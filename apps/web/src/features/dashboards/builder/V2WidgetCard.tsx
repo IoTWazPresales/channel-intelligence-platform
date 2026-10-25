@@ -33,7 +33,8 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DashboardWidget } from '../types';
 import { useV2Query } from './BuilderData';
 import { breakdownLabel, definitionMeasures, modelOf } from './catalog';
-import { autoGrain } from './dates';
+import { autoGrain, compareWindow } from './dates';
+import { mergeComparison } from './comparison';
 import { chartToPng, exportableSvg } from './exportPng';
 import { effectiveVisualV2 } from './fit';
 import { notFilteredHeadline, requestFor, sparklineRequest, withWindow, type NotFiltered, type RequestPlan } from './requestFor';
@@ -134,6 +135,8 @@ export function V2WidgetCard({
 }) {
   const theme = useTheme();
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeFullRef = useRef<HTMLButtonElement | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [full, setFull] = useState(false);
   const [rowsOpen, setRowsOpen] = useState(false);
@@ -148,25 +151,32 @@ export function V2WidgetCard({
 
   const first = measures[0];
   const isKpi = visual === 'kpi';
+  const seriesCompare = Boolean(def.display?.compare) && ['bar', 'line', 'area', 'table'].includes(visual);
+  const comparisonWindow = def.dashboard?.fixed_window && plan.status === 'ready' ? compareWindow(plan.window, ctx.compareMode) : ctx.compare;
   const compareReq: V2Request | null =
-    isKpi && def.display?.kpi?.compare && plan.status === 'ready' && plan.window && ctx.compare ? withWindow(plan.request, ctx.compare) : null;
+    ((isKpi && def.display?.kpi?.compare) || seriesCompare) && plan.status === 'ready' && plan.window && comparisonWindow ? withWindow(plan.request, comparisonWindow) : null;
   const grain = isKpi && def.display?.kpi?.sparkline ? sparklineGrain(first, plan) : false;
   const sparkReq: V2Request | null = grain !== false && plan.status === 'ready' ? sparklineRequest(plan.request, grain) : null;
   const compareQ = useV2Query(compareReq, { tag: 'compare' });
   const sparkQ = useV2Query(sparkReq, { tag: 'sparkline' });
 
   const data = main.data;
+  const filterCaption = plan.status === 'ready' ? plan.filterCaption : ctx.filterCaption;
+  const compared = useMemo(() => seriesCompare && compareReq && plan.status === 'ready' && data?.ok && !main.isPlaceholderData && compareQ.data?.ok && !compareQ.isPlaceholderData
+    ? mergeComparison(data, compareQ.data, def, plan.window, comparisonWindow, ctx.compareLabel ?? 'previous period') : null,
+    [seriesCompare, compareReq, plan, data, main.isPlaceholderData, compareQ.data, compareQ.isPlaceholderData, def, comparisonWindow, ctx.compareLabel]);
+  const exportData = compared?.ok ? compared.response : data;
   // A previous answer stays visible during refresh, but must never be downloaded under new filters.
-  const exportReady = plan.status === 'ready' && Boolean(data?.ok) && !main.isPlaceholderData;
+  const exportReady = plan.status === 'ready' && Boolean(data?.ok) && !main.isPlaceholderData && (!seriesCompare || !compareReq || Boolean(compared?.ok));
   const vintage = vintageTo(data);
   const refetching = main.isFetching && Boolean(data);
   const total = rowCount(data);
 
   const exportCsv = () => {
-    if (!exportReady || !data?.ok) return;
-    const cols = tableCols(data);
-    downloadBlob(new Blob([toCsv(cols, data.rows)], { type: 'text/csv;charset=utf-8' }), exportFileName(dashboardName, widget.title, 'csv'));
-    setToast(exportToast(data.rows.length, total, data.truncated));
+    if (!exportReady || !exportData?.ok) return;
+    const cols = tableCols(exportData);
+    downloadBlob(new Blob([toCsv(cols, exportData.rows)], { type: 'text/csv;charset=utf-8' }), exportFileName(dashboardName, widget.title, 'csv'));
+    setToast(compared?.ok ? `Exported ${exportData.rows.length} comparison rows.${exportData.truncated ? ' Some rows were not returned; narrow the filters.' : ''}` : exportToast(exportData.rows.length, total, exportData.truncated));
   };
   const exportPng = async () => {
     if (!exportReady || !bodyRef.current) return;
@@ -178,7 +188,7 @@ export function V2WidgetCard({
     }
     const blob = await chartToPng(bodyRef.current, {
       title: widget.title,
-      caption: `${ctx.filterCaption}${vintage ? ` · Data to ${vintage}` : ''}`,
+      caption: `${filterCaption}${vintage ? ` · Data to ${vintage}` : ''}${compared?.ok ? ` · ${compared.note}` : ''}`,
       background: theme.palette.background.paper,
       text: theme.palette.text.primary,
       muted: theme.palette.text.secondary,
@@ -230,12 +240,14 @@ export function V2WidgetCard({
         loading={main.isLoading}
         error={main.isError ? main.error : null}
         onRetry={() => void main.refetch()}
-        kpi={isKpi ? { compare: compareQ.data, compareLabel: ctx.compareLabel, sparkline: sparkQ.data } : undefined}
+        kpi={isKpi ? { compare: main.isPlaceholderData || compareQ.isPlaceholderData ? undefined : compareQ.data, compareLabel: ctx.compareLabel, sparkline: main.isPlaceholderData || sparkQ.isPlaceholderData ? undefined : sparkQ.data } : undefined}
+        comparison={seriesCompare && compareReq && plan.status === 'ready' ? { result: main.isPlaceholderData || compareQ.isPlaceholderData ? undefined : compareQ.data, window: plan.window, previousWindow: comparisonWindow,
+          label: ctx.compareLabel ?? 'previous period', loading: compareQ.isFetching, stale: main.isPlaceholderData || compareQ.isPlaceholderData, error: compareQ.isError ? compareQ.error : undefined } : undefined}
         caption={plan.caption}
         onSelect={ctx.onSelect}
         selectedKeys={ctx.selectedKeys}
-        emptyContext={ctx.emptyContext}
-        onClearFilters={ctx.hasActiveFilters ? ctx.onClearFilters : undefined}
+        emptyContext={def.dashboard ? `under ${filterCaption}` : ctx.emptyContext}
+        onClearFilters={ctx.hasActiveFilters && !def.dashboard ? ctx.onClearFilters : undefined}
         testKey={widget.id}
         chartHeight={height}
       />
@@ -288,7 +300,7 @@ export function V2WidgetCard({
             </IconButton>
           </Tooltip>
         ) : null}
-        <WidgetMenu widgetId={widget.id} title={widget.title} actions={menu} />
+        <WidgetMenu widgetId={widget.id} title={widget.title} actions={menu} buttonRef={menuButtonRef} />
       </Stack>
       <NotFilteredLine items={plan.notFiltered} testId={`dashboard-widget-not-filtered-${widget.id}`} />
       <Box sx={{ px: 1, py: 0 }}>
@@ -315,15 +327,21 @@ export function V2WidgetCard({
       </Box>
       {footer}
 
-      <Dialog fullScreen open={full} onClose={() => setFull(false)} data-testid={`dashboard-widget-fullscreen-${widget.id}`}>
+      <Dialog fullScreen open={full} onClose={() => setFull(false)} data-testid={`dashboard-widget-fullscreen-${widget.id}`}
+        slotProps={{ transition: {
+          // Menu focus restoration can run after the dialog mounts. Move focus once
+          // its transition finishes, then restore the stable trigger on closing.
+          onEntered: () => closeFullRef.current?.focus(),
+          onExited: () => menuButtonRef.current?.focus(),
+        } }}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             {widget.title}
             <Typography variant="caption" color="text.secondary" display="block">
-              {ctx.filterCaption}
+              {filterCaption}
             </Typography>
           </Box>
-          <IconButton aria-label="Close full screen" onClick={() => setFull(false)}>
+          <IconButton ref={closeFullRef} aria-label="Close full screen" onClick={() => setFull(false)}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>

@@ -12,6 +12,28 @@ const woc: DefinitionV2 = { v: 1, kind: 'governed', query: { measures: ['weeks_o
 const pipeline: DefinitionV2 = { v: 1, kind: 'governed', query: { measures: ['pipeline_inbound'], breakdowns: ['period'], period: { grain: 'week' } } };
 
 describe('requestFor: model measures', () => {
+  it('ignores only explicitly excluded dashboard keys, retaining widget-own restrictions', () => {
+    const def: DefinitionV2 = { ...cst, dashboard: { ignore_filters: ['customer'] }, query: { ...cst.query, filters: { customer: [103] } } };
+    const plan = requestFor(def, { catalog, filters: { customer: [101], bu: ['Notebook'] }, required: ['customer'], window: W });
+    expect(plan.status).toBe('ready');
+    if (plan.status !== 'ready') return;
+    expect(plan.request.filters).toEqual({ customer: [103], bu: ['Notebook'] });
+    expect(plan.notFiltered).toContainEqual(expect.objectContaining({ key: 'customer', reason: expect.stringContaining('ignores') }));
+    expect(requestFor(def, { catalog, filters: {}, required: ['customer'], window: W }).status).toBe('ready');
+  });
+  it('runs a fixed widget window independently of the dashboard and rejects invalid fixed dates', () => {
+    const fixed = { from: '2026-01-01', to: '2026-01-31' };
+    const def: DefinitionV2 = { ...dsi, dashboard: { fixed_window: fixed } };
+    const plan = requestFor(def, { catalog, filters: {}, window: W });
+    expect(plan.status).toBe('ready');
+    if (plan.status !== 'ready') return;
+    expect(plan.window).toEqual(fixed);
+    expect(plan.request.period).toEqual({ grain: 'week', ...fixed });
+    expect(plan.notFiltered).toContainEqual(expect.objectContaining({ key: 'date', reason: expect.stringContaining('2026-01-31') }));
+    expect(requestFor({ ...def, dashboard: { fixed_window: { from: '2026-02-30', to: '2026-03-05' } } }, { catalog, filters: {}, window: W })).toMatchObject({ status: 'blocked', reason: 'invalid_window' });
+    const ignored = requestFor({ ...dsi, dashboard: { ignore_filters: ['date'] } }, { catalog, filters: {}, window: W });
+    expect(ignored.status === 'ready' && ignored.request.period).toEqual({ grain: 'week' });
+  });
   it('never executes without catalog metadata, rather than dropping dashboard filters', () => {
     for (const cat of [null, undefined, { ...catalog, measures: [] }, { ...catalog, models: [] }]) {
       expect(requestFor(cst, { catalog: cat, filters: { customer: [101] }, window: W }))
@@ -159,5 +181,9 @@ describe('request helpers', () => {
   it('view rows fills to three breakdowns with the finest the model allows', () => {
     expect(viewRowsBreakdowns(['bu'], 'dsi_sellout', ['bu', 'customer', 'product', 'period'])).toEqual(['bu', 'customer', 'product']);
     expect(viewRowsBreakdowns([], 'cst_sellthrough', ['customer', 'site_label', 'period'])).toEqual(['customer', 'site_label', 'period']);
+    expect(viewRowsBreakdowns([], 'cpor', ['case', 'customer', 'product', 'status'])).toEqual(['case', 'customer', 'product']);
+    expect(viewRowsBreakdowns(['status'], 'cpor', ['case', 'customer', 'product', 'status'])).toEqual(['status', 'case', 'customer']);
+    // Catalogs predating S19 still get supported grouped rows.
+    expect(viewRowsBreakdowns([], 'cpor', ['customer', 'product', 'status'])).toEqual(['customer', 'product', 'status']);
   });
 });

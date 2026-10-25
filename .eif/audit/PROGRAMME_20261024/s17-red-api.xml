@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="7" time="4.957" timestamp="2026-10-24T22:19:03.168251+02:00" hostname="RF2300014-NB3"><testcase classname="tests.test_dashboard_v2_definitions" name="test_widget_fixed_window_is_validated_preserved_and_never_delivered_through_v1" time="0.410"><failure message="app.services.dashboard_definitions.DefinitionRefused: Unknown key in definition_v2: dashboard.">def test_widget_fixed_window_is_validated_preserved_and_never_delivered_through_v1() -&gt; None:
+        fixed = {"from": "2026-01-01", "to": "2026-01-31"}
+&gt;       c = check_definition({"query": {"measures": ["dsi_sellout.units"]},
+                              "dashboard": {"ignore_filters": ["customer"], "fixed_window": fixed}}, tenant_id="default")
+
+tests\test_dashboard_v2_definitions.py:94: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\services\dashboard_definitions.py:231: in check_definition
+    raw, req = _shape(raw)
+               ^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+raw = {'dashboard': {'fixed_window': {'from': '2026-01-01', 'to': '2026-01-31'}, 'ignore_filters': ['customer']}, 'query': {'measures': ['dsi_sellout.units']}}
+
+    def _shape(raw: Any) -&gt; tuple[dict[str, Any], V2Request]:
+        """Check the JSON shape and build the planner request. Nothing about meaning is decided here."""
+        if not isinstance(raw, dict):
+            raise _refuse("definition_v2 is an object.")
+        unknown = sorted(set(raw) - _TOP_KEYS)
+        if unknown:
+&gt;           raise _refuse(f"Unknown key in definition_v2: {', '.join(unknown)}.")
+E           app.services.dashboard_definitions.DefinitionRefused: Unknown key in definition_v2: dashboard.
+
+app\services\dashboard_definitions.py:110: DefinitionRefused</failure></testcase><testcase classname="tests.test_dashboard_v2_definitions" name="test_widget_dashboard_overrides_refuse_invalid_shapes[settings0]" time="0.065" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_widget_dashboard_overrides_refuse_invalid_shapes[settings1]" time="0.074" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_widget_dashboard_overrides_refuse_invalid_shapes[settings2]" time="0.071" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_widget_dashboard_overrides_refuse_invalid_shapes[settings3]" time="0.078" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_widget_dashboard_overrides_refuse_invalid_shapes[settings4]" time="0.061" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_widget_dashboard_overrides_refuse_invalid_shapes[settings5]" time="0.069" /></testsuite></testsuites>

@@ -20,7 +20,7 @@ import {
   MenuItem,
   Tooltip,
 } from '@mui/material';
-import { useState } from 'react';
+import { useState, type Ref } from 'react';
 
 export type WidgetAction = {
   id: 'duplicate' | 'fullscreen' | 'view-rows' | 'export-csv' | 'export-png' | 'promote' | 'remove';
@@ -33,7 +33,7 @@ export type WidgetAction = {
   dividerBefore?: boolean;
 };
 
-export function WidgetMenu({ widgetId, title, actions }: { widgetId: number | string; title: string; actions: WidgetAction[] }) {
+export function WidgetMenu({ widgetId, title, actions, buttonRef }: { widgetId: number | string; title: string; actions: WidgetAction[]; buttonRef?: Ref<HTMLButtonElement> }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [pending, setPending] = useState<WidgetAction | null>(null);
   const close = () => setAnchor(null);
@@ -41,6 +41,7 @@ export function WidgetMenu({ widgetId, title, actions }: { widgetId: number | st
     <>
       <Tooltip title="Widget actions">
         <IconButton
+          ref={buttonRef}
           size="small"
           aria-label={`Actions for ${title}`}
           aria-haspopup="menu"

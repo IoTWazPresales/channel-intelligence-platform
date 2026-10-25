@@ -12,6 +12,7 @@
  */
 
 import { breakdownLabel, definitionKind, lowerFirst, measureOf, modelOf } from './catalog';
+import { isoDay, parseDay, windowLabel } from './dates';
 import type { CatalogV2, DateWindow, DefinitionV2, V2FilterValue, V2Measure, V2Request } from './types';
 
 /** Breakdown id -> chosen values; an explicit empty list means an empty intersection. */
@@ -34,8 +35,10 @@ export type RequestPlan =
       kind: 'model' | 'governed';
       /** Plain caption to show under a figure (latest-stock measures), with `{to}` filled. */
       caption?: string;
+      /** Names/counts and dates of filters actually applied, including widget-only restrictions. */
+      filterCaption: string;
     }
-  | { status: 'blocked'; reason: 'required' | 'empty_intersection' | 'no_measure' | 'catalog_unavailable'; message: string; notFiltered: NotFiltered[] };
+  | { status: 'blocked'; reason: 'required' | 'empty_intersection' | 'no_measure' | 'catalog_unavailable' | 'invalid_window'; message: string; notFiltered: NotFiltered[] };
 
 export type RequestContext = {
   catalog: CatalogV2 | null | undefined;
@@ -91,6 +94,12 @@ function namesFor(names: ValueNames | undefined, key: string, values: V2FilterVa
   return out.length <= 3 ? out.join(', ') : `${out.slice(0, 3).join(', ')} and ${out.length - 3} more`;
 }
 
+export function validFixedWindow(window: NonNullable<DateWindow>): boolean {
+  const from = parseDay(window.from);
+  const to = parseDay(window.to);
+  return Boolean(from && to && isoDay(from) === window.from && isoDay(to) === window.to && window.from <= window.to);
+}
+
 export function requestFor(def: DefinitionV2, ctx: RequestContext): RequestPlan {
   const { catalog } = ctx;
   const notFiltered: NotFiltered[] = [];
@@ -103,8 +112,21 @@ export function requestFor(def: DefinitionV2, ctx: RequestContext): RequestPlan 
     return { status: 'blocked', reason: 'catalog_unavailable', message: 'The data model for this widget is unavailable. Reload the data model before running or editing it.', notFiltered };
   }
 
-  // A required filter (starters: "customer") with no value: no query.
+  const ignored = new Set(def.dashboard?.ignore_filters ?? []);
+  const fixed = def.dashboard?.fixed_window;
+  if (fixed && !validFixedWindow(fixed)) {
+    return { status: 'blocked', reason: 'invalid_window', message: 'Choose valid fixed dates with the start on or before the end.', notFiltered };
+  }
+  for (const key of ignored) {
+    if (key === 'date' && fixed) continue;
+    notFiltered.push({ key, label: key === 'date' ? 'Date' : breakdownLabel(catalog, key), reason: 'this widget explicitly ignores this dashboard filter.' });
+  }
+  if (fixed) notFiltered.push({ key: 'date', label: 'Date', reason: `this widget uses fixed dates, ${fixed.from} to ${fixed.to}.` });
+  const requestedWindow = fixed ?? (ignored.has('date') ? null : ctx.window);
+
+  // Required bar filters still apply unless the widget explicitly opts out.
   for (const key of ctx.required ?? []) {
+    if (ignored.has(key)) continue;
     if (!(ctx.filters[key]?.length ?? 0)) {
       const label = lowerFirst(breakdownLabel(catalog, key));
       const what = key === 'customer' ? 'this account' : 'this dashboard';
@@ -121,6 +143,7 @@ export function requestFor(def: DefinitionV2, ctx: RequestContext): RequestPlan 
   // Dashboard filters.
   const dash: FilterSelection = {};
   for (const [key, raw] of Object.entries(ctx.filters)) {
+    if (ignored.has(key)) continue;
     const values = asList(raw);
     if (key === 'period') continue;
     const label = breakdownLabel(catalog, key);
@@ -182,12 +205,13 @@ export function requestFor(def: DefinitionV2, ctx: RequestContext): RequestPlan 
 
   // Dates.
   let window: DateWindow = null;
-  if (ctx.window) {
+  if (requestedWindow) {
     if (kind === 'model') {
-      window = ctx.window;
+      window = requestedWindow;
     } else if (first?.honours?.dates && !first.honours.all_time_only) {
-      window = ctx.window;
+      window = requestedWindow;
     } else if (first) {
+      if (fixed) return { status: 'blocked', reason: 'invalid_window', message: 'This metric cannot use fixed dates. Follow the dashboard dates instead.', notFiltered };
       notFiltered.push({ key: 'date', label: 'Date', reason: governedDateReason(first) });
     }
   }
@@ -216,7 +240,8 @@ export function requestFor(def: DefinitionV2, ctx: RequestContext): RequestPlan 
     caption = `Latest report on or before ${window?.to ?? 'today'}.`;
   }
 
-  return { status: 'ready', request, notFiltered, applied, window, kind, caption };
+  const filterCaption = [...applied.map((key) => `${breakdownLabel(catalog, key)}: ${namesFor(ctx.names, key, dash[key]) ?? `${dash[key].length} selected`}`), windowLabel(window)].join(' · ');
+  return { status: 'ready', request, notFiltered, applied, window, kind, caption, filterCaption };
 }
 
 /** "Not filtered by distributor, store / site" (keys in order, labels in lower case). */
@@ -255,7 +280,7 @@ export function sparklineRequest(req: V2Request, grain: string | null): V2Reques
 export const FINEST_BREAKDOWNS: Record<string, string[]> = {
   dsi_sellout: ['customer', 'product', 'period'],
   cst_sellthrough: ['customer', 'product', 'site_label', 'period'],
-  cpor: ['customer', 'product', 'status'],
+  cpor: ['case', 'customer', 'product', 'status'],
 };
 
 export function viewRowsBreakdowns(own: string[], modelId: string | null | undefined, allowed: string[], max = 3): string[] {

@@ -46,6 +46,7 @@ export function buildRunContext(args: {
     filters,
     window,
     compare,
+    compareMode: bar.compare,
     compareLabel: bar.compare === 'previous_year' ? 'previous year' : bar.compare === 'previous_period' ? 'previous period' : undefined,
     required: bar.required,
     names,

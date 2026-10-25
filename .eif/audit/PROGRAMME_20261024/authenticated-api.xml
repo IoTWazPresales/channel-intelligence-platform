@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="39.800" timestamp="2026-10-24T22:53:40.950049+02:00" hostname="RF2300014-NB3"><testcase classname="tests.test_dashboard_v2_authenticated" name="test_bearer_queries_keep_tenant_scope_product_lines_and_cache_isolation[asyncio]" time="4.728"><failure message="AssertionError: assert 'N0116-A-3188cfc252' == ['N0116-A-3188cfc252']">signed_in = (&lt;httpx.AsyncClient object at 0x000001ADD3458830&gt;, {'admin': {'Authorization': 'Bearer [CREDENTIAL]... object at 0x000001ADD4D6D4F0&gt;, &lt;app.models.dimensions.DimProduct object at 0x000001ADD3B2E690&gt;], 'N0116-A-3188cfc252')
+
+    @pytest.mark.anyio
+    async def test_bearer_queries_keep_tenant_scope_product_lines_and_cache_isolation(signed_in):
+        client, headers, _products, line_a = signed_in
+        query = {'measures': ['dsi_sellout.units'], 'breakdowns': ['product'], 'period': {'from': '2026-01-01', 'to': '2026-01-31'}}
+        for url, method, body in [('/api/v1/semantics/v2/catalog', 'GET', None), ('/api/v1/query/v2/execute', 'POST', query), ('/api/v1/dashboards', 'GET', None)]:
+            assert (await client.request(method, url, json=body)).status_code == 401
+            assert (await client.request(method, url, json=body, headers={'X-User-Id': '1', 'X-User-Role': 'admin'})).status_code == 401
+        expected = [('admin', 112), ('viewer', 13), ('none', 0), ('other', 1000), ('viewer', 13)]
+        for key, total in expected:
+            r = await client.post('/api/v1/query/v2/execute', json=query, headers=headers[key])
+            assert r.status_code == 200, r.text
+            data = r.json()
+            assert data['ok'] and data['totals']['dsi_sellout.units'] == total
+            if key == 'none':
+                assert data['rows'] == []
+            if key == 'viewer':
+&gt;               assert data['explain']['scope']['product_lines'] == [line_a]
+E               AssertionError: assert 'N0116-A-3188cfc252' == ['N0116-A-3188cfc252']
+
+tests\test_dashboard_v2_authenticated.py:111: AssertionError</failure></testcase><testcase classname="tests.test_dashboard_v2_authenticated" name="test_authenticated_starters_fixed_widget_layout_promote_export_and_delivery[asyncio]" time="4.388"><failure message="AssertionError: {&quot;detail&quot;:[{&quot;type&quot;:&quot;list_type&quot;,&quot;loc&quot;:[&quot;body&quot;],&quot;msg&quot;:&quot;Input should be a valid list&quot;,&quot;input&quot;:{&quot;items&quot;:[{&quot;id&quot;:439,&quot;x&quot;:0,&quot;y&quot;:0,&quot;w&quot;:6,&quot;h&quot;:5}]}}]}&#10;assert 422 == 200&#10; +  where 422 = &lt;Response [422 Unprocessable Entity]&gt;.status_code">signed_in = (&lt;httpx.AsyncClient object at 0x000001ADD5719580&gt;, {'admin': {'Authorization': 'Bearer [CREDENTIAL]... object at 0x000001ADD57AF0B0&gt;, &lt;app.models.dimensions.DimProduct object at 0x000001ADD57AFAA0&gt;], 'N0116-A-1d6bfaa973')
+
+    @pytest.mark.anyio
+    async def test_authenticated_starters_fixed_widget_layout_promote_export_and_delivery(signed_in):
+        client, headers, products, _line_a = signed_in
+        admin = headers['admin']
+        for key, count in [('account_overview', 8), ('sellthrough_stock', 6), ('cpor_cases', 8)]:
+            r = await client.post('/api/v1/dashboards/from-template', json={'key': key}, headers=admin)
+            assert r.status_code == 200, r.text
+            assert len(r.json()['widgets']) == count
+        r = await client.post('/api/v1/dashboards', json={'name': 'Authenticated fixed-window dashboard'}, headers=admin)
+        assert r.status_code == 200, r.text
+        dashboard = r.json()
+        base = f"/api/v1/dashboards/{dashboard['id']}"
+        fixed = {'from': '2026-01-01', 'to': '2026-01-31'}
+        definition = {'v': 1, 'query': {'measures': ['dsi_sellout.units'], 'filters': {'product': [products[0].id]}},
+                      'display': {'compare': True}, 'dashboard': {'ignore_filters': ['customer'], 'fixed_window': fixed}}
+        body = {'title': 'Fixed January', 'visual': 'table', 'definition_v2': definition}
+        for title in ['Fixed January', 'Fixed January copy']:
+            r = await client.post(f'{base}/widgets', json={**body, 'title': title}, headers=admin)
+            assert r.status_code == 200, r.text
+        widget = next(w for w in r.json()['widgets'] if w['title'] == 'Fixed January')
+        assert widget['definition_v2']['dashboard'] == definition['dashboard']
+        assert widget['definition_v2']['v1_equivalent'] is False
+        r = await client.patch(f"{base}/widgets/{widget['id']}", json={'title': 'January only'}, headers=admin)
+        assert r.status_code == 200, r.text
+        r = await client.patch(f'{base}/layout', json={'items': [{'id': widget['id'], 'x': 0, 'y': 0, 'w': 6, 'h': 5}]}, headers=admin)
+&gt;       assert r.status_code == 200, r.text
+E       AssertionError: {"detail":[{"type":"list_type","loc":["body"],"msg":"Input should be a valid list","input":{"items":[{"id":439,"x":0,"y":0,"w":6,"h":5}]}}]}
+E       assert 422 == 200
+E        +  where 422 = &lt;Response [422 Unprocessable Entity]&gt;.status_code
+
+tests\test_dashboard_v2_authenticated.py:142: AssertionError</failure></testcase></testsuite></testsuites>

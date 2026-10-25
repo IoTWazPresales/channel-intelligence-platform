@@ -52,10 +52,12 @@ describe('builder API compatibility', () => {
   });
 
   it('duplicates the existing definition without its migration marker, below all widgets', () => {
-    const copy = duplicateBody(board, widget);
+    const settings = { ignore_filters: ['customer'], fixed_window: { from: '2026-01-01', to: '2026-01-31' } };
+    const copy = duplicateBody(board, { ...widget, definition_v2: { ...widget.definition_v2!, dashboard: settings } });
     expect(copy).toMatchObject({ title: `${widget.title} (copy)`, visual: widget.visual, layout_json: { y: 8 } });
     expect(copy.definition_v2?.query).toEqual(widget.definition_v2?.query);
     expect(copy.definition_v2).not.toHaveProperty('migrated_from');
+    expect(copy.definition_v2?.dashboard).toEqual(settings);
     expect(widget.title).not.toContain('(copy)');
   });
 });

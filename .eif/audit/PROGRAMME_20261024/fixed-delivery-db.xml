@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="3" time="9.095" timestamp="2026-10-24T22:41:54.193964+02:00" hostname="RF2300014-NB3"><testcase classname="tests.test_dashboard_v2_export" name="test_saved_fixed_window_export_never_runs_the_all_time_v1_query[asyncio-xlsx]" time="0.382" /><testcase classname="tests.test_dashboard_v2_export" name="test_saved_fixed_window_export_never_runs_the_all_time_v1_query[asyncio-pdf]" time="0.028" /><testcase classname="tests.test_dashboard_v2_export" name="test_fixed_window_delivery_excludes_outside_dates_on_cip_test[asyncio]" time="0.959"><failure message="sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) &lt;class 'asyncpg.exceptions.NotNullViolationError'&gt;: null value in column &quot;customer_id&quot; of relation &quot;fact_sales_sellout&quot; violates not-null constraint&#10;[SQL: INSERT INTO fact_sales_sellout (source_key, staging_line_id, tenant_id, product_id, customer_id, channel_id, distributor_id, period_start, transaction_date, invoice_no, units, revenue, unit_sellout_price_ex_tax_amount, reported_revenue_amount, comput ... 1012 characters truncated ... out.id, fact_sales_sellout.created_at, fact_sales_sellout.updated_at, fact_sales_sellout.id AS id__1]&#10;[parameters: ('n0116-fixed-3ddc3974-1', None, 'n0116-fixed-3ddc3974', 55719, None, None, None, datetime.date(2026, 1, 5), datetime.date(2026, 1, 5), '', 13, 0, None, None, None, None, None, 'n0116-fixed-3ddc3974-2', None, 'n0116-fixed-3ddc3974', 55719, None, None, None, datetime.date(2026, 2, 5), datetime.date(2026, 2, 5), '', 900, 0, None, None, None, None, None)]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)">self = &lt;sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x0000028BB76E6B00&gt;
+operation = 'INSERT INTO fact_sales_sellout (source_key, staging_line_id, tenant_id, product_id, customer_id, channel_id, distribu...NG fact_sales_sellout.id, fact_sales_sellout.created_at, fact_sales_sellout.updated_at, fact_sales_sellout.id AS id__1'
+parameters = ('n0116-fixed-3ddc3974-1', None, 'n0116-fixed-3ddc3974', 55719, None, None, ...)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+&gt;                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:550: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\asyncpg\prepared_stmt.py:176: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\asyncpg\prepared_stmt.py:267: in __bind_execute
+    data, status, _ = await self.__do_execute(
+.venv\Lib\site-packages\asyncpg\prepared_stmt.py:256: in __do_execute
+    return await executor(protocol)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+&gt;   ???
+E   asyncpg.exceptions.NotNullViolationError: null value in column "customer_id" of relation "fact_sales_sellout" violates not-null constraint
+
+asyncpg\\protocol\\protocol.pyx:206: NotNullViolationError
+
+The above exception was the direct cause of the following exception:
+
+self = &lt;sqlalchemy.engine.base.Connection object at 0x0000028BB6A5B3E0&gt;
+dialect = &lt;sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x0000028BB696F050&gt;
+context = &lt;sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x0000028BB6E81A90&gt;
+
+    def _exec_insertmany_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+    ) -&gt; CursorResult[Any]:
+        """continue the _execute_context() method for an "insertmanyvalues"
+        operation, which will invoke DBAPI
+        cursor.execute() one or more times with individual log and
+        event hook calls.
+    
+        """
+    
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+        else:
+            generic_setinputsizes = None
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters = parameters
+    
+        engine_events = self._has_events or self.engine._has_events
+        if self.dialect._has_events:
+            do_execute_dispatch: Iterable[Any] = (
+                self.dialect.dispatch.do_execute
+            )
+        else:
+            do_execute_dispatch = ()
+    
+        if engine_events:
+            _WORKAROUND_ISSUE_13018 = getattr(
+                self, "_WORKAROUND_ISSUE_13018", False
+            )
+        else:
+            _WORKAROUND_ISSUE_13018 = False
+    
+        if self._echo:
+            stats = context._get_cache_stats() + " (insertmanyvalues)"
+    
+        preserve_rowcount = context.execution_options.get(
+            "preserve_rowcount", False
+        )
+        rowcount = 0
+    
+        for imv_batch in dialect._deliver_insertmanyvalues_batches(
+            self,
+            cursor,
+            str_statement,
+            effective_parameters,
+            generic_setinputsizes,
+            context,
+        ):
+            if imv_batch.processed_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor,
+                        imv_batch.processed_setinputsizes,
+                        context,
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e,
+                        sql_util._long_statement(imv_batch.replaced_statement),
+                        imv_batch.replaced_parameters,
+                        None,
+                        context,
+                        is_sub_exec=True,
+                    )
+    
+            sub_stmt = imv_batch.replaced_statement
+            sub_params = imv_batch.replaced_parameters
+    
+            if engine_events:
+                for fn in self.dispatch.before_cursor_execute:
+                    sub_stmt, sub_params = fn(
+                        self,
+                        cursor,
+                        sub_stmt,
+                        sub_params,
+                        context,
+                        True,
+                    )
+    
+            if self._echo:
+                self._log_info(sql_util._long_statement(sub_stmt))
+    
+                imv_stats = f""" {imv_batch.batchnum}/{
+                            imv_batch.total_batches
+                } ({
+                    'ordered'
+                    if imv_batch.rows_sorted else 'unordered'
+                }{
+                    '; batch not supported'
+                    if imv_batch.is_downgraded
+                    else ''
+                })"""
+    
+                if imv_batch.batchnum == 1:
+                    stats += imv_stats
+                else:
+                    stats = f"insertmanyvalues{imv_stats}"
+    
+                if not self.engine.hide_parameters:
+                    self._log_info(
+                        "[%s] %r",
+                        stats,
+                        sql_util._repr_params(
+                            sub_params,
+                            batches=10,
+                            ismulti=False,
+                        ),
+                    )
+                else:
+                    self._log_info(
+                        "[%s] [SQL parameters hidden due to "
+                        "hide_parameters=True]",
+                        stats,
+                    )
+    
+            try:
+                for fn in do_execute_dispatch:
+                    if fn(
+                        cursor,
+                        sub_stmt,
+                        sub_params,
+                        context,
+                    ):
+                        break
+                else:
+&gt;                   dialect.do_execute(
+                        cursor,
+                        sub_stmt,
+                        sub_params,
+                        context,
+                    )
+
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:2127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;AdaptedConnection &lt;asyncpg.connection.Connection object at 0x0000028BB6EDEF30&gt;&gt;
+error = NotNullViolationError('null value in column "customer_id" of relation "fact_sales_sellout" violates not-null constraint')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+&gt;                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: &lt;class 'asyncpg.exceptions.NotNullViolationError'&gt;: null value in column "customer_id" of relation "fact_sales_sellout" violates not-null constraint
+
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:797: IntegrityError
+
+The above exception was the direct cause of the following exception:
+
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000028BB6E9B1A0&gt;
+
+    @pytest.mark.anyio
+    async def test_fixed_window_delivery_excludes_outside_dates_on_cip_test(monkeypatch):
+        import secrets
+        from datetime import date
+        from sqlalchemy import text
+        from app.db.session import AsyncSessionLocal
+        from app.models.dimensions import DimProduct
+        from app.models.facts import FactSalesSellout
+        from app.models.saved_reports import SavedReport
+        from app.query.cache import clear_query_cache
+        from app.services.report_delivery import deliver_saved_report
+    
+        tag = secrets.token_hex(4)
+        tid = f"n0116-fixed-{tag}"
+        async with AsyncSessionLocal() as db:
+            if (await db.execute(text('select current_database()'))).scalar_one() != 'cip_test':
+                pytest.skip('cip_test only')
+            try:
+                monkeypatch.setattr(db, 'commit', db.flush)
+                product = DimProduct(sku=f'n0116-fixed-{tag}', name='Fixed-window test product', tenant_id=tid)
+                db.add(product)
+                await db.flush()
+                for month, units in [(1, 13), (2, 900)]:
+                    day = date(2026, month, 5)
+                    db.add(FactSalesSellout(source_key=f'n0116-fixed-{tag}-{month}', tenant_id=tid, product_id=product.id,
+                                           transaction_date=day, period_start=day, units=units, revenue=0))
+                fixed = {'from': '2026-01-01', 'to': '2026-01-31'}
+                checked = check_definition({'query': {'measures': ['dsi_sellout.units']}, 'dashboard': {'fixed_window': fixed}}, tenant_id=tid)
+                report = SavedReport(tenant_id=tid, name='Fixed January delivery', visual='kpi', metric_key=checked.v1.metric_key,
+                                     grains=[], filters={}, definition_v2=checked.definition)
+                db.add(report)
+&gt;               await db.flush()
+
+tests\test_dashboard_v2_export.py:71: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py:787: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\orm\session.py:4353: in flush
+    self._flush(objects)
+.venv\Lib\site-packages\sqlalchemy\orm\session.py:4488: in _flush
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv\Lib\site-packages\sqlalchemy\orm\session.py:4449: in _flush
+    flush_context.execute()
+.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:465: in execute
+    rec.execute(self)
+.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:641: in execute
+    util.preloaded.orm_persistence.save_obj(
+.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:94: in save_obj
+    _emit_insert_statements(
+.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:1144: in _emit_insert_statements
+    result = connection.execute(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1421: in execute
+    return meth(
+.venv\Lib\site-packages\sqlalchemy\sql\elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_insertmany_context(dialect, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:2135: in _exec_insertmany_context
+    self._handle_dbapi_exception(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:2127: in _exec_insertmany_context
+    dialect.do_execute(
+.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;AdaptedConnection &lt;asyncpg.connection.Connection object at 0x0000028BB6EDEF30&gt;&gt;
+error = NotNullViolationError('null value in column "customer_id" of relation "fact_sales_sellout" violates not-null constraint')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+&gt;                   raise translated_error from error
+E                   sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) &lt;class 'asyncpg.exceptions.NotNullViolationError'&gt;: null value in column "customer_id" of relation "fact_sales_sellout" violates not-null constraint
+E                   [SQL: INSERT INTO fact_sales_sellout (source_key, staging_line_id, tenant_id, product_id, customer_id, channel_id, distributor_id, period_start, transaction_date, invoice_no, units, revenue, unit_sellout_price_ex_tax_amount, reported_revenue_amount, comput ... 1012 characters truncated ... out.id, fact_sales_sellout.created_at, fact_sales_sellout.updated_at, fact_sales_sellout.id AS id__1]
+E                   [parameters: ('n0116-fixed-3ddc3974-1', None, 'n0116-fixed-3ddc3974', 55719, None, None, None, datetime.date(2026, 1, 5), datetime.date(2026, 1, 5), '', 13, 0, None, None, None, None, None, 'n0116-fixed-3ddc3974-2', None, 'n0116-fixed-3ddc3974', 55719, None, None, None, datetime.date(2026, 2, 5), datetime.date(2026, 2, 5), '', 900, 0, None, None, None, None, None)]
+E                   (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:797: IntegrityError</failure></testcase></testsuite></testsuites>

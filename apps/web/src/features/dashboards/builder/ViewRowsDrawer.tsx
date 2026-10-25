@@ -92,6 +92,7 @@ export function ViewRowsDrawer({
               {title}
             </Typography>
             <Typography variant="body2" color="text.secondary" data-testid="view-rows-heading">
+              {def.display?.compare ? 'Current period only. ' : ''}
               {heading}
             </Typography>
             {kind === 'governed' ? (

@@ -277,6 +277,26 @@ describe('DashboardWorkspace orchestration', () => {
     expect(screen.getByTestId('builder-editor-save')).toBeEnabled();
   });
 
+  it('saves and reopens explicit widget filter exceptions and fixed dates through the real editor', async () => {
+    const {user} = await setup();
+    await user.click(screen.getByRole('button', { name: 'Edit widget 11' }));
+    await screen.findByTestId('builder-editor');
+    await user.click(screen.getByText('Dashboard filter exceptions'));
+    await user.click(screen.getByRole('checkbox', { name: 'Ignore dashboard customer' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Use fixed dates for this widget' }));
+    fireEvent.change(screen.getByTestId('builder-editor-fixed-from'), { target: { value: '2026-01-01' } });
+    fireEvent.change(screen.getByTestId('builder-editor-fixed-to'), { target: { value: '2026-01-31' } });
+    await user.click(screen.getByTestId('builder-editor-save'));
+    await waitFor(() => expect(screen.queryByTestId('builder-editor')).not.toBeInTheDocument());
+    expect(store[0].widgets[0].definition_v2?.dashboard).toEqual({ ignore_filters: ['customer'], fixed_window: { from: '2026-01-01', to: '2026-01-31' } });
+    await user.click(screen.getByRole('button', { name: 'Edit widget 11' }));
+    await screen.findByTestId('builder-editor');
+    await user.click(screen.getByText('Dashboard filter exceptions'));
+    expect(screen.getByRole('checkbox', { name: 'Ignore dashboard customer' })).toBeChecked();
+    expect(screen.getByTestId('builder-editor-fixed-from')).toHaveValue('2026-01-01');
+    expect(screen.getByTestId('builder-editor-fixed-to')).toHaveValue('2026-01-31');
+  });
+
   it('adapts the grid layout callback to layout-only PATCH and keeps definitions/filter state', async () => {
     const {user} = await setup();
     await user.click(screen.getByRole('button',{name:'Select Retail from chart'}));

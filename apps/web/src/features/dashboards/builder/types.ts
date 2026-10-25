@@ -122,6 +122,8 @@ export type V2Response = {
 
 /** Display options stored beside the query; every key is optional. */
 export type WidgetDisplay = {
+  /** S16 comparison series/columns, using the dashboard comparison mode. */
+  compare?: boolean;
   top_n?: number;
   series?: Record<string, { kind?: 'bar' | 'line' | 'area'; axis?: 'left' | 'right' }>;
   kpi?: { compare?: boolean; sparkline?: boolean };
@@ -146,6 +148,8 @@ export type DefinitionV2 = {
     limit?: number;
   };
   display?: WidgetDisplay;
+  /** Explicit per-widget exceptions to the dashboard bar/chips. Own query filters still apply. */
+  dashboard?: { ignore_filters?: string[]; fixed_window?: { from: string; to: string } };
   v1_equivalent?: boolean;
   migrated_from?: Record<string, unknown>;
 };

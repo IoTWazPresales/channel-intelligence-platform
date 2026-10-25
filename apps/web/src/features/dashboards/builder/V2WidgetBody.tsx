@@ -27,7 +27,9 @@ import {
 import { safeDisplayError } from '@/lib/api';
 
 import type { WidgetVisual } from '../types';
-import { breakdownLabel, definitionMeasures, measureOf, measureUnit, isRatio, isAdditive } from './catalog';
+import { breakdownLabel, chartUnit, definitionMeasures, measureOf, measureUnit, isRatio, isAdditive } from './catalog';
+import { ComparisonChart } from './ComparisonChart';
+import { mergeComparison, type ComparisonData } from './comparison';
 import type { SelectDatum } from './clickFilters';
 import { kpiDelta } from './dates';
 import { effectiveVisualV2 } from './fit';
@@ -53,6 +55,7 @@ export type V2WidgetBodyProps = {
   error: unknown;
   onRetry?: () => void;
   kpi?: KpiExtras;
+  comparison?: ComparisonData;
   /** Caption under a KPI ("Latest report on or before 2026-10-09."). */
   caption?: string;
   onSelect?: (d: SelectDatum, additive: boolean) => void;
@@ -177,9 +180,16 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
   const first = measures[0] ?? measureOf(catalog, measureIds[0] ?? '');
   const unit = measureUnit(first);
   const firstLabel = first?.label ?? measureIds[0] ?? 'Value';
+  const compared = useMemo(() => props.comparison?.result?.ok && result?.ok
+    ? mergeComparison(result, props.comparison.result, def, props.comparison.window, props.comparison.previousWindow, props.comparison.label) : null,
+    [result, props.comparison, def]);
+  const displayed = compared?.ok ? compared.response : result;
+  const comparisonNote = props.comparison ? props.comparison.loading || props.comparison.stale ? 'Updating comparison…'
+    : props.comparison.error ? `Comparison could not load: ${safeDisplayError(props.comparison.error)}`
+    : compared?.note ?? (props.comparison.result && !props.comparison.result.ok ? 'Comparison was refused; current figures remain visible.' : undefined) : undefined;
   const tcols = useMemo(
-    () => tableCols(result, (c) => measureUnit(measureOf(catalog, c.id)) ?? 'number'),
-    [result, catalog],
+    () => tableCols(displayed, (c) => measureOf(catalog, c.id) ? measureUnit(measureOf(catalog, c.id)) : chartUnit(c.unit)),
+    [displayed, catalog],
   );
   const colDefs = useMemo(() => gridColumns(tcols, def.display?.table?.rules), [tcols, def.display?.table?.rules]);
 
@@ -229,7 +239,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
 
   const total = result.totals?.[measureIds[0] ?? ''];
   const totalNum = typeof total === 'number' ? total : total == null ? null : Number(total);
-  const empty = visual === 'kpi' ? totalNum == null || (totalNum === 0 && result.rows.length === 0) : result.rows.length === 0;
+  const empty = visual === 'kpi' ? totalNum == null || (totalNum === 0 && result.rows.length === 0) : displayed?.rows.length === 0;
   if (empty) {
     return (
       <Box sx={{ p: 1 }} data-testid={`dashboard-widget-empty-${testKey}`}>
@@ -282,9 +292,10 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
   if (visual === 'table') {
     const firstBd = breakdownColumns(result)[0];
     return (
-      <Box sx={{ height: '100%', minHeight: 160 }} data-testid={`dashboard-widget-table-${testKey}`}>
+      <Stack sx={{ height: '100%', minHeight: 160 }} data-testid={`dashboard-widget-table-${testKey}`}>
+        <Box sx={{ flex: 1, minHeight: 120 }}>
         <EnterpriseDataGrid<V2Row>
-          rowData={result.rows}
+          rowData={displayed?.rows ?? result.rows}
           columnDefs={colDefs}
           height="100%"
           gridOptions={
@@ -298,7 +309,9 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
               : undefined
           }
         />
-      </Box>
+        </Box>
+        {comparisonNote ? <Typography variant="caption" data-testid="widget-comparison-note">{comparisonNote}</Typography> : null}
+      </Stack>
     );
   }
 
@@ -311,6 +324,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
   const frame = (child: ReactNode, note?: string | null) => (
     <Box data-testid="dashboard-widget-chart" sx={{ height, overflowY: 'auto', overflowX: 'hidden' }}>
       {child}
+      {comparisonNote ? <Typography variant="caption" display="block" data-testid="widget-comparison-note">{comparisonNote}</Typography> : null}
       {note ? (
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
           {note}
@@ -318,6 +332,11 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
       ) : null}
     </Box>
   );
+
+  if (compared?.ok && catalog && (visual === 'bar' || visual === 'line' || visual === 'area')) {
+    return frame(<ComparisonChart response={compared.response} def={def} measures={measures} catalog={catalog} visual={visual}
+      label={props.comparison!.label} height={plotHeight} selectedKeys={selectedKeys} onSelect={onSelect ? (cat, e) => select(cat, e) : undefined} />);
+  }
 
   if (visual === 'pivot') {
     const shaped = pivotRows(result, measures, breakdowns);

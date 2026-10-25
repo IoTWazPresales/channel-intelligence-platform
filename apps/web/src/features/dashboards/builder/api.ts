@@ -112,8 +112,8 @@ export function duplicateBody(dashboard: Dashboard, w: DashboardWidget) {
   const layout_json = { x: typeof l.x === 'number' ? l.x : 0, y: bottom, w: typeof l.w === 'number' ? l.w : 6, h: typeof l.h === 'number' ? l.h : 8 };
   const title = `${w.title} (copy)`;
   if (w.definition_v2) {
-    const { v, kind, query, display } = w.definition_v2;
-    return { title, visual: w.visual, definition_v2: { v, kind, query, ...(display ? { display } : {}) }, layout_json };
+    const { v, kind, query, display, dashboard } = w.definition_v2;
+    return { title, visual: w.visual, definition_v2: { v, kind, query, ...(display ? { display } : {}), ...(dashboard ? { dashboard } : {}) }, layout_json };
   }
   return { title, visual: w.visual, metric_key: w.metric_key, grains: w.grains, period_grain: w.period_grain, filters: w.filters, layout_json };
 }

@@ -1,0 +1,51 @@
+{
+  "full_web": {
+    "passed": 1139,
+    "files": 218,
+    "seconds": 2016,
+    "artifact": "web-original-scope.json",
+    "cutoff": "Before the later two-file fullscreen focus correction; final Unit C/browser evidence follows separately."
+  },
+  "full_api": {
+    "passed": 3376,
+    "skipped": 21,
+    "warnings": 7,
+    "artifact": "api-original-scope.xml",
+    "cutoff": "Before later authenticated-test module was collected; independent auth/export artifact follows."
+  },
+  "authenticated_browser": {
+    "passed": 1,
+    "artifact": "browser-authenticated.json",
+    "harness": "authenticated-browser-harness-corrected.xml",
+    "scope": "Real browser/Next/ASGI/bearer/cip_test, fictional rolled-back data; no startup jobs, production or worker."
+  },
+  "lint": {
+    "exit_code": 0,
+    "errors": 0,
+    "existing_warnings": 50
+  },
+  "typescript": {
+    "exit_code": 0
+  },
+  "acceptance": "pending",
+  "independence": "bounded fresh-context verification; R3 model separation unattested",
+  "final_unit_c": {
+    "passed": 121,
+    "failed": 0,
+    "files": 16,
+    "artifact": "unit-c-original-final.json"
+  },
+  "final_browser": {
+    "passed": 6,
+    "failed": 0,
+    "minutes": 4.7,
+    "artifact": "browser-original-final.json",
+    "includes": "Initial Close focus, reverse-tab containment, Escape and restored trigger focus; themes/widths/13 visuals/22 starter widgets"
+  },
+  "final_auth_export": {
+    "passed": 5,
+    "skipped": 1,
+    "artifact": "auth-export-final.xml",
+    "skip": "Opt-in browser run is separate and passed in authenticated-browser-harness-corrected.xml"
+  }
+}

@@ -18,6 +18,35 @@ vi.mock('./WidgetMenu', () => ({ WidgetMenu: ({ actions }: { actions: WidgetActi
 </> }));
 
 describe('widget export request identity', () => {
+  it('waits for the matching previous answer before enabling comparison exports', async () => {
+    const widget = visualWidgets.find((w) => w.visual === 'bar')!;
+    const answer: V2Response = { ok: true, columns: [], rows: [], totals: {}, truncated: false, refusals: [] };
+    let finish!: (r: V2Response) => void;
+    const execute = vi.fn().mockResolvedValueOnce(answer).mockImplementationOnce(() => new Promise<V2Response>((resolve) => { finish = resolve; }));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(<QueryClientProvider client={qc}><V2ExecutorProvider execute={execute}>
+      <V2WidgetCard widget={widget} def={{ ...widget.definition_v2!, display: { compare: true } }} catalog={catalog} ctx={{ ...NO_FILTERS, window: { from: '2026-07-01', to: '2026-07-31' }, compare: { from: '2026-05-31', to: '2026-06-30' } }} dashboardName="Board" actions={{}} />
+    </V2ExecutorProvider></QueryClientProvider>);
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+    await act(async () => { finish(answer); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export CSV' })).toBeEnabled());
+    qc.clear();
+  });
+  it('compares a fixed widget window against its own previous period, not the dashboard period', async () => {
+    const widget = visualWidgets[0];
+    const execute = vi.fn().mockResolvedValue({ ok: true, columns: [], rows: [], totals: {}, truncated: false, refusals: [] });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const def = { ...widget.definition_v2!, display: { kpi: { compare: true } }, dashboard: { fixed_window: { from: '2026-01-01', to: '2026-01-31' } } };
+    renderWithProviders(<QueryClientProvider client={qc}><V2ExecutorProvider execute={execute}>
+      <V2WidgetCard widget={widget} def={def} catalog={catalog} ctx={{ ...NO_FILTERS, window: { from: '2026-07-01', to: '2026-07-31' }, compare: { from: '2026-05-31', to: '2026-06-30' }, compareMode: 'previous_period' }} dashboardName="Board" actions={{}} />
+    </V2ExecutorProvider></QueryClientProvider>);
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute.mock.calls.map(([req]) => req.period)).toEqual(expect.arrayContaining([
+      { from: '2026-01-01', to: '2026-01-31' }, { from: '2025-12-01', to: '2025-12-31' },
+    ]));
+    qc.clear();
+  });
   it('keeps the old drawing during refresh but disables exports until the current answer arrives, and clears blocked data', async () => {
     const widget = visualWidgets.find((w) => w.visual === 'bar')!;
     const answer: V2Response = { ok: true, columns: [], rows: [], totals: {}, truncated: false, refusals: [] };

@@ -1,0 +1,5 @@
+{
+  "node": "N-0116",
+  "expected_revision": 10,
+  "note": "Original S16 comparison series/table, S17 dashboard exceptions/fixed windows and S19 named CPOR cases implemented. Regression and independent 28-test gap fix verified; focused 38/38, browser 5/5, actual authenticated HTTP workflows 2/2 on rolled-back cip_test. Final full suites running. See N0116_ORIGINAL_SCOPE_EXECUTION.md and VERIFY_ORIGINAL_SCOPE.md. Remain implement/acceptance pending; original business/model/domain decisions and non-owner RLS/authenticated browser proof still open, never accepted deferrals. No production/service/main action."
+}

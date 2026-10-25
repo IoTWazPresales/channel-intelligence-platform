@@ -47,7 +47,8 @@ import { useV2Query } from './BuilderData';
 import { breakdownLabel, isPickableGoverned, lowerFirst, measureOf, modelOf } from './catalog';
 import { BUILDER_VISUALS, effectiveVisualV2, fitsAll, visualsForV2 } from './fit';
 import { FilterValuePicker } from './FilterBar';
-import { requestFor } from './requestFor';
+import { requestFor, validFixedWindow, withWindow } from './requestFor';
+import { compareWindow } from './dates';
 import { NO_FILTERS, type DashboardRunContext } from './runContext';
 import { MAX_RULES } from './table';
 import { BAR_FILTER_KEYS, type CatalogV2, type ColourRule, type DefinitionV2, type V2FilterValue, type V2Measure, type WidgetDisplay } from './types';
@@ -132,6 +133,7 @@ export function BuilderEditorDialog({
   const [breakdowns, setBreakdowns] = useState<string[]>([]);
   const [grain, setGrain] = useState<string | null>(null);
   const [own, setOwn] = useState<Record<string, V2FilterValue[]>>({});
+  const [overrides, setOverrides] = useState<NonNullable<DefinitionV2['dashboard']>>({});
   const [sort, setSort] = useState<{ by: string; dir: 'asc' | 'desc' } | null>(null);
   const [limit, setLimit] = useState<number>(catalog.limits?.default_limit ?? 500);
   const [visual, setVisual] = useState<WidgetVisual>('kpi');
@@ -150,6 +152,7 @@ export function BuilderEditorDialog({
     const f: Record<string, V2FilterValue[]> = {};
     for (const [k, v] of Object.entries(d?.query.filters ?? {})) f[k] = Array.isArray(v) ? v : [v];
     setOwn(f);
+    setOverrides(d?.dashboard ?? {});
     setSort(d?.query.sort ?? null);
     setLimit(d?.query.limit ?? catalog.limits?.default_limit ?? 500);
     setDisplay(d?.display ?? {});
@@ -184,6 +187,7 @@ export function BuilderEditorDialog({
     if (m.kind === 'governed' || !curFirst || curFirst.kind === 'governed' || curFirst.model !== m.model) {
       // A new data family has different filter semantics. Do not retain invisible old filters.
       setOwn({});
+      setOverrides({});
       setMeasures([m.id]);
     } else setMeasures([...measures, m.id]);
   };
@@ -226,9 +230,11 @@ export function BuilderEditorDialog({
     if (breakdowns.length) d.query.breakdowns = [...breakdowns];
     if (breakdowns.includes('period') && grain) d.query.period = { grain };
     if (Object.keys(filters).length) d.query.filters = filters;
+    if (overrides.ignore_filters?.length || overrides.fixed_window) d.dashboard = overrides;
     if (sort && (measures.includes(sort.by) || breakdowns.includes(sort.by))) d.query.sort = sort;
     if (limit && limit !== (catalog.limits?.default_limit ?? 500)) d.query.limit = limit;
     const disp: WidgetDisplay = {};
+    if (['bar', 'line', 'area', 'table'].includes(visual) && display.compare) disp.compare = true;
     if (visual === 'kpi' && display.kpi) disp.kpi = display.kpi;
     if (visual === 'combo' && display.series) disp.series = display.series;
     if (visual === 'dual_axis') disp.series = Object.fromEntries(dualSeries(chosen, display).map((s) => [s.key, { axis: s.axis, kind: s.kind }]));
@@ -237,7 +243,7 @@ export function BuilderEditorDialog({
     if (display.caption) disp.caption = display.caption;
     if (Object.keys(disp).length) d.display = disp;
     return d;
-  }, [measures, chosen, breakdowns, grain, own, sort, limit, visual, display, governed, catalog.limits?.default_limit]);
+  }, [measures, chosen, breakdowns, grain, own, overrides, sort, limit, visual, display, governed, catalog.limits?.default_limit]);
 
   const previewCtx = withDash ? ctx : NO_FILTERS;
   const debounced = useDebounced(definition, 300);
@@ -246,6 +252,9 @@ export function BuilderEditorDialog({
     [debounced, catalog, previewCtx],
   );
   const preview = useV2Query(open && measures.length && plan.status === 'ready' ? plan.request : null, { tag: 'editor-preview' });
+  const previewWindow = debounced.dashboard?.fixed_window && plan.status === 'ready' ? compareWindow(plan.window, previewCtx.compareMode) : previewCtx.compare;
+  const previewCompareReq = open && debounced.display?.compare && plan.status === 'ready' && plan.window && previewWindow ? withWindow(plan.request, previewWindow) : null;
+  const previewCompare = useV2Query(previewCompareReq, { tag: 'editor-compare' });
   const refusals = preview.data && !preview.data.ok ? preview.data.refusals : [];
   const measureRefusals = refusals.filter((r) => r.measure && measures.includes(r.measure));
   const filterRefusals = refusals.filter((r) => /^Filter '/.test(r.reason));
@@ -268,6 +277,8 @@ export function BuilderEditorDialog({
   const rules = display.table?.rules ?? [];
   const setRules = (next: ColourRule[]) => setDisplay((d) => ({ ...d, table: { rules: next } }));
   const spark = sparklineGrain(first, plan);
+  const supportsDates = Boolean(first && (!governed || (first.honours?.dates && !first.honours.all_time_only)));
+  const invalidFixed = Boolean(overrides.fixed_window && (!validFixedWindow(overrides.fixed_window) || !supportsDates));
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl" fullScreen={phone} data-testid="builder-editor" PaperProps={{ sx: { height: { md: '90vh' } } }}>
@@ -408,6 +419,8 @@ export function BuilderEditorDialog({
                   error={preview.isError ? preview.error : null}
                   onRetry={() => void preview.refetch()}
                   caption={plan.caption}
+                  comparison={previewCompareReq && plan.status === 'ready' ? { result: preview.isPlaceholderData || previewCompare.isPlaceholderData ? undefined : previewCompare.data, window: plan.window, previousWindow: previewWindow,
+                    label: previewCtx.compareLabel ?? 'previous period', loading: previewCompare.isFetching, stale: preview.isPlaceholderData || previewCompare.isPlaceholderData, error: previewCompare.isError ? previewCompare.error : undefined } : undefined}
                   testKey="preview"
                   chartHeight={280}
                 />
@@ -544,6 +557,29 @@ export function BuilderEditorDialog({
           ) : null}
 
           {first ? (
+            <Box component="details" data-testid="builder-editor-overrides">
+              <Typography component="summary" variant="subtitle2">Dashboard filter exceptions</Typography>
+              <Typography variant="caption" color="text.secondary">Choose filters this widget should ignore. Its own filters still apply.</Typography>
+              <Stack direction="row" flexWrap="wrap" useFlexGap>
+                {['date', ...catalog.breakdowns.filter((b) => b.id !== 'period').map((b) => b.id)].map((key) => (
+                  <FormControlLabel key={key} label={`Ignore dashboard ${key === 'date' ? 'date range' : breakdownLabel(catalog, key).toLowerCase()}`}
+                    control={<Checkbox size="small" checked={overrides.ignore_filters?.includes(key) ?? false}
+                      onChange={(e) => setOverrides((o) => ({ ...o, ignore_filters: e.target.checked ? [...(o.ignore_filters ?? []), key] : o.ignore_filters?.filter((k) => k !== key) }))} />}
+                  />
+                ))}
+              </Stack>
+              <FormControlLabel label="Use fixed dates for this widget" control={<Switch checked={Boolean(overrides.fixed_window)} disabled={!supportsDates && !overrides.fixed_window}
+                onChange={(e) => setOverrides((o) => ({ ...o, fixed_window: e.target.checked ? ctx.window ?? { from: '', to: '' } : undefined }))} />} />
+              {overrides.fixed_window ? <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                {(['from', 'to'] as const).map((key) => <TextField key={key} type="date" size="small" label={`Fixed ${key}`} value={overrides.fixed_window![key]}
+                  InputLabelProps={{ shrink: true }} error={invalidFixed} inputProps={{ 'data-testid': `builder-editor-fixed-${key}` }}
+                  onChange={(e) => setOverrides((o) => ({ ...o, fixed_window: { ...o.fixed_window!, [key]: e.target.value } }))} />)}
+              </Stack> : null}
+              {invalidFixed ? <Alert severity="warning">Choose valid fixed dates for a measure that accepts date ranges.</Alert> : null}
+            </Box>
+          ) : null}
+
+          {first ? (
             <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap alignItems="center">
               <FormControl size="small" sx={{ minWidth: 220 }}>
                 <InputLabel id="builder-sort-label">Sort rows by</InputLabel>
@@ -632,6 +668,9 @@ export function BuilderEditorDialog({
               </Box>
             ) : null}
           </Box>
+
+          {['bar', 'line', 'area', 'table'].includes(visual) && first ? <FormControlLabel label="Compare using the dashboard comparison setting"
+            control={<Switch checked={Boolean(display.compare)} onChange={(e) => setDisplay((d) => ({ ...d, compare: e.target.checked }))} />} /> : null}
 
           {visual === 'kpi' && first ? (
             <Box data-testid="builder-editor-kpi-options">
@@ -789,7 +828,7 @@ export function BuilderEditorDialog({
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={!measures.length || saving}
+          disabled={!measures.length || saving || invalidFixed}
           onClick={() => onSave({ title: title.trim() || autoTitle, visual, definition_v2: definition })}
           data-testid="builder-editor-save"
         >

@@ -1,0 +1,6 @@
+{
+  "node": "N-0116",
+  "path": ".eif/audit/PROGRAMME_20261024/N0116_ORIGINAL_SCOPE_EXECUTION.md",
+  "note": "N-0116 original S16/S17/S19 continuation implemented; s16-gap-fixed 38/38, independent comparison/request sample 28/28; browser-original-scope 5/5; authenticated-api-corrected 2/2 real bearer/ASGI on rolled-back cip_test, fixed-delivery-db-corrected 3/3. Full final API/web still running. No acceptance; original domain/model/authenticated browser and non-owner RLS proof remain open.",
+  "provenance": "implementation-observation"
+}

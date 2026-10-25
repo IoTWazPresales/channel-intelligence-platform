@@ -27,7 +27,7 @@ const ALL_GRAINS = ['week', 'month', 'quarter', 'year'];
 
 const DSI_BD = ['period', 'customer', 'distributor', 'product', 'bu', 'channel', 'region'];
 const CST_BD = ['period', 'customer', 'product', 'bu', 'channel', 'region', 'site_label'];
-const CPOR_BD = ['period', 'customer', 'distributor', 'product', 'bu', 'promo_type', 'status', 'workflow_status'];
+const CPOR_BD = ['period', 'case', 'customer', 'distributor', 'product', 'bu', 'promo_type', 'status', 'workflow_status'];
 
 const W_CST_NO_DISTRIBUTOR = 'Customer sell-through reports do not say which distributor supplied the stock.';
 const W_SITE_CST_ONLY = 'Store / site comes only from customer sell-through reports. Distributor sell-out has no store.';
@@ -69,6 +69,7 @@ export const builderCatalog: CatalogV2 = {
     { id: 'product', label: 'Product', group: 'Product', kind: 'entity' },
     { id: 'bu', label: 'Business unit (product line)', group: 'Product', kind: 'attribute', of: 'product' },
     { id: 'site_label', label: 'Store / site', group: 'Store', kind: 'local', models: ['cst_sellthrough'] },
+    { id: 'case', label: 'Case', group: 'Promotion', kind: 'local', models: ['cpor'] },
     { id: 'promo_type', label: 'Promotion type', group: 'Promotion', kind: 'local', models: ['cpor'] },
     { id: 'status', label: 'Case status', group: 'Promotion', kind: 'local', models: ['cpor'] },
     { id: 'workflow_status', label: 'Case approval status', group: 'Promotion', kind: 'local', models: ['cpor'] },
@@ -238,7 +239,10 @@ const START = Date.UTC(2026, 6, 6);
  * ---------------------------------------------------------------------------------------------- */
 
 const LABEL: Record<string, string> = Object.fromEntries(builderCatalog.breakdowns.map((b) => [b.id, b.label]));
-const ENTITY: Record<string, [number, string][]> = { customer: CUSTOMERS, distributor: DISTRIBUTORS, product: PRODUCTS };
+const ENTITY: Record<string, [number, string][]> = {
+  customer: CUSTOMERS, distributor: DISTRIBUTORS, product: PRODUCTS,
+  case: [[301, 'Autumn promotion'], [302, 'Autumn promotion'], [303, 'Campus launch']],
+};
 const ATTR: Record<string, string[]> = { bu: BUS, channel: CHANNELS, region: REGIONS, promo_type: PROMO_TYPES, status: STATUSES, workflow_status: STATUSES, site_label: ['Rosebank', 'Sandton City', 'Canal Walk', 'Gateway', 'Menlyn', 'Eastgate'] };
 
 function column(id: string): V2Column {
@@ -254,8 +258,21 @@ function measureColumn(id: string): V2Column {
 
 type Member = Record<string, unknown>;
 
-function members(breakdown: string, grain: string | null | undefined): Member[] {
+function members(breakdown: string, grain: string | null | undefined, window?: { from?: string | null; to?: string | null }): Member[] {
   if (breakdown === 'period') {
+    if (window?.from && window.to) {
+      let start = new Date(`${window.from}T00:00:00Z`);
+      const bound = new Date(`${window.to}T00:00:00Z`);
+      if (grain === 'week') start = new Date(start.getTime() - ((start.getUTCDay() + 6) % 7) * DAY);
+      else start = new Date(Date.UTC(start.getUTCFullYear(), grain === 'year' ? 0 : grain === 'quarter' ? Math.floor(start.getUTCMonth() / 3) * 3 : start.getUTCMonth(), 1));
+      const out: Member[] = [];
+      while (start <= bound && out.length < 200) {
+        const next = grain === 'week' ? new Date(start.getTime() + 7 * DAY) : new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + (grain === 'year' ? 12 : grain === 'quarter' ? 3 : 1), 1));
+        out.push({ bucket_key: iso(start.getTime()), bucket_start: iso(start.getTime()), bucket_end: iso(next.getTime() - DAY) });
+        start = next;
+      }
+      return out;
+    }
     if (grain === 'month') {
       return ['2026-07', '2026-08', '2026-09'].map((k, i) => ({
         bucket_key: k,
@@ -295,10 +312,10 @@ function value(measure: string, i: number, j: number): number {
   return 120 + seed * 11;
 }
 
-function cross(breakdowns: string[], grain: string | null | undefined): Member[] {
+function cross(breakdowns: string[], grain: string | null | undefined, window?: { from?: string | null; to?: string | null }): Member[] {
   let rows: Member[] = [{}];
   for (const b of breakdowns) {
-    const ms = members(b, grain);
+    const ms = members(b, grain, window);
     rows = rows.flatMap((r) => ms.map((m) => ({ ...r, ...m })));
   }
   return rows;
@@ -309,7 +326,7 @@ const ADDITIVE = new Set(builderCatalog.measures.filter((m) => m.additivity === 
 export function fixtureResponse(req: V2Request, opts: { scale?: number; maxRows?: number; truncatedOf?: number; unassigned?: boolean } = {}): V2Response {
   const breakdowns = req.breakdowns ?? [];
   const grain = req.period?.grain ?? 'week';
-  let combos = cross(breakdowns, grain);
+  let combos = cross(breakdowns, grain, req.period);
   if (opts.unassigned && breakdowns.length === 1 && ENTITY[breakdowns[0]]) {
     combos = [...combos, { [`${breakdowns[0]}_id`]: null, [`${breakdowns[0]}_name`]: null }];
   }
@@ -337,7 +354,7 @@ export function fixtureResponse(req: V2Request, opts: { scale?: number; maxRows?
     totals,
     truncated: Boolean(opts.truncatedOf),
     refusals: [],
-    explain: { row_count: opts.truncatedOf ?? rows.length, data_vintage: { min: '2024-01-02', max: '2026-10-04' } },
+    explain: { row_count: opts.truncatedOf ?? rows.length, data_vintage: { min: req.period?.from ?? '2024-01-02', max: req.period?.to ?? '2026-10-04' } },
   };
 }
 
@@ -381,11 +398,12 @@ const q = (measures: string[], breakdowns: string[] = [], grain?: string, extra:
 
 export const visualWidgets: DashboardWidget[] = [
   widget('Sell-through units', 'kpi', { v: 1, query: q(['cst_sellthrough.units']), display: { kpi: { compare: true, sparkline: true } } }),
-  widget('Sell-out units by business unit', 'bar', { v: 1, query: q(['dsi_sellout.units'], ['bu']) }),
+  widget('Sell-out units by business unit', 'bar', { v: 1, query: q(['dsi_sellout.units'], ['bu']), display: { compare: true } }),
   widget('Sell-through units by customer', 'hbar', { v: 1, query: q(['cst_sellthrough.units'], ['customer']), display: { top_n: 15 } }),
   widget('Sell-out units by month and business unit', 'stacked_bar', { v: 1, query: q(['dsi_sellout.units'], ['period', 'bu'], 'month') }),
-  widget('Sell-through units by week', 'line', { v: 1, query: q(['cst_sellthrough.units'], ['period'], 'week') }),
-  widget('Sell-out units by week', 'area', { v: 1, query: q(['dsi_sellout.units'], ['period'], 'week') }),
+  widget('Sell-through units by week', 'line', { v: 1, query: q(['cst_sellthrough.units'], ['period'], 'week'), display: { compare: true } }),
+  widget('Sell-out units by week', 'area', { v: 1, query: q(['dsi_sellout.units'], ['period'], 'week'), display: { compare: true },
+    dashboard: { ignore_filters: ['distributor'], fixed_window: { from: '2026-01-01', to: '2026-03-31' } } }),
   widget('Estimated and result units by quarter', 'combo', {
     v: 1,
     query: q(['cpor.estimate_units', 'cpor.result_units'], ['period'], 'quarter'),
@@ -405,6 +423,7 @@ export const visualWidgets: DashboardWidget[] = [
       sort: { by: 'cst_sellthrough.units', dir: 'desc' },
     }),
     display: {
+      compare: true,
       table: {
         rules: [
           { measure: 'cst_sellthrough.units_per_week', op: '<', value: 8, tone: 'warn' },
@@ -453,8 +472,8 @@ export function fixtureExecute(req: V2Request): Promise<V2Response> {
       break;
   }
   // The KPI comparison: the same question over the window before the dashboard's.
-  const before = Boolean(req.period?.to && req.period.to < FIXTURE_WINDOW.from);
-  return Promise.resolve(fixtureResponse(req, { scale: before ? 0.88 : 1 }));
+  const month = req.period?.from ? new Date(`${req.period.from}T00:00:00Z`).getUTCMonth() : 6;
+  return Promise.resolve(fixtureResponse(req, { scale: Math.round((0.7 + month * 0.05) * 100) / 100 }));
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -502,7 +521,6 @@ export const fixtureTemplates: DashboardTemplate[] = [
     left_out: [
       { what: 'Open cases', reason: 'Which statuses count as open is a proposed decision (4).', pending_id: 'cpor.open_cases' },
       { what: 'Case value', reason: 'Proposed decision 4.', pending_id: null },
-      { what: 'A list of cases', reason: 'There is no case breakdown yet.', pending_id: null },
       { what: 'Cases as a pie', reason: 'Cases are a distinct count, so they do not add up into slices.', pending_id: null },
     ],
   },

@@ -8,11 +8,17 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 import { V2ExecutorProvider } from './BuilderData';
 import { requestFor } from './requestFor';
 import type { DefinitionV2, V2Response } from './types';
-import { ViewRowsDrawer } from './ViewRowsDrawer';
+import { ViewRowsDrawer, viewRowsRequest } from './ViewRowsDrawer';
 
 vi.mock('@/components/EnterpriseDataGrid', () => ({ EnterpriseDataGrid: () => <div>Grouped rows</div> }));
 
 describe('drill-down totals', () => {
+  it('requests CPOR case identities at the finest allowed grain and preserves a selected case ID', () => {
+    const def: DefinitionV2 = { v: 1, query: { measures: ['cpor.cases'] } };
+    const plan = requestFor(def, { catalog, filters: { case: [301] }, window: null });
+    const spec = viewRowsRequest(def, plan, catalog);
+    expect(spec?.request).toMatchObject({ breakdowns: ['case', 'customer', 'product'], filters: { case: [301] }, limit: 5000 });
+  });
   it.each(['dsi_sellout.units', 'cst_sellthrough.reported_soh', 'cpor.delivery_rate'])(
     'labels the total at the drill grouping without asserting widget equality: %s',
     async (measure) => {

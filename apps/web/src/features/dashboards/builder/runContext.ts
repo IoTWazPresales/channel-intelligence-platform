@@ -5,13 +5,14 @@
 
 import type { SelectDatum } from './clickFilters';
 import type { FilterSelection, ValueNames } from './requestFor';
-import type { DateWindow } from './types';
+import type { CompareMode, DateWindow } from './types';
 
 export type DashboardRunContext = {
   filters: FilterSelection;
   window: DateWindow;
   /** The KPI comparison window (null: no comparison). */
   compare: DateWindow;
+  compareMode?: CompareMode;
   /** "previous period" / "previous year". */
   compareLabel?: string;
   required?: string[];

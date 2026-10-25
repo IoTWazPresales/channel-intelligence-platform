@@ -704,10 +704,11 @@
       {
         "id": 100205,
         "dashboard_id": 1002,
-        "title": "Status and approval status",
+        "title": "Promotion cases and outcomes",
         "visual": "table",
         "metric_key": "cpor.cases",
         "grains": [
+          "case",
           "status",
           "workflow_status"
         ],
@@ -733,6 +734,7 @@
               "cpor.delivery_rate"
             ],
             "breakdowns": [
+              "case",
               "status",
               "workflow_status"
             ]

@@ -3,30 +3,38 @@
 Branch `feat/ns-2-brief-nav-collapse`. Start HEAD `57b3a98e`. Read this file first on resume and continue
 from the last unit not marked DONE.
 
-## Execution resumed 2026-10-24 (Codex)
+## Execution resumed 2026-10-24/25 (Codex)
 
 - Warren confirmed original functional scope and authorised development, tests, EIF updates and
   explicit-path commits/pushes. Temporary cuts are not accepted permanent deferrals; incomplete nodes
   receive no acceptance. Production cip migration/deployment, API/worker restarts and main remain forbidden.
 - N-0116 ownership restored with supported lease + stage events under
   `RUN-20261024-N0116-IMPL-CODEX`; stage implement. Lease re-acquired after the later continuation
-  because the earlier four-hour lease had expired. All inherited frontend files preserved.
+  because the earlier four-hour lease had expired, including 25 October. All inherited frontend files preserved.
 - Corrected colour assertion (50 matches >=20; 5 tests the ignored fourth rule), without changing matcher.
   Four regressions first failed in 8 cases, then builder suite passed 60 tests: dashboard switch state,
   empty intersections, mixed units on shared axes and unsupported drill-total equality claims.
 - Added actual dual-axis, scatter and pivot, complete fixture snapshots of all 22 current starter widgets,
   catalog-driven extra attribute filters, compatibility/export/workspace/editor/render tests. Sample
-  builder + charts 119 passed; workspace/filter integration 10 passed. Final checks are in progress.
+  builder + charts 119 passed; workspace/filter integration 10 passed at that earlier checkpoint.
 - Five isolated Playwright checks passed: every visual and current starter at 1280/390, light/dark
   verified by actual computed background colour; chart click, Esc, full screen, rows and PNG download.
-  Accepted captures are only `PROGRAMME_20261024/renders/accepted/`; earlier captures had an unchecked
+  That earlier checkpoint uses `PROGRAMME_20261024/renders/accepted/`; the new continuation uses `renders/original-scope/`; earlier captures had an unchecked
   mobile hydration/theme race. Isolated :3106, `.tmp/builder-next`, proxy disabled; production untouched.
 - Independent different-model sample re-executed 42 focused tests and found three further defects:
   missing catalog dropping filters, hidden own filters after model change, and summed non-additive
   Other series. Targeted fixes/regressions applied. Verifier exhausted its usage before final report;
   no completed independent verification gate is claimed.
-- Original S16 comparisons, S17 widget filter/date overrides, S19 CPOR cases and the missing original
-  N-0115/business definitions remain open work, not permanent deferrals. No node is closed.
+- Original S16/S17/S19 now implemented. Backend unit `5aceee9a`; frontend/evidence pin in CONTEXT.
+  Full web 1,139/1,139; API 3,376 / 21 skipped. Later final-source Unit C 121/121; fixture browser 6/6;
+  auth/export 5 passed / one opt-in skip plus separate actual authenticated browser 1/1. Focus failed
+  twice, paused per AGENTS, then fixed on Warren's continue: focus/containment/Escape/return passed.
+  Tsc/lint passed (50 existing warnings). Full web preceded only that focus correction, covered by
+  later complete Unit C/browser checks. See N0116_ORIGINAL_SCOPE_EXECUTION.md, original-final-summary.json,
+  source SHA manifest and VERIFY_ORIGINAL_SCOPE.md. No node acceptance.
+- Missing original N-0115/business definitions, non-owner RLS/performance and full original acceptance
+  remain open work, not permanent deferrals. No node is closed. Existing cip_test login owns FORCE RLS
+  tables and cannot bypass RLS; that does not constitute non-owner-role proof.
 - Current execution evidence: `.eif/audit/PROGRAMME_20261024/`. Clean final test results are in N0116_TEST_EVIDENCE.md; commit pin follows. EIF verify integrity true at rev 2759; same nine acknowledged older-node gate issues. Programme ledger/views remain local under the existing protected-path checkpoint boundary.
 
 ## Start check (2026-10-23)

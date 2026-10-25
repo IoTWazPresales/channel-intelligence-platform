@@ -22,7 +22,11 @@ const measures = ['cpor.support_usd', 'cpor.delivery_rate'];
 const def: DefinitionV2 = { v: 1, query: { measures, breakdowns: ['customer'] } };
 const result: V2Response = {
   ok: true,
-  columns: [{ id: 'customer', kind: 'breakdown', label: 'Customer', fields: ['customer_id', 'customer_name'] }],
+  columns: [
+    { id: 'customer', kind: 'breakdown', label: 'Customer', fields: ['customer_id', 'customer_name'] },
+    { id: measures[0], kind: 'measure', label: 'Support USD', fields: [measures[0]], unit: 'usd' },
+    { id: measures[1], kind: 'measure', label: 'Delivery rate', fields: [measures[1]], unit: 'ratio' },
+  ],
   rows: [
     { customer_id: 1, customer_name: 'Kestrel', [measures[0]]: -10, [measures[1]]: 0.25 },
     { customer_id: 2, customer_name: 'Marula', [measures[0]]: 0, [measures[1]]: 0 },
@@ -32,6 +36,28 @@ const result: V2Response = {
 };
 
 describe('v2 widget rendering', () => {
+  it.each(['line', 'area', 'bar'] as const)('renders an actual dashed previous series for %s with bucket dates in the accessible table', (visual) => {
+    const d: DefinitionV2 = { v: 1, query: { measures: [measures[0]], breakdowns: ['period'], period: { grain: 'month' } }, display: { compare: true } };
+    const columns: V2Response['columns'] = [
+      { id: 'period', kind: 'breakdown', label: 'Period', fields: ['bucket_key', 'bucket_start', 'bucket_end'] },
+      { id: measures[0], kind: 'measure', label: 'Support USD', fields: [measures[0]], unit: 'usd' },
+    ];
+    const c = { ...result, columns, rows: ['2026-04', '2026-05'].map((k) => ({ bucket_key: k, bucket_start: `${k}-01`, bucket_end: `${k}-30`, [measures[0]]: 500 })) };
+    const p = { ...c, rows: ['2026-01', '2026-02'].map((k) => ({ bucket_key: k, bucket_start: `${k}-01`, bucket_end: `${k}-28`, [measures[0]]: 400 })) };
+    const { container } = renderWithProviders(<V2WidgetBody def={d} visual={visual} catalog={catalog} result={c} loading={false} error={null} testKey="compare"
+      comparison={{ result: p, window: { from: '2026-04-01', to: '2026-05-31' }, previousWindow: { from: '2026-01-01', to: '2026-02-28' }, label: 'previous period' }} />);
+    expect(container.querySelector('[stroke-dasharray="5 4"]')).not.toBeNull();
+    expect(screen.getByRole('table')).toHaveTextContent('Previous bucket');
+    expect(screen.getByRole('table')).toHaveTextContent('2026-01-01 to 2026-01-28');
+    expect(screen.getByTestId('widget-comparison-note')).toHaveTextContent('boundary buckets may be partial');
+  });
+
+  it('adds comparison table columns with the original currency and rate units', () => {
+    renderWithProviders(<V2WidgetBody def={{ ...def, display: { compare: true } }} visual="table" catalog={catalog} result={result} loading={false} error={null} testKey="compare-table"
+      comparison={{ result, window: null, previousWindow: null, label: 'previous period' }} />);
+    expect(screen.getByTestId('grid-boundary')).toHaveTextContent('Support USD, previous period (US$)');
+    expect(screen.getByTestId('grid-boundary')).toHaveTextContent('Delivery rate, previous period (%)');
+  });
   it.each(['dual_axis', 'scatter'] as const)('pauses %s safely when catalog metadata is unavailable', (visual) => {
     renderWithProviders(<V2WidgetBody def={def} visual={visual} catalog={null} result={result} loading={false} error={null} testKey="metadata" />);
     expect(screen.getByTestId('dashboard-widget-model-unavailable-metadata')).toHaveTextContent('data model');

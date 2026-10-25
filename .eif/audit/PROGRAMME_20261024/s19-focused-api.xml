@@ -1,0 +1,370 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="81" time="43.209" timestamp="2026-10-24T22:13:45.615138+02:00" hostname="RF2300014-NB3"><testcase classname="tests.test_query_model_graph" name="test_model_file_loads_with_three_models_and_tenant_paths" time="0.131" /><testcase classname="tests.test_query_model_graph" name="test_loader_refuses_a_model_with_no_tenant_path" time="1.590" /><testcase classname="tests.test_query_model_graph" name="test_loader_refuses_unknown_table_column_and_rule" time="0.443" /><testcase classname="tests.test_query_model_graph" name="test_loader_refuses_a_wall_text_that_drifts_from_v1" time="0.197" /><testcase classname="tests.test_query_model_graph" name="test_loader_accepts_tenant_via_dim_product" time="0.337" /><testcase classname="tests.test_query_model_graph" name="test_every_v1_refuse_example_is_kept_verbatim_by_a_wall" time="0.054" /><testcase classname="tests.test_query_model_graph" name="test_derived_breakdowns_per_model" time="0.001" /><testcase classname="tests.test_query_model_graph" name="test_cpor_named_case_breakdown_uses_the_existing_tenant_join" time="0.248" /><testcase classname="tests.test_query_model_graph" name="test_named_local_breakdown_refuses_an_unknown_name_column" time="0.153" /><testcase classname="tests.test_query_model_graph" name="test_any_three_derived_breakdowns_are_valid" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_old_refuse_examples_refused_with_their_exact_text_in_v2_and_v1" time="0.003" /><testcase classname="tests.test_query_model_graph" name="test_wall_reasons_for_measures_without_a_v1_example" time="0.003" /><testcase classname="tests.test_query_model_graph" name="test_one_model_per_query_holds_the_customer_role_wall" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_stock_is_never_summed_across_periods" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_governed_refuse_all_keeps_its_reason" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_governed_metric_is_answered_alone_at_its_v1_grains" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_day_grain_refused_with_the_v1_text" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_calculated_measures_state_their_needs" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_unknown_measure_ids_are_refused[dsi_sellout.units; drop table dim_customer]" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_unknown_measure_ids_are_refused[dsi_sellout.units' or '1'='1]" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_unknown_measure_ids_are_refused[f.units]" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_unknown_measure_ids_are_refused[../../etc]" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_unknown_measure_ids_are_refused[DSI_SELLOUT.UNITS ]" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_unknown_breakdown_sort_and_filter_ids_are_refused" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_filter_values_are_coerced_capped_and_bound" time="0.007" /><testcase classname="tests.test_query_model_graph" name="test_limit_above_max_is_refused_not_clamped" time="0.002" /><testcase classname="tests.test_query_model_graph" name="test_governed_metrics_check_limit_and_sort_like_model_measures" time="0.003" /><testcase classname="tests.test_query_model_graph" name="test_governed_metrics_refuse_filters_their_handler_never_reads" time="0.003" /><testcase classname="tests.test_query_model_graph" name="test_cpor_compiles_the_portfolio_rules_and_case_tenant" time="0.010" /><testcase classname="tests.test_query_model_graph" name="test_attribute_joins_are_left_joins_with_unassigned" time="0.010" /><testcase classname="tests.test_query_model_graph" name="test_v2_cache_key_hashes_request_tenant_version_scope_and_role" time="0.003" /><testcase classname="tests.test_query_model_db" name="test_compiler_matches_volume_series_at_every_grain[asyncio]" time="2.283" /><testcase classname="tests.test_query_model_db" name="test_two_tenants_zero_leakage[asyncio]" time="0.424" /><testcase classname="tests.test_query_model_db" name="test_tenant_via_dim_product_path[asyncio]" time="0.612" /><testcase classname="tests.test_query_model_db" name="test_unassigned_bucket_keeps_totals_and_names_sit_beside_ids[asyncio]" time="0.412" /><testcase classname="tests.test_query_model_db" name="test_limit_truncates_rows_but_totals_come_from_sql[asyncio]" time="0.338" /><testcase classname="tests.test_query_model_db" name="test_calculated_measures_null_rules[asyncio]" time="0.403" /><testcase classname="tests.test_query_model_db" name="test_cst_never_finer_than_stored_with_the_v1_text[asyncio]" time="0.389" /><testcase classname="tests.test_query_model_db" name="test_reported_stock_follows_the_sell_through_overview_rule[asyncio]" time="0.398" /><testcase classname="tests.test_query_model_db" name="test_cpor_measures_follow_the_portfolio_service[asyncio]" time="0.670"><failure message="sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) &lt;class 'asyncpg.exceptions.UndefinedFunctionError'&gt;: operator does not exist: integer = character varying&#10;HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.&#10;[SQL: WITH agg AS &#10;(SELECT b_case.id AS case_id, coalesce(b_case.case_name, 'Unassigned') AS case_name, coalesce(sum(coalesce(f.ttl_support_usd, CASE WHEN (f.estimate_qty != $1::INTEGER) THEN f.support_usd * f.estimate_qty END)), 0) AS m0 &#10;FROM cpor_case_line AS f JOIN cpor_case AS b_case ON b_case.id = f.case_id &#10;WHERE b_case.tenant_id = $2::VARCHAR AND b_case.superseded_by_case_id IS NULL AND b_case.intelligence_exclude IS false AND strpos(coalesce(f.remark, ''), '[voided]') = $3::INTEGER AND strpos(coalesce(f.remark, ''), '[split into layers]') = $4::INTEGER AND coalesce(f.estimate_qty, 0) &gt; $5::INTEGER AND b_case.id IN ($7::VARCHAR) GROUP BY b_case.id, b_case.case_name)&#10; SELECT agg.case_id, agg.case_name, agg.m0 AS out0 &#10;FROM agg ORDER BY out0 DESC NULLS LAST, agg.case_id ASC NULLS LAST &#10; LIMIT $6::INTEGER]&#10;[parameters: (0, 'n0115-a-5c0c09', 0, 0, 0, 501, '476')]&#10;(Background on this error at: https://sqlalche.me/e/20/f405)">self = &lt;sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x0000013C67343C40&gt;
+operation = "WITH agg AS \n(SELECT b_case.id AS case_id, coalesce(b_case.case_name, 'Unassigned') AS case_name, coalesce(sum(coale...gg.case_name, agg.m0 AS out0 \nFROM agg ORDER BY out0 DESC NULLS LAST, agg.case_id ASC NULLS LAST \n LIMIT $6::INTEGER"
+parameters = (0, 'n0115-a-5c0c09', 0, 0, 0, 501, ...)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+&gt;               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:526: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:755: in _prepare
+    prepared_stmt = await self._connection.prepare(
+.venv\Lib\site-packages\asyncpg\connection.py:635: in prepare
+    return await self._prepare(
+.venv\Lib\site-packages\asyncpg\connection.py:653: in _prepare
+    stmt = await self._get_statement(
+.venv\Lib\site-packages\asyncpg\connection.py:432: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+&gt;   ???
+E   asyncpg.exceptions.UndefinedFunctionError: operator does not exist: integer = character varying
+E   HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+
+asyncpg\\protocol\\protocol.pyx:165: UndefinedFunctionError
+
+The above exception was the direct cause of the following exception:
+
+self = &lt;sqlalchemy.engine.base.Connection object at 0x0000013C671439B0&gt;
+dialect = &lt;sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x0000013C3DF449E0&gt;
+context = &lt;sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x0000013C673A1010&gt;
+statement = &lt;sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x0000013C6736CF80&gt;
+parameters = [(0, 'n0115-a-5c0c09', 0, 0, 0, 501, ...)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -&gt; CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+&gt;                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;AdaptedConnection &lt;asyncpg.connection.Connection object at 0x0000013C67116B70&gt;&gt;
+error = UndefinedFunctionError('operator does not exist: integer = character varying')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+&gt;                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: &lt;class 'asyncpg.exceptions.UndefinedFunctionError'&gt;: operator does not exist: integer = character varying
+E                   HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:797: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.mark.anyio
+    async def test_cpor_measures_follow_the_portfolio_service():
+        from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
+    
+        db = await _session_or_skip()
+        try:
+            s = await _seed(db)
+    
+            def case(code, **kw):
+                c = CporCase(
+                    case_code=_key(code)[-60:], tenant_id=TA, customer_id=s.cA1.id, promotion_type="Price drop",
+                    window_start=date(2026, 3, 2), window_end=date(2026, 3, 29), **kw,
+                )
+                db.add(c)
+                return c
+    
+            live, superseded, excluded = case("live", status="approved"), case("sup"), case("exc", intelligence_exclude=True)
+            await db.flush()
+            superseded.superseded_by_case_id = live.id
+    
+            def line(c, prod, est, res, usd, *, remark=None, ttl_usd=None, ws=date(2026, 3, 2)):
+                db.add(
+                    CporCaseLine(
+                        case_id=c.id, product_id=prod.id, distributor_id=s.dA.id, window_start=ws, window_end=ws + timedelta(days=27),
+                        srp=100, vat_rate=15, dealer_margin_pct=10, estimate_qty=est, result_qty=res, support_usd=usd,
+                        ttl_support_usd=ttl_usd, ttl_support=(usd or 0) * est * 18, remark=remark,
+                    )
+                )
+    
+            line(live, s.pA1, 10, 8, 2.5)
+            line(live, s.pA2, 4, 0, 1.0, ttl_usd=7, ws=date(2026, 3, 9))
+            line(live, s.pA1, 5, 5, 3.0, remark="[voided] by steward", ws=date(2026, 3, 16))
+            line(live, s.pA2, 0, 0, 3.0, ws=date(2026, 3, 23))
+            line(superseded, s.pA1, 99, 99, 9.0)
+            line(excluded, s.pA1, 77, 77, 9.0)
+            await db.flush()
+    
+            portfolio = await db.run_sync(build_portfolio_intelligence)
+            mine = next(c for c in portfolio["by_customer"] if c["customer_id"] == s.cA1.id)
+            r = await _v2(
+                db, ["cpor.support_usd", "cpor.support_zar", "cpor.estimate_units", "cpor.result_units", "cpor.delivery_rate",
+                     "cpor.support_per_unit_usd", "cpor.cases", "cpor.lines"],
+                ["customer"], filters={"customer": s.cA1.id},
+            )
+            row = r["rows"][0]
+            assert row["cpor.support_usd"] == pytest.approx(mine["support_usd"]) == pytest.approx(25 + 7)
+            assert row["cpor.support_zar"] == pytest.approx(mine["support_zar"])
+            assert row["cpor.estimate_units"] == mine["estimate_qty"] == 14.0
+            assert row["cpor.result_units"] == mine["result_qty"] == 8.0
+            assert row["cpor.delivery_rate"] == pytest.approx(mine["delivery_rate"])
+            assert row["cpor.support_per_unit_usd"] == pytest.approx(mine["support_per_unit_sold_usd"])
+            assert row["cpor.cases"] == 1.0 and row["cpor.lines"] == 2.0
+            # Ratio null when the denominator is 0: product a2 sold nothing.
+            byp = await _v2(db, ["cpor.support_per_unit_usd"], ["product"], filters={"customer": s.cA1.id})
+            vals = {x["product_id"]: x["cpor.support_per_unit_usd"] for x in byp["rows"]}
+            assert vals[s.pA2.id] is None and vals[s.pA1.id] == pytest.approx(25 / 8)
+            st = await _v2(db, ["cpor.cases"], ["status", "workflow_status"], filters={"customer": s.cA1.id})
+            assert [(x["status"], x["workflow_status"]) for x in st["rows"]] == [("approved", "draft")]
+            # Tenant B sees none of tenant A's cases.
+            none = await _v2(db, ["cpor.support_usd"], ["customer"], tenant=TB)
+            assert none["rows"] == [] and none["totals"]["cpor.support_usd"] == 0.0
+    
+            # S19: labels may repeat or be absent; cases stay distinct by the case ID.
+            live.case_name = "Autumn promotion"
+            twin = case("twin", case_name="Autumn promotion")
+            unnamed = case("unnamed")
+            await db.flush()
+            line(twin, s.pA1, 2, 1, 1)
+            line(unnamed, s.pA1, 3, 1, 1)
+            await db.flush()
+            cases = await _v2(db, ["cpor.cases", "cpor.support_usd"], ["case"])
+            assert cases["ok"]
+            by_id = {r["case_id"]: r for r in cases["rows"]}
+            assert set(by_id) == {live.id, twin.id, unnamed.id}
+            assert by_id[live.id]["case_name"] == by_id[twin.id]["case_name"] == "Autumn promotion"
+            assert by_id[unnamed.id]["case_name"] == "Unassigned"
+            assert cases["totals"]["cpor.cases"] == 3
+&gt;           only_live = await _v2(db, ["cpor.support_usd"], ["case"], filters={"case": [live.id]})
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_query_model_db.py:481: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_query_model_db.py:148: in _v2
+    return await run_v2(
+app\query\model\execute.py:154: in run_v2
+    result = list((await db.execute(compiled.rows)).all())
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py:449: in execute
+    result = await greenlet_spawn(
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\orm\session.py:2373: in execute
+    return self._execute_internal(
+.venv\Lib\site-packages\sqlalchemy\orm\session.py:2280: in _execute_internal
+    result = conn.execute(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1421: in execute
+    return meth(
+.venv\Lib\site-packages\sqlalchemy\sql\elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1848: in _execute_context
+    return self._exec_single_context(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;AdaptedConnection &lt;asyncpg.connection.Connection object at 0x0000013C67116B70&gt;&gt;
+error = UndefinedFunctionError('operator does not exist: integer = character varying')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+&gt;                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) &lt;class 'asyncpg.exceptions.UndefinedFunctionError'&gt;: operator does not exist: integer = character varying
+E                   HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
+E                   [SQL: WITH agg AS 
+E                   (SELECT b_case.id AS case_id, coalesce(b_case.case_name, 'Unassigned') AS case_name, coalesce(sum(coalesce(f.ttl_support_usd, CASE WHEN (f.estimate_qty != $1::INTEGER) THEN f.support_usd * f.estimate_qty END)), 0) AS m0 
+E                   FROM cpor_case_line AS f JOIN cpor_case AS b_case ON b_case.id = f.case_id 
+E                   WHERE b_case.tenant_id = $2::VARCHAR AND b_case.superseded_by_case_id IS NULL AND b_case.intelligence_exclude IS false AND strpos(coalesce(f.remark, ''), '[voided]') = $3::INTEGER AND strpos(coalesce(f.remark, ''), '[split into layers]') = $4::INTEGER AND coalesce(f.estimate_qty, 0) &gt; $5::INTEGER AND b_case.id IN ($7::VARCHAR) GROUP BY b_case.id, b_case.case_name)
+E                    SELECT agg.case_id, agg.case_name, agg.m0 AS out0 
+E                   FROM agg ORDER BY out0 DESC NULLS LAST, agg.case_id ASC NULLS LAST 
+E                    LIMIT $6::INTEGER]
+E                   [parameters: (0, 'n0115-a-5c0c09', 0, 0, 0, 501, '476')]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:797: ProgrammingError</failure></testcase><testcase classname="tests.test_query_model_db" name="test_scope_and_timeout_are_bound_inside_the_compiled_transaction[asyncio]" time="1.025" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_catalog_filter_refusals_are_the_planners_own_texts" time="0.141" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_catalog_governed_honours_and_planner_refuses_what_is_not_honoured" time="0.138" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_valid_model_and_governed_with_v1_mirror" time="0.108" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw0-One query reads one model]" time="0.139" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw1-do not say which distributor]" time="0.071" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw2-site_label is CST-only]" time="0.072" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw3-above the maximum of 5000 rows]" time="0.063" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw4-Use dsi_sellout.units]" time="0.060" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw5-Unknown measure]" time="0.065" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw6-never stores period.from]" time="0.073" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw7-Unknown key in definition_v2]" time="0.084" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw8-definition_v2.v must be 1]" time="0.083" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw9-Lowest calendar grain is week]" time="0.125" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw10-never added up across dates]" time="0.087" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_refused_with_the_planners_text[raw11-top_n]" time="0.080" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_request_from_definition_and_dual_path_switch" time="0.003" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_dashboard_filters_json_checked" time="0.004" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[W4-sellout_units-grains0-week-area-model-measures0-week-area]" time="0.069" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[W5-cst_sellthrough_units-grains1-None-line-model-measures1-None-hbar]" time="0.091" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[W6-cst_sellthrough_units-grains2-week-line-model-measures2-week-line]" time="0.080" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[W11-sellout_units-grains3-None-table-model-measures3-None-table]" time="0.068" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[W19-pipeline_inbound-grains4-None-kpi-governed-measures4-None-kpi]" time="0.064" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[W20-cst_sellthrough_units-grains5-week-line-model-measures5-week-line]" time="0.059" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[R1-weeks_of_cover-grains6-None-kpi-governed-measures6-None-kpi]" time="0.071" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[R2-weeks_of_cover-grains7-None-kpi-governed-measures7-None-kpi]" time="0.073" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_definition_from_v1_maps_the_nine_cip_rows[R3-sellout_units-grains8-week-line-model-measures8-week-line]" time="0.057" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_effective_visual_port_matches_web_rules" time="0.002" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_every_starter_widget_plans_with_no_refusals" time="0.313" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_0048_downgrade_and_upgrade_in_a_rolled_back_transaction" time="1.412" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_0048_downgrade_refuses_when_a_new_visual_is_used" time="0.055" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_migration_script_apply_twice_and_prove_on_cip_test[asyncio]" time="1.018" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_delivery_r2_same_before_and_after_migration_and_v2_only_report_uses_run_v2[asyncio]" time="0.489" /><testcase classname="tests.test_dashboard_v2_definitions" name="test_governed_filters_honoured_or_refused_at_execute_on_cip_test[asyncio]" time="0.415" /><testcase classname="tests.test_dashboard_v2_api" name="test_widget_post_and_patch_with_definition_v2[asyncio]" time="0.951" /><testcase classname="tests.test_dashboard_v2_api" name="test_patch_layout_writes_only_layout_and_put_keeps_definition[asyncio]" time="0.850" /><testcase classname="tests.test_dashboard_v2_api" name="test_dashboard_filters_json_round_trip[asyncio]" time="0.517" /><testcase classname="tests.test_dashboard_v2_api" name="test_from_template_makes_three_personal_dashboards_every_widget_planner_clean[asyncio]" time="0.720" /><testcase classname="tests.test_dashboard_v2_api" name="test_promote_copies_definition_and_saved_report_accepts_definition_v2[asyncio]" time="0.819" /><testcase classname="tests.test_dashboard_v2_api" name="test_starter_routes_refuse_anonymous_callers[asyncio]" time="0.019" /><testcase classname="tests.test_dashboard_v2_api" name="test_new_routes_registered_before_the_id_route" time="0.005" /></testsuite></testsuites>

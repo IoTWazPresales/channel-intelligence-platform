@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="277.567" timestamp="2026-10-24T23:06:21.556610+02:00" hostname="RF2300014-NB3"><testcase classname="tests.test_dashboard_v2_authenticated" name="test_browser_builder_on_transactional_cip_test[asyncio]" time="249.662"><failure message="AssertionError: #x1B[2m[WebServer] #x1B[22m(node:38076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;  #x1B[2m[WebServer] #x1B[22m(node:47592) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;  #x1B[2m[WebServer] #x1B[22m(node:82472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;  &#10;  Running 1 test using 1 worker&#10;  &#10;  (node:68016) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  (Use `node --trace-warnings ...` to show where the warning was created)&#10;  (node:68016) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  (Use `node --trace-warnings ...` to show where the warning was created)&#10;  #x1B[2m[WebServer] #x1B[22m(node:76944) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;  #x1B[2m[WebServer] #x1B[22m(node:87580) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;  #x1B[2m[WebServer] #x1B[22m(node:30340) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;  #x1B[2m[WebServer] #x1B[22m(node:86932) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;  #x1B[2m[WebServer] #x1B[22m(node:65076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;  #x1B[2m[WebServer] #x1B[22m(node:84024) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.&#10;  #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)&#10;    x  1 [chromium] › e2e\builder-auth.spec.ts:5:5 › authenticated builder persists edits, duplicate and promoted fixed-window context on cip_test (3.0m)&#10;  &#10;  &#10;    1) [chromium] › e2e\builder-auth.spec.ts:5:5 › authenticated builder persists edits, duplicate and promoted fixed-window context on cip_test &#10;  &#10;      #x1B[31mTest timeout of 180000ms exceeded.#x1B[39m&#10;  &#10;      Error: locator.click: Test timeout of 180000ms exceeded.&#10;      Call log:&#10;      #x1B[2m  - waiting for getByTestId('dashboard-create-blank')#x1B[22m&#10;  &#10;  &#10;        14 |   await page.goto('/dashboards');&#10;        15 |   await page.getByTestId('dashboard-create').click();&#10;      &gt; 16 |   await page.getByTestId('dashboard-create-blank').click();&#10;           |                                                    ^&#10;        17 |   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Transactional browser board');&#10;        18 |   await page.getByTestId('dashboard-create-confirm').click();&#10;        19 |   await page.getByTestId('dashboard-add-widget').click();&#10;          at C:\Users\warren_eliason\channel-intelligence-platform\apps\web\e2e\builder-auth.spec.ts:16:52&#10;  &#10;      Error Context: test-results\builder\builder-auth-authenticated-ce589--window-context-on-cip-test-chromium\error-context.md&#10;  &#10;    1 failed&#10;      [chromium] › e2e\builder-auth.spec.ts:5:5 › authenticated builder persists edits, duplicate and promoted fixed-window context on cip_test &#10;  &#10;assert 1 == 0&#10; +  where 1 = &lt;Process 88096&gt;.returncode">signed_in = SignedIn(cip_test fixtures; credentials omitted)
+
+    @pytest.mark.anyio
+    @pytest.mark.skipif(os.environ.get('CIP_RUN_BUILDER_BROWSER') != '1', reason='opt-in: requires pnpm and Playwright Chromium')
+    async def test_browser_builder_on_transactional_cip_test(signed_in):
+        """An isolated test listener, not a restart of the operator's API/worker."""
+        import asyncio
+        import shutil
+        import socket
+        import subprocess
+        from pathlib import Path
+    
+        import uvicorn
+        from starlette.responses import JSONResponse
+    
+        lock = asyncio.Lock()
+    
+        async def transactional_app(scope, receive, send):
+            async with lock:  # One rolled-back DB connection; serialize parallel browser requests.
+                if scope.get('path') == '/__cip_test_identity':
+                    await JSONResponse({'database': 'cip_test', 'mode': 'rolled-back-test'})(scope, receive, send)
+                else:
+                    await app(scope, receive, send)
+    
+        listener = socket.socket()
+        listener.bind(('127.0.0.1', 0))
+        port = listener.getsockname()[1]
+        listener.listen(128)
+        server = uvicorn.Server(uvicorn.Config(transactional_app, lifespan='off', access_log=False, log_level='error'))
+        task = asyncio.create_task(server.serve(sockets=[listener]))
+        try:
+            for _ in range(100):
+                if server.started:
+                    break
+                if task.done():
+                    await task
+                await asyncio.sleep(0.05)
+            assert server.started
+            env = {**os.environ, 'CIP_BUILDER_TEST_API': f'http://127.0.0.1:{port}',
+                   'CIP_BUILDER_TEST_TOKEN': signed_in.headers['admin']['Authorization'].removeprefix('Bearer ')}
+            pnpm = shutil.which('pnpm.cmd' if os.name == 'nt' else 'pnpm')
+            assert pnpm, 'pnpm is required for this opt-in browser check'
+            proc = await asyncio.create_subprocess_exec(pnpm, 'exec', 'playwright', 'test', '--config', 'playwright.builder-auth.config.ts',
+                        cwd=str(Path(__file__).resolve().parents[2] / 'web'), env=env, stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            output, _ = await proc.communicate()
+            # The browser test disables traces; no token/password is written to evidence.
+&gt;           assert proc.returncode == 0, output.decode('utf-8', errors='replace')
+E           AssertionError: #x1B[2m[WebServer] #x1B[22m(node:38076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E             #x1B[2m[WebServer] #x1B[22m(node:47592) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E             #x1B[2m[WebServer] #x1B[22m(node:82472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E             
+E             Running 1 test using 1 worker
+E             
+E             (node:68016) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             (Use `node --trace-warnings ...` to show where the warning was created)
+E             (node:68016) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             (Use `node --trace-warnings ...` to show where the warning was created)
+E             #x1B[2m[WebServer] #x1B[22m(node:76944) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E             #x1B[2m[WebServer] #x1B[22m(node:87580) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E             #x1B[2m[WebServer] #x1B[22m(node:30340) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E             #x1B[2m[WebServer] #x1B[22m(node:86932) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E             #x1B[2m[WebServer] #x1B[22m(node:65076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E             #x1B[2m[WebServer] #x1B[22m(node:84024) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+E             #x1B[2m[WebServer] #x1B[22m(Use `node --trace-warnings ...` to show where the warning was created)
+E               x  1 [chromium] › e2e\builder-auth.spec.ts:5:5 › authenticated builder persists edits, duplicate and promoted fixed-window context on cip_test (3.0m)
+E             
+E             
+E               1) [chromium] › e2e\builder-auth.spec.ts:5:5 › authenticated builder persists edits, duplicate and promoted fixed-window context on cip_test 
+E             
+E                 #x1B[31mTest timeout of 180000ms exceeded.#x1B[39m
+E             
+E                 Error: locator.click: Test timeout of 180000ms exceeded.
+E                 Call log:
+E                 #x1B[2m  - waiting for getByTestId('dashboard-create-blank')#x1B[22m
+E             
+E             
+E                   14 |   await page.goto('/dashboards');
+E                   15 |   await page.getByTestId('dashboard-create').click();
+E                 &gt; 16 |   await page.getByTestId('dashboard-create-blank').click();
+E                      |                                                    ^
+E                   17 |   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Transactional browser board');
+E                   18 |   await page.getByTestId('dashboard-create-confirm').click();
+E                   19 |   await page.getByTestId('dashboard-add-widget').click();
+E                     at C:\Users\warren_eliason\channel-intelligence-platform\apps\web\e2e\builder-auth.spec.ts:16:52
+E             
+E                 Error Context: test-results\builder\builder-auth-authenticated-ce589--window-context-on-cip-test-chromium\error-context.md
+E             
+E               1 failed
+E                 [chromium] › e2e\builder-auth.spec.ts:5:5 › authenticated builder persists edits, duplicate and promoted fixed-window context on cip_test 
+E             
+E           assert 1 == 0
+E            +  where 1 = &lt;Process 88096&gt;.returncode
+
+tests\test_dashboard_v2_authenticated.py:212: AssertionError</failure></testcase></testsuite></testsuites>

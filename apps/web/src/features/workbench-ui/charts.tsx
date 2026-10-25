@@ -1156,6 +1156,9 @@ export function TrendChart({
                 dataKey={s.key}
                 name={s.label}
                 fill={colorOf(s, i)}
+                stroke={s.dash ? colorOf(s, i) : undefined}
+                strokeDasharray={s.dash}
+                fillOpacity={s.dash ? 0.35 : 1}
                 stackId={stack && !hasRight ? 'bar' : undefined}
                 radius={stack ? undefined : [3, 3, 0, 0]}
                 maxBarSize={22}

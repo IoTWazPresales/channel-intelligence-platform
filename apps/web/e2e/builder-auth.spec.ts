@@ -1,0 +1,74 @@
+import path from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { expect, test } from '@playwright/test';
+
+test('authenticated builder persists edits, duplicate and promoted fixed-window context on cip_test', async ({ page, request }) => {
+  const api = process.env.CIP_BUILDER_TEST_API!;
+  const identity = await request.get(`${api}/__cip_test_identity`);
+  expect(await identity.json()).toEqual({ database: 'cip_test', mode: 'rolled-back-test' });
+  const token = process.env.CIP_BUILDER_TEST_TOKEN;
+  if (!token) throw new Error('The transactional test harness must supply its ephemeral bearer.');
+  // Browser API traffic must use this isolated Next host, whose proxy targets the test listener.
+  await page.route('**/api/v1/**', async (route) => {
+    if (new URL(route.request().url()).origin !== 'http://127.0.0.1:3106') {
+      await route.abort();
+      throw new Error('Refused an API destination outside the isolated test web host.');
+    }
+    await route.continue();
+  });
+  await page.addInitScript((session) => localStorage.setItem('cip.auth.token.v1', session), token);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/dashboards');
+  await expect(page.getByTestId('dashboard-create')).toHaveAttribute('aria-haspopup', 'menu');
+  await page.getByTestId('dashboard-create').click();
+  await page.getByTestId('dashboard-create-blank').click();
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Transactional browser board');
+  await page.getByTestId('dashboard-create-confirm').click();
+  await page.getByTestId('dashboard-add-widget').click();
+  await page.getByTestId('builder-editor-measure-dsi_sellout.units').click();
+  await page.getByTestId('builder-editor-breakdown-product').click();
+  await page.getByTestId('builder-editor-visual-bar').click();
+  await page.getByText('Dashboard filter exceptions', { exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Use fixed dates for this widget' }).check();
+  await page.getByTestId('builder-editor-fixed-from').fill('2026-01-01');
+  await page.getByTestId('builder-editor-fixed-to').fill('2026-01-31');
+  await page.getByTestId('builder-editor-title').fill('January units');
+  const saved = page.waitForResponse((r) => /\/dashboards\/\d+\/widgets$/.test(r.url()) && r.request().method() === 'POST');
+  await page.getByTestId('builder-editor-save').click();
+  const first = (await (await saved).json()).widgets.find((w: { title: string }) => w.title === 'January units');
+  const fixed = { from: '2026-01-01', to: '2026-01-31' };
+  expect(first.definition_v2.dashboard.fixed_window).toEqual(fixed);
+  const card = page.getByTestId(`dashboard-widget-${first.id}`);
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('table')).toContainText('Fixture product 0');
+  await expect(card.getByRole('table')).toContainText('13');
+  await expect(card.getByRole('table')).toContainText('99');
+  await expect(card.getByRole('table')).not.toContainText('900');
+  await card.getByRole('button', { name: 'Edit January units' }).click();
+  await expect(page.getByTestId('builder-editor-fixed-from')).toHaveValue(fixed.from);
+  await expect(page.getByTestId('builder-editor-fixed-to')).toHaveValue(fixed.to);
+  await page.getByTestId('builder-editor-title').fill('January checked');
+  await page.getByTestId('builder-editor-save').click();
+  await expect(card.getByRole('heading', { name: 'January checked' })).toBeVisible();
+  await card.getByRole('button', { name: /^Actions for / }).click();
+  await page.getByTestId(`dashboard-widget-duplicate-${first.id}`).click();
+  await expect(page.locator('[data-engine="v2"]')).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator('[data-engine="v2"]')).toHaveCount(2);
+  await expect(card.getByRole('table')).toContainText('13');
+  await card.getByRole('button', { name: /^Actions for / }).click();
+  const downloaded = page.waitForEvent('download');
+  await page.getByTestId(`dashboard-widget-export-csv-${first.id}`).click();
+  const download = await downloaded;
+  const csv = await readFile((await download.path())!, 'utf8');
+  expect(csv).toContain('Fixture product 0');
+  expect(csv).toContain('13');
+  expect(csv).not.toContain('900');
+  await card.getByRole('button', { name: /^Actions for / }).click();
+  const promoted = page.waitForResponse((r) => r.url().endsWith(`/widgets/${first.id}/promote`) && r.request().method() === 'POST');
+  await page.getByTestId(`dashboard-widget-promote-${first.id}`).click();
+  expect((await (await promoted).json()).saved_report.definition_v2.dashboard.fixed_window).toEqual(fixed);
+  await card.screenshot({ path: path.resolve(__dirname, '../../../.eif/audit/PROGRAMME_20261024/renders/original-scope/authenticated-fixed-widget.png') });
+  expect(errors).toEqual([]);
+});

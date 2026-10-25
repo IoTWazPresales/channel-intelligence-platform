@@ -2,12 +2,12 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'builder*.spec.ts',
+  testMatch: 'builder-fixtures.spec.ts',
   workers: 1,
   retries: 0,
   timeout: 90_000,
   expect: { timeout: 20_000 },
-  reporter: [['list'], ['json', { outputFile: '../../.eif/audit/PROGRAMME_20261024/browser-results.json' }]],
+  reporter: [['list'], ['json', { outputFile: process.env.CIP_BUILDER_REPORT_PATH ?? '../../.eif/audit/PROGRAMME_20261024/browser-results.json' }]],
   outputDir: './test-results/builder',
   use: { baseURL: 'http://127.0.0.1:3106', trace: 'retain-on-failure' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

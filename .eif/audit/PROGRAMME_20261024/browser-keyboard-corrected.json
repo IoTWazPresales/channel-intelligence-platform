@@ -1,0 +1,159 @@
+{
+  "config": {
+    "configFile": "C:\\Users\\warren_eliason\\channel-intelligence-platform\\apps\\web\\playwright.builder.config.ts",
+    "rootDir": "C:/Users/warren_eliason/channel-intelligence-platform/apps/web/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/warren_eliason/channel-intelligence-platform/apps/web/test-results/builder",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/Users/warren_eliason/channel-intelligence-platform/apps/web/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "builder*.spec.ts"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "../../.eif/audit/PROGRAMME_20261024/browser-keyboard-corrected.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 1,
+    "webServer": {
+      "command": "pnpm exec next dev --port 3106 --hostname 127.0.0.1",
+      "url": "http://127.0.0.1:3106/design-lab/builder",
+      "reuseExistingServer": false,
+      "timeout": 240000,
+      "env": {
+        "CIP_DISABLE_NEXT_API_PROXY": "true",
+        "CIP_NEXT_DIST_DIR": ".tmp/builder-next",
+        "CIP_NEXT_TSCONFIG": "tsconfig.builder-e2e.json",
+        "NEXT_TELEMETRY_DISABLED": "1"
+      }
+    }
+  },
+  "suites": [
+    {
+      "title": "builder-fixtures.spec.ts",
+      "file": "builder-fixtures.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "comparison charts expose data tables and support keyboard filtering and full screen",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 47914,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\nCall Log:\n- Timeout 20000ms exceeded while waiting on the predicate",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\nCall Log:\n- Timeout 20000ms exceeded while waiting on the predicate\n    at C:\\Users\\warren_eliason\\channel-intelligence-platform\\apps\\web\\e2e\\builder-fixtures.spec.ts:114:3",
+                    "location": {
+                      "file": "C:\\Users\\warren_eliason\\channel-intelligence-platform\\apps\\web\\e2e\\builder-fixtures.spec.ts",
+                      "column": 3,
+                      "line": 114
+                    },
+                    "snippet": "  112 |   const dialog = page.getByRole('dialog');\n  113 |   await expect(dialog).toBeVisible();\n> 114 |   await expect.poll(() => dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);\n      |   ^\n  115 |   await page.keyboard.press('Tab');\n  116 |   await expect(dialog.getByRole('button', { name: 'Close full screen' })).toBeFocused();\n  117 |   await page.keyboard.press('Escape');"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\warren_eliason\\channel-intelligence-platform\\apps\\web\\e2e\\builder-fixtures.spec.ts",
+                        "column": 3,
+                        "line": 114
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\nCall Log:\n- Timeout 20000ms exceeded while waiting on the predicate\n\n  112 |   const dialog = page.getByRole('dialog');\n  113 |   await expect(dialog).toBeVisible();\n> 114 |   await expect.poll(() => dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);\n      |   ^\n  115 |   await page.keyboard.press('Tab');\n  116 |   await expect(dialog.getByRole('button', { name: 'Close full screen' })).toBeFocused();\n  117 |   await page.keyboard.press('Escape');\n    at C:\\Users\\warren_eliason\\channel-intelligence-platform\\apps\\web\\e2e\\builder-fixtures.spec.ts:114:3"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T21:04:29.058Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\warren_eliason\\channel-intelligence-platform\\apps\\web\\test-results\\builder\\builder-fixtures-compariso-7697b-d-filtering-and-full-screen-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\warren_eliason\\channel-intelligence-platform\\apps\\web\\test-results\\builder\\builder-fixtures-compariso-7697b-d-filtering-and-full-screen-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\warren_eliason\\channel-intelligence-platform\\apps\\web\\e2e\\builder-fixtures.spec.ts",
+                    "column": 3,
+                    "line": 114
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "c00ba39f70cfee8f95de-7c64b9159bc9850ff0f9",
+          "file": "builder-fixtures.spec.ts",
+          "line": 87,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-24T21:03:39.259Z",
+    "duration": 100723.178,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}
