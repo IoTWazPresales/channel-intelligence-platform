@@ -1,0 +1,828 @@
+{
+  "scope": "same-directory continuity only; no product tests, services, DB or ledger mutation",
+  "continuity_check_date": "2026-10-25",
+  "fresh_verify_exit_code": 1,
+  "fresh_verify": {
+    "ok": false,
+    "issues": [
+      "N-0006: recorded complete but gates invalid",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 is independence-disclaimed and cannot anchor review",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 design_sameness_review pass lacks implementation_run from node.stage -> implement",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 rendered_comparison pass lacks implementation_run from node.stage -> implement",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.referent pass lacks implementation_run from node.stage -> implement",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.rendered pass lacks implementation_run from node.stage -> implement",
+      "N-0014: recorded complete but gates invalid",
+      "N-0015: recorded complete but gates invalid",
+      "N-0016: recorded complete but gates invalid"
+    ],
+    "integrity_ok": true,
+    "integrity_issues": [],
+    "gates_ok": false,
+    "gate_issues": [
+      "N-0006: recorded complete but gates invalid",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 is independence-disclaimed and cannot anchor review",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 design_sameness_review pass lacks implementation_run from node.stage -> implement",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 rendered_comparison pass lacks implementation_run from node.stage -> implement",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.referent pass lacks implementation_run from node.stage -> implement",
+      "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.rendered pass lacks implementation_run from node.stage -> implement",
+      "N-0014: recorded complete but gates invalid",
+      "N-0015: recorded complete but gates invalid",
+      "N-0016: recorded complete but gates invalid"
+    ],
+    "gate_debt": [
+      {
+        "node": "N-0006",
+        "acknowledged": true,
+        "issues": [
+          "recorded complete but gates invalid"
+        ]
+      },
+      {
+        "node": "N-0013",
+        "acknowledged": true,
+        "issues": [
+          "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 is independence-disclaimed and cannot anchor review",
+          "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 design_sameness_review pass lacks implementation_run from node.stage -> implement",
+          "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 rendered_comparison pass lacks implementation_run from node.stage -> implement",
+          "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.referent pass lacks implementation_run from node.stage -> implement",
+          "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.rendered pass lacks implementation_run from node.stage -> implement"
+        ]
+      },
+      {
+        "node": "N-0014",
+        "acknowledged": true,
+        "issues": [
+          "recorded complete but gates invalid"
+        ]
+      },
+      {
+        "node": "N-0015",
+        "acknowledged": true,
+        "issues": [
+          "recorded complete but gates invalid"
+        ]
+      },
+      {
+        "node": "N-0016",
+        "acknowledged": true,
+        "issues": [
+          "recorded complete but gates invalid"
+        ]
+      }
+    ],
+    "revision": 2767
+  },
+  "node_status": {
+    "N-0114": {"status": "in_progress", "stage": "verify", "revision": 17, "lease": null, "acceptance": "pending"},
+    "N-0115": {"status": "in_progress", "stage": "verify", "revision": 16, "lease": null, "acceptance": "pending"},
+    "N-0116": {"status": "in_progress", "stage": "implement", "revision": 14, "lease": null, "acceptance": "pending"}
+  },
+  "active_leases": [],
+  "source_manifest_paths_checked": 39,
+  "source_manifest_all_matched": true,
+  "product_tests_rerun": false,
+  "checked_delivery_commit": "93217bf5b032a7d486858d1d76c927327c1a86ed",
+  "branch": "feat/ns-2-brief-nav-collapse",
+  "working_directory": "C:\\Users\\warren_eliason\\channel-intelligence-platform",
+  "committed_ledger_revision": 2679,
+  "local_ledger_revision": 2767,
+  "committed_prefix_unchanged": true,
+  "local_only_event_range": [
+    2680,
+    2767
+  ],
+  "local_only_event_count": 88,
+  "local_event_type_counts": {
+    "node.add": 3,
+    "node.lease.acquire": 9,
+    "node.stage_note": 5,
+    "node.lease.release": 4,
+    "evidence.add": 16,
+    "node.stage": 14,
+    "finding.defer": 4,
+    "decision.add": 16,
+    "baseline.add": 2,
+    "node.baseline": 2,
+    "node.quality": 9,
+    "node.verification": 4
+  },
+  "local_event_inventory": [
+    {
+      "seq": 2680,
+      "event": "node.add",
+      "run": "R20261022T222542Z",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2681,
+      "event": "node.add",
+      "run": "R20261022T222619Z",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2682,
+      "event": "node.add",
+      "run": "R20261022T222650Z",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2683,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2684,
+      "event": "node.stage_note",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2685,
+      "event": "node.lease.release",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2686,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2687,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2688,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2689,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2690,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2691,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2692,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2693,
+      "event": "finding.defer",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2694,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2695,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2696,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2697,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2698,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2699,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2700,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2701,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2702,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2703,
+      "event": "finding.defer",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2704,
+      "event": "baseline.add",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2705,
+      "event": "node.baseline",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2706,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2707,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2708,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2709,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2710,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2711,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2712,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2713,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2714,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2715,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2716,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2717,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2718,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2719,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2720,
+      "event": "node.lease.release",
+      "run": "RUN-20261023-N0114-IMPL",
+      "actor": "gov-001",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2721,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2722,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2723,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2724,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2725,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2726,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2727,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2728,
+      "event": "node.quality",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2729,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2730,
+      "event": "node.lease.release",
+      "run": "RUN-20261023-N0115-IMPL",
+      "actor": "gov-001",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2731,
+      "event": "node.verification",
+      "run": "RUN-20261023-N0114-VER",
+      "actor": "gov-008",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2732,
+      "event": "node.verification",
+      "run": "RUN-20261023-N0114-VER",
+      "actor": "gov-008",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2733,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0114-VER",
+      "actor": "gov-008",
+      "node": "N-0114"
+    },
+    {
+      "seq": 2734,
+      "event": "node.verification",
+      "run": "RUN-20261023-N0115-VER",
+      "actor": "gov-008",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2735,
+      "event": "node.verification",
+      "run": "RUN-20261023-N0115-VER",
+      "actor": "gov-008",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2736,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0115-VER",
+      "actor": "gov-008",
+      "node": "N-0115"
+    },
+    {
+      "seq": 2737,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2738,
+      "event": "baseline.add",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2739,
+      "event": "node.baseline",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2740,
+      "event": "evidence.add",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2741,
+      "event": "finding.defer",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2742,
+      "event": "finding.defer",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2743,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2744,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2745,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2746,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2747,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2748,
+      "event": "decision.add",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": null
+    },
+    {
+      "seq": 2749,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2750,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2751,
+      "event": "node.stage",
+      "run": "RUN-20261023-N0116-IMPL",
+      "actor": "gov-001",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2752,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2753,
+      "event": "evidence.add",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2754,
+      "event": "node.stage",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2755,
+      "event": "evidence.add",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2756,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2757,
+      "event": "decision.add",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": null
+    },
+    {
+      "seq": 2758,
+      "event": "evidence.add",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2759,
+      "event": "node.stage_note",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2760,
+      "event": "evidence.add",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2761,
+      "event": "node.stage_note",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2762,
+      "event": "evidence.add",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2763,
+      "event": "node.stage_note",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2764,
+      "event": "node.lease.acquire",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2765,
+      "event": "evidence.add",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2766,
+      "event": "node.stage_note",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    },
+    {
+      "seq": 2767,
+      "event": "node.lease.release",
+      "run": "RUN-20261024-N0116-IMPL-CODEX",
+      "actor": "codex",
+      "node": "N-0116"
+    }
+  ],
+  "modified_tracked_sha256": {
+    ".cursor/eif-runtime-policy.json": "64f17efe20127b5e611d877499f46f33e2694ea0ffd2e40f756afcef0421be44",
+    ".eif/CURRENT.md": "1f825be507a81e525ff41cd23b9c014c4ddb6d3541ee0c8ef68a928c0ca7b69d",
+    ".eif/ESCALATION.md": "22683b551176f94931beb61d4142e61305de6ead423ceaa50bfd3602dc68a053",
+    ".eif/PROGRAM.md": "0194405d5e838a94c3415bdfe6adc0d4a8667f3171b4b72e9f6ad407ffefa434",
+    ".eif/ROADMAP.md": "8d8f5bb2978e70472a7324f86200275d136e0ade00b782783885c4c1eb1b4c77",
+    ".eif/RUNTIME_CAPABILITIES.md": "e5511889ce2c91f194ffa0d2128fe5d1daf7eb965d3602827a6d6569d0683d83",
+    ".eif/program/PROGRAM.yaml": "428cdb17ca5527831aa39c54c63fc95a07f9ec8ec984bd3ab96195ae3e201bc2",
+    ".eif/program/PROGRAM_LOG.ndjson": "20faf23a68be8227c01ea6ec0a8f563521e8281128ebf7d6be492c3f5264bd25",
+    ".eif/runtime/programme/eif_program/__init__.py": "78b3417e3ff764955f7c9e0f378db7e712d7c6afcd22fab8b388efb888fe838a",
+    ".eif/runtime/programme/eif_program/clock.py": "c0923ad5dfc5552283d3cfab98f9ed681dbcd257a8c3592f9c60d88bd427299f",
+    ".eif/runtime/programme/eif_program/design_artifacts.py": "5779dabc17314178a4d456b8095246d31cd79cf61f9bb8a152b67642aff527d9",
+    ".eif/runtime/programme/eif_program/engine.py": "cdf487cbfa50a2ecdb7bd788944c4c57544a1a0d16063eb6e4cae52b02b49d10",
+    ".eif/runtime/programme/eif_program/errors.py": "cd6154a615f1fa95ce0cc8d21e0b0e127a5bb79e801ea4ce547790b542e137d0",
+    ".eif/runtime/programme/eif_program/facet_map.yaml": "ef6acf5252a10d2253525e537e9f33eea6ffff5efbd248a89b066a6d14dc0bd5",
+    ".eif/runtime/programme/eif_program/facets.py": "02604a35b9fe3c8fe0c6bd91ccb8fad47eafa7b5b2ec2fb83bf91d0bcd82f676",
+    ".eif/runtime/programme/eif_program/journeys.py": "7c569f14f42545df994bab1fc90802b5545dd644db602d65c7f5c3c251d017bc",
+    ".eif/runtime/programme/eif_program/migrate.py": "24b8ede9ca653023a922b8ff77c9a3323e47f3ee87a90fc51b0878ebc75f526b",
+    ".eif/runtime/programme/eif_program/store.py": "4ab1a047b7fc59967410fe6f6519dd18df12384fbec0bf8a3849a2bb084b48c1",
+    ".eif/runtime/programme/eif_program/views.py": "e602dc91acc816f87963ceb5b37bcce2a4a5860631800e9b648c3db59c19d6a6",
+    ".eif/runtime/programme/manifest.json": "cf2bad627d57081cbe990f51c095002a1aad02d1ac48abeee4a8d618aad24547"
+  },
+  "ledger_sha256": "20faf23a68be8227c01ea6ec0a8f563521e8281128ebf7d6be492c3f5264bd25",
+  "state_sha256": "428cdb17ca5527831aa39c54c63fc95a07f9ec8ec984bd3ab96195ae3e201bc2",
+  "git_status_before_handoff_docs": [
+    " M .cursor/eif-runtime-policy.json",
+    " M .eif/CURRENT.md",
+    " M .eif/ESCALATION.md",
+    " M .eif/PROGRAM.md",
+    " M .eif/ROADMAP.md",
+    " M .eif/RUNTIME_CAPABILITIES.md",
+    " M .eif/program/PROGRAM.yaml",
+    " M .eif/program/PROGRAM_LOG.ndjson",
+    " M .eif/runtime/programme/eif_program/__init__.py",
+    " M .eif/runtime/programme/eif_program/clock.py",
+    " M .eif/runtime/programme/eif_program/design_artifacts.py",
+    " M .eif/runtime/programme/eif_program/engine.py",
+    " M .eif/runtime/programme/eif_program/errors.py",
+    " M .eif/runtime/programme/eif_program/facet_map.yaml",
+    " M .eif/runtime/programme/eif_program/facets.py",
+    " M .eif/runtime/programme/eif_program/journeys.py",
+    " M .eif/runtime/programme/eif_program/migrate.py",
+    " M .eif/runtime/programme/eif_program/store.py",
+    " M .eif/runtime/programme/eif_program/views.py",
+    " M .eif/runtime/programme/manifest.json",
+    "?? .agents/",
+    "?? .cursor/rules/eif-core.mdc",
+    "?? .cursor/rules/eif-project-adapter.mdc",
+    "?? .eif/audit/CIP_TEST_LEAK_20261021/",
+    "?? .eif/audit/PROGRAMME_20261022/",
+    "?? .eif/audit/PROGRAMME_20261023/seats/analytics-bi.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/data-quality.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/database.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/domain.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/performance.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/product.md",
+    "?? .eif/audit/PROGRAMME_20261024/renders/dual-axis-export.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-account_overview-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-account_overview-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-account_overview-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-account_overview-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-cpor_cases-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-cpor_cases-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-cpor_cases-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-cpor_cases-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-sellthrough_stock-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-sellthrough_stock-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-sellthrough_stock-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-sellthrough_stock-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/states-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/states-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/states-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/states-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/visuals-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/visuals-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/visuals-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/visuals-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/widget-rendering.json",
+    "?? .eif/audit/PROGRAMME_20261024/workspace-integration.json",
+    "?? .eif/runs/R20261022T082234Z/",
+    "?? .eif/runs/R20261022T084906Z/",
+    "?? .eif/runs/R20261022T090426Z/",
+    "?? .eif/runs/R20261022T133449Z/",
+    "?? .eif/runs/R20261022T222542Z/",
+    "?? .eif/runs/R20261022T222619Z/",
+    "?? .eif/runs/R20261022T222650Z/",
+    "?? .eif/runs/RUN-20261022-N0089-LOGVIEW/",
+    "?? .eif/runs/RUN-20261022-N0112-IMPL/",
+    "?? .eif/runs/RUN-20261022-N0113-IMPL/",
+    "?? .eif/runs/RUN-20261022-S0-ACCEPT/",
+    "?? .eif/runs/RUN-20261023-N0089-DOCK/",
+    "?? .eif/runs/RUN-20261023-N0114-IMPL/",
+    "?? .eif/runs/RUN-20261023-N0114-VER/",
+    "?? .eif/runs/RUN-20261023-N0115-IMPL/",
+    "?? .eif/runs/RUN-20261023-N0115-VER/",
+    "?? .eif/runs/RUN-20261023-N0116-IMPL/",
+    "?? .eif/runs/RUN-20261024-N0116-IMPL-CODEX/",
+    "?? .eif/runtime-events.jsonl",
+    "?? .eif/upgrade-work/"
+  ],
+  "same_directory_survival": "Files already reside on disk and are not conversation state. Preserve the checkout, uncommitted ledger/runtime/views, and untracked runs/skills/audits. Do not reset/clean/stash/restore or replace this directory with a clone. Git alone does not contain current EIF state."
+}

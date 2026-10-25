@@ -5,6 +5,8 @@ from the last unit not marked DONE.
 
 ## Execution resumed 2026-10-24/25 (Codex)
 
+- Final continuity check: [ASTRA_HANDOFF.md](ASTRA_HANDOFF.md) records pushed delivery through `93217bf5`, EIF 2767/no leases, and the preserved dirty-state inventory. Use this same directory: 88 protected events (2680–2767) are local only; Git's ledger ends at 2679. No product tests, ledger mutations or production actions during the handoff check.
+
 - Warren confirmed original functional scope and authorised development, tests, EIF updates and
   explicit-path commits/pushes. Temporary cuts are not accepted permanent deferrals; incomplete nodes
   receive no acceptance. Production cip migration/deployment, API/worker restarts and main remain forbidden.

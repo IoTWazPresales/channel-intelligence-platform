@@ -4,6 +4,8 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
+**Astra handoff (25 October):** see [ASTRA_HANDOFF.md](ASTRA_HANDOFF.md). Completed product/evidence/memory delivery through `93217bf5` is pushed. Continue in this same directory: EIF revision 2767 includes 88 protected local-only events beyond Git revision 2679; all leases clear, acceptance pending. The handoff inventory records preserved runtime/audit leftovers. Do not replace or clean this checkout; a fresh clone loses the local control-plane state.
+
 **Current execution:** N-0116 under `RUN-20261024-N0116-IMPL-CODEX`, stage implement, acceptance pending. Warren confirmed the original 23 October functional scope; temporary cuts are not permanent deferrals. Existing uncommitted Unit C work was preserved and extended. Do not repeat the completed reconciliation. Evidence and the operator instruction are under `.eif/audit/PROGRAMME_20261024/`; read `docs/memory/OVERNIGHT.md` on resume.
 
 **Deployment boundary:** code head `20261023_0048`; applied to `cip_test`, NOT `cip` (production remains at the reported 0047 checkpoint). Read-only test identity check on 24 October returned `cip_test / 20261023_0048`. No production connection, migration, deployment, API/worker restart or main change is authorised. Existing processes use earlier code; the current ORM needs 0048 columns. Do not restart those services against cip. Fixture browser uses isolated :3106/.tmp with proxy disabled; authenticated browser uses a temporary random-loopback test ASGI listener, startup jobs off and rolled-back cip_test data.
