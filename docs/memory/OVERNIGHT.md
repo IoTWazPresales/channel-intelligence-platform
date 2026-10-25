@@ -35,7 +35,7 @@ from the last unit not marked DONE.
 - Missing original N-0115/business definitions, non-owner RLS/performance and full original acceptance
   remain open work, not permanent deferrals. No node is closed. Existing cip_test login owns FORCE RLS
   tables and cannot bypass RLS; that does not constitute non-owner-role proof.
-- Current execution evidence: `.eif/audit/PROGRAMME_20261024/`. Clean final test results are in N0116_TEST_EVIDENCE.md; commit pin follows. EIF verify integrity true at rev 2759; same nine acknowledged older-node gate issues. Programme ledger/views remain local under the existing protected-path checkpoint boundary.
+- Delivery: backend `5aceee9a`, frontend `8ea51e9b`, memory pin `05a12607` pushed on the feature branch. Final evidence: original-final-summary.json and VERIFY_ORIGINAL_SCOPE.md; the earlier checkpoint is N0116_TEST_EVIDENCE.md. EIF final verify at rev 2767: integrity true, same nine acknowledged older-node gate issues; see programme-final-verify.json. Lease released; N-0116 remains implement/acceptance pending. Programme ledger/views remain local under the protected checkpoint boundary.
 
 ## Start check (2026-10-23)
 

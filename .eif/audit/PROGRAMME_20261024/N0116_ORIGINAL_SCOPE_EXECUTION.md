@@ -159,3 +159,13 @@ All earlier failed artifacts are historical attempts, retained rather than descr
 The rendered examples and authenticated DB data are fictional. No production connection, migration,
 deployment, API/worker restart, main modification, DB identity/grant mutation or node acceptance.
 Original N-0115/business/calculation/calendar/overlay and non-owner RLS requirements stay open.
+
+## Delivered checkpoint
+
+Backend `5aceee9a`, frontend/evidence `8ea51e9b` and memory pin `05a12607` pushed to
+`feat/ns-2-brief-nav-collapse`; remote HEAD confirmed. Product paths are clean; unrelated inherited
+work and old audit samples remain preserved. No main mutation. Final supported EIF evidence/stage
+note/lease release succeeded at programme revisions 2765/2766/2767. Final verify referent
+`programme-final-verify.json`: integrity true, zero integrity issues, same nine acknowledged legacy
+gate issues and exit 1. No new gates or acceptance asserted. Lease released; stage remains implement.
+Protected ledger/views remain local; ordinary staging protection was not bypassed.
