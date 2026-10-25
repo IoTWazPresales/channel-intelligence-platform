@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-25 — **Astra continuity checkpoint:** completed delivery through `93217bf5` pushed; 39 source hashes match. EIF 2767 integrity true, nine acknowledged legacy gate issues, no leases, no node acceptance. Preserve this directory: 88 protected ledger events remain local beyond Git 2679. Handoff and inventory: `docs/memory/ASTRA_HANDOFF.md`. No product tests or production actions. Handoff pin: PENDING_HANDOFF_PIN.
+- 2026-10-25 — **Astra continuity checkpoint:** completed delivery through `93217bf5` pushed; 39 source hashes match. EIF 2767 integrity true, nine acknowledged legacy gate issues, no leases, no node acceptance. Preserve this directory: 88 protected ledger events remain local beyond Git 2679. Handoff and inventory: `docs/memory/ASTRA_HANDOFF.md`. No product tests or production actions. Handoff pin: `1e3f5c8c`.
 
 - 2026-10-25 — **N-0116 original-scope execution:** S16 comparison, S17 fixed dates/filter exceptions and S19 named cases; gap and keyboard-focus regressions fixed. Backend `5aceee9a`; frontend/evidence checkpoint `8ea51e9b` on `feat/ns-2-brief-nav-collapse`. Web 1,139/1,139; later Unit C 121/121 and browser 6/6; cip_test API 3,376 / 21 skipped; actual authenticated browser 1/1; tsc/lint passed. Original requirements and acceptance remain open. No cip migration/deployment, API/worker restart or main change.
 
