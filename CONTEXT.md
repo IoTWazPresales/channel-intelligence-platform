@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-25 — **N-0116 original-scope execution:** S16 comparison, S17 fixed dates/filter exceptions and S19 named cases; gap and keyboard-focus regressions fixed. Backend `5aceee9a`; frontend/evidence checkpoint PENDING_PIN on `feat/ns-2-brief-nav-collapse`. Web 1,139/1,139; later Unit C 121/121 and browser 6/6; cip_test API 3,376 / 21 skipped; actual authenticated browser 1/1; tsc/lint passed. Original requirements and acceptance remain open. No cip migration/deployment, API/worker restart or main change.
+- 2026-10-25 — **N-0116 original-scope execution:** S16 comparison, S17 fixed dates/filter exceptions and S19 named cases; gap and keyboard-focus regressions fixed. Backend `5aceee9a`; frontend/evidence checkpoint `8ea51e9b` on `feat/ns-2-brief-nav-collapse`. Web 1,139/1,139; later Unit C 121/121 and browser 6/6; cip_test API 3,376 / 21 skipped; actual authenticated browser 1/1; tsc/lint passed. Original requirements and acceptance remain open. No cip migration/deployment, API/worker restart or main change.
 
 - 2026-10-24 — **N-0116 execution resumed:** original overnight scope retained; colour assertion and four correctness regressions fixed; dual-axis/scatter/pivot, complete starter fixtures, attribute filters and integration coverage added. Evidence `.eif/audit/PROGRAMME_20261024/`; node acceptance pending. No cip migration, deployment or API/worker restart. Web 1,121/1,121; Unit C 104/104; cip_test API 3,363 passed/21 skipped; browser 5/5; tsc/lint passed (50 existing warnings). Frontend checkpoint `32c65eaf` on `feat/ns-2-brief-nav-collapse`.
 

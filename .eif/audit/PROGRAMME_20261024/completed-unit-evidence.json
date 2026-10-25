@@ -1,0 +1,7 @@
+{
+  "node": "N-0116",
+  "path": ".eif/audit/PROGRAMME_20261024/original-final-summary.json",
+  "tree_hash": "146b56ae3d0322b126c7c70b8c685ff4565b97cb",
+  "note": "N-0116 execution checkpoints backend5aceee9a/frontend8ea51e9b. Fullweb1139/1139 (pre final two-file focus fix); final UnitC121/121+browser6/6 cover corrected focus. API3376passed/21skip; finalauth/export5pass/1optin skip and separate real authenticated browser1/1; tsc/lint0 (50existingwarnings). Fresh verifier inspected referents+six source hashes; 39-path manifest pins implementation. No R3 model attestation, node acceptance, permanent scope retirement or production action. See VERIFY_ORIGINAL_SCOPE.md.",
+  "provenance": "implementation-observation"
+}

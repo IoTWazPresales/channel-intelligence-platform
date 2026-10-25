@@ -1,0 +1,5 @@
+{
+  "node": "N-0116",
+  "expected_revision": 12,
+  "note": "Completed tested execution units committed: backend5aceee9a and frontend8ea51e9b; memory pin follows. Fullweb1139, finalUnitC121, finalfixturebrowser6, actualauthbrowser1, API3376/21skip, auth-export5/1optin skip; tsc/lintpass. See original-final-summary.json, sourceSHA and VERIFY_ORIGINAL_SCOPE.md. Original model/calendar/overlay/calculation and stock-cover/restock/value/open-case semantics, non-owner RLS/performance and complete acceptance still open, never accepted deferrals. Remain implement/acceptance pending. No production DB connection/migration/deployment/API-worker restart/main or DB role/grant mutation. Supported ledger remains local under protected checkpoint boundary."
+}
