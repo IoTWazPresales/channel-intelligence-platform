@@ -1,0 +1,40 @@
+{
+    "review_run":  "RUN-20261026-N0115-E3-VER-ASTRA",
+    "implementation_run":  "RUN-20261026-N0115-E3-CODEX",
+    "head":  "03ec2221251bfba489b73f2d2a00742399b961d9",
+    "observed_utc":  "2026-10-26T13:07:45.5897467Z",
+    "sources":  [
+                    {
+                        "path":  "apps/api/app/services/report_delivery.py",
+                        "sha256":  "13495f5e04e6f6072fe4781d1b6546ec14f137b5f685fea5cdb6b29596cb7df7"
+                    },
+                    {
+                        "path":  "apps/api/app/services/report_schedule_runner.py",
+                        "sha256":  "2865aecc901e7d8b5e7020516b166603b9e5dc0911a28d7010257a7bc8c8d922"
+                    },
+                    {
+                        "path":  "apps/api/app/api/v1/endpoints/report_exports.py",
+                        "sha256":  "7f60652fa5fc3795f4ce929d3c513ee4634ceaee6d25eae07ad1e562179c72be"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_report_schedule_recipient_scope.py",
+                        "sha256":  "0f11ba51be0caaa36022edb2957a36fb9b02b8651355d8725c60cd15e415906b"
+                    },
+                    {
+                        "path":  "apps/api/app/core/product_line_scope.py",
+                        "sha256":  "1eebb6fc85a9fea62bfc76103ba0fabd21c95d67250bd8b75f64f3c5b0675a1e"
+                    },
+                    {
+                        "path":  "apps/api/app/services/saved_report_access.py",
+                        "sha256":  "4a7ce766d5b8b68826a32d40c571220c18c7d602799e97aafc9dec35dec01a75"
+                    },
+                    {
+                        "path":  "apps/api/app/query/cache.py",
+                        "sha256":  "d4b9ddd2d591d0db08a102bae95cb58cc499b84c05c7ef5808134806a52dd9a6"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_dashboard_v2_authenticated.py",
+                        "sha256":  "bc5f591fe3436c5fa335406a618c9f874299ad02af8fb2712ed7acbcdda80834"
+                    }
+                ]
+}

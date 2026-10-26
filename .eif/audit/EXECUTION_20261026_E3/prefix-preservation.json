@@ -1,0 +1,8 @@
+{
+  "original_89_events_preserved": true,
+  "original_prefix_2768_sha256": "aa0cad9bdcfddc02ac95b22ba15502c942e65d74028f384cad136edd6e170f98",
+  "ledger_lines": 2784,
+  "git_ledger_lines": 2679,
+  "local_only_events": 105,
+  "remote_ledger_backup": false
+}

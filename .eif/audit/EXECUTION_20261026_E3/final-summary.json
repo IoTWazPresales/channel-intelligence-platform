@@ -1,0 +1,74 @@
+{
+  "unit": "E3",
+  "node": "N-0115",
+  "base_commit": "03ec2221251bfba489b73f2d2a00742399b961d9",
+  "implementation_run": "RUN-20261026-N0115-E3-CODEX",
+  "review_run": "RUN-20261026-N0115-E3-VER-ASTRA",
+  "policy": "Accepted D-0132: each recipient current permissions; same tenant, active identity, existing report visibility",
+  "failed_before": {
+    "failed": 8,
+    "path": "failed-before-clean.txt"
+  },
+  "review_regressions_before": {
+    "failed": 3,
+    "path": "review-findings-before.txt"
+  },
+  "focused": {
+    "passed": 40,
+    "skipped": 1,
+    "exit_code": 0,
+    "path": "focused-final.txt"
+  },
+  "independent": {
+    "passed": 29,
+    "exit_code": 0,
+    "verdict": "VERIFIED_WITH_LIMITATIONS",
+    "path": "VERIFY_ASTRA.md"
+  },
+  "full_api": {
+    "passed": 3414,
+    "skipped": 22,
+    "warnings": 7,
+    "seconds": 465.44,
+    "exit_code": 0,
+    "path": "full-api.txt"
+  },
+  "full_web": {
+    "passed": 1139,
+    "files": 218,
+    "exit_code": 0,
+    "path": "full-web.txt"
+  },
+  "lint": {
+    "exit_code": 0,
+    "existing_warnings": 50,
+    "path": "lint-final.txt",
+    "initial_failure": "Missing documented ESLINT_USE_FLAT_CONFIG=false in fresh shell; corrected setup, no source change"
+  },
+  "typecheck": {
+    "exit_code": 0,
+    "path": "typecheck.txt"
+  },
+  "isolated_build": {
+    "exit_code": 0,
+    "path": "build-isolated.txt",
+    "dist_dir": ".tmp/e3-build",
+    "tsconfig": ".tmp/e3-tsconfig.json",
+    "tracked_generated_reference_restored": true
+  },
+  "limitations": [
+    "No browser/broker/production delivery smoke",
+    "Non-owner SQL and exhaustive concurrency/revocation races remain unproven",
+    "Expired interruption lease detected after resumed regression/correction edits; supported reacquisition2783, no uninterrupted enforcement claim",
+    "Runtime/model attestation and full R3 unverified; original scope and node acceptance pending",
+    "Per-delivery commit granularity preserved; no atomic whole-recipient fanout introduced"
+  ],
+  "next_unit": "E4 saved-query fidelity; E6 retains legacy tenant semantic restrictions/model overlays",
+  "source_sha256": {
+    "apps/api/app/services/report_delivery.py": "13495f5e04e6f6072fe4781d1b6546ec14f137b5f685fea5cdb6b29596cb7df7",
+    "apps/api/app/services/report_schedule_runner.py": "2865aecc901e7d8b5e7020516b166603b9e5dc0911a28d7010257a7bc8c8d922",
+    "apps/api/app/api/v1/endpoints/report_exports.py": "7f60652fa5fc3795f4ce929d3c513ee4634ceaee6d25eae07ad1e562179c72be",
+    "apps/api/tests/test_report_schedule_recipient_scope.py": "0f11ba51be0caaa36022edb2957a36fb9b02b8651355d8725c60cd15e415906b"
+  },
+  "production": "No connection, migration, service restart, external send, identity/grant, deploy or main action"
+}

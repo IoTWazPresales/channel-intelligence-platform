@@ -1,0 +1,34 @@
+[
+    {
+        "path":  "apps/api/app/services/report_delivery.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/services/report_schedule_runner.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/api/v1/endpoints/report_exports.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_report_schedule_recipient_scope.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/core/product_line_scope.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/services/saved_report_access.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/query/cache.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_dashboard_v2_authenticated.py",
+        "matches":  true
+    }
+]

@@ -24,11 +24,12 @@ from app.services.report_delivery import (
     deliver_saved_report,
     delivery_to_dict,
     next_run_for_cadence,
+    resolve_report_recipient,
     schedule_to_dict,
 )
 from app.services.dashboard_definitions import runs_v1
 from app.services.report_export import build_pdf_bytes, build_xlsx_bytes, detect_missing_data
-from app.services.saved_report_access import can_view_owned_item, parse_user_id
+from app.services.saved_report_access import can_view_owned_item, parse_user_id, user_role_str
 
 router = APIRouter()
 
@@ -294,6 +295,13 @@ async def create_schedule(
     report = await db.get(SavedReport, body.saved_report_id)
     if report is None or report.tenant_id != tid:
         raise HTTPException(status_code=404, detail="Saved report not found")
+    recipients = list(body.subscriber_user_ids or []) or [parse_user_id(user)]
+    try:
+        await resolve_report_recipient(db, report, parse_user_id(user))
+        for rid in recipients:
+            await resolve_report_recipient(db, report, rid)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     row = ReportSchedule(
         tenant_id=tid,
         owner_user_id=parse_user_id(user),
@@ -325,13 +333,19 @@ async def run_schedule_now(
     if not sched.saved_report_id:
         raise HTTPException(status_code=400, detail="Schedule has no saved_report_id")
     report = await db.get(SavedReport, sched.saved_report_id)
-    if report is None:
+    if report is None or report.tenant_id != tid:
         raise HTTPException(status_code=404, detail="Saved report missing")
 
     deliveries = []
     recipients = list(sched.subscriber_user_ids or [])
     if not recipients:
         recipients = [parse_user_id(user)]
+    try:
+        await resolve_report_recipient(db, report, parse_user_id(user))
+        for rid in recipients:
+            await resolve_report_recipient(db, report, int(rid) if rid is not None else None)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     for rid in recipients:
         d = await deliver_saved_report(
             db,
@@ -341,7 +355,10 @@ async def run_schedule_now(
             trigger="schedule",
             recipient_user_id=int(rid) if rid is not None else None,
         )
-        deliveries.append(delivery_to_dict(d))
+        # Match inbox visibility: scheduling a broader recipient does not grant
+        # the caller access to that recipient's computed report contents.
+        if user_role_str(user) == "admin" or d.recipient_user_id == parse_user_id(user):
+            deliveries.append(delivery_to_dict(d))
 
     sched.last_run_at = datetime.now(timezone.utc)
     sched.next_run_at = next_run_for_cadence(sched.cadence)

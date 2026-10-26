@@ -29,6 +29,7 @@ from app.services.report_delivery import (
     deliver_saved_report,
     import_event_skips_cache,
     next_run_for_cadence,
+    resolve_report_recipient,
 )
 from app.worker.task_failure_alert import emit_task_failure_alert
 
@@ -148,7 +149,15 @@ async def _write_failed_delivery(
         recipients = [sched.owner_user_id] if sched.owner_user_id is not None else [None]
     timeoutish = "timeout" in error.lower() or "canceling statement" in error.lower()
     prefix = "[TIMEOUT]" if timeoutish else "[FAILED]"
+    if report is None or report.tenant_id != sched.tenant_id:
+        return
     for rid in recipients:
+        try:
+            await resolve_report_recipient(db, report, int(rid) if rid is not None else None)
+        except PermissionError:
+            # Failure messages also contain report details; never broadcast them
+            # to missing, inactive, foreign or otherwise unauthorized identities.
+            continue
         db.add(
             ReportDelivery(
                 tenant_id=sched.tenant_id,
@@ -186,6 +195,8 @@ async def _deliver_schedule_async(
         report = await db.get(SavedReport, sched.saved_report_id)
         if report is None:
             return {"schedule_id": schedule_id, "skipped": True, "reason": "saved_report_missing"}
+        if report.tenant_id != sched.tenant_id:
+            return {"schedule_id": schedule_id, "ok": False, "reason": "saved_report_tenant_mismatch"}
 
         recipients = list(sched.subscriber_user_ids or [])
         if not recipients:

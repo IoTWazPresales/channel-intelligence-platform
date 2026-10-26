@@ -2,17 +2,27 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.product_line_scope import (
+    apply_product_line_guc, product_line_scope_for, request_editable_product_lines,
+    request_product_lines, request_role,
+)
+from app.core.security import Role, normalize_role
+from app.core.tenant_scope import request_tenant_id
+from app.models.iam import AppUser
+from app.models.product_line_access import UserProductLineAccess
 from app.models.report_delivery import ReportDelivery, ReportSchedule
 from app.models.saved_reports import SavedReport
 from app.query.engine import execute_query
 from app.services.dashboard_definitions import request_from_definition, runs_v1
 from app.services.report_export import detect_missing_data
-from app.services.saved_report_access import parse_user_id
+from app.services.saved_report_access import can_view_owned_item, parse_user_id
 
 Format = Literal["xlsx", "pdf"]
 Trigger = Literal["manual", "schedule", "import_event"]
@@ -79,7 +89,79 @@ def next_run_for_cadence(cadence: str, *, now: datetime | None = None) -> dateti
     return candidate + timedelta(days=days_ahead)
 
 
+async def resolve_report_recipient(
+    db: AsyncSession, report: SavedReport, recipient_user_id: int | None,
+) -> dict:
+    """Current server identity and report visibility; never owner-delegated access (D-0132)."""
+    if recipient_user_id is None:
+        raise PermissionError("Scheduled delivery requires an identified recipient.")
+    recipient = (await db.scalars(select(AppUser).where(
+        AppUser.id == recipient_user_id, AppUser.tenant_id == report.tenant_id,
+        AppUser.is_active.is_(True),
+    ))).one_or_none()
+    if recipient is None:
+        raise PermissionError("Scheduled recipient must be active and belong to the report tenant.")
+    user = {"id": recipient.id, "tenant_id": recipient.tenant_id, "role": normalize_role(recipient.role)}
+    if not can_view_owned_item(visibility=report.visibility, owner_user_id=report.owner_user_id,
+                              shared_roles=report.shared_roles, user=user):
+        raise PermissionError("Scheduled recipient cannot view this report.")
+    return user
+
+
+@asynccontextmanager
+async def _scheduled_recipient_scope(db, report, recipient_user_id):
+    # Bind the report tenant before even loading identity. A background caller
+    # has no request context; the recipient supplies permissions, never the owner.
+    tokens = [(request_tenant_id, request_tenant_id.set(report.tenant_id))]
+    try:
+        user = await resolve_report_recipient(db, report, recipient_user_id)
+        assignments = (await db.scalars(select(UserProductLineAccess).where(
+            UserProductLineAccess.tenant_id == report.tenant_id,
+            UserProductLineAccess.user_id == user["id"],
+        ))).all()
+        read, edit = product_line_scope_for(is_admin=user["role"] == Role.ADMIN,
+                                           assignments=((a.product_line, a.can_edit) for a in assignments))
+        for context, value in [(request_product_lines, read), (request_editable_product_lines, edit),
+                               (request_role, user["role"].value)]:
+            tokens.append((context, context.set(value)))
+        # The identity lookup began this transaction; update its transaction-local
+        # GUCs now. Later transactions use the canonical after_begin listener.
+        await apply_product_line_guc(db)
+        yield user
+    except BaseException:
+        # The delivery writer owns its transaction. End a failed recipient
+        # transaction before returning to the caller, including aborted SQL.
+        await db.rollback()
+        raise
+    finally:
+        for context, token in reversed(tokens):
+            context.reset(token)
+        if db.in_transaction():
+            # commit + refresh opens a new transaction under the recipient.
+            # Restore its gate as well as the Python/cache scope before reuse.
+            if request_product_lines.get() is None and request_editable_product_lines.get() is None:
+                await db.execute(text(
+                    "SELECT set_config('cip.product_lines', '*', true), "
+                    "set_config('cip.editable_product_lines', '*', true), "
+                    "set_config('cip.request_role', '', true)"
+                ))
+            else:
+                await apply_product_line_guc(db)
+
+
 async def deliver_saved_report(
+    db: AsyncSession, *, report: SavedReport, user: dict | None,
+    fmt: Format = "xlsx", trigger: Trigger = "manual",
+    recipient_user_id: int | None = None, skip_cache: bool = False,
+) -> ReportDelivery:
+    kwargs = dict(report=report, fmt=fmt, trigger=trigger, recipient_user_id=recipient_user_id, skip_cache=skip_cache)
+    if trigger in {"schedule", "import_event"}:
+        async with _scheduled_recipient_scope(db, report, recipient_user_id) as recipient:
+            return await _deliver_saved_report(db, user=recipient, **kwargs)
+    return await _deliver_saved_report(db, user=user, **kwargs)
+
+
+async def _deliver_saved_report(
     db: AsyncSession,
     *,
     report: SavedReport,
