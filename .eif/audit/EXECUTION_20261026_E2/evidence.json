@@ -1,0 +1,7 @@
+{
+  "node": "N-0116",
+  "path": ".eif/audit/EXECUTION_20261026_E2/E2_IMPLEMENTATION.md",
+  "tree_hash": "60c4df295ae3f1c482b0b5ca32b557e5d87c776b",
+  "provenance": "implementation-observation",
+  "note": "E2 committed 40ed870d614a1481361dfe69fc91b31123cb79a0: common XLSX writer marks strings literal; formulas/error inference refused by serialization while numbers/bools/missing unchanged. Failed-before4/pass10; root focused39, separate Astra30 +12XML cases; final API3401/22skip, web1139, lint50warnings/types/isolated build exit0. Bounded VERIFIED_WITH_LIMITATIONS, existing CR normalization disclosed, no overall R3/runtime attestation or node acceptance. Original scope remains. Separate E3 fictional runner preparation observed recipient scope gap, no production query leak; Warren accepted current-recipient permissions D0132 at2778. No production/service/migration/identity/main action. Source hashes and full outputs pinned."
+}

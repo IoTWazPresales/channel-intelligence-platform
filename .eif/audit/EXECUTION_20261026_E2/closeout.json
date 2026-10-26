@@ -1,0 +1,27 @@
+{
+  "product_commit": "40ed870d614a1481361dfe69fc91b31123cb79a0",
+  "revision": 2780,
+  "integrity_ok": true,
+  "gate_issues": [
+    "N-0006: recorded complete but gates invalid",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 is independence-disclaimed and cannot anchor review",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 design_sameness_review pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 rendered_comparison pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.referent pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.rendered pass lacks implementation_run from node.stage -> implement",
+    "N-0014: recorded complete but gates invalid",
+    "N-0015: recorded complete but gates invalid",
+    "N-0016: recorded complete but gates invalid"
+  ],
+  "node": "N-0116",
+  "node_revision": 18,
+  "stage": "validate",
+  "lease": null,
+  "acceptance": "pending",
+  "original_89_events_intact": true,
+  "local_only_events_after_git2679": 101,
+  "ledger_remote_backup": false,
+  "accepted_policy": "D-0132: each scheduled recipient current permissions; foreign tenants refused",
+  "next": "E3",
+  "full_R3": "not claimed"
+}

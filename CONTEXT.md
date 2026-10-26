@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-26 - **E2/E3 continuation:** common XLSX literal safety tested (failed-before4; focused39; independent30/12cases; full API3,401/22skip; web1,139; lint/types/isolated build pass). Checkpoint publication underway. Fictional runner proves recipient scope gap; accepted D-0132 uses each recipient's current permissions, refusing foreign tenants and preserving report visibility. Evidence EXECUTION_20261026_E2/ and EXECUTION_20261026_E3/; no production/acceptance.
+- 2026-10-26 - **E2/E3 continuation:** common XLSX literal safety tested (failed-before4; focused39; independent30/12cases; full API3,401/22skip; web1,139; lint/types/isolated build pass). Product/evidence `40ed870d`; EIF2780 validate, lease released. Fictional runner proves recipient scope gap; accepted D-0132 uses each recipient's current permissions, refusing foreign tenants and preserving report visibility. Evidence EXECUTION_20261026_E2/ and EXECUTION_20261026_E3/; no production/acceptance.
 
 - 2026-10-26 — **N-0115 E1 controlled implementation:** canonical CPOR customer/BU filtering, row/ratio total consistency and refusal/cache regressions; separate bounded Astra verification with limitations. Focused23 + independent11 pass; web1,139, lint/typecheck/isolated build pass; final-source API3,387/22skip passes. Product/evidence `e6c87fbc`; EIF2774 validate, lease released. Evidence `.eif/audit/EXECUTION_20261025_E1/`. Original89 local-only events preserved; no acceptance or production actions; next E2/E3/E4, original scope retained.
 
