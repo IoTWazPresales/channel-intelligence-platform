@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-26 — **N-0115 E1 controlled implementation:** canonical CPOR customer/BU filtering, row/ratio total consistency and refusal/cache regressions; separate bounded Astra verification with limitations. Focused23 + independent11 pass; web1,139, lint/typecheck/isolated build pass; final-source API3,387/22skip passes; checkpoint publication underway. Evidence `.eif/audit/EXECUTION_20261025_E1/`. Original89 local-only events preserved; no acceptance or production actions; next E2/E3/E4, original scope retained.
+- 2026-10-26 — **N-0115 E1 controlled implementation:** canonical CPOR customer/BU filtering, row/ratio total consistency and refusal/cache regressions; separate bounded Astra verification with limitations. Focused23 + independent11 pass; web1,139, lint/typecheck/isolated build pass; final-source API3,387/22skip passes. Product/evidence `e6c87fbc`; EIF2774 validate, lease released. Evidence `.eif/audit/EXECUTION_20261025_E1/`. Original89 local-only events preserved; no acceptance or production actions; next E2/E3/E4, original scope retained.
 
 - 2026-10-25 — **Independent original-scope verification:** checked product HEAD/remote `d069f86c`; original acceptance incomplete. Matrices, new pure query/export counterexamples, decision queue and E1–E10 frontier in `.eif/audit/PROGRAMME_20261025/VERIFICATION_AND_FRONTIER.md`; next N-0115 governed filter fidelity. Supported evidence-only EIF2768; original88 events preserved, no node/lease/acceptance changes. R2 fresh-context only; no R3 attestation. Read-only cip_test metadata, no product/service/production changes; artifacts/memory uncommitted. BACKLOG-217.
 

@@ -1,0 +1,28 @@
+{
+  "product_commit": "e6c87fbcfa7c9c15791d6761f3769a365562081b",
+  "programme_revision": 2774,
+  "node": "N-0115",
+  "node_revision": 21,
+  "stage": "validate",
+  "lease": null,
+  "acceptance": "pending",
+  "integrity_ok": true,
+  "acknowledged_legacy_gate_issues": [
+    "N-0006: recorded complete but gates invalid",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 is independence-disclaimed and cannot anchor review",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 design_sameness_review pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 rendered_comparison pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.referent pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.rendered pass lacks implementation_run from node.stage -> implement",
+    "N-0014: recorded complete but gates invalid",
+    "N-0015: recorded complete but gates invalid",
+    "N-0016: recorded complete but gates invalid"
+  ],
+  "entry_89_local_events_preserved": true,
+  "local_only_events_after_git2679": 95,
+  "ledger_remote_backup": false,
+  "product_tests": "final-summary.json",
+  "independent_review": "VERIFY_ASTRA.md",
+  "next_unit": "E2 N0116 XLSX literal safety",
+  "overall_R3": "not claimed"
+}

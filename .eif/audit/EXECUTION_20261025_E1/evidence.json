@@ -1,0 +1,7 @@
+{
+  "node": "N-0115",
+  "path": ".eif/audit/EXECUTION_20261025_E1/E1_IMPLEMENTATION.md",
+  "tree_hash": "49a660c7ddeb68bde9515c59e8752c4e3c73189e",
+  "provenance": "implementation-observation",
+  "note": "E1 committed e6c87fbcfa7c9c15791d6761f3769a365562081b: canonical CPOR customer/BU filtering before aggregation; request session with explicit tenant; correct totals/ratios/zero matches, strict refusals and warm-cache refusal safety; separate scoped supplemental omission. Regressions failed8 before fix. Final API3387passed/22skip, web1139, focused23, independent Astra11; lint50existingwarnings/typecheck/isolatedbuild exit0. Separate VERIFY_ASTRA bounded VERIFIED_WITH_LIMITATIONS with source hashes; invocation model separation is not runtime attestation or full R3. Original N0115 requirements/acceptance pending. Original89 events intact. No production/service/migration/main/identity action. Next E2/E3/E4."
+}
