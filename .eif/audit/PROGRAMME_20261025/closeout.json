@@ -1,0 +1,113 @@
+{
+  "head": "d069f86c9232a735b87c64bb8f3fe3c7b5916b08",
+  "programme_revision": 2768,
+  "verify_exit_code": 2,
+  "integrity_ok": true,
+  "gate_issues": [
+    "N-0006: recorded complete but gates invalid",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 is independence-disclaimed and cannot anchor review",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 design_sameness_review pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 rendered_comparison pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.referent pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.rendered pass lacks implementation_run from node.stage -> implement",
+    "N-0014: recorded complete but gates invalid",
+    "N-0015: recorded complete but gates invalid",
+    "N-0016: recorded complete but gates invalid"
+  ],
+  "gate_debt": [
+    {
+      "node": "N-0006",
+      "acknowledged": true,
+      "issues": [
+        "recorded complete but gates invalid"
+      ]
+    },
+    {
+      "node": "N-0013",
+      "acknowledged": true,
+      "issues": [
+        "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 is independence-disclaimed and cannot anchor review",
+        "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 design_sameness_review pass lacks implementation_run from node.stage -> implement",
+        "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 rendered_comparison pass lacks implementation_run from node.stage -> implement",
+        "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.referent pass lacks implementation_run from node.stage -> implement",
+        "IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.rendered pass lacks implementation_run from node.stage -> implement"
+      ]
+    },
+    {
+      "node": "N-0014",
+      "acknowledged": true,
+      "issues": [
+        "recorded complete but gates invalid"
+      ]
+    },
+    {
+      "node": "N-0015",
+      "acknowledged": true,
+      "issues": [
+        "recorded complete but gates invalid"
+      ]
+    },
+    {
+      "node": "N-0016",
+      "acknowledged": true,
+      "issues": [
+        "recorded complete but gates invalid"
+      ]
+    }
+  ],
+  "original_2767_event_prefix_sha256": "20faf23a68be8227c01ea6ec0a8f563521e8281128ebf7d6be492c3f5264bd25",
+  "original_event_prefix_unchanged": true,
+  "git_ledger_revision": 2679,
+  "local_only_event_count": 89,
+  "new_events": [
+    {
+      "seq": 2768,
+      "ts": "2026-10-25T19:49:53Z",
+      "run": "RUN-20261025-N0116-ASTRA",
+      "actor": "codex",
+      "event": "evidence.add",
+      "payload": {
+        "node": "N-0116",
+        "path": ".eif/audit/PROGRAMME_20261025/VERIFICATION_AND_FRONTIER.md",
+        "tree_hash": "6c81038221d0290ed124d0083185a71a8a60887b",
+        "provenance": "independent-verification",
+        "note": "Fresh-context original-scope review of N-0114/N-0115/N-0116 at product HEAD d069f86c. Original acceptance cannot pass: new pure final-source probes reproduce governed CPOR filter totals, tenant semantic counterpart bypass, saved v1-equivalence sort/limit loss, missing promoted execution dates, and XLSX formula interpretation. Matrices and E1-E10 frontier persisted. 39 source hashes and 20 inherited hashes matched at entry; 88 events2680-2767 preserved. Historical suites parsed, not rerun; cip_test metadata read-only, no production connection or services. R2 fresh-context rung only, no attested R3 model separation; no quality/gate pass, stage change, implementation lease or acceptance. D0116-D0130 remain proposed. Next implementation: N0115 governed filter fidelity, supported fresh ownership and canonical path audit. See checkpoint.json and closeout.json.",
+        "_allocated_id": "EV-0199",
+        "_allocated_counter": 199
+      },
+      "request_id": "n0114-n0116-original-review-evidence-20261025",
+      "request_fingerprint": "7f9b919af57d4143b2fc17df94ad47688f5ba8c4ee4e3f8fb1dc0f26c1933650"
+    }
+  ],
+  "leases": {},
+  "nodes": {
+    "N-0114": {
+      "revision": 17,
+      "status": "in_progress",
+      "stage": "verify",
+      "acceptance_state": "pending",
+      "lease": null
+    },
+    "N-0115": {
+      "revision": 16,
+      "status": "in_progress",
+      "stage": "verify",
+      "acceptance_state": "pending",
+      "lease": null
+    },
+    "N-0116": {
+      "revision": 14,
+      "status": "in_progress",
+      "stage": "implement",
+      "acceptance_state": "pending",
+      "lease": null
+    }
+  },
+  "source_hash_mismatches": [],
+  "inherited_runtime_policy_mismatches": [],
+  "product_diff": [],
+  "audit_delivery": "local artifacts and memory updates only; no commit/push",
+  "independence": "R2 fresh-context review; R3 model separation unattested; no operator acceptance",
+  "evidence_only_mutation": "supported evidence.add event; no node, decision, quality, stage, acceptance or lease change",
+  "earlier_cli_attempt": "event --type rejected by argparse before mutation; event help consulted, corrected to positional event evidence.add once"
+}

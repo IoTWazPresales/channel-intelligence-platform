@@ -1,0 +1,93 @@
+[
+  {
+    "probe": "capability_inventory",
+    "models": [
+      "dsi_sellout",
+      "cst_sellthrough",
+      "cpor"
+    ],
+    "aggregates": [
+      "count",
+      "count_distinct",
+      "latest_sum",
+      "sum"
+    ],
+    "calculations": [
+      "difference",
+      "pct_change",
+      "per_week_rate",
+      "prior_period",
+      "ratio"
+    ],
+    "period_grains": [
+      "week",
+      "month",
+      "quarter",
+      "year"
+    ],
+    "walls": 9,
+    "base_measures": 15,
+    "calculated_measures": 10
+  },
+  {
+    "probe": "wall_preservation",
+    "examples_checked": 11,
+    "all_kept_verbatim": true,
+    "dsi_cst_site_wall": true
+  },
+  {
+    "probe": "governed_filter",
+    "filters": {
+      "bu": "NB"
+    },
+    "planner_ok": true,
+    "observed_total": 100,
+    "observed_rows": [
+      {
+        "customer_id": 10,
+        "support_usd": 40,
+        "value": 40
+      },
+      {
+        "customer_id": 20,
+        "support_usd": 60,
+        "value": 60
+      }
+    ],
+    "expected": "apply filter to rows and totals or refuse honestly"
+  },
+  {
+    "probe": "governed_filter",
+    "filters": {
+      "customer": 999
+    },
+    "planner_ok": true,
+    "observed_total": 100,
+    "observed_rows": [],
+    "expected": "apply filter to rows and totals or refuse honestly"
+  },
+  {
+    "probe": "tenant_semantic_restriction",
+    "v1_ok": false,
+    "v1_reason": "Metric Fictional restricted metric (sellout_units) is hidden for this tenant and cannot be queried.",
+    "v2_ok": true,
+    "non_admin_catalog_label": "Sell-out units",
+    "non_admin_catalog_breakdowns": [
+      "period",
+      "product",
+      "bu",
+      "business_unit",
+      "category",
+      "series",
+      "form_factor",
+      "price_band",
+      "sales_model",
+      "lifecycle",
+      "customer",
+      "partner_tier",
+      "region",
+      "channel",
+      "distributor"
+    ]
+  }
+]

@@ -64,7 +64,7 @@ def cache_key(
     }
     raw = json.dumps(canonical, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
-    return f"cip:query:v2:{digest}"
+    return f"cip:query:v3:{digest}"
 
 
 def cache_key_v2(*, tenant_id: str, request: dict[str, Any], catalog_version: str) -> str:
@@ -90,8 +90,8 @@ def _canonicalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k in sorted(filters.keys()):
         v = filters[k]
-        if v is None or v == "":
-            continue
+        # Blank/null inputs may be invalid for a handler. Keeping them distinct
+        # prevents a warmed unfiltered result from bypassing that refusal.
         out[str(k)] = v
     return out
 

@@ -1,0 +1,48 @@
+{
+    "review_run":  "RUN-20261025-N0115-E1-VER-ASTRA",
+    "implementation_run":  "RUN-20261025-N0115-E1-CODEX",
+    "head":  "d069f86c9232a735b87c64bb8f3fe3c7b5916b08",
+    "observed_utc":  "2026-10-26T07:10:29.0014638Z",
+    "sources":  [
+                    {
+                        "path":  "apps/api/app/query/handlers/a2_cpor.py",
+                        "sha256":  "220efc0383eb2089fce0167b0e945e4f90a6ac2f5e10d5acdb4d1a0982985f71"
+                    },
+                    {
+                        "path":  "apps/api/app/services/cpor/portfolio_intelligence.py",
+                        "sha256":  "60ca08999b11fbf7c62840cd559b2707c24a8b523fecd5b64ed8f1cacc89969b"
+                    },
+                    {
+                        "path":  "apps/api/app/query/cache.py",
+                        "sha256":  "d4b9ddd2d591d0db08a102bae95cb58cc499b84c05c7ef5808134806a52dd9a6"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_cpor_query_filter_fidelity.py",
+                        "sha256":  "5f098de8e257affb828ce4fe6cf666086758127347f67a58bbbec7a8f7b8e004"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_cpor_portfolio_intelligence.py",
+                        "sha256":  "0eb16ca3f0bf0fffc648c2c2f7911f10eabe1570c3c57562556ae11cf64f8df1"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_dashboard_v2_authenticated.py",
+                        "sha256":  "bc5f591fe3436c5fa335406a618c9f874299ad02af8fb2712ed7acbcdda80834"
+                    },
+                    {
+                        "path":  "apps/api/app/query/model/graph.py",
+                        "sha256":  "8495ae6e56b96cd8d58ec62bbe5218ab6a1ad138a1c88260dbcb6332cfe8e7cd"
+                    },
+                    {
+                        "path":  "apps/api/app/query/model/execute.py",
+                        "sha256":  "67a9e594958cd628d9aa7bb500bf5dacbf16c89b0b13698be99c425070f454a3"
+                    },
+                    {
+                        "path":  "apps/api/app/query/engine.py",
+                        "sha256":  "bb6797068121cc9e5a867276ecee77316b0dbce0386a18b7326d920e47b4fd94"
+                    },
+                    {
+                        "path":  "apps/api/app/semantics/catalog/default.yaml",
+                        "sha256":  "979cf119e09cdc5efb247bb1a18352618bab89bad95bd72c9f73f56559c69d24"
+                    }
+                ]
+}

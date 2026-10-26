@@ -1,0 +1,67 @@
+{
+  "implementation_run": "RUN-20261025-N0115-E1-CODEX",
+  "verification_run": "RUN-20261025-N0115-E1-VER-ASTRA",
+  "base_commit": "d069f86c9232a735b87c64bb8f3fe3c7b5916b08",
+  "node": "N-0115",
+  "unit": "E1",
+  "full_api": {
+    "passed": 3387,
+    "skipped": 22,
+    "warnings": 7,
+    "exit_code": 0,
+    "seconds": 531.42,
+    "path": "full-api-final.txt"
+  },
+  "focused": {
+    "passed": 23,
+    "exit_code": 0,
+    "path": "focused-final.txt"
+  },
+  "independent_focused": {
+    "passed": 11,
+    "exit_code": 0,
+    "path": "astra_focused_final.txt"
+  },
+  "full_web": {
+    "passed": 1139,
+    "files": 218,
+    "exit_code": 0,
+    "path": "full-web.txt",
+    "scope": "frontend unchanged during E1"
+  },
+  "lint": {
+    "exit_code": 0,
+    "existing_warnings": 50,
+    "path": "lint.txt"
+  },
+  "typecheck": {
+    "exit_code": 0,
+    "path": "typecheck-canonical.txt"
+  },
+  "isolated_build": {
+    "exit_code": 0,
+    "dist_dir": ".tmp/e1-build",
+    "path": "build-isolated.txt"
+  },
+  "failed_before": {
+    "failures": 8,
+    "path": "failed-before.txt"
+  },
+  "initial_api": {
+    "passed": 3386,
+    "skipped": 22,
+    "failed": 1,
+    "failure": "known ops_logs stream timing under concurrent load",
+    "source_cutoff": "before cache/supplement review corrections",
+    "path": "full-api.txt"
+  },
+  "original_89_local_events_preserved": true,
+  "entry_prefix_sha256": "aa0cad9bdcfddc02ac95b22ba15502c942e65d74028f384cad136edd6e170f98",
+  "final_source_manifest": "astra_source_sha256_final.json",
+  "all_10_source_hashes_match": true,
+  "bounded_review": "VERIFIED_WITH_LIMITATIONS",
+  "overall_R3": "not claimed; runtime attestation remains unverified",
+  "operator_acceptance": "pending",
+  "production": "no connection/migration/restart/deployment/main/role/grant actions",
+  "next": "E2 XLSX literal safety; E3 background scope; E4 saved query fidelity; original E1-E10 scope retained"
+}

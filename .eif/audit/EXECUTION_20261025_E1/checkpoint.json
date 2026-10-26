@@ -1,0 +1,13 @@
+{
+  "entry_head": "d069f86c9232a735b87c64bb8f3fe3c7b5916b08",
+  "original_2767_event_prefix_sha256": "20faf23a68be8227c01ea6ec0a8f563521e8281128ebf7d6be492c3f5264bd25",
+  "entry_2768_event_prefix_sha256": "aa0cad9bdcfddc02ac95b22ba15502c942e65d74028f384cad136edd6e170f98",
+  "original_89_local_events_preserved": true,
+  "current_revision": 2770,
+  "product_sha256": {
+    "apps/api/app/query/handlers/a2_cpor.py": "220efc0383eb2089fce0167b0e945e4f90a6ac2f5e10d5acdb4d1a0982985f71",
+    "apps/api/app/query/cache.py": "a0909082c0c2cbb01790b18feec531e4ec81f9e9754438f2b8b8ccf9035f0ce7",
+    "apps/api/app/services/cpor/portfolio_intelligence.py": "852aae1ac7d6e15165d7053798f71beb2f668d275217e744aa476d05ff32caf7",
+    "apps/api/tests/test_cpor_query_filter_fidelity.py": "3ddeb09e1f6752f2fddf60a382731764979b47a68a63f3a88cd741244870c00c"
+  }
+}

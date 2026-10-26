@@ -1,0 +1,42 @@
+[
+    {
+        "path":  "apps/api/app/query/handlers/a2_cpor.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/services/cpor/portfolio_intelligence.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/query/cache.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_cpor_query_filter_fidelity.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_cpor_portfolio_intelligence.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_dashboard_v2_authenticated.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/query/model/graph.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/query/model/execute.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/query/engine.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/semantics/catalog/default.yaml",
+        "matches":  true
+    }
+]

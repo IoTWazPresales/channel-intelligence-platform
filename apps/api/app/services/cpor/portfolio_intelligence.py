@@ -33,15 +33,30 @@ def _line_ttl_support_zar(line: CporCaseLine) -> float | None:
         return None
 
 
-def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
-    """Portfolio aggregates over non-superseded cases."""
+def build_portfolio_intelligence(
+    session: Session, *, tenant_id: str | None = None, customer_id: int | None = None,
+    bu: str | None = None, include_incremental: bool = True,
+) -> dict[str, Any]:
+    """Portfolio aggregates over non-superseded cases.
+
+    Query filters select cases/lines before every rollup, including ratio
+    denominators. The query caller omits the separate incremental-cost summary;
+    that summary has its own cohort and is not one of these governed measures.
+    Existing owner-surface calls without arguments retain their full payload.
+    """
+    scoped = tenant_id is not None or customer_id is not None or bu is not None
+    stmt = (
+        select(CporCase)
+        .where(CporCase.superseded_by_case_id.is_(None))
+        .where(where_commercial_intelligence())
+        .options(joinedload(CporCase.lines))
+    )
+    if tenant_id is not None:
+        stmt = stmt.where(CporCase.tenant_id == tenant_id)
+    if customer_id is not None:
+        stmt = stmt.where(CporCase.customer_id == customer_id)
     cases = list(
-        session.scalars(
-            select(CporCase)
-            .where(CporCase.superseded_by_case_id.is_(None))
-            .where(where_commercial_intelligence())
-            .options(joinedload(CporCase.lines))
-        ).unique().all()
+        session.scalars(stmt).unique().all()
     )
     if not cases:
         return _empty_payload(cases_in_scope=0, lines_included=0)
@@ -73,6 +88,18 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
     bu_by_product = {
         int(r[0]): (str(r[1]).strip() if r[1] else None) or "(unassigned)" for r in prod_rows
     }
+    # Do not mutate ORM relationships: another caller may reuse this session.
+    lines_by_case = {
+        int(case.id): [
+            line for line in case.lines or []
+            if bu is None or bu_by_product.get(line.product_id, "(unassigned)").casefold() == bu.strip().casefold()
+        ]
+        for case in cases
+    }
+    if bu is not None:
+        cases = [case for case in cases if lines_by_case[int(case.id)]]
+        if not cases:
+            return _empty_payload(cases_in_scope=0, lines_included=0)
 
     by_customer: dict[int, dict[str, float]] = defaultdict(
         lambda: {
@@ -118,7 +145,7 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
         promo = (case.promotion_type or "").strip() or "(unknown)"
         cid = int(case.customer_id)
         is_claim = basis_by.get(int(case.id)) == CLAIM_EVIDENCED
-        for line in case.lines or []:
+        for line in lines_by_case[int(case.id)]:
             if is_voided_line(line):
                 lines_excluded_voided += 1
                 continue
@@ -148,9 +175,9 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
                 claim_res += res
                 claim_lines += 1
 
-            bu = bu_by_product.get(int(line.product_id), "(unassigned)") if line.product_id else "(unassigned)"
+            line_bu = bu_by_product.get(int(line.product_id), "(unassigned)") if line.product_id else "(unassigned)"
 
-            for bucket in (by_customer[cid], by_bu[bu], by_promo[promo]):
+            for bucket in (by_customer[cid], by_bu[line_bu], by_promo[promo]):
                 bucket["support_usd"] += usd_v
                 bucket["support_zar"] += zar_v
                 bucket["estimate_qty"] += est
@@ -222,7 +249,9 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
 
     from app.services.cpor.incremental_unit_cost import build_portfolio_incremental_summary
 
-    incremental = build_portfolio_incremental_summary(session)
+    # This separate metric has no matching filter contract. Never attach an
+    # unfiltered supplement to a scoped portfolio, even for a direct caller.
+    incremental = build_portfolio_incremental_summary(session) if include_incremental and not scoped else None
 
     claim_delivery = (claim_res / claim_est) if claim_est > 0 else None
     claim_spu_usd = (claim_usd / claim_res) if claim_res > 0 else None

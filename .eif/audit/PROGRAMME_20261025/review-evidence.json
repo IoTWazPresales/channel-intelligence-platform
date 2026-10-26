@@ -1,0 +1,7 @@
+{
+  "node": "N-0116",
+  "path": ".eif/audit/PROGRAMME_20261025/VERIFICATION_AND_FRONTIER.md",
+  "tree_hash": "6c81038221d0290ed124d0083185a71a8a60887b",
+  "provenance": "independent-verification",
+  "note": "Fresh-context original-scope review of N-0114/N-0115/N-0116 at product HEAD d069f86c. Original acceptance cannot pass: new pure final-source probes reproduce governed CPOR filter totals, tenant semantic counterpart bypass, saved v1-equivalence sort/limit loss, missing promoted execution dates, and XLSX formula interpretation. Matrices and E1-E10 frontier persisted. 39 source hashes and 20 inherited hashes matched at entry; 88 events2680-2767 preserved. Historical suites parsed, not rerun; cip_test metadata read-only, no production connection or services. R2 fresh-context rung only, no attested R3 model separation; no quality/gate pass, stage change, implementation lease or acceptance. D0116-D0130 remain proposed. Next implementation: N0115 governed filter fidelity, supported fresh ownership and canonical path audit. See checkpoint.json and closeout.json."
+}

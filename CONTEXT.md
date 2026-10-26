@@ -16,6 +16,10 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-10-26 — **N-0115 E1 controlled implementation:** canonical CPOR customer/BU filtering, row/ratio total consistency and refusal/cache regressions; separate bounded Astra verification with limitations. Focused23 + independent11 pass; web1,139, lint/typecheck/isolated build pass; final-source API3,387/22skip passes; checkpoint publication underway. Evidence `.eif/audit/EXECUTION_20261025_E1/`. Original89 local-only events preserved; no acceptance or production actions; next E2/E3/E4, original scope retained.
+
+- 2026-10-25 — **Independent original-scope verification:** checked product HEAD/remote `d069f86c`; original acceptance incomplete. Matrices, new pure query/export counterexamples, decision queue and E1–E10 frontier in `.eif/audit/PROGRAMME_20261025/VERIFICATION_AND_FRONTIER.md`; next N-0115 governed filter fidelity. Supported evidence-only EIF2768; original88 events preserved, no node/lease/acceptance changes. R2 fresh-context only; no R3 attestation. Read-only cip_test metadata, no product/service/production changes; artifacts/memory uncommitted. BACKLOG-217.
+
 - 2026-10-25 — **Astra continuity checkpoint:** completed delivery through `93217bf5` pushed; 39 source hashes match. EIF 2767 integrity true, nine acknowledged legacy gate issues, no leases, no node acceptance. Preserve this directory: 88 protected ledger events remain local beyond Git 2679. Handoff and inventory: `docs/memory/ASTRA_HANDOFF.md`. No product tests or production actions. Handoff pin: `1e3f5c8c`.
 
 - 2026-10-25 — **N-0116 original-scope execution:** S16 comparison, S17 fixed dates/filter exceptions and S19 named cases; gap and keyboard-focus regressions fixed. Backend `5aceee9a`; frontend/evidence checkpoint `8ea51e9b` on `feat/ns-2-brief-nav-collapse`. Web 1,139/1,139; later Unit C 121/121 and browser 6/6; cip_test API 3,376 / 21 skipped; actual authenticated browser 1/1; tsc/lint passed. Original requirements and acceptance remain open. No cip migration/deployment, API/worker restart or main change.

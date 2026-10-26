@@ -7,7 +7,6 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session_sync import SessionLocal
 from app.query.types import HandlerResult, QueryRequest
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 
@@ -38,8 +37,6 @@ async def handle_a2(
     metric_key: str,
     explain_only: bool = False,
 ) -> HandlerResult:
-    # db unused — portfolio path is sync SessionLocal (same as /cpor/intelligence/portfolio)
-    _ = db
     filters = req.filters or {}
     if filters.get("period_from") or filters.get("period_to") or filters.get("period"):
         return HandlerResult(
@@ -52,6 +49,36 @@ async def handle_a2(
             explain={**EXPLAIN, "metric_key": metric_key, "handler": "a2_cpor"},
         )
 
+    def refuse(message: str) -> HandlerResult:
+        return HandlerResult(status="refused", message=message, invariants_applied=list(INVARIANTS),
+                             explain={**EXPLAIN, "metric_key": metric_key, "handler": "a2_cpor"})
+
+    unknown = set(filters) - {"customer_id", "bu", "product_line", "period", "period_from", "period_to", "period_grain"}
+    if unknown:
+        return refuse(f"A2 portfolio intelligence cannot be filtered by {', '.join(sorted(unknown))}.")
+    cust_id = filters.get("customer_id")
+    if cust_id is not None:
+        if isinstance(cust_id, bool) or not isinstance(cust_id, (str, int)):
+            return refuse("customer_id must be one whole-number customer id.")
+        try:
+            cust_id = int(cust_id)
+        except (TypeError, ValueError):
+            return refuse("customer_id must be one whole-number customer id.")
+    for key in ("bu", "product_line"):
+        if key in filters and (not isinstance(filters[key], str) or not filters[key].strip()):
+            return refuse(f"{key} must be one non-empty product line.")
+    bu = filters.get("bu") or filters.get("product_line")
+    if "bu" in filters and "product_line" in filters and filters["bu"].strip().casefold() != filters["product_line"].strip().casefold():
+        return refuse("bu and product_line must name the same product line.")
+
+    grains = _grain_set(req.grains)
+    if grains in ({"customer", "bu"}, {"period", "customer", "bu"}):
+        return HandlerResult(
+            status="not_implemented", invariants_applied=list(INVARIANTS),
+            message="customer×bu cross-tab is not produced by build_portfolio_intelligence; use single-dimension grains (customer or bu) for P3-2 v1.",
+            explain={**EXPLAIN, "metric_key": metric_key, "handler": "a2_cpor"},
+        )
+
     if explain_only:
         return HandlerResult(
             status="ok",
@@ -60,10 +87,11 @@ async def handle_a2(
             message="Would execute build_portfolio_intelligence (no DB run).",
         )
 
-    with SessionLocal() as session:
-        payload = build_portfolio_intelligence(session)
+    payload = await db.run_sync(
+        build_portfolio_intelligence, tenant_id=req.tenant_id, customer_id=cust_id,
+        bu=bu, include_incremental=False,
+    )
 
-    grains = _grain_set(req.grains)
     totals = payload.get("totals") or {}
 
     if metric_key == "support_spend":
@@ -86,35 +114,9 @@ async def handle_a2(
     elif grains == {"promo_type"} or "promo_type" in grains:
         for item in payload.get("by_promotion_type") or []:
             rows.append({**item, "promo_type": item.get("promotion_type"), "value": item.get(value_key)})
-    elif grains in ({"customer", "bu"}, {"period", "customer", "bu"}):
-        # Portfolio service lacks customer×BU cross-tab — honest not_implemented
-        return HandlerResult(
-            status="not_implemented",
-            invariants_applied=list(INVARIANTS),
-            message=(
-                "customer×bu cross-tab is not produced by build_portfolio_intelligence; "
-                "use single-dimension grains (customer or bu) for P3-2 v1."
-            ),
-            explain={**EXPLAIN, "metric_key": metric_key, "handler": "a2_cpor"},
-        )
     else:
         # totals / multi without cross-tab
         rows.append({"value": value, **{k: totals.get(k) for k in totals}})
-
-    # Optional filter narrowing
-    cust_id = filters.get("customer_id")
-    if cust_id is not None and rows and "customer_id" in (rows[0] or {}):
-        try:
-            cid = int(cust_id)
-            rows = [r for r in rows if r.get("customer_id") == cid]
-            value = rows[0].get("value") if len(rows) == 1 else value
-        except (TypeError, ValueError):
-            pass
-    bu = filters.get("bu") or filters.get("product_line")
-    if bu and rows and "bu" in (rows[0] or {}):
-        needle = str(bu).strip().lower()
-        rows = [r for r in rows if str(r.get("bu") or "").strip().lower() == needle]
-        value = rows[0].get("value") if len(rows) == 1 else value
 
     return HandlerResult(
         status="ok",
@@ -123,7 +125,7 @@ async def handle_a2(
             "as_of_utc": datetime.now(timezone.utc).isoformat(),
             "cases_in_scope": payload.get("cases_in_scope"),
             "lines_included": payload.get("lines_included"),
-            "scope": "all_non_superseded_cases",
+            "scope": "filtered_non_superseded_cases",
         },
         value=value,
         rows=rows,

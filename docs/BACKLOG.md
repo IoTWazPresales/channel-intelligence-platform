@@ -3367,3 +3367,19 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | Product-line row security on every scoped table; the parity test with no exemption. |
 | **Out of scope** | BACKLOG-099 (live API in CI) itself. |
 | **TRIGGER** | Before main promotion, CI, or a second tenant instance. |
+
+## BACKLOG-217 — Original N-0114/N-0115/N-0116 completion and verification findings
+
+| Field | Detail |
+|-------|--------|
+| **Status / recorded** | **Open, active programme continuation; not an approved permanent deferral** · 2026-10-25 independent review at product HEAD `d069f86c`. |
+| **Source** | `.eif/audit/PROGRAMME_20261025/VERIFICATION_AND_FRONTIER.md`, original matrices, pure probe scripts/JSON and closeout. D-0131 keeps the original23October scope; D-0116–D-0130 remain proposed. |
+| **Effort** | Bounded E1–E10 units in that report; no single broad rewrite. |
+| **E1 checkpoint (26 October)** | Governed CPOR customer/BU filter/total and cache-refusal corrections tested: final API3,387/22skip, web1,139, separate bounded Astra11, lint/typecheck/isolated build pass. `.eif/audit/EXECUTION_20261025_E1/`. No node acceptance. |
+| **What remains** | XLSX literal safety; background tenant/recipient-scope proof; model counterpart semantic restrictions; saved report sort/limit/grain/context/download fidelity; shared category controls and keyboard parity; five model families, avg/min/max, specs_json, tenant calendar/configuration and missing calculated measures; complete original starters; non-owner RLS/performance and authentic accessibility/acceptance evidence. |
+| **Why still open** | The original verification had implementation scope NONE; E1 is now implemented/tested as recorded above. Other reproduced defects and original missing features remain open and are not waived. |
+| **Canonical reuse** | Extend existing governed handlers, compiler/definition/export paths, shared charts, BusinessCalendar and overview cover/restock logic. Reconcile FactPricing versus listing observations before the recorded-price model. |
+| **Behavior to retain** | Existing financial definitions, tenant/product-line isolation, v1 compatibility, migration reversibility, corrected filter intersections/focus/comparison gaps, implemented S15–S19, original88 protected events. |
+| **Hard constraints** | No cip writes/migration/restart/deploy/main; no new DB identity/grants without authority; no fabricated values or altered amounts to claim parity; no premature acceptance. |
+| **TRIGGER** | Next authorized implementation session on N-0114/15/16, before node acceptance or any deployment; begin E1 N-0115 governed filter fidelity after fresh CLI status/verify/ownership and canonical path map. |
+| **Out of scope** | S20 full v2 report editor/raw-source drill/continuous colour scale/note/cross-model widgets; unrelated old gate debt remediation and production release. |

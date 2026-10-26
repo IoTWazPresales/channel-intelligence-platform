@@ -1,0 +1,26 @@
+{
+  "checkpoint": "d069f86c9232a735b87c64bb8f3fe3c7b5916b08",
+  "command": "apps/api/.venv/Scripts/python.exe -B .eif/audit/PROGRAMME_20261025/n0116_readonly_probes.py",
+  "exit_code": 0,
+  "scope": "Pure local functions and in-memory XLSX. SQLAlchemy connection guard installed. No database connection or service.",
+  "observed": [
+    {
+      "probe": "sort_limit_equivalence",
+      "v1_equivalent": true,
+      "runs_v1": true,
+      "stored_query": {
+        "measures": ["dsi_sellout.units"],
+        "breakdowns": ["product"],
+        "sort": {"by": "dsi_sellout.units", "dir": "asc"},
+        "limit": 1
+      },
+      "v1_mirror": {"metric_key": "sellout_units", "grains": ["product"], "filters": {}, "period_grain": null}
+    },
+    {"probe": "spreadsheet_literal", "cell_data_type": "f", "formula_stored": "=1+1"},
+    {
+      "probe": "promotion_requires_dates", "needs_date_range": true,
+      "saved_from": null, "saved_to": null, "delivery_plan_ok": false,
+      "refusals": [{"measure": "cst_sellthrough.units_per_week", "reason": "Sell-through units per week needs period as a breakdown or both period.from and period.to.", "wall": null}]
+    }
+  ]
+}

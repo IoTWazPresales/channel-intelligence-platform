@@ -1,0 +1,813 @@
+{
+  "scope": "read-only independent provenance check; implementation change scope NONE",
+  "head": "d069f86c9232a735b87c64bb8f3fe3c7b5916b08",
+  "branch": "feat/ns-2-brief-nav-collapse",
+  "upstream": "d069f86c9232a735b87c64bb8f3fe3c7b5916b08",
+  "remote": "d069f86c9232a735b87c64bb8f3fe3c7b5916b08\trefs/heads/feat/ns-2-brief-nav-collapse",
+  "root_commit": "8f7f1b53e3555dd3010244c7fe8b398ecb881548",
+  "source_hashes": {
+    "apps/api/app/api/v1/endpoints/report_exports.py": {
+      "expected": "0df517fe96df5e00c9fd1b479fb8e9742dba9ad1e8a481bb0ecd971a0089c648",
+      "actual": "0df517fe96df5e00c9fd1b479fb8e9742dba9ad1e8a481bb0ecd971a0089c648"
+    },
+    "apps/api/app/query/model/compiler.py": {
+      "expected": "a24c9edf0bf242cc0ed5d1587d2aeebf20e6173d53376091206f63f18c3fb176",
+      "actual": "a24c9edf0bf242cc0ed5d1587d2aeebf20e6173d53376091206f63f18c3fb176"
+    },
+    "apps/api/app/query/model/graph.py": {
+      "expected": "8495ae6e56b96cd8d58ec62bbe5218ab6a1ad138a1c88260dbcb6332cfe8e7cd",
+      "actual": "8495ae6e56b96cd8d58ec62bbe5218ab6a1ad138a1c88260dbcb6332cfe8e7cd"
+    },
+    "apps/api/app/query/model/loader.py": {
+      "expected": "2f4454f06a3ed4a86a2fcc9338bc586ef7c313b91bfba42b503a4be36fc1c6ce",
+      "actual": "2f4454f06a3ed4a86a2fcc9338bc586ef7c313b91bfba42b503a4be36fc1c6ce"
+    },
+    "apps/api/app/semantics/models/default.yaml": {
+      "expected": "72625277643811f96c2cec747e775ac6c2454f8236f1a2cd3e5c1f479c469285",
+      "actual": "72625277643811f96c2cec747e775ac6c2454f8236f1a2cd3e5c1f479c469285"
+    },
+    "apps/api/app/services/dashboard_definitions.py": {
+      "expected": "21e21034e848ff75579bce84dac049db4a2635d57229f5f7630e0acb408b468a",
+      "actual": "21e21034e848ff75579bce84dac049db4a2635d57229f5f7630e0acb408b468a"
+    },
+    "apps/api/app/services/dashboard_templates.py": {
+      "expected": "5ef1c9cf944ec3afe402525d51530bca3dd5d7e18ce243d1df2a9f71281921aa",
+      "actual": "5ef1c9cf944ec3afe402525d51530bca3dd5d7e18ce243d1df2a9f71281921aa"
+    },
+    "apps/api/app/services/report_delivery.py": {
+      "expected": "d39c11b9178eb9970c2d5b8e43557c0fb58a83d2a2e8e8652af4f06b232df556",
+      "actual": "d39c11b9178eb9970c2d5b8e43557c0fb58a83d2a2e8e8652af4f06b232df556"
+    },
+    "apps/api/tests/test_dashboard_v2_authenticated.py": {
+      "expected": "bc5f591fe3436c5fa335406a618c9f874299ad02af8fb2712ed7acbcdda80834",
+      "actual": "bc5f591fe3436c5fa335406a618c9f874299ad02af8fb2712ed7acbcdda80834"
+    },
+    "apps/api/tests/test_dashboard_v2_definitions.py": {
+      "expected": "f9c23ef16d826f0b751cda5973b3d5a2b161be7ab6c955ffcca30a482c5e96e2",
+      "actual": "f9c23ef16d826f0b751cda5973b3d5a2b161be7ab6c955ffcca30a482c5e96e2"
+    },
+    "apps/api/tests/test_dashboard_v2_export.py": {
+      "expected": "53a7925c96e1278a441429a5d5b4d073d2a5215216ab507b91033e7f625fc202",
+      "actual": "53a7925c96e1278a441429a5d5b4d073d2a5215216ab507b91033e7f625fc202"
+    },
+    "apps/api/tests/test_query_model_db.py": {
+      "expected": "85a4246a6a0f361c6391c5533a74d55caf5bd38a5adb106cf9719405218bdcc2",
+      "actual": "85a4246a6a0f361c6391c5533a74d55caf5bd38a5adb106cf9719405218bdcc2"
+    },
+    "apps/api/tests/test_query_model_graph.py": {
+      "expected": "9cc8cdbc6f33df71f4165b29656fbfb3235443749925ddc3578359531a34f34d",
+      "actual": "9cc8cdbc6f33df71f4165b29656fbfb3235443749925ddc3578359531a34f34d"
+    },
+    "apps/web/e2e/builder-auth.spec.ts": {
+      "expected": "89e218ce84efe38c31d3275bba926e21122252eabd50e273423c7a32461cde38",
+      "actual": "89e218ce84efe38c31d3275bba926e21122252eabd50e273423c7a32461cde38"
+    },
+    "apps/web/e2e/builder-fixtures.spec.ts": {
+      "expected": "f04310c2d8ac9641102d0b57437ff4ccf7b7d60f5a469c2503cf93b80a65cad4",
+      "actual": "f04310c2d8ac9641102d0b57437ff4ccf7b7d60f5a469c2503cf93b80a65cad4"
+    },
+    "apps/web/playwright.builder-auth.config.ts": {
+      "expected": "eb235d688a39205ddd111afd6d5969bc23b8abd77edb3f0497ce2f1545433626",
+      "actual": "eb235d688a39205ddd111afd6d5969bc23b8abd77edb3f0497ce2f1545433626"
+    },
+    "apps/web/playwright.builder.config.ts": {
+      "expected": "7b4fcea3ebde61ba9599d46c157b449ceb046eec2e5725385d90b70dc0930f1a",
+      "actual": "7b4fcea3ebde61ba9599d46c157b449ceb046eec2e5725385d90b70dc0930f1a"
+    },
+    "apps/web/src/design-lab/fixtures/builder.ts": {
+      "expected": "53246d321984aeca95a767fcd44d48494dd5e3f39c5a6f8792f839027e71696a",
+      "actual": "53246d321984aeca95a767fcd44d48494dd5e3f39c5a6f8792f839027e71696a"
+    },
+    "apps/web/src/design-lab/fixtures/builderStarters.json": {
+      "expected": "1292faf6c96ae589c08c9f7d78e6f2dcd15a0a730861cf2a2629bd51db4ed5e2",
+      "actual": "1292faf6c96ae589c08c9f7d78e6f2dcd15a0a730861cf2a2629bd51db4ed5e2"
+    },
+    "apps/web/src/features/dashboards/DashboardWorkspace.integration.test.tsx": {
+      "expected": "678278d34b739c54e9dbb5baa466ced568515a6dfb1b8f8d4cd7f69497a28584",
+      "actual": "678278d34b739c54e9dbb5baa466ced568515a6dfb1b8f8d4cd7f69497a28584"
+    },
+    "apps/web/src/features/dashboards/builder/BuilderEditorDialog.tsx": {
+      "expected": "981f2eade01e8a4082e50b27117c883130b8f7d3eef7c77917d441360331bd02",
+      "actual": "981f2eade01e8a4082e50b27117c883130b8f7d3eef7c77917d441360331bd02"
+    },
+    "apps/web/src/features/dashboards/builder/ComparisonChart.tsx": {
+      "expected": "0cd4f6fc334dfb10d8cba49d2388fed9567d999619920b069a954ecd0edd2dea",
+      "actual": "0cd4f6fc334dfb10d8cba49d2388fed9567d999619920b069a954ecd0edd2dea"
+    },
+    "apps/web/src/features/dashboards/builder/V2WidgetBody.test.tsx": {
+      "expected": "8f9eafb630f7c787f348014576d74adf6fdfe798ac686214e81667bac4d1c9f7",
+      "actual": "8f9eafb630f7c787f348014576d74adf6fdfe798ac686214e81667bac4d1c9f7"
+    },
+    "apps/web/src/features/dashboards/builder/V2WidgetBody.tsx": {
+      "expected": "d3822f8d3fe996a05e0475603e8f7cebcc8b14a030d1a39e24d81b426d715845",
+      "actual": "d3822f8d3fe996a05e0475603e8f7cebcc8b14a030d1a39e24d81b426d715845"
+    },
+    "apps/web/src/features/dashboards/builder/V2WidgetCard.test.tsx": {
+      "expected": "4894fef0a26086fda36e48508d0ea89df1b83d6a3ab419a9c4114f5fc3f4bc27",
+      "actual": "4894fef0a26086fda36e48508d0ea89df1b83d6a3ab419a9c4114f5fc3f4bc27"
+    },
+    "apps/web/src/features/dashboards/builder/V2WidgetCard.tsx": {
+      "expected": "82bb105a3946d57b5954bcb8fea70c67558216172098aca3a5d5bff241542bc6",
+      "actual": "82bb105a3946d57b5954bcb8fea70c67558216172098aca3a5d5bff241542bc6"
+    },
+    "apps/web/src/features/dashboards/builder/ViewRowsDrawer.test.tsx": {
+      "expected": "c3e4a15f22c92e5e31c4c600a814f0a41c8ed66e070b575af2fb9cffbe335573",
+      "actual": "c3e4a15f22c92e5e31c4c600a814f0a41c8ed66e070b575af2fb9cffbe335573"
+    },
+    "apps/web/src/features/dashboards/builder/ViewRowsDrawer.tsx": {
+      "expected": "5b80c6cf59ecdc2f6f58000fff26f9feecdbef0f22b3a31438db4f8a8d686109",
+      "actual": "5b80c6cf59ecdc2f6f58000fff26f9feecdbef0f22b3a31438db4f8a8d686109"
+    },
+    "apps/web/src/features/dashboards/builder/WidgetMenu.tsx": {
+      "expected": "9b34d4514fc505a5577ec7d6cedc04369ddb56af0b45fc4db4326dc95049e99a",
+      "actual": "9b34d4514fc505a5577ec7d6cedc04369ddb56af0b45fc4db4326dc95049e99a"
+    },
+    "apps/web/src/features/dashboards/builder/api.test.ts": {
+      "expected": "06b618955c97c018d12cdf134cdc5c67734ee85f9b795addb925a5483425eeb0",
+      "actual": "06b618955c97c018d12cdf134cdc5c67734ee85f9b795addb925a5483425eeb0"
+    },
+    "apps/web/src/features/dashboards/builder/api.ts": {
+      "expected": "f6e02f35399e66001424999a6ad526f42317eaa689846506c5d19ba4143a5c76",
+      "actual": "f6e02f35399e66001424999a6ad526f42317eaa689846506c5d19ba4143a5c76"
+    },
+    "apps/web/src/features/dashboards/builder/comparison.test.ts": {
+      "expected": "512db80714e821da002647fd75bbe640f1c7f5c408898a4ae501a24ca28c86e8",
+      "actual": "512db80714e821da002647fd75bbe640f1c7f5c408898a4ae501a24ca28c86e8"
+    },
+    "apps/web/src/features/dashboards/builder/comparison.ts": {
+      "expected": "9cc5ebba5c77efecf330fc04afdd63fbf73f647e042a8c0afc271dbfd0ed20b7",
+      "actual": "9cc5ebba5c77efecf330fc04afdd63fbf73f647e042a8c0afc271dbfd0ed20b7"
+    },
+    "apps/web/src/features/dashboards/builder/requestFor.test.ts": {
+      "expected": "b618b28137af1f834465da4e98277d07ae8d44bfc54204f709e5e606424dc550",
+      "actual": "b618b28137af1f834465da4e98277d07ae8d44bfc54204f709e5e606424dc550"
+    },
+    "apps/web/src/features/dashboards/builder/requestFor.ts": {
+      "expected": "dabdec4466f57263fa79c04a6a7fd958a9a8aa80ca78c86e585361c5851fecb7",
+      "actual": "dabdec4466f57263fa79c04a6a7fd958a9a8aa80ca78c86e585361c5851fecb7"
+    },
+    "apps/web/src/features/dashboards/builder/runContext.ts": {
+      "expected": "47616af2fe7084c3b0d994a8a0689ec377bb1b50780a190d334f0a2ec399756a",
+      "actual": "47616af2fe7084c3b0d994a8a0689ec377bb1b50780a190d334f0a2ec399756a"
+    },
+    "apps/web/src/features/dashboards/builder/types.ts": {
+      "expected": "44428fb244c253e42c6dd9a4f123061793232072f8bb441f9be7f881035f41c4",
+      "actual": "44428fb244c253e42c6dd9a4f123061793232072f8bb441f9be7f881035f41c4"
+    },
+    "apps/web/src/features/dashboards/builder/useDashboardRun.ts": {
+      "expected": "6653fe79b51603c1ad96fc0e17cd0ad2e70f35c9c4b9df746aaa6bb26291f116",
+      "actual": "6653fe79b51603c1ad96fc0e17cd0ad2e70f35c9c4b9df746aaa6bb26291f116"
+    },
+    "apps/web/src/features/workbench-ui/charts.tsx": {
+      "expected": "736d5ba93d307dcfa5d7a0f5acc551df2fab5aa65b1af0c8626eb29137520ace",
+      "actual": "736d5ba93d307dcfa5d7a0f5acc551df2fab5aa65b1af0c8626eb29137520ace"
+    }
+  },
+  "inherited_hashes": {
+    ".cursor/eif-runtime-policy.json": {
+      "expected": "64f17efe20127b5e611d877499f46f33e2694ea0ffd2e40f756afcef0421be44",
+      "actual": "64f17efe20127b5e611d877499f46f33e2694ea0ffd2e40f756afcef0421be44"
+    },
+    ".eif/CURRENT.md": {
+      "expected": "1f825be507a81e525ff41cd23b9c014c4ddb6d3541ee0c8ef68a928c0ca7b69d",
+      "actual": "1f825be507a81e525ff41cd23b9c014c4ddb6d3541ee0c8ef68a928c0ca7b69d"
+    },
+    ".eif/ESCALATION.md": {
+      "expected": "22683b551176f94931beb61d4142e61305de6ead423ceaa50bfd3602dc68a053",
+      "actual": "22683b551176f94931beb61d4142e61305de6ead423ceaa50bfd3602dc68a053"
+    },
+    ".eif/PROGRAM.md": {
+      "expected": "0194405d5e838a94c3415bdfe6adc0d4a8667f3171b4b72e9f6ad407ffefa434",
+      "actual": "0194405d5e838a94c3415bdfe6adc0d4a8667f3171b4b72e9f6ad407ffefa434"
+    },
+    ".eif/ROADMAP.md": {
+      "expected": "8d8f5bb2978e70472a7324f86200275d136e0ade00b782783885c4c1eb1b4c77",
+      "actual": "8d8f5bb2978e70472a7324f86200275d136e0ade00b782783885c4c1eb1b4c77"
+    },
+    ".eif/RUNTIME_CAPABILITIES.md": {
+      "expected": "e5511889ce2c91f194ffa0d2128fe5d1daf7eb965d3602827a6d6569d0683d83",
+      "actual": "e5511889ce2c91f194ffa0d2128fe5d1daf7eb965d3602827a6d6569d0683d83"
+    },
+    ".eif/program/PROGRAM.yaml": {
+      "expected": "428cdb17ca5527831aa39c54c63fc95a07f9ec8ec984bd3ab96195ae3e201bc2",
+      "actual": "428cdb17ca5527831aa39c54c63fc95a07f9ec8ec984bd3ab96195ae3e201bc2"
+    },
+    ".eif/program/PROGRAM_LOG.ndjson": {
+      "expected": "20faf23a68be8227c01ea6ec0a8f563521e8281128ebf7d6be492c3f5264bd25",
+      "actual": "20faf23a68be8227c01ea6ec0a8f563521e8281128ebf7d6be492c3f5264bd25"
+    },
+    ".eif/runtime/programme/eif_program/__init__.py": {
+      "expected": "78b3417e3ff764955f7c9e0f378db7e712d7c6afcd22fab8b388efb888fe838a",
+      "actual": "78b3417e3ff764955f7c9e0f378db7e712d7c6afcd22fab8b388efb888fe838a"
+    },
+    ".eif/runtime/programme/eif_program/clock.py": {
+      "expected": "c0923ad5dfc5552283d3cfab98f9ed681dbcd257a8c3592f9c60d88bd427299f",
+      "actual": "c0923ad5dfc5552283d3cfab98f9ed681dbcd257a8c3592f9c60d88bd427299f"
+    },
+    ".eif/runtime/programme/eif_program/design_artifacts.py": {
+      "expected": "5779dabc17314178a4d456b8095246d31cd79cf61f9bb8a152b67642aff527d9",
+      "actual": "5779dabc17314178a4d456b8095246d31cd79cf61f9bb8a152b67642aff527d9"
+    },
+    ".eif/runtime/programme/eif_program/engine.py": {
+      "expected": "cdf487cbfa50a2ecdb7bd788944c4c57544a1a0d16063eb6e4cae52b02b49d10",
+      "actual": "cdf487cbfa50a2ecdb7bd788944c4c57544a1a0d16063eb6e4cae52b02b49d10"
+    },
+    ".eif/runtime/programme/eif_program/errors.py": {
+      "expected": "cd6154a615f1fa95ce0cc8d21e0b0e127a5bb79e801ea4ce547790b542e137d0",
+      "actual": "cd6154a615f1fa95ce0cc8d21e0b0e127a5bb79e801ea4ce547790b542e137d0"
+    },
+    ".eif/runtime/programme/eif_program/facet_map.yaml": {
+      "expected": "ef6acf5252a10d2253525e537e9f33eea6ffff5efbd248a89b066a6d14dc0bd5",
+      "actual": "ef6acf5252a10d2253525e537e9f33eea6ffff5efbd248a89b066a6d14dc0bd5"
+    },
+    ".eif/runtime/programme/eif_program/facets.py": {
+      "expected": "02604a35b9fe3c8fe0c6bd91ccb8fad47eafa7b5b2ec2fb83bf91d0bcd82f676",
+      "actual": "02604a35b9fe3c8fe0c6bd91ccb8fad47eafa7b5b2ec2fb83bf91d0bcd82f676"
+    },
+    ".eif/runtime/programme/eif_program/journeys.py": {
+      "expected": "7c569f14f42545df994bab1fc90802b5545dd644db602d65c7f5c3c251d017bc",
+      "actual": "7c569f14f42545df994bab1fc90802b5545dd644db602d65c7f5c3c251d017bc"
+    },
+    ".eif/runtime/programme/eif_program/migrate.py": {
+      "expected": "24b8ede9ca653023a922b8ff77c9a3323e47f3ee87a90fc51b0878ebc75f526b",
+      "actual": "24b8ede9ca653023a922b8ff77c9a3323e47f3ee87a90fc51b0878ebc75f526b"
+    },
+    ".eif/runtime/programme/eif_program/store.py": {
+      "expected": "4ab1a047b7fc59967410fe6f6519dd18df12384fbec0bf8a3849a2bb084b48c1",
+      "actual": "4ab1a047b7fc59967410fe6f6519dd18df12384fbec0bf8a3849a2bb084b48c1"
+    },
+    ".eif/runtime/programme/eif_program/views.py": {
+      "expected": "e602dc91acc816f87963ceb5b37bcce2a4a5860631800e9b648c3db59c19d6a6",
+      "actual": "e602dc91acc816f87963ceb5b37bcce2a4a5860631800e9b648c3db59c19d6a6"
+    },
+    ".eif/runtime/programme/manifest.json": {
+      "expected": "cf2bad627d57081cbe990f51c095002a1aad02d1ac48abeee4a8d618aad24547",
+      "actual": "cf2bad627d57081cbe990f51c095002a1aad02d1ac48abeee4a8d618aad24547"
+    }
+  },
+  "source_mismatches": [],
+  "inherited_mismatches": [],
+  "ledger": {
+    "committed_revision": 2679,
+    "local_revision": 2767,
+    "committed_prefix_unchanged": true,
+    "local_only_count": 88,
+    "local_only_range": [
+      2680,
+      2767
+    ],
+    "last_event": "node.lease.release"
+  },
+  "programme_revision": 2767,
+  "leases": {},
+  "nodes": {
+    "N-0114": {
+      "revision": 17,
+      "status": "in_progress",
+      "stage": "verify",
+      "lease": null,
+      "risk": "R2",
+      "acceptance_state": "pending",
+      "depends_on": [],
+      "implementation_run": "RUN-20261023-N0114-IMPL",
+      "implementation_actor": "gov-001",
+      "acceptance_criteria": [
+        "Every chart axis has a title with its unit",
+        "a chart with more than one series shows a legend, optional on a single series",
+        "Long names are never cut short: wrapped or angled with the full name on hover, horizontal bars chosen automatically when labels are long or many, pie legend shows full names",
+        "The viewer can set top N (5, 10, 15, 25, all) and sort (value, name, period) on charts",
+        "Numbers are formatted by unit (R, US$, units, %)",
+        "Shared chart components fixed first, then every dashboard and report chart uses them",
+        "No new chart library: Recharts and MUI as configured, workbench-ui reused",
+        "Rendered light and dark at 1280x800 and 390x844",
+        "Full API pytest on cip_test, full web vitest and tsc green"
+      ],
+      "quality": {
+        "ux": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0114_RENDER.md",
+            "summary": "Fixture page rendered light and dark at 1280 and 390 (iframe); 390 overflow found and fixed; real pages not rendered signed in."
+          },
+          "rationale": "Full names, auto horizontal bars, top N and sort with a Top N of M caption, legends on multi-series, checked on the fixture page.",
+          "pass_run": "RUN-20261023-N0114-IMPL",
+          "pass_actor": "gov-001"
+        },
+        "a11y": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0114_RENDER.md",
+            "summary": "Fixture page rendered light and dark at 1280 and 390 (iframe); 390 overflow found and fixed; real pages not rendered signed in."
+          },
+          "rationale": "Every chart with a value title has an accessible name and a hidden data table; full names in SVG title and tooltip; no axe run.",
+          "pass_run": "RUN-20261023-N0114-IMPL",
+          "pass_actor": "gov-001"
+        },
+        "rendered": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0114_RENDER.md",
+            "summary": "Fixture page rendered light and dark at 1280 and 390 (iframe); 390 overflow found and fixed; real pages not rendered signed in."
+          },
+          "rationale": "Rendered on the production build, light and dark, 1280x800 and 390x844 (iframe), fixture data; signed-in pages not rendered.",
+          "pass_run": "RUN-20261023-N0114-IMPL",
+          "pass_actor": "gov-001"
+        },
+        "content": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0114_RENDER.md",
+            "summary": "Fixture page rendered light and dark at 1280 and 390 (iframe); 390 overflow found and fixed; real pages not rendered signed in."
+          },
+          "rationale": "Axis titles name the measure and unit; R and US$; unknown units carry no unit.",
+          "pass_run": "RUN-20261023-N0114-IMPL",
+          "pass_actor": "gov-001"
+        }
+      },
+      "verification": {
+        "behavioral": {
+          "state": "pass",
+          "pass_run": "RUN-20261023-N0114-VER",
+          "pass_actor": "gov-008",
+          "evidence": ".eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md",
+          "path": null
+        },
+        "referent": {
+          "state": "pass",
+          "pass_run": "RUN-20261023-N0114-VER",
+          "pass_actor": "gov-008",
+          "evidence": ".eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md",
+          "path": "apps/web/src/features/workbench-ui/charts.tsx"
+        }
+      }
+    },
+    "N-0115": {
+      "revision": 16,
+      "status": "in_progress",
+      "stage": "verify",
+      "lease": null,
+      "risk": "R3",
+      "acceptance_state": "pending",
+      "depends_on": [
+        "N-0114"
+      ],
+      "implementation_run": "RUN-20261023-N0115-IMPL",
+      "implementation_actor": "gov-001",
+      "acceptance_criteria": [
+        "Discovery lists the catalog, handlers, metrics that run, what each fact table holds and every caller of the query engine and catalog",
+        "Fact tables are declared models with measures (sum, count, distinct count, average, min, max) for sell-out, customer sell-through, shipments, distributor stock, returns, lineup plan, CPOR cases and lines, recorded prices",
+        "Shared breakdowns: period day/week/month/quarter/year on the tenant business calendar, customer, distributor, product and product attributes and specs, business unit, channel, region, store/site, promo type",
+        "Allowed breakdowns per measure are derived from joins and declared walls, never hand-listed",
+        "walls declared once with plain-words reasons",
+        "every existing refuse_example kept",
+        "Calculated measures: ratio, difference, percent change, prior period, prior year, running total, share of total, per-week rate",
+        "Existing metrics re-expressed or kept as governed handlers with parity proven on cip_test and read-only on a clone of cip",
+        "a metric that does not match keeps its old handler and is listed",
+        "One compiler: measure x breakdowns x filters to SQL with tenant and product-line scope always applied, row limits, explain, caching",
+        "timings on the cip clone, target under 2 s per widget query",
+        "Catalog definitions are per-tenant configuration with the current catalog as default",
+        "Catalog API returns measures, breakdowns and allowed combinations",
+        "every existing caller keeps working with a test per caller"
+      ],
+      "quality": {
+        "testing": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md",
+            "summary": "Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66); full API pytest 3321 passed."
+          },
+          "rationale": "49 new tests (graph 27, db 10, rules 2, v2 api 5, v1 callers 5); relevant set 320 passed; full API pytest on cip_test 3321 passed, 21 skipped, 0 failed.",
+          "pass_run": "RUN-20261023-N0115-IMPL",
+          "pass_actor": "gov-001"
+        },
+        "observability": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md",
+            "summary": "Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66); full API pytest 3321 passed."
+          },
+          "rationale": "Every v2 result carries explain: models, measures, joins, walls checked, filters by name, SQL with parameter names, scope source, row count, ms.",
+          "pass_run": "RUN-20261023-N0115-IMPL",
+          "pass_actor": "gov-001"
+        },
+        "data_integrity": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md",
+            "summary": "Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66); full API pytest 3321 passed."
+          },
+          "rationale": "Read path only; parity old vs new identical on cip_test and on the clone for every allowed grain of sellout_units and cst_sellthrough_units; no number on an existing surface changed (v1 untouched).",
+          "pass_run": "RUN-20261023-N0115-IMPL",
+          "pass_actor": "gov-001"
+        },
+        "backup_recovery": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md",
+            "summary": "Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66); full API pytest 3321 passed."
+          },
+          "rationale": "No data written and no schema change; rollback is reverting be38feb5 (v1 endpoints never depended on it).",
+          "pass_run": "RUN-20261023-N0115-IMPL",
+          "pass_actor": "gov-001"
+        },
+        "migration_safety": {
+          "required": true,
+          "state": "pass",
+          "evidence": {
+            "path": ".eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md",
+            "summary": "Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66); full API pytest 3321 passed."
+          },
+          "rationale": "No migration. Nothing waits for apply to cip.",
+          "pass_run": "RUN-20261023-N0115-IMPL",
+          "pass_actor": "gov-001"
+        }
+      },
+      "verification": {
+        "behavioral": {
+          "state": "pass",
+          "pass_run": "RUN-20261023-N0115-VER",
+          "pass_actor": "gov-008",
+          "evidence": ".eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md",
+          "path": null
+        },
+        "referent": {
+          "state": "pass",
+          "pass_run": "RUN-20261023-N0115-VER",
+          "pass_actor": "gov-008",
+          "evidence": ".eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md",
+          "path": "apps/api/app/query/model/compiler.py"
+        }
+      }
+    },
+    "N-0116": {
+      "revision": 14,
+      "status": "in_progress",
+      "stage": "implement",
+      "lease": null,
+      "risk": "R3",
+      "acceptance_state": "pending",
+      "depends_on": [
+        "N-0115"
+      ],
+      "implementation_run": "RUN-20261024-N0116-IMPL-CODEX",
+      "implementation_actor": "codex",
+      "acceptance_criteria": [
+        "Extends the existing canvas: drag-drop layout and per-widget loading kept",
+        "Dashboard filters every widget follows (date range and compare, customer, distributor, product and attributes, business unit, channel, region) plus per-widget filters",
+        "a filter that cannot apply to a widget says so in plain words",
+        "Widget editor on the new catalog: measures, breakdowns, filters, visual",
+        "visuals KPI with comparison and sparkline, bar, horizontal bar, stacked, line, area, bar plus line, dual axis, scatter, pie and donut, table, pivot table, conditional colour on tables",
+        "Click a bar or slice filters the dashboard (chip clears)",
+        "view rows opens the rows behind a figure",
+        "Widget resize, duplicate, full screen, export CSV and image",
+        "loading and empty states per widget",
+        "Saved dashboards, widgets and saved reports migrate without loss (clone proof, cip_test only)",
+        "scheduled reports keep sending",
+        "Three editable starter dashboards on existing measures: Account overview, Sell-through and stock cover across customers, CPOR cases",
+        "Every visual and starter rendered light and dark at both widths"
+      ],
+      "quality": {
+        "testing": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        },
+        "observability": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        },
+        "data_integrity": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        },
+        "backup_recovery": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        },
+        "migration_safety": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        },
+        "ux": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        },
+        "a11y": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        },
+        "rendered": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        },
+        "content": {
+          "required": true,
+          "state": "pending",
+          "evidence": null,
+          "rationale": null
+        }
+      },
+      "verification": {}
+    }
+  },
+  "decisions": {
+    "D-0116": {
+      "id": "D-0116",
+      "scope": "N-0115",
+      "statement": "N-0115 proposed for Warren: Day grain: allow day only on models dated by day (DSI, shipments, returns, CPOR) and only on the v2 endpoint, v1 keeps refusing day; alternative keep week as the lowest grain everywhere.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0117": {
+      "id": "D-0117",
+      "scope": "N-0115",
+      "statement": "N-0115 proposed for Warren: DSI sales value = units x unit price ex VAT on priced rows only, with priced-units coverage, currency not recorded, never SUM(revenue) (22,546 of 58,128 rows have no price; currency NULL on all rows).",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0118": {
+      "id": "D-0118",
+      "scope": "N-0115",
+      "statement": "N-0115 proposed for Warren: CST sales value converted to the tenant sales-value VAT setting per row vat_basis exactly as the sell-through overview does; no listing-price estimate for unpriced units.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0119": {
+      "id": "D-0119",
+      "scope": "N-0115",
+      "statement": "N-0115 proposed for Warren: Distributor reported stock by period = latest count per distributor and product in each bucket, no carry-forward, shown with pairs reporting; Channel Ops derived stock and weeks of cover stay governed and keep refusing period.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0120": {
+      "id": "D-0120",
+      "scope": "N-0115",
+      "statement": "N-0115 proposed for Warren: Shipments period date = ship confirm date; alternative POD date (landed).",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0121": {
+      "id": "D-0121",
+      "scope": "N-0114",
+      "statement": "N-0114 proposed for Warren: chart numbers keep the existing convention, decimal point and a space for thousands (R 1.2 M, US$ 1.2 M), not a decimal comma; USD is shown as US$ on charts, tiles and table headers (text only).",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0122": {
+      "id": "D-0122",
+      "scope": "N-0114",
+      "statement": "N-0114 proposed for Warren: bars and pies drop the folded Other (n) bucket in favour of a viewer-set top N with a Top 10 of 37 caption; pie shares are of the full total; series charts keep the 7-series colour cap with Other. Alternatives: keep the Other fold when top N is not All, or offer Other as a toggle.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0123": {
+      "id": "D-0123",
+      "scope": "N-0115",
+      "statement": "N-0115 proposed for Warren: CPOR open = cases that are not superseded and whose workflow_status is not in a closed set (settled, ended, cancelled, rejected, voided), as the portfolio service excludes; CPOR value = support USD (ttl_support_usd, the compute currency) with ZAR shown beside it. Alternatives: status column instead of workflow_status; estimate value instead of support.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0124": {
+      "id": "D-0124",
+      "scope": "N-0115",
+      "statement": "N-0115 proposed for Warren: per-customer stock cover and restock flags on the starter dashboards reuse the sell-through code definitions if they exist (per-customer replenishment weeks of cover setting); if not, the widget shows reported on-hand beside per-week sell-through and no derived cover number.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0125": {
+      "id": "D-0125",
+      "scope": "N-0116",
+      "statement": "N-0116 proposed for Warren: Storage: one nullable definition_v2 JSONB on dashboard_widget and saved_report (query + display; NULL = v1 path), dashboard.filters_json and template_key; alternatives query_v2 + display_v2 or a version int.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0126": {
+      "id": "D-0126",
+      "scope": "N-0116",
+      "statement": "N-0116 proposed for Warren: Migration 0048 and the definition script run on the clone (rolled back) and cip_test only; applying them to cip waits for Warren's go (dual path: not migrating is safe).",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0127": {
+      "id": "D-0127",
+      "scope": "N-0116",
+      "statement": "N-0116 proposed for Warren: Starter B is titled Sell-through & stock across customers (no stock-cover figure exists yet); the mandate's title needs decision 5 first.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0128": {
+      "id": "D-0128",
+      "scope": "N-0116",
+      "statement": "N-0116 proposed for Warren: Business unit in the filter bar = product line (bu), what v1 widgets use; dim_product.business_unit stays an attribute.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0129": {
+      "id": "D-0129",
+      "scope": "N-0116",
+      "statement": "N-0116 proposed for Warren: Compare previous year = both dates minus one calendar year; alternative 52 weeks (keeps Monday weeks aligned).",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0130": {
+      "id": "D-0130",
+      "scope": "N-0116",
+      "statement": "N-0116 proposed for Warren: Real-data screenshots of the starters: the agent does not sign in, so starters are rendered on design-lab fixtures shaped like v2 responses; alternative grant the app role on a cip clone and run an API on it.",
+      "origin": "eif",
+      "status": "proposed",
+      "supersedes": null
+    },
+    "D-0131": {
+      "id": "D-0131",
+      "scope": "N-0116",
+      "statement": "Warren 2026-10-24: The original 23 October overnight specification remains the authoritative functional scope. Claude's temporary scope reductions are not accepted as permanent deferrals. Proceed autonomously with authorised development, testing and EIF updates. Production database migration and deployment remain explicitly unauthorised. No operator acceptance is granted for incomplete nodes. Source: N0116_OPERATOR_EXECUTION.md, current direct operator instruction.",
+      "origin": "operator",
+      "status": "accepted",
+      "supersedes": null
+    }
+  },
+  "historical_test_artifacts_parsed_not_rerun": {
+    "web-original-scope.json": {
+      "success": true,
+      "numTotalTests": 1139,
+      "numPassedTests": 1139,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "files": 218
+    },
+    "unit-c-original-final.json": {
+      "success": true,
+      "numTotalTests": 121,
+      "numPassedTests": 121,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "files": 16
+    },
+    "browser-original-final.json": {
+      "startTime": "2026-10-25T09:21:21.137Z",
+      "duration": 279598.364,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "browser-authenticated.json": {
+      "startTime": "2026-10-24T21:12:17.391Z",
+      "duration": 130033.227,
+      "expected": 1,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "api-original-scope.xml": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "21",
+        "tests": "3397",
+        "time": "660.480",
+        "timestamp": "2026-10-24T22:50:16.012627+02:00",
+        "hostname": "RF2300014-NB3"
+      }
+    ],
+    "auth-export-final.xml": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "1",
+        "tests": "6",
+        "time": "41.505",
+        "timestamp": "2026-10-25T11:25:13.818334+02:00",
+        "hostname": "RF2300014-NB3"
+      }
+    ],
+    "authenticated-browser-harness-corrected.xml": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "1",
+        "time": "164.311",
+        "timestamp": "2026-10-24T23:11:43.501826+02:00",
+        "hostname": "RF2300014-NB3"
+      }
+    ]
+  },
+  "git_status": [
+    "M .cursor/eif-runtime-policy.json",
+    " M .eif/CURRENT.md",
+    " M .eif/ESCALATION.md",
+    " M .eif/PROGRAM.md",
+    " M .eif/ROADMAP.md",
+    " M .eif/RUNTIME_CAPABILITIES.md",
+    " M .eif/program/PROGRAM.yaml",
+    " M .eif/program/PROGRAM_LOG.ndjson",
+    " M .eif/runtime/programme/eif_program/__init__.py",
+    " M .eif/runtime/programme/eif_program/clock.py",
+    " M .eif/runtime/programme/eif_program/design_artifacts.py",
+    " M .eif/runtime/programme/eif_program/engine.py",
+    " M .eif/runtime/programme/eif_program/errors.py",
+    " M .eif/runtime/programme/eif_program/facet_map.yaml",
+    " M .eif/runtime/programme/eif_program/facets.py",
+    " M .eif/runtime/programme/eif_program/journeys.py",
+    " M .eif/runtime/programme/eif_program/migrate.py",
+    " M .eif/runtime/programme/eif_program/store.py",
+    " M .eif/runtime/programme/eif_program/views.py",
+    " M .eif/runtime/programme/manifest.json",
+    "?? .agents/",
+    "?? .cursor/rules/eif-core.mdc",
+    "?? .cursor/rules/eif-project-adapter.mdc",
+    "?? .eif/audit/CIP_TEST_LEAK_20261021/",
+    "?? .eif/audit/PROGRAMME_20261022/",
+    "?? .eif/audit/PROGRAMME_20261023/seats/analytics-bi.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/data-quality.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/database.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/domain.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/performance.md",
+    "?? .eif/audit/PROGRAMME_20261023/seats/product.md",
+    "?? .eif/audit/PROGRAMME_20261024/renders/dual-axis-export.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-account_overview-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-account_overview-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-account_overview-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-account_overview-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-cpor_cases-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-cpor_cases-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-cpor_cases-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-cpor_cases-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-sellthrough_stock-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-sellthrough_stock-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-sellthrough_stock-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/starter-sellthrough_stock-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/states-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/states-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/states-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/states-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/visuals-dark-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/visuals-dark-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/visuals-light-1280.png",
+    "?? .eif/audit/PROGRAMME_20261024/renders/visuals-light-390.png",
+    "?? .eif/audit/PROGRAMME_20261024/widget-rendering.json",
+    "?? .eif/audit/PROGRAMME_20261024/workspace-integration.json",
+    "?? .eif/audit/PROGRAMME_20261025/",
+    "?? .eif/runs/R20261022T082234Z/",
+    "?? .eif/runs/R20261022T084906Z/",
+    "?? .eif/runs/R20261022T090426Z/",
+    "?? .eif/runs/R20261022T133449Z/",
+    "?? .eif/runs/R20261022T222542Z/",
+    "?? .eif/runs/R20261022T222619Z/",
+    "?? .eif/runs/R20261022T222650Z/",
+    "?? .eif/runs/RUN-20261022-N0089-LOGVIEW/",
+    "?? .eif/runs/RUN-20261022-N0112-IMPL/",
+    "?? .eif/runs/RUN-20261022-N0113-IMPL/",
+    "?? .eif/runs/RUN-20261022-S0-ACCEPT/",
+    "?? .eif/runs/RUN-20261023-N0089-DOCK/",
+    "?? .eif/runs/RUN-20261023-N0114-IMPL/",
+    "?? .eif/runs/RUN-20261023-N0114-VER/",
+    "?? .eif/runs/RUN-20261023-N0115-IMPL/",
+    "?? .eif/runs/RUN-20261023-N0115-VER/",
+    "?? .eif/runs/RUN-20261023-N0116-IMPL/",
+    "?? .eif/runs/RUN-20261024-N0116-IMPL-CODEX/",
+    "?? .eif/runtime-events.jsonl",
+    "?? .eif/upgrade-work/"
+  ]
+}
