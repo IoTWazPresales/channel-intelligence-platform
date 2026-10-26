@@ -1,0 +1,7 @@
+{
+  "node": "N-0116",
+  "path": ".eif/audit/EXECUTION_20261026_E4/E4_IMPLEMENTATION.md",
+  "tree_hash": "fc451d5e7e6a61e03a16c2ac2cdb7f5460d22aa1",
+  "provenance": "implementation-observation",
+  "note": "E4 committed ab5e5de45fbe2f778bf196e278c623387f7f8579. Saved explicit+implicit row presentation, period grain, effective fixed promotion context, saved-v2 download, typed null protection and governed import cache bypass corrected. Root related99/self20/final browser1 pass; final isolated full API3434/22skip, web1155/218files, lint50warnings/types/isolated build pass. Initial ops_logs timing failure retained separately. Preliminary independent findings reproduced before correction; final independent review UNVERIFIED because usage limit, no R3/node/operator acceptance. Compatible legacy handlers and totals retained. Original89 events preserved; interruption lease reacquired before resumed edits. No production/service/migration/identity/main action. User requests bounded closeout; original E5-E10 next, including E6 legacy tenant semantic restrictions."
+}

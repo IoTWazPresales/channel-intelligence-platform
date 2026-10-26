@@ -1,0 +1,30 @@
+{
+  "product_commit": "ab5e5de45fbe2f778bf196e278c623387f7f8579",
+  "programme_revision": 2792,
+  "node": "N-0116",
+  "node_revision": 23,
+  "stage": "validate",
+  "lease": null,
+  "acceptance": "pending",
+  "integrity_ok": true,
+  "acknowledged_legacy_gate_issues": [
+    "N-0006: recorded complete but gates invalid",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 is independence-disclaimed and cannot anchor review",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 design_sameness_review pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 rendered_comparison pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.referent pass lacks implementation_run from node.stage -> implement",
+    "N-0013: IMPLEMENTATION_PROVENANCE_REQUIRED: N-0013 verification.rendered pass lacks implementation_run from node.stage -> implement",
+    "N-0014: recorded complete but gates invalid",
+    "N-0015: recorded complete but gates invalid",
+    "N-0016: recorded complete but gates invalid"
+  ],
+  "entry89_local_events_preserved": true,
+  "prefix_sha256": "aa0cad9bdcfddc02ac95b22ba15502c942e65d74028f384cad136edd6e170f98",
+  "local_only_events_after_git2679": 113,
+  "ledger_remote_backup": false,
+  "product_tests": "final-summary.json",
+  "final_independent_review": "UNVERIFIED: usage limit; preliminary findings preserved, corrections root-verified",
+  "overall_R3": "not claimed",
+  "next_unit": "E5 shared category/control/keyboard parity; original E6-E10 remain open",
+  "operator_closeout": "Stop after tested E4 checkpoint to limit usage; no original requirements waived"
+}
