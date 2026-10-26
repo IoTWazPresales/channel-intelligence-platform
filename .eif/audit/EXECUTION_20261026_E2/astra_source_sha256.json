@@ -1,0 +1,32 @@
+{
+    "review_run":  "RUN-20261026-N0116-E2-VER-ASTRA",
+    "implementation_run":  "RUN-20261026-N0116-E2-CODEX",
+    "head":  "40c111f4da21a7597dcf982f4b9fe6ca3e322ede",
+    "observed_utc":  "2026-10-26T07:27:55.4985728Z",
+    "sources":  [
+                    {
+                        "path":  "apps/api/app/services/report_export.py",
+                        "sha256":  "5b47d4dad07f8816a1ada89f42960060982a5e6da3e19f6cfb150ef99577d2c1"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_report_xlsx_literal_safety.py",
+                        "sha256":  "52554c289f564f90e19c6b8cdd923063548f18573d9644decf6c015de4d6fd0b"
+                    },
+                    {
+                        "path":  "apps/api/app/api/v1/endpoints/report_exports.py",
+                        "sha256":  "0df517fe96df5e00c9fd1b479fb8e9742dba9ad1e8a481bb0ecd971a0089c648"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_report_export.py",
+                        "sha256":  "0d4307c0f8c8317df4577ab795319b87eb74e1d3862d71dd7b2428b40bf9c3a7"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_dashboard_v2_export.py",
+                        "sha256":  "53a7925c96e1278a441429a5d5b4d073d2a5215216ab507b91033e7f625fc202"
+                    },
+                    {
+                        "path":  "apps/api/tests/test_dashboard_v2_authenticated.py",
+                        "sha256":  "bc5f591fe3436c5fa335406a618c9f874299ad02af8fb2712ed7acbcdda80834"
+                    }
+                ]
+}

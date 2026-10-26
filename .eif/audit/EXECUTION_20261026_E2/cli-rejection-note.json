@@ -1,0 +1,8 @@
+{
+  "attempted_event": "decision.add",
+  "error": "ERROR RUNTIME_INTEGRITY: [Errno 13] Permission denied",
+  "preceding_command": "node.stage still pending, later completed at2777",
+  "recovery": "waited for completion; supported verify integrity true at2777, same9 legacy issues; then single serial decision.add accepted D-0132 at2778",
+  "protected_history_edits": false,
+  "bypass": false
+}

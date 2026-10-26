@@ -59,6 +59,15 @@ def build_xlsx_bytes(
             for c_i, k in enumerate(keys, start=1):
                 sheet.cell(r_i, c_i, _cell(row.get(k)))
 
+    # Report text comes from names, labels and user-entered titles. Never let
+    # openpyxl infer formulas or Excel error cells from those strings. Preserve
+    # the exact text and leave actual numeric/boolean/missing values unchanged.
+    for worksheet in wb:
+        for row in worksheet:
+            for cell in row:
+                if isinstance(cell.value, str):
+                    cell.data_type = "s"
+
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()

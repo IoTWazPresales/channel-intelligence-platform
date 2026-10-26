@@ -1,0 +1,26 @@
+[
+    {
+        "path":  "apps/api/app/services/report_export.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_report_xlsx_literal_safety.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/app/api/v1/endpoints/report_exports.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_report_export.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_dashboard_v2_export.py",
+        "matches":  true
+    },
+    {
+        "path":  "apps/api/tests/test_dashboard_v2_authenticated.py",
+        "matches":  true
+    }
+]

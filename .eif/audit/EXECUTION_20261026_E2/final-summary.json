@@ -1,0 +1,66 @@
+{
+  "unit": "E2",
+  "node": "N-0116",
+  "base_commit": "40c111f4da21a7597dcf982f4b9fe6ca3e322ede",
+  "implementation_run": "RUN-20261026-N0116-E2-CODEX",
+  "review_run": "RUN-20261026-N0116-E2-VER-ASTRA",
+  "failed_before": {
+    "failed": 4,
+    "passed": 10,
+    "path": "failed-before.txt"
+  },
+  "focused": {
+    "passed": 39,
+    "exit_code": 0,
+    "path": "focused-after.txt"
+  },
+  "independent": {
+    "passed": 30,
+    "extra_xml_cases": 12,
+    "verdict": "VERIFIED_WITH_LIMITATIONS",
+    "path": "VERIFY_ASTRA.md"
+  },
+  "full_api": {
+    "passed": 3401,
+    "skipped": 22,
+    "warnings": 7,
+    "seconds": 838.7,
+    "exit_code": 0,
+    "path": "full-api.txt"
+  },
+  "full_web": {
+    "passed": 1139,
+    "files": 218,
+    "exit_code": 0,
+    "path": "full-web.txt"
+  },
+  "lint": {
+    "exit_code": 0,
+    "existing_warnings": 50,
+    "path": "lint.txt"
+  },
+  "typecheck": {
+    "exit_code": 0,
+    "path": "typecheck.txt"
+  },
+  "isolated_build": {
+    "exit_code": 0,
+    "path": "build-isolated-2.txt",
+    "dist_dir": ".tmp/e2-build",
+    "tsconfig": ".tmp/e2-tsconfig.json"
+  },
+  "initial_build_failure": "Nested temporary tsconfig alias base was wrong; corrected only temporary config with explicit baseUrl. Product frontend unchanged.",
+  "limitations": [
+    "existing carriage-return to linefeed normalization",
+    "no desktop spreadsheet or browser smoke",
+    "runtime attestation and full R3 remain unverified",
+    "original node scope/acceptance incomplete"
+  ],
+  "next_unit": "E3 current-recipient-permission delivery per accepted D-0132; then E4 saved-query fidelity",
+  "new_e3_evidence": "background-scope-observed.json; rolled-back fictional actual runner, not production leak proof",
+  "production": "no connection/migration/service restart/deploy/main/role/grant action",
+  "source_sha256": {
+    "apps/api/app/services/report_export.py": "5b47d4dad07f8816a1ada89f42960060982a5e6da3e19f6cfb150ef99577d2c1",
+    "apps/api/tests/test_report_xlsx_literal_safety.py": "52554c289f564f90e19c6b8cdd923063548f18573d9644decf6c015de4d6fd0b"
+  }
+}

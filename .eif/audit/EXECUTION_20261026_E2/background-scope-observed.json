@@ -1,0 +1,36 @@
+{
+  "kind": "fictional rolled-back E3 investigation",
+  "manual_authorized_values": {
+    "admin": 70.0,
+    "viewer": 10.0,
+    "none": 0.0,
+    "other": 1000.0
+  },
+  "background_context": {
+    "cip_request_tenant_id": null,
+    "cip_request_product_lines": null,
+    "cip_request_editable_product_lines": null,
+    "cip_request_role": null
+  },
+  "deliveries": [
+    {
+      "recipient": "viewer",
+      "tenant_is_report_tenant": true,
+      "value": "70.0",
+      "status": "delivered"
+    },
+    {
+      "recipient": "none",
+      "tenant_is_report_tenant": true,
+      "value": "70.0",
+      "status": "delivered"
+    },
+    {
+      "recipient": "other",
+      "tenant_is_report_tenant": true,
+      "value": "70.0",
+      "status": "delivered"
+    }
+  ],
+  "limit": "No production leak asserted. Recipient policy is not decided by this probe."
+}
