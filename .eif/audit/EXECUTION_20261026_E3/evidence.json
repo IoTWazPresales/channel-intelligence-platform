@@ -1,0 +1,7 @@
+{
+  "node": "N-0115",
+  "path": ".eif/audit/EXECUTION_20261026_E3/E3_IMPLEMENTATION.md",
+  "tree_hash": "9cba188d3059f5d20e6c82a29d5e8760122627a4",
+  "provenance": "implementation-observation",
+  "note": "E3 committed d19992450e747f4288308b0f3bd5a6b23e083343: accepted D0132 current-recipient scheduled permissions, active same-tenant report visibility, canonical transaction/cache scope, Run now inbox-visible response and failure notification checks. Clean baseline8 failures; review3 failures reproduced then corrected; root40/1skip, separate Astra29 VERIFIED_WITH_LIMITATIONS; final API3414/22skip, web1139, lint50warnings/types/isolatedbuild exit0. Final source hashes pinned. Interrupted lease expiry/reacquisition disclosed; no uninterrupted runtime/R3 attestation, non-owner/concurrency proof or node acceptance. Original89-event prefix preserved. No production/service/migration/identity/grant/main action. Next E4, E6 legacy restrictions retained."
+}
