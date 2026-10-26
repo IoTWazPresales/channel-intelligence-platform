@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2679
-  log_sha256: 7b37cb4747497db30101eff806e7c508f289dfbd16326fab7a34dda0bbe908cc
+  snapshot_revision: 2792
+  log_sha256: 72d063e7ec76db620f2252fec3e765986d885760d05a5b3ca47ded3e2c1bc520
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13563,6 +13563,357 @@ nodes:
     risk_class: full
     implementation_run: RUN-20261022-N0113-IMPL
     implementation_actor: gov-001
+  N-0114:
+    id: N-0114
+    parent: null
+    title: 'Chart fixes: axis titles with units, legends, full names, horizontal bars for long labels, top N and sort, unit
+      formatting on every dashboard and report chart'
+    class: feature
+    origin: operator
+    status: in_progress
+    stage: verify
+    revision: 17
+    lease: null
+    depends_on: []
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Every chart axis has a title with its unit
+    - a chart with more than one series shows a legend, optional on a single series
+    - 'Long names are never cut short: wrapped or angled with the full name on hover, horizontal bars chosen automatically
+      when labels are long or many, pie legend shows full names'
+    - The viewer can set top N (5, 10, 15, 25, all) and sort (value, name, period) on charts
+    - Numbers are formatted by unit (R, US$, units, %)
+    - Shared chart components fixed first, then every dashboard and report chart uses them
+    - 'No new chart library: Recharts and MUI as configured, workbench-ui reused'
+    - Rendered light and dark at 1280x800 and 390x844
+    - Full API pytest on cip_test, full web vitest and tsc green
+    baseline_ref: BLN-N0114
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0114_RENDER.md
+          summary: Fixture page rendered light and dark at 1280 and 390 (iframe); 390 overflow found and fixed; real pages
+            not rendered signed in.
+        rationale: Full names, auto horizontal bars, top N and sort with a Top N of M caption, legends on multi-series, checked
+          on the fixture page.
+        pass_run: RUN-20261023-N0114-IMPL
+        pass_actor: gov-001
+      a11y:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0114_RENDER.md
+          summary: Fixture page rendered light and dark at 1280 and 390 (iframe); 390 overflow found and fixed; real pages
+            not rendered signed in.
+        rationale: Every chart with a value title has an accessible name and a hidden data table; full names in SVG title
+          and tooltip; no axe run.
+        pass_run: RUN-20261023-N0114-IMPL
+        pass_actor: gov-001
+      rendered:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0114_RENDER.md
+          summary: Fixture page rendered light and dark at 1280 and 390 (iframe); 390 overflow found and fixed; real pages
+            not rendered signed in.
+        rationale: Rendered on the production build, light and dark, 1280x800 and 390x844 (iframe), fixture data; signed-in
+          pages not rendered.
+        pass_run: RUN-20261023-N0114-IMPL
+        pass_actor: gov-001
+      content:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0114_RENDER.md
+          summary: Fixture page rendered light and dark at 1280 and 390 (iframe); 390 overflow found and fixed; real pages
+            not rendered signed in.
+        rationale: Axis titles name the measure and unit; R and US$; unknown units carry no unit.
+        pass_run: RUN-20261023-N0114-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261023-N0114-VER
+        pass_actor: gov-008
+        evidence: .eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261023-N0114-VER
+        pass_actor: gov-008
+        evidence: .eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md
+        path: apps/web/src/features/workbench-ui/charts.tsx
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'GOV-008 under RUN-20261023-N0114-VER, a fresh-context subagent, same model, different run from RUN-20261023-N0114-IMPL.
+      VERIFIED_WITH_LIMITATIONS: scope apps/web only, no new library, typecheck 0, vitest 15 files / 120 tests re-run, no
+      invented Other on bars/pies, hidden-table fix present; number-integrity test covers the data table only (D4). Rendered
+      by the orchestrator on fixture data (N0114_RENDER.md); signed-in pages not rendered. Operator acceptance pending.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      numbers: no value changes, formatting only
+      rankBars: kept
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+    implementation_run: RUN-20261023-N0114-IMPL
+    implementation_actor: gov-001
+  N-0115:
+    id: N-0115
+    parent: null
+    title: 'Data model under the builder: fact models with measures, shared breakdowns, declared walls, calculated measures
+      and one query compiler replacing one hand-written query per metric'
+    class: inception
+    origin: operator
+    status: in_progress
+    stage: validate
+    revision: 26
+    lease: null
+    depends_on:
+    - N-0114
+    facets:
+    - api
+    - schema
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Discovery lists the catalog, handlers, metrics that run, what each fact table holds and every caller of the query engine
+      and catalog
+    - Fact tables are declared models with measures (sum, count, distinct count, average, min, max) for sell-out, customer
+      sell-through, shipments, distributor stock, returns, lineup plan, CPOR cases and lines, recorded prices
+    - 'Shared breakdowns: period day/week/month/quarter/year on the tenant business calendar, customer, distributor, product
+      and product attributes and specs, business unit, channel, region, store/site, promo type'
+    - Allowed breakdowns per measure are derived from joins and declared walls, never hand-listed
+    - walls declared once with plain-words reasons
+    - every existing refuse_example kept
+    - 'Calculated measures: ratio, difference, percent change, prior period, prior year, running total, share of total, per-week
+      rate'
+    - Existing metrics re-expressed or kept as governed handlers with parity proven on cip_test and read-only on a clone of
+      cip
+    - a metric that does not match keeps its old handler and is listed
+    - 'One compiler: measure x breakdowns x filters to SQL with tenant and product-line scope always applied, row limits,
+      explain, caching'
+    - timings on the cip clone, target under 2 s per widget query
+    - Catalog definitions are per-tenant configuration with the current catalog as default
+    - Catalog API returns measures, breakdowns and allowed combinations
+    - every existing caller keeps working with a test per caller
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md
+          summary: Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66);
+            full API pytest 3321 passed.
+        rationale: 49 new tests (graph 27, db 10, rules 2, v2 api 5, v1 callers 5); relevant set 320 passed; full API pytest
+          on cip_test 3321 passed, 21 skipped, 0 failed.
+        pass_run: RUN-20261023-N0115-IMPL
+        pass_actor: gov-001
+      observability:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md
+          summary: Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66);
+            full API pytest 3321 passed.
+        rationale: 'Every v2 result carries explain: models, measures, joins, walls checked, filters by name, SQL with parameter
+          names, scope source, row count, ms.'
+        pass_run: RUN-20261023-N0115-IMPL
+        pass_actor: gov-001
+      data_integrity:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md
+          summary: Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66);
+            full API pytest 3321 passed.
+        rationale: Read path only; parity old vs new identical on cip_test and on the clone for every allowed grain of sellout_units
+          and cst_sellthrough_units; no number on an existing surface changed (v1 untouched).
+        pass_run: RUN-20261023-N0115-IMPL
+        pass_actor: gov-001
+      backup_recovery:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md
+          summary: Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66);
+            full API pytest 3321 passed.
+        rationale: No data written and no schema change; rollback is reverting be38feb5 (v1 endpoints never depended on it).
+        pass_run: RUN-20261023-N0115-IMPL
+        pass_actor: gov-001
+      migration_safety:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md
+          summary: Three models, compiler, v2 catalog/execute/explain; parity 0 mismatches on cip_test (52) and clone (66);
+            full API pytest 3321 passed.
+        rationale: No migration. Nothing waits for apply to cip.
+        pass_run: RUN-20261023-N0115-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261023-N0115-VER
+        pass_actor: gov-008
+        evidence: .eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261023-N0115-VER
+        pass_actor: gov-008
+        evidence: .eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md
+        path: apps/api/app/query/model/compiler.py
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: E3 tested and committed d19992450e747f4288308b0f3bd5a6b23e083343; final API3414/22skip, web1139, focused40/1skip,
+      separate Astra29 VERIFIED_WITH_LIMITATIONS, lint50warnings/types/isolatedbuild pass. Accepted D0132 current recipient
+      permissions implemented. Evidence pins final tree and source; original89 events preserved. Interrupted lease and runtime/non-owner/concurrency
+      limits disclosed, no overall R3 or original node acceptance. Keep validate, release lease; next E4 saved-query fidelity
+      and later E6 legacy counterpart restrictions. No production/service/migration/identity/main action.
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+    implementation_run: RUN-20261023-N0115-IMPL
+    implementation_actor: gov-001
+  N-0116:
+    id: N-0116
+    parent: null
+    title: 'Dashboard builder on the new data model: dashboard and widget filters, full visual set, click to filter, view
+      rows, widget tools, migration of saved dashboards and reports, three starter dashboards'
+    class: feature
+    origin: operator
+    status: in_progress
+    stage: validate
+    revision: 23
+    lease: null
+    depends_on:
+    - N-0115
+    facets:
+    - api
+    - data_migration
+    - ui
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - 'Extends the existing canvas: drag-drop layout and per-widget loading kept'
+    - Dashboard filters every widget follows (date range and compare, customer, distributor, product and attributes, business
+      unit, channel, region) plus per-widget filters
+    - a filter that cannot apply to a widget says so in plain words
+    - 'Widget editor on the new catalog: measures, breakdowns, filters, visual'
+    - visuals KPI with comparison and sparkline, bar, horizontal bar, stacked, line, area, bar plus line, dual axis, scatter,
+      pie and donut, table, pivot table, conditional colour on tables
+    - Click a bar or slice filters the dashboard (chip clears)
+    - view rows opens the rows behind a figure
+    - Widget resize, duplicate, full screen, export CSV and image
+    - loading and empty states per widget
+    - Saved dashboards, widgets and saved reports migrate without loss (clone proof, cip_test only)
+    - scheduled reports keep sending
+    - 'Three editable starter dashboards on existing measures: Account overview, Sell-through and stock cover across customers,
+      CPOR cases'
+    - Every visual and starter rendered light and dark at both widths
+    baseline_ref: BLN-N0116
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: E4 tested product checkpoint ab5e5de45fbe2f778bf196e278c623387f7f8579; final isolated API3434/22skip, web1155,
+      related99/self20/browser1, lint50warnings/types/isolatedbuild pass. Evidence pins final tree/source. Independent final
+      review UNVERIFIED due usage limits; no overall R3 or original node acceptance. Original89 events preserved, no production/service/migration/grant/main
+      action. Remain validate, release lease and stop at operator-requested bounded checkpoint; next E5 then original E6-E10.
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      drag-drop-grid: kept
+      per-widget-loading: kept
+      report-schedule: kept
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+    implementation_run: RUN-20261024-N0116-IMPL-CODEX
+    implementation_actor: codex
 decisions:
   D-0001:
     id: D-0001
@@ -14778,6 +15129,155 @@ decisions:
       the existing column-mapping step to map headers to the standard sell-through columns, and the layout is saved for that
       customer; later uploads match a saved layout by headers automatically; a customer may have several saved layouts (e.g.
       weekly report, history file, wide-week). (4) Test/build-session sources never appear to users.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0116:
+    id: D-0116
+    scope: N-0115
+    statement: 'N-0115 proposed for Warren: Day grain: allow day only on models dated by day (DSI, shipments, returns, CPOR)
+      and only on the v2 endpoint, v1 keeps refusing day; alternative keep week as the lowest grain everywhere.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0117:
+    id: D-0117
+    scope: N-0115
+    statement: 'N-0115 proposed for Warren: DSI sales value = units x unit price ex VAT on priced rows only, with priced-units
+      coverage, currency not recorded, never SUM(revenue) (22,546 of 58,128 rows have no price; currency NULL on all rows).'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0118:
+    id: D-0118
+    scope: N-0115
+    statement: 'N-0115 proposed for Warren: CST sales value converted to the tenant sales-value VAT setting per row vat_basis
+      exactly as the sell-through overview does; no listing-price estimate for unpriced units.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0119:
+    id: D-0119
+    scope: N-0115
+    statement: 'N-0115 proposed for Warren: Distributor reported stock by period = latest count per distributor and product
+      in each bucket, no carry-forward, shown with pairs reporting; Channel Ops derived stock and weeks of cover stay governed
+      and keep refusing period.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0120:
+    id: D-0120
+    scope: N-0115
+    statement: 'N-0115 proposed for Warren: Shipments period date = ship confirm date; alternative POD date (landed).'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0121:
+    id: D-0121
+    scope: N-0114
+    statement: 'N-0114 proposed for Warren: chart numbers keep the existing convention, decimal point and a space for thousands
+      (R 1.2 M, US$ 1.2 M), not a decimal comma; USD is shown as US$ on charts, tiles and table headers (text only).'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0122:
+    id: D-0122
+    scope: N-0114
+    statement: 'N-0114 proposed for Warren: bars and pies drop the folded Other (n) bucket in favour of a viewer-set top N
+      with a Top 10 of 37 caption; pie shares are of the full total; series charts keep the 7-series colour cap with Other.
+      Alternatives: keep the Other fold when top N is not All, or offer Other as a toggle.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0123:
+    id: D-0123
+    scope: N-0115
+    statement: 'N-0115 proposed for Warren: CPOR open = cases that are not superseded and whose workflow_status is not in
+      a closed set (settled, ended, cancelled, rejected, voided), as the portfolio service excludes; CPOR value = support
+      USD (ttl_support_usd, the compute currency) with ZAR shown beside it. Alternatives: status column instead of workflow_status;
+      estimate value instead of support.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0124:
+    id: D-0124
+    scope: N-0115
+    statement: 'N-0115 proposed for Warren: per-customer stock cover and restock flags on the starter dashboards reuse the
+      sell-through code definitions if they exist (per-customer replenishment weeks of cover setting); if not, the widget
+      shows reported on-hand beside per-week sell-through and no derived cover number.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0125:
+    id: D-0125
+    scope: N-0116
+    statement: 'N-0116 proposed for Warren: Storage: one nullable definition_v2 JSONB on dashboard_widget and saved_report
+      (query + display; NULL = v1 path), dashboard.filters_json and template_key; alternatives query_v2 + display_v2 or a
+      version int.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0126:
+    id: D-0126
+    scope: N-0116
+    statement: 'N-0116 proposed for Warren: Migration 0048 and the definition script run on the clone (rolled back) and cip_test
+      only; applying them to cip waits for Warren''s go (dual path: not migrating is safe).'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0127:
+    id: D-0127
+    scope: N-0116
+    statement: 'N-0116 proposed for Warren: Starter B is titled Sell-through & stock across customers (no stock-cover figure
+      exists yet); the mandate''s title needs decision 5 first.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0128:
+    id: D-0128
+    scope: N-0116
+    statement: 'N-0116 proposed for Warren: Business unit in the filter bar = product line (bu), what v1 widgets use; dim_product.business_unit
+      stays an attribute.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0129:
+    id: D-0129
+    scope: N-0116
+    statement: 'N-0116 proposed for Warren: Compare previous year = both dates minus one calendar year; alternative 52 weeks
+      (keeps Monday weeks aligned).'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0130:
+    id: D-0130
+    scope: N-0116
+    statement: 'N-0116 proposed for Warren: Real-data screenshots of the starters: the agent does not sign in, so starters
+      are rendered on design-lab fixtures shaped like v2 responses; alternative grant the app role on a cip clone and run
+      an API on it.'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0131:
+    id: D-0131
+    scope: N-0116
+    statement: 'Warren 2026-10-24: The original 23 October overnight specification remains the authoritative functional scope.
+      Claude''s temporary scope reductions are not accepted as permanent deferrals. Proceed autonomously with authorised development,
+      testing and EIF updates. Production database migration and deployment remain explicitly unauthorised. No operator acceptance
+      is granted for incomplete nodes. Source: N0116_OPERATOR_EXECUTION.md, current direct operator instruction.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0132:
+    id: D-0132
+    scope: N-0115
+    statement: E3 scheduled/import-triggered report delivery uses each recipient's CURRENT product permissions, with tenant
+      membership, active identity and existing report visibility enforced. Warren explicitly selected 'Each recipient’s current
+      permissions (Recommended)' on26October2026 in the asynchronous policy question after fictional cip_test runner proof
+      (admin70, scoped viewer10, no-lines viewer0; old background70 to each). Cross-tenant recipients must be refused. Reuse
+      existing transaction-local tenant/product/role scope and current access assignments; do not grant roles/privileges,
+      assume owner-sharing authority, change commercial formulas, or assert a production cross-tenant leak. This accepts only
+      this recipient policy, not any proposed commercial definition, production action, R3 gate or node acceptance.
     origin: operator
     status: accepted
     supersedes: null
@@ -16647,6 +17147,186 @@ evidence:
       SSE; web tests under apps/web/src/features/ops-logs. Full API pytest on cip_test 3258 passed, 21 skipped, 0 failed (first
       run from the project root: 3227 passed, 3 failed and 28 errors that all came from alembic.ini not being found outside
       apps/api; those 4 files, 59 tests, re-run from apps/api all passed); full web vitest 199 files passed; tsc clean.'
+  EV-0183:
+    id: EV-0183
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261023/N0115_DISCOVERY.md
+    tree_hash: null
+    note: 'N-0115 discovery: catalog, handlers, engine, every caller, saved state and fact tables on clone cip_n0115.'
+  EV-0184:
+    id: EV-0184
+    provenance: implementation-observation
+    path: docs/DATA_MODEL_SPEC.md
+    tree_hash: null
+    note: 'N-0115 merged data-model spec: models, shared breakdowns, walls, calculated measures, compiler, v1 compatibility,
+      catalog v2, parity method.'
+  EV-0185:
+    id: EV-0185
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261023/seats/data-architect.md
+    tree_hash: null
+    note: N-0115 data-architect seat report (only seat that delivered).
+  EV-0186:
+    id: EV-0186
+    provenance: implementation-observation
+    path: apps/api/app/query/cache.py
+    tree_hash: null
+    note: N-0115 cache key now includes product-line scope and role (commit 6db990b6); test_query_engine.py 12 passed; full
+      API pytest on cip_test 3272 passed, 21 skipped, 0 failed.
+  EV-0187:
+    id: EV-0187
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261023/N0114_SPEC_PROPOSAL.md
+    tree_hash: null
+    note: 'N-0114 definition spec (one subagent, product-interaction, visual design and BI lenses): AS-IS per chart and caller,
+      shared component API, per-caller list, tests, fixture page plan, findings.'
+  EV-0188:
+    id: EV-0188
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261023/N0115_CHALLENGE.md
+    tree_hash: null
+    note: 'N-0115 challenge (simplicity, cost/scale, security-skeptic in one subagent): cut to three models, no v1 switch,
+      structural tenant isolation, explicit sign-in on v2, CPOR open/value and customer cover not invented; timings on the
+      clone as owner 165 ms base, 1.03 s spec key.'
+  EV-0189:
+    id: EV-0189
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261023/N0114_IMPL_REPORT.md
+    tree_hash: null
+    note: 'N-0114 implementation report: files, callers, tests (chartRows 8, charts 35, WidgetChart 4, design-lab page 1),
+      deviations, findings.'
+  EV-0190:
+    id: EV-0190
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261023/N0114_RENDER.md
+    tree_hash: null
+    note: 'N-0114 render: design-lab charts light/dark at 1280 and 390; 390 overflow fixed; full web vitest 202 files 1018
+      tests passed, tsc 0, API pytest 3321 passed.'
+  EV-0191:
+    id: EV-0191
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md
+    tree_hash: null
+    note: N-0115 implementation report with parity tables (cip_test 52 cases, clone cip_n0115 66 cases, 0 mismatches) and
+      8 widget timings on the clone (63-292 ms as owner; scoped timings unverified).
+  EV-0192:
+    id: EV-0192
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261023/N0116_SPEC_PROPOSAL.md
+    tree_hash: null
+    note: 'N-0116 definition (one subagent: product, interaction, visual, premium-benchmark lenses): AS-IS, storage definition_v2,
+      migration of 6 widgets and 3 reports, filter bar with plain-words not-filtered lines, editor on catalog v2, visuals,
+      click-to-filter, honest view rows, widget tools, three starters, tests, render checklist.'
+  EV-0193:
+    id: EV-0193
+    provenance: operator-instruction
+    path: .eif/audit/PROGRAMME_20261024/N0116_OPERATOR_EXECUTION.md
+    tree_hash: null
+    note: 'N-0116: direct operator authorises execution against original overnight functional scope; temporary cuts are not
+      permanent deferrals. No incomplete-node acceptance, cip migration, deployment, API or worker restart.'
+  EV-0194:
+    id: EV-0194
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261024/N0116_TEST_EVIDENCE.md
+    tree_hash: null
+    note: N-0116 conditional-colour assertion corrected without production matcher changes; four correctness concerns reproduced
+      (8 failures), fixed in existing canonical modules, builder regression suite exit 0. Machine-readable builder-regressions.json.
+      Implementation-run self-check, not independent verification or completed-node acceptance.
+  EV-0195:
+    id: EV-0195
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261024/N0116_TEST_EVIDENCE.md
+    tree_hash: null
+    note: 'N-0116 bounded Unit C frontend: final focused suite 104/104; cip_test API 3363 passed, 21 skipped; refreshed fixture
+      browser 5/5; TypeScript and root lint exit 0, 50 existing lint warnings. source-sha256.json pins the 51 source files.
+      Full web still collecting. Original requirements and authenticated/RLS evidence remain open; no node acceptance or production
+      action.'
+  EV-0196:
+    id: EV-0196
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261024/full-web-final.json
+    tree_hash: null
+    note: 'N-0116 full web suite exit 0: 1121/1121 tests, 216 files, 1976 seconds. Final source additionally verified by later
+      complete Unit C suite 104/104, browser fixture 5/5, tsc/lint exit 0; cip_test API 3363 passed/21 skipped. Historical
+      failures superseded, limitations retained in execution report. No node acceptance or production change.'
+  EV-0197:
+    id: EV-0197
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261024/N0116_ORIGINAL_SCOPE_EXECUTION.md
+    tree_hash: null
+    note: N-0116 original S16/S17/S19 continuation implemented; s16-gap-fixed 38/38, independent comparison/request sample
+      28/28; browser-original-scope 5/5; authenticated-api-corrected 2/2 real bearer/ASGI on rolled-back cip_test, fixed-delivery-db-corrected
+      3/3. Full final API/web still running. No acceptance; original domain/model/authenticated browser and non-owner RLS
+      proof remain open.
+  EV-0198:
+    id: EV-0198
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261024/original-final-summary.json
+    tree_hash: 146b56ae3d0322b126c7c70b8c685ff4565b97cb
+    note: N-0116 execution checkpoints backend5aceee9a/frontend8ea51e9b. Fullweb1139/1139 (pre final two-file focus fix);
+      final UnitC121/121+browser6/6 cover corrected focus. API3376passed/21skip; finalauth/export5pass/1optin skip and separate
+      real authenticated browser1/1; tsc/lint0 (50existingwarnings). Fresh verifier inspected referents+six source hashes;
+      39-path manifest pins implementation. No R3 model attestation, node acceptance, permanent scope retirement or production
+      action. See VERIFY_ORIGINAL_SCOPE.md.
+  EV-0199:
+    id: EV-0199
+    provenance: independent-verification
+    path: .eif/audit/PROGRAMME_20261025/VERIFICATION_AND_FRONTIER.md
+    tree_hash: 6c81038221d0290ed124d0083185a71a8a60887b
+    note: 'Fresh-context original-scope review of N-0114/N-0115/N-0116 at product HEAD d069f86c. Original acceptance cannot
+      pass: new pure final-source probes reproduce governed CPOR filter totals, tenant semantic counterpart bypass, saved
+      v1-equivalence sort/limit loss, missing promoted execution dates, and XLSX formula interpretation. Matrices and E1-E10
+      frontier persisted. 39 source hashes and 20 inherited hashes matched at entry; 88 events2680-2767 preserved. Historical
+      suites parsed, not rerun; cip_test metadata read-only, no production connection or services. R2 fresh-context rung only,
+      no attested R3 model separation; no quality/gate pass, stage change, implementation lease or acceptance. D0116-D0130
+      remain proposed. Next implementation: N0115 governed filter fidelity, supported fresh ownership and canonical path audit.
+      See checkpoint.json and closeout.json.'
+  EV-0200:
+    id: EV-0200
+    provenance: implementation-observation
+    path: .eif/audit/EXECUTION_20261025_E1/E1_IMPLEMENTATION.md
+    tree_hash: 49a660c7ddeb68bde9515c59e8752c4e3c73189e
+    note: 'E1 committed e6c87fbcfa7c9c15791d6761f3769a365562081b: canonical CPOR customer/BU filtering before aggregation;
+      request session with explicit tenant; correct totals/ratios/zero matches, strict refusals and warm-cache refusal safety;
+      separate scoped supplemental omission. Regressions failed8 before fix. Final API3387passed/22skip, web1139, focused23,
+      independent Astra11; lint50existingwarnings/typecheck/isolatedbuild exit0. Separate VERIFY_ASTRA bounded VERIFIED_WITH_LIMITATIONS
+      with source hashes; invocation model separation is not runtime attestation or full R3. Original N0115 requirements/acceptance
+      pending. Original89 events intact. No production/service/migration/main/identity action. Next E2/E3/E4.'
+  EV-0201:
+    id: EV-0201
+    provenance: implementation-observation
+    path: .eif/audit/EXECUTION_20261026_E2/E2_IMPLEMENTATION.md
+    tree_hash: 60c4df295ae3f1c482b0b5ca32b557e5d87c776b
+    note: 'E2 committed 40ed870d614a1481361dfe69fc91b31123cb79a0: common XLSX writer marks strings literal; formulas/error
+      inference refused by serialization while numbers/bools/missing unchanged. Failed-before4/pass10; root focused39, separate
+      Astra30 +12XML cases; final API3401/22skip, web1139, lint50warnings/types/isolated build exit0. Bounded VERIFIED_WITH_LIMITATIONS,
+      existing CR normalization disclosed, no overall R3/runtime attestation or node acceptance. Original scope remains. Separate
+      E3 fictional runner preparation observed recipient scope gap, no production query leak; Warren accepted current-recipient
+      permissions D0132 at2778. No production/service/migration/identity/main action. Source hashes and full outputs pinned.'
+  EV-0202:
+    id: EV-0202
+    provenance: implementation-observation
+    path: .eif/audit/EXECUTION_20261026_E3/E3_IMPLEMENTATION.md
+    tree_hash: 9cba188d3059f5d20e6c82a29d5e8760122627a4
+    note: 'E3 committed d19992450e747f4288308b0f3bd5a6b23e083343: accepted D0132 current-recipient scheduled permissions,
+      active same-tenant report visibility, canonical transaction/cache scope, Run now inbox-visible response and failure
+      notification checks. Clean baseline8 failures; review3 failures reproduced then corrected; root40/1skip, separate Astra29
+      VERIFIED_WITH_LIMITATIONS; final API3414/22skip, web1139, lint50warnings/types/isolatedbuild exit0. Final source hashes
+      pinned. Interrupted lease expiry/reacquisition disclosed; no uninterrupted runtime/R3 attestation, non-owner/concurrency
+      proof or node acceptance. Original89-event prefix preserved. No production/service/migration/identity/grant/main action.
+      Next E4, E6 legacy restrictions retained.'
+  EV-0203:
+    id: EV-0203
+    provenance: implementation-observation
+    path: .eif/audit/EXECUTION_20261026_E4/E4_IMPLEMENTATION.md
+    tree_hash: fc451d5e7e6a61e03a16c2ac2cdb7f5460d22aa1
+    note: E4 committed ab5e5de45fbe2f778bf196e278c623387f7f8579. Saved explicit+implicit row presentation, period grain, effective
+      fixed promotion context, saved-v2 download, typed null protection and governed import cache bypass corrected. Root related99/self20/final
+      browser1 pass; final isolated full API3434/22skip, web1155/218files, lint50warnings/types/isolated build pass. Initial
+      ops_logs timing failure retained separately. Preliminary independent findings reproduced before correction; final independent
+      review UNVERIFIED because usage limit, no R3/node/operator acceptance. Compatible legacy handlers and totals retained.
+      Original89 events preserved; interruption lease reacquired before resumed edits. No production/service/migration/identity/main
+      action. User requests bounded closeout; original E5-E10 next, including E6 legacy tenant semantic restrictions.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -17385,6 +18065,38 @@ baselines:
       test jobs, cip still holds 142 test customers, 113 test distributors and 20 test products (census 2026-10-22); many
       are refused by the UI delete because rows reference them. apps/api/scripts/ops/cleanup_test_fixture_customers.py (older)
       covers customers only, deletes with --confirm and no --expect-db, and writes no audit event.'
+  BLN-N0114:
+    id: BLN-N0114
+    provenance: implementation-observation
+    tree_hash: 6db990b69583056efd64cdb98c9338ad4d5060cb
+    latent_capabilities:
+    - rankBars
+    - hidden-data-table
+    preservation:
+      rankBars: kept and reused by reports
+      hidden-data-table: 'kept: every chart keeps its text alternative'
+      numbers: no value changes, formatting only
+    path: apps/web/src/features/workbench-ui/charts.tsx
+    observed_behavior: Shared charts had no axis titles, PairedBars cut names to 10 chars, dashboard bars to 11, pie legend
+      noWrap, no ZAR unit kind, en-ZA decimal-comma default formatter, fixed top 15 / 6 slices folded into Other, no viewer
+      top N or sort.
+  BLN-N0116:
+    id: BLN-N0116
+    provenance: implementation-observation
+    tree_hash: be38feb52917a9039fde87e053ce1ae70513aae4
+    latent_capabilities:
+    - drag-drop-grid
+    - per-widget-loading
+    - promote-to-report
+    - report-schedule
+    preservation:
+      drag-drop-grid: 'kept: react-grid-layout canvas'
+      per-widget-loading: 'kept: each card its own request'
+      promote-to-report: kept
+      report-schedule: 'kept: v1 delivery path for v1-expressible reports'
+    path: apps/web/src/features/dashboards/DashboardWorkspace.tsx
+    observed_behavior: 'Builder is v1 only: one governed metric per widget, no filter UI, layout save PUTs every widget and
+      re-validates against v1, 6 widgets and 3 saved reports and 1 schedule on cip.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -18361,9 +19073,47 @@ deferred_findings:
   run: R20261018T192512Z
   actor: gov-001
   status: deferred
+- seq: 2693
+  code: DOES_NOT_FIT
+  note: 'N-0115: the design panel was reduced. Eight seats ran in parallel and all stopped at the usage limit; only the data-architect
+    seat delivered. The analytics-bi, database, data-quality, performance, domain, product and architecture lenses were applied
+    by the orchestrator in docs/DATA_MODEL_SPEC.md, not by independent seats. Subagent handback, SendMessage and TaskStop
+    are not mapped by the guard (SHIM_TOOL_UNMAPPED).'
+  node: N-0115
+  run: RUN-20261023-N0115-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2703
+  code: DOES_NOT_FIT
+  note: 'N-0114 findings from the spec: Shipping arriving chart plots quantity or line count on one scale (ShippingCommercialSummary.tsx:150-152)
+    and pre-truncates names; ChannelOps overview draws the same units key as bar and Trend line; sell-through product labels
+    embed change %; sales-value currency on Sell-through overview unconfirmed; three compact formatters exist; ChartControls
+    choices are not persisted per widget (schema change, separate node).'
+  node: N-0114
+  run: RUN-20261023-N0114-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2741
+  code: DOES_NOT_FIT
+  note: 'N-0116: implementation is split into two fresh subagent runs in sequence (API, then web) instead of one, because
+    one context cannot hold the 14 MUST items; same lenses, same implementation run id.'
+  node: N-0116
+  run: RUN-20261023-N0116-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2742
+  code: DOES_NOT_FIT
+  note: 'N-0116 findings from the definition: scheduled delivery does not pass period_grain (report_delivery.py:54-61, value_preview
+    unaffected); categoryPoints merges equal names; widget 5 saved as line but rendered as ranked bars; DSI has 4,822 customers
+    near the 5,000 values limit; no CPOR case breakdown; no CPOR status reads as open on today''s data. F1 (governed filters
+    ignored) fixed in N-0115 follow-up.'
+  node: N-0116
+  run: RUN-20261023-N0116-IMPL
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 115
+  decision: 132
   blocker: 19
-  evidence: 182
+  evidence: 203
   baseline: 18
