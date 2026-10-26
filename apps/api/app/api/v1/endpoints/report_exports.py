@@ -25,6 +25,7 @@ from app.services.report_delivery import (
     delivery_to_dict,
     next_run_for_cadence,
     resolve_report_recipient,
+    saved_report_payload,
     schedule_to_dict,
 )
 from app.services.dashboard_definitions import runs_v1
@@ -43,6 +44,7 @@ class ExportBody(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     format: Format = "xlsx"
     title: str | None = None
+    period_grain: Literal["week", "month", "quarter"] | None = None
 
 
 class DeliverBody(BaseModel):
@@ -113,6 +115,7 @@ async def export_ad_hoc(
         grains=body.grains,
         filters=body.filters,
         tenant_id=tid,
+        period_grain=body.period_grain,
     )
     if result.status == "refused":
         raise HTTPException(status_code=400, detail=result.as_dict())
@@ -147,15 +150,10 @@ async def export_saved_report(
         raise HTTPException(status_code=403, detail="Not allowed")
     definition = getattr(row, "definition_v2", None)
     grains = list(row.grains or [])
-    if runs_v1(definition):
-        result = await execute_query(
-            db, metric=row.metric_key, grains=grains, filters=dict(row.filters or {}), tenant_id=tid,
-        )
-        payload = result.as_dict()
-    else:
-        payload = await _v2_payload(db, definition, tenant_id=tid, skip_cache=False)
-        if not payload.get("ok"):
-            raise HTTPException(status_code=400, detail=payload)
+    payload = await saved_report_payload(db, row)
+    if not payload.get("ok"):
+        raise HTTPException(status_code=400, detail=payload)
+    if definition is not None and not runs_v1(definition):
         grains = list((definition.get("query") or {}).get("breakdowns") or [])
     return await _export_from_result(
         title=row.name,

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
+import type { DefinitionV2 } from '@/features/dashboards/builder/types';
 
 import {
   fixtureCatalog,
@@ -92,6 +93,7 @@ function wrap(ui: ReactNode) {
 beforeEach(() => {
   api.apiGet.mockReset();
   api.apiPost.mockReset();
+  api.apiDownloadBlob.mockClear();
   api.apiGet.mockImplementation(async (url: string) => {
     if (url === '/api/v1/semantics/catalog') return fixtureCatalog;
     if (url === '/api/v1/saved-reports') return fixtureSavedReports();
@@ -120,6 +122,87 @@ function pickView(name: string) {
 }
 
 describe('ReportBuilderView', () => {
+  function savedModelReport() {
+    const get = api.apiGet.getMockImplementation()!;
+    const definition: DefinitionV2 = { v: 1, query: { measures: ['dsi_sellout.units'], breakdowns: ['customer'],
+      filters: { customer: [101] }, sort: { by: 'dsi_sellout.units', dir: 'asc' }, limit: 1 },
+      dashboard: { fixed_window: { from: '2026-07-05', to: '2026-07-31' } } };
+    api.apiGet.mockImplementation(async (url: string) => url === '/api/v1/saved-reports'
+      ? { items: [{ ...fixtureSavedReports().items[1], id: 77, name: 'Selected July question', grains: [], definition_v2: definition }] }
+      : get(url));
+  }
+
+  it.each(['xlsx', 'pdf'] as const)('downloads a saved model report through its canonical %s route even with no legacy grains', async (format) => {
+    savedModelReport();
+    wrap(<ReportBuilderView />);
+    fireEvent.click(await screen.findByText('Selected July question'));
+    const download = screen.getByTestId(`report-export-${format}`);
+    expect(download).toBeEnabled();
+    fireEvent.click(download);
+    await waitFor(() => expect(api.apiDownloadBlob).toHaveBeenCalledWith(
+      `/api/v1/reports/saved/77/export?format=${format}`, `Selected July question.${format}`,
+    ));
+    expect(api.apiPost).not.toHaveBeenCalled();
+  });
+
+  it('represents a loaded model question honestly and prevents running or saving its legacy mirror', async () => {
+    savedModelReport();
+    wrap(<ReportBuilderView />);
+    fireEvent.click(await screen.findByText('Selected July question'));
+    expect(screen.getByTestId('report-saved-definition-note')).toHaveTextContent(/fixed dates.*2026-07-05.*2026-07-31/i);
+    expect(screen.getByTestId('report-run')).toBeDisabled();
+    expect(screen.getByTestId('report-save')).toBeDisabled();
+    expect(screen.queryByTestId('report-grain-select')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('report-question-chips')).not.toBeInTheDocument();
+    expect(screen.getByTestId('report-deliver-inbox')).toBeEnabled();
+    expect(screen.getByTestId('report-schedule')).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Start a new report' }));
+    expect(screen.getByTestId('report-run')).toBeEnabled();
+    expect(screen.getByTestId('report-save')).toBeEnabled();
+    expect(screen.getByTestId('report-deliver-inbox')).toBeDisabled();
+    expect(screen.getByTestId('report-grain-select')).toBeInTheDocument();
+  });
+
+  it('sends and schedules the loaded saved model definition without a legacy run or save', async () => {
+    savedModelReport();
+    api.apiPost.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/reports/saved/77/deliver') return { id: 10, missing_data_alert: false };
+      if (path === '/api/v1/reports/schedules') return { id: 21 };
+      if (path === '/api/v1/reports/schedules/21/run-now') return { id: 11 };
+      throw new Error(`Unexpected POST ${path}`);
+    });
+    wrap(<ReportBuilderView />);
+    fireEvent.click(await screen.findByText('Selected July question'));
+    fireEvent.click(screen.getByTestId('report-deliver-inbox'));
+    await waitFor(() => expect(api.apiPost).toHaveBeenCalledWith('/api/v1/reports/saved/77/deliver', { format: 'xlsx' }));
+    fireEvent.click(screen.getByTestId('report-schedule'));
+    fireEvent.click(await screen.findByTestId('report-schedule-confirm'));
+    await waitFor(() => expect(api.apiPost).toHaveBeenCalledWith('/api/v1/reports/schedules', expect.objectContaining({ saved_report_id: 77 })));
+    expect(api.apiPost.mock.calls.some(([path]) => path === '/api/v1/query/execute' || path === '/api/v1/saved-reports')).toBe(false);
+  });
+
+  it('keeps edited legacy form export ad-hoc and preserves its saved calendar grain', async () => {
+    const get = api.apiGet.getMockImplementation()!;
+    api.apiGet.mockImplementation(async (url: string) => url === '/api/v1/saved-reports'
+      ? { items: [{ ...fixtureSavedReports().items[1], period_grain: 'month' }] }
+      : get(url));
+    wrap(<ReportBuilderView />);
+    fireEvent.click(within(await screen.findByTestId('saved-report-2')).getByText('Sell-out trend'));
+    fireEvent.change(screen.getByTestId('report-period-from'), { target: { value: '26Q3' } });
+    fireEvent.click(screen.getByTestId('report-export-xlsx'));
+    await waitFor(() => expect(api.apiDownloadBlob).toHaveBeenCalledWith('/api/v1/reports/export', 'sellout_units_period.xlsx', {
+      method: 'POST', body: JSON.stringify({ metric: 'sellout_units', grains: ['period'],
+        filters: { period_from: '26Q3', period_to: '26Q2' }, period_grain: 'month', format: 'xlsx', title: 'Sell-out units' }),
+    }));
+    fireEvent.click(screen.getByTestId('report-run'));
+    await waitFor(() => expect(api.apiPost).toHaveBeenCalledWith('/api/v1/query/execute', expect.objectContaining({ period_grain: 'month' })));
+    api.apiPost.mockImplementationOnce(async () => ({ ...fixtureSavedReports().items[1], id: 88, name: 'Monthly question' }));
+    fireEvent.click(screen.getByTestId('report-save'));
+    fireEvent.change(await screen.findByTestId('report-save-name'), { target: { value: 'Monthly question' } });
+    fireEvent.click(screen.getByTestId('report-save-confirm'));
+    await waitFor(() => expect(api.apiPost).toHaveBeenCalledWith('/api/v1/saved-reports', expect.objectContaining({ period_grain: 'month' })));
+  });
+
   it('summary tiles, saved reports and recent runs come from the API', async () => {
     wrap(<ReportBuilderView />);
     expect(await screen.findByText('1 pinned to dashboards')).toBeInTheDocument();

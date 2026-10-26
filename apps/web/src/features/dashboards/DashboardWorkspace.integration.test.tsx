@@ -39,7 +39,7 @@ vi.mock('next/dynamic', async () => {
 vi.mock('./DashboardWidgetCard', async () => {
   const { createElement: h, useLayoutEffect } = await import('react');
   return { DashboardWidgetCard: (p: {
-    widget: DashboardWidget; ctx: DashboardRunContext; dashboardName: string; onEdit: () => void;
+    widget: DashboardWidget; ctx: DashboardRunContext; dashboardName: string; onEdit: () => void; onPromote: () => void;
   }) => {
     const snap = { name: p.dashboardName, widget: p.widget.id,
       filters: p.ctx.filters, window: p.ctx.window, selected: p.ctx.selectedKeys, required:p.ctx.required };
@@ -47,6 +47,7 @@ vi.mock('./DashboardWidgetCard', async () => {
     return h('section', { 'data-testid': `card-boundary-${p.widget.id}` },
       h('output', { 'data-testid': `context-${p.widget.id}` }, JSON.stringify(snap)),
       h('button', { type:'button', onClick: p.onEdit }, `Edit widget ${p.widget.id}`),
+      h('button', { type:'button', onClick: p.onPromote }, `Promote widget ${p.widget.id}`),
       h('button', { type:'button', onClick: () => p.ctx.onSelect?.(
         { breakdown:'channel', value:'Retail', label:'Retail' }, false) }, 'Select Retail from chart'),
       h('button', { type:'button', onClick: () => p.ctx.onSelect?.(
@@ -136,6 +137,7 @@ beforeEach(() => {
         filters_json:{date:{preset:'all_time',from:null,to:null},compare:'none',required:['customer']}};
       store.push(d); return clone(d);
     }
+    if (/\/widgets\/\d+\/promote$/.test(path)) return { saved_report_id: 77 };
     const m = /^\/api\/v1\/dashboards\/(\d+)\/widgets$/.exec(path);
     if (m) {
       const d = store.find((d) => d.id === Number(m[1]))!;
@@ -177,6 +179,63 @@ function context(id: number) {
 }
 
 describe('DashboardWorkspace orchestration', () => {
+  it('promotes the effective unsaved bar and chart question with own-filter intersection, sort and limit', async () => {
+    Object.assign(store[0].widgets[0].definition_v2!.query, {
+      filters: { customer: [101, 303], channel: ['Retail', 'Wholesale'] },
+      period: { grain: 'week' }, sort: { by: 'dsi_sellout.units', dir: 'asc' }, limit: 1,
+    });
+    const { user } = await setup();
+    fireEvent.change(screen.getByTestId('dashboard-filter-from'), { target: { value: '2026-07-05' } });
+    await user.click(screen.getByRole('button', { name: 'Select Retail from chart' }));
+    await user.click(screen.getByRole('button', { name: 'Promote widget 11' }));
+    await waitFor(() => expect(edge.apiPost).toHaveBeenCalledWith('/api/v1/dashboards/1/widgets/11/promote', {
+      execution: { measures: ['dsi_sellout.units'], breakdowns: ['customer'],
+        filters: { customer: [101], channel: ['Retail'] },
+        period: { grain: 'week', from: '2026-07-05', to: '2026-07-31' },
+        sort: { by: 'dsi_sellout.units', dir: 'asc' }, limit: 1 },
+    }));
+    expect(await screen.findByTestId('dashboard-promote-result')).toHaveTextContent(/fixed dates.*2026-07-05.*2026-07-31/i);
+    expect(edge.apiPatch).not.toHaveBeenCalled();
+  });
+
+  it('promotes chart-selected dates and honours widget fixed dates and ignored filters', async () => {
+    store[0].widgets.push(widget(12, 1));
+    store[0].widgets[1].definition_v2!.dashboard = {
+      ignore_filters: ['customer', 'channel'], fixed_window: { from: '2026-01-01', to: '2026-01-31' },
+    };
+    const { user } = await setup();
+    await user.click(screen.getAllByRole('button', { name: 'Select Retail from chart' })[0]);
+    await user.click(screen.getAllByRole('button', { name: 'Select week from chart' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Promote widget 11' }));
+    await waitFor(() => expect(edge.apiPost).toHaveBeenCalledWith('/api/v1/dashboards/1/widgets/11/promote', {
+      execution: { measures: ['dsi_sellout.units'], breakdowns: ['customer'],
+        filters: { customer: [101], channel: ['Retail'] }, period: { from: '2026-09-28', to: '2026-10-04' } },
+    }));
+    await user.click(screen.getByRole('button', { name: 'Promote widget 12' }));
+    await waitFor(() => expect(edge.apiPost).toHaveBeenCalledWith('/api/v1/dashboards/1/widgets/12/promote', {
+      execution: { measures: ['dsi_sellout.units'], breakdowns: ['customer'], period: { from: '2026-01-01', to: '2026-01-31' } },
+    }));
+  });
+
+  it.each(['required', 'empty intersection', 'catalog unavailable'] as const)('refuses promotion with %s rather than saving a different question', async (mode) => {
+    if (mode === 'required') store[0].filters_json = { ...store[0].filters_json!, customer: [], required: ['customer'] };
+    if (mode === 'empty intersection') store[0].widgets[0].definition_v2!.query.filters = { customer: [303] };
+    if (mode === 'catalog unavailable') v2CatalogMissing = true;
+    const { user } = await setup();
+    await user.click(screen.getByRole('button', { name: 'Promote widget 11' }));
+    expect(await screen.findByTestId('dashboard-promote-error')).toBeInTheDocument();
+    expect(edge.apiPost.mock.calls.filter(([path]) => path.endsWith('/promote'))).toHaveLength(0);
+  });
+
+  it('keeps legacy widget promotion body-free and shows server refusals', async () => {
+    delete store[0].widgets[0].definition_v2;
+    const { user } = await setup();
+    edge.apiPost.mockRejectedValueOnce(new Error('Choose dates before saving this report'));
+    await user.click(screen.getByRole('button', { name: 'Promote widget 11' }));
+    await waitFor(() => expect(edge.apiPost).toHaveBeenCalledWith('/api/v1/dashboards/1/widgets/11/promote'));
+    expect(await screen.findByTestId('dashboard-promote-error')).toHaveTextContent('Choose dates before saving this report');
+  });
+
   it('clears hidden own filters when changing to another data model', async () => {
     store[0].widgets[0].definition_v2!.query.filters = { distributor: [12] };
     const { user } = await setup();

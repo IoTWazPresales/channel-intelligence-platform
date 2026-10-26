@@ -119,7 +119,7 @@ async def run_v2(
     plan = plan_request(dm, req, v1_catalog=v1_catalog)
 
     if plan.governed is not None:
-        return await _run_governed(db, plan, tid=tid, explain_only=explain_only, version=version)
+        return await _run_governed(db, plan, tid=tid, explain_only=explain_only, version=version, skip_cache=skip_cache)
 
     if not plan.measures:
         return _response(ok=False, refusals=plan.refusals, explain=build_explain(dm, plan, None, catalog_version=version))
@@ -189,7 +189,40 @@ async def run_v2(
     return resp
 
 
-async def _run_governed(db: AsyncSession, plan: Plan, *, tid: str, explain_only: bool, version: str) -> dict[str, Any]:
+def present_handler_rows(rows: list[dict[str, Any]], plan: Plan) -> tuple[list[dict[str, Any]], bool]:
+    """Apply v2 row presentation while retaining a compatible legacy handler's totals.
+
+    Model defaults mirror compiler ordering (measure descending or period
+    ascending, then dimension keys). Governed defaults retain handler order.
+    This never mutates the cached handler rows or changes their amounts.
+    """
+    rows = list(rows)
+    governed = plan.governed is not None
+    measure = plan.governed.key if governed else plan.measures[0].id
+
+    def dimension(row, key):
+        if key == "period":
+            return row.get("bucket_start") or row.get("bucket_key")
+        if governed:
+            return row.get(f"{key}_name") or row.get(key) or row.get(f"{key}_id")
+        return row.get(f"{key}_id", row.get(key))
+
+    if not governed:
+        rows.sort(key=lambda row: tuple(
+            (dimension(row, key) is None, dimension(row, key)) for key in plan.breakdowns
+        ))
+    by = plan.sort_by or (None if governed else "period" if "period" in plan.breakdowns else measure)
+    if by:
+        def value(row):
+            result = row.get(measure, row.get("value")) if by == measure else dimension(row, by)
+            return result.lower() if governed and isinstance(result, str) else result
+        present = [row for row in rows if value(row) is not None]
+        missing = [row for row in rows if value(row) is None]
+        rows = sorted(present, key=value, reverse=plan.sort_dir == "desc") + missing
+    return rows[:plan.limit], len(rows) > plan.limit
+
+
+async def _run_governed(db: AsyncSession, plan: Plan, *, tid: str, explain_only: bool, version: str, skip_cache: bool = False) -> dict[str, Any]:
     """A governed (v1 handler) metric: the v1 engine runs unchanged; v2 reshapes the answer."""
     from app.query.engine import execute_query
     from app.semantics.registry import catalog_for_tenant_cached
@@ -203,6 +236,7 @@ async def _run_governed(db: AsyncSession, plan: Plan, *, tid: str, explain_only:
         tenant_id=tid,
         explain_only=explain_only,
         period_grain=plan.period_grain,
+        skip_cache=skip_cache,
     )
     cat = catalog_for_tenant_cached(tid)
     columns: list[dict[str, Any]] = []
@@ -214,20 +248,8 @@ async def _run_governed(db: AsyncSession, plan: Plan, *, tid: str, explain_only:
         columns.append({"id": g, "kind": "breakdown", "label": dim.label if dim else g, "fields": fields, "group": None})
     columns.append({"id": metric.key, "kind": "measure", "label": metric.label, "fields": [metric.key], "unit": None})
     rows = [{**r, metric.key: r.get("value")} for r in (res.rows or []) if isinstance(r, dict)]
-    if plan.sort_by:
-        by = plan.sort_by
-
-        def _key(r: dict[str, Any]) -> tuple[int, Any]:
-            v = r.get(by) if by == metric.key else (
-                r.get("bucket_key") if by == "period" else r.get(f"{by}_name") or r.get(by) or r.get(f"{by}_id")
-            )
-            return (1, v) if v is None else (0, v if isinstance(v, (int, float)) else str(v).lower())
-
-        present = [r for r in rows if _key(r)[0] == 0]
-        missing = [r for r in rows if _key(r)[0] == 1]
-        rows = sorted(present, key=_key, reverse=plan.sort_dir == "desc") + missing
-    truncated = len(rows) > plan.limit
-    rows = rows[: plan.limit]
+    row_count = len(rows)
+    rows, truncated = present_handler_rows(rows, plan)
     refusals = [] if res.ok else [Refusal(measure=metric.key, reason=res.message or res.status)]
     explain = {
         "engine": "governed_handler",
@@ -239,6 +261,7 @@ async def _run_governed(db: AsyncSession, plan: Plan, *, tid: str, explain_only:
         "handler_explain": res.explain,
         "walls_checked": sorted(set(plan.walls_checked)),
         "data_vintage": res.data_vintage,
+        "row_count": row_count,
     }
     return _response(
         ok=res.ok,

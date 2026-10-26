@@ -208,6 +208,11 @@ def _v1_mirror(dm: DataModel, plan: Plan, req: V2Request, v1_catalog: Any) -> tu
     """v1 columns for this definition and whether the v1 path answers the same question."""
     from app.semantics.registry import validate_metric_grain
 
+    if req.sort_by or req.sort_dir or req.limit is not None:
+        # v1 has no row ordering/limit arguments. Mirroring only the measure and
+        # filters would change the saved question, including for governed rows.
+        key = plan.governed.key if plan.governed is not None else plan.measures[0].id
+        return V1Mirror(metric_key=key), False
     if plan.governed is not None:
         # v2 runs the v1 handler with the same grains and mapped filters; v1 is the same query.
         return (
@@ -332,8 +337,85 @@ def request_from_definition(
 
 
 def runs_v1(definition: dict[str, Any] | None) -> bool:
-    """Spec s.2.5: the v1 path runs when there is no definition or it is v1-equivalent."""
-    return definition is None or bool(definition.get("v1_equivalent"))
+    """Use v1 only when the definition's semantics fit, including old stored flags."""
+    if definition is None:
+        return True
+    query = definition.get("query") or {}
+    return bool(definition.get("v1_equivalent")) and not (
+        query.get("sort") or query.get("limit") is not None
+        or (definition.get("dashboard") or {}).get("fixed_window")
+    )
+
+
+def definition_for_promotion(
+    definition: dict[str, Any], *, tenant_id: str,
+    execution: Any = None, requires_context: bool = False,
+) -> CheckedDefinition:
+    """Freeze the displayed question through the existing validated definition writer.
+
+    The browser resolves dashboard presets, transient selections and explicit
+    exceptions using requestFor. It must still identify the stored query and
+    retain every widget-owned restriction. Dates become an explicit fixed window;
+    relative dashboard settings never silently turn into an all-time report.
+    """
+    checked = check_definition(definition, tenant_id=tenant_id)
+    if execution is None:
+        if requires_context or checked.needs_date_range:
+            raise _refuse("Send this widget's current execution filters and dates before saving it as a report.")
+        return checked
+    if not isinstance(execution, dict) or set(execution) - _QUERY_KEYS:
+        raise _refuse("Promotion execution is the widget's current query request.")
+    original = checked.definition["query"]
+    query = dict(execution)
+    period = query.pop("period", {})
+    if not isinstance(period, dict) or set(period) - {"grain", "from", "to"}:
+        raise _refuse("Promotion execution.period is {grain, from, to}.")
+    same = (
+        _str_list(query.get("measures"), "measures") == original["measures"]
+        and _str_list(query.get("breakdowns"), "breakdowns") == original["breakdowns"]
+        and (query.get("sort") or {}) == (original.get("sort") or {})
+        and query.get("limit") == original.get("limit")
+        and period.get("grain") == (original.get("period") or {}).get("grain")
+    )
+    if not same:
+        raise _refuse("The widget query changed. Reload it before saving it as a report.")
+    filters = query.get("filters") or {}
+    if not isinstance(filters, dict):
+        raise _refuse("Promotion execution.filters is an object.")
+    if any(isinstance(value, list) and not value for value in filters.values()):
+        raise _refuse("The current filter selection is empty; choose matching values before saving the report.")
+    for key, own in (original.get("filters") or {}).items():
+        if key not in filters:
+            raise _refuse(f"Promotion must retain the widget's own {key} restriction.")
+        values = filters.get(key)
+        values = values if isinstance(values, list) else [values]
+        allowed = own if isinstance(own, list) else [own]
+        if not values or any(not any(
+            (value is None and item is None)
+            or (value is not None and item is not None and str(value) == str(item))
+            for item in allowed
+        ) for value in values):
+            raise _refuse(f"Promotion must retain the widget's own {key} restriction.")
+    fixed = None
+    if "from" in period or "to" in period:
+        fixed = {key: period.get(key) for key in ("from", "to")}
+        # Reuse canonical ISO-date/order validation, with no business-calendar invention.
+        fixed = _dashboard_options({"fixed_window": fixed}, default_model())["fixed_window"]
+    settings = checked.definition.get("dashboard") or {}
+    if settings.get("fixed_window") and fixed != settings["fixed_window"]:
+        raise _refuse("Promotion must retain the widget's fixed dates.")
+    if "date" in settings.get("ignore_filters", []) and not settings.get("fixed_window") and fixed:
+        raise _refuse("This widget ignores dashboard dates; promotion cannot add a date restriction.")
+    if period.get("grain"):
+        query["period"] = {"grain": period["grain"]}
+    raw = {**checked.definition, "query": query}
+    raw.pop("dashboard", None)  # Effective restrictions are flattened, not inherited again.
+    if fixed:
+        raw["dashboard"] = {"fixed_window": fixed}
+    result = check_definition(raw, tenant_id=tenant_id)
+    if result.needs_date_range:
+        raise _refuse("This report needs execution dates. Choose a date range before saving it.")
+    return result
 
 
 # ----------------------------------------------------------------------------- dashboard filters

@@ -1,0 +1,18 @@
+{
+  "apps/api/app/services/dashboard_definitions.py": "ac20f1c6bb0fb5b1a51fd66b07b47862b3cf406c75ed700a4d5ab498bd99743d",
+  "apps/api/app/services/report_delivery.py": "3c78a323f9d9e1a40108632354a2f7003c3f56d3a36d4999e43ab4162a0879d8",
+  "apps/api/app/query/model/execute.py": "f3a48851007f41de903d14d49b19cbe30dd6647e786d2a1bdb3307b25f136350",
+  "apps/api/app/api/v1/endpoints/dashboards.py": "40cfe36af0bb13b5bc290a7cbabf13339ccefbd14b9b5cdd44ee56aaf40fcdbd",
+  "apps/api/app/api/v1/endpoints/report_exports.py": "e91a6482d908f8aeb53fd38599570d05714dee6f19e3d0c9e0568d3d6672b58e",
+  "apps/api/tests/test_saved_query_execution_fidelity.py": "c0e2f114f3795417149b2f6bdb820f940dd5db4ac442c03f0b6dc37799b5ce4f",
+  "apps/api/tests/test_dashboard_v2_authenticated.py": "d7a2d10a60cc8d69bcc754c85d2cfd733671c8e2e7a644a7ea0fbd8dc3029aa9",
+  "apps/web/src/features/dashboards/DashboardWorkspace.tsx": "da57c84638577533c1f580f5d86521f997a81a5cbeca4d3a265f0db3abe8ae8b",
+  "apps/web/src/features/dashboards/DashboardWorkspace.integration.test.tsx": "13dbc462425f05798b81b60a838c7883418f86d66d41389a7ebc20d4a214089a",
+  "apps/web/src/features/reports/ReportBuilderView.tsx": "1456f9c89bf4b244b481dc103964a2a42340807281dafbbe5f02568b3ef62b2d",
+  "apps/web/src/features/reports/ReportBuilderView.test.tsx": "556a6ece3a402f3f96c3acd5194b08ab5a57c8fe70b7be9f5968362ae0a918ab",
+  "apps/web/src/features/dashboards/builder/requestFor.ts": "a989cec2a1771d1316287b4ccaf16fbd143ce74286b02806640061ca7060ad1e",
+  "apps/web/src/features/dashboards/builder/requestFor.test.ts": "0653d16936e39eefa26631d90cba292959481ecfd3ca941a910a7c2a560c07f9",
+  "apps/web/playwright.e4-auth.config.ts": "10e7b1bb27115b75bbb7ceedcb63d6ff47b217298be14e8bb96eac7f2786c6d2",
+  "apps/web/e2e/e4-saved-query-auth.spec.ts": "e82c89d78d64b8eeb07ec483651d9eab372e0fac13ea4f6b9c9bab34ad6a4455",
+  "apps/web/tsconfig.e4-e2e.json": "7b57b8c2f9b25283a3e6aa3fcb54f8b1d3799b43f5afd17b930ef4aa2b32122e"
+}

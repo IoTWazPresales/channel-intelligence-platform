@@ -12,6 +12,31 @@ const woc: DefinitionV2 = { v: 1, kind: 'governed', query: { measures: ['weeks_o
 const pipeline: DefinitionV2 = { v: 1, kind: 'governed', query: { measures: ['pipeline_inbound'], breakdowns: ['period'], period: { grain: 'week' } } };
 
 describe('requestFor: model measures', () => {
+  it.each([
+    ['scalar null', null],
+    ['list null', [null]],
+    ['missing value and literal None', [null, 'None']],
+    ['literal None and missing value', ['None', null]],
+  ] as const)('blocks owned %s filters before a request can lose their scope', (_label, value) => {
+    // Valid server JSON may contain null even though this builder's value type cannot represent it.
+    const def = JSON.parse(JSON.stringify({ ...dsi, query: { ...dsi.query, filters: { bu: value } } })) as DefinitionV2;
+    const plan = requestFor(def, { catalog, filters: {}, window: W });
+    expect(plan).toMatchObject({ status: 'blocked', reason: 'invalid_filter', message: expect.stringMatching(/missing value.*cannot run or promote/i) });
+    expect(plan).not.toHaveProperty('request');
+    expect(def.query.filters?.bu).toEqual(value);
+    // Ignoring the dashboard's BU never removes the widget's own restriction.
+    expect(requestFor({ ...def, dashboard: { ignore_filters: ['bu'] } }, { catalog, filters: { bu: ['None'] }, window: W }))
+      .toMatchObject({ status: 'blocked', reason: 'invalid_filter' });
+  });
+
+  it('keeps a literal None value distinct from JSON null', () => {
+    const def: DefinitionV2 = { ...dsi, query: { ...dsi.query, filters: { bu: ['None'] } } };
+    const plan = requestFor(def, { catalog, filters: {}, window: W });
+    expect(plan.status).toBe('ready');
+    if (plan.status !== 'ready') return;
+    expect(plan.request.filters).toEqual({ bu: ['None'] });
+  });
+
   it('ignores only explicitly excluded dashboard keys, retaining widget-own restrictions', () => {
     const def: DefinitionV2 = { ...cst, dashboard: { ignore_filters: ['customer'] }, query: { ...cst.query, filters: { customer: [103] } } };
     const plan = requestFor(def, { catalog, filters: { customer: [101], bu: ['Notebook'] }, required: ['customer'], window: W });

@@ -183,7 +183,7 @@ async def test_browser_builder_on_transactional_cip_test(signed_in):
         async with lock:  # One rolled-back DB connection; serialize parallel browser requests.
             if scope.get('path') == '/__cip_test_identity':
                 await JSONResponse({'database': 'cip_test', 'mode': 'rolled-back-test'})(scope, receive, send)
-            elif not scope.get('path', '').startswith(('/api/v1/auth/', '/api/v1/dashboards', '/api/v1/query/', '/api/v1/semantics/', '/api/v1/reports/')):
+            elif not scope.get('path', '').startswith(('/api/v1/auth/', '/api/v1/dashboards', '/api/v1/query/', '/api/v1/semantics/', '/api/v1/reports/', '/api/v1/saved-reports')):
                 # The global chrome's optional ops/log requests must never read host service logs.
                 await JSONResponse({'detail': 'Outside this isolated builder test'}, status_code=404)(scope, receive, send)
             else:
@@ -207,7 +207,9 @@ async def test_browser_builder_on_transactional_cip_test(signed_in):
                'CIP_BUILDER_TEST_TOKEN': signed_in.headers['admin']['Authorization'].removeprefix('Bearer ')}
         pnpm = shutil.which('pnpm.cmd' if os.name == 'nt' else 'pnpm')
         assert pnpm, 'pnpm is required for this opt-in browser check'
-        proc = await asyncio.create_subprocess_exec(pnpm, 'exec', 'playwright', 'test', '--config', 'playwright.builder-auth.config.ts',
+        config = os.environ.get('CIP_BUILDER_TEST_CONFIG', 'playwright.builder-auth.config.ts')
+        assert config in {'playwright.builder-auth.config.ts', 'playwright.e4-auth.config.ts'}
+        proc = await asyncio.create_subprocess_exec(pnpm, 'exec', 'playwright', 'test', '--config', config,
                     cwd=str(Path(__file__).resolve().parents[2] / 'web'), env=env, stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         try:

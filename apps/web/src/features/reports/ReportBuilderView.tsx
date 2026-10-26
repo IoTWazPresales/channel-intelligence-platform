@@ -37,6 +37,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useProductLines } from '@/features/catalog/useProductLines';
+import type { DefinitionV2 } from '@/features/dashboards/builder/types';
 import type { ChartControlsState } from '@/features/workbench-ui/ChartControls';
 import { RankedBars, StateKey, TrendChart, axisTitle, formatMeasure, rankBars, type MeasureUnit } from '@/features/workbench-ui/charts';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
@@ -82,6 +83,7 @@ type SavedReport = {
   period_grain?: string | null;
   updated_at?: string | null;
   overview_pinned?: boolean;
+  definition_v2?: DefinitionV2 | null;
 };
 
 type Schedule = {
@@ -195,6 +197,7 @@ export function ReportBuilderView() {
   const [grains, setGrains] = useState<string[]>(['distributor', 'product']);
   const [periodFrom, setPeriodFrom] = useState('26Q2');
   const [periodTo, setPeriodTo] = useState('26Q2');
+  const [periodGrain, setPeriodGrain] = useState<string | null>(null);
   const [distributorId, setDistributorId] = useState('');
   const [bu, setBu] = useState('');
   const [visual, setVisual] = useState<VisualMode>('kpi');
@@ -210,6 +213,10 @@ export function ReportBuilderView() {
   const [exportBusy, setExportBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const savedItems = useMemo(() => savedQ.data?.items ?? [], [savedQ.data]);
+  const savedById = useMemo(() => new Map(savedItems.map((s) => [s.id, s])), [savedItems]);
+  const loadedSaved = loadedSavedId != null ? savedById.get(loadedSavedId) ?? null : null;
+  const savedDefinition = loadedSaved?.definition_v2 ?? null;
 
   const selected = queryableMetrics.find((m) => m.key === metricKey) ?? null;
   const metricLabelOf = (key: string) => allMetrics.find((m) => m.key === key)?.label ?? 'Saved figure';
@@ -244,11 +251,13 @@ export function ReportBuilderView() {
 
   const runMut = useMutation({
     mutationFn: async () => {
+      if (savedDefinition) throw new Error('Download or send this saved report. Start a new report to build another question.');
       const filters = buildFilters();
       const data = await apiPost<QueryResult>('/api/v1/query/execute', {
         metric: metricKey,
         grains,
         filters,
+        ...(needsPeriod && periodGrain ? { period_grain: periodGrain } : {}),
       });
       return { data, filters };
     },
@@ -259,16 +268,19 @@ export function ReportBuilderView() {
   });
 
   const saveMut = useMutation({
-    mutationFn: async () =>
-      apiPost<SavedReport>('/api/v1/saved-reports', {
+    mutationFn: async () => {
+      if (savedDefinition) throw new Error('This saved report keeps its dashboard definition. Start a new report to build another question.');
+      return apiPost<SavedReport>('/api/v1/saved-reports', {
         name: saveName.trim() || `${selected?.label ?? metricKey} report`,
         metric: metricKey,
         grains,
         filters: buildFilters(),
+        ...(needsPeriod && periodGrain ? { period_grain: periodGrain } : {}),
         visual,
         visibility: publishOnSave ? 'published' : 'personal',
         shared_roles: [],
-      }),
+      });
+    },
     onSuccess: async (row) => {
       setSaveOpen(false);
       setSaveName('');
@@ -293,10 +305,6 @@ export function ReportBuilderView() {
     },
   });
 
-  const savedItems = useMemo(() => savedQ.data?.items ?? [], [savedQ.data]);
-  const savedById = useMemo(() => new Map(savedItems.map((s) => [s.id, s])), [savedItems]);
-  const loadedSaved = loadedSavedId != null ? savedById.get(loadedSavedId) ?? null : null;
-
   const deliverMut = useMutation({
     mutationFn: async (reportId: number) =>
       apiPost<{ id: number; subject: string; missing_data_alert: boolean }>(
@@ -320,7 +328,7 @@ export function ReportBuilderView() {
     mutationFn: async () => {
       if (loadedSavedId == null) throw new Error('Save the report first');
       const sched = await apiPost<{ id: number }>('/api/v1/reports/schedules', {
-        name: scheduleName.trim() || `${selected?.label ?? metricKey} schedule`,
+        name: scheduleName.trim() || `${loadedSaved?.name ?? selected?.label ?? metricKey} schedule`,
         saved_report_id: loadedSavedId,
         cadence: scheduleCadence,
         format: 'xlsx',
@@ -350,14 +358,20 @@ export function ReportBuilderView() {
     setActionErr(null);
     setActionMsg(null);
     try {
+      if (savedDefinition && loadedSaved) {
+        await apiDownloadBlob(`/api/v1/reports/saved/${loadedSaved.id}/export?format=${fmt}`, `${loadedSaved.name}.${fmt}`);
+        setActionMsg(`${fmt === 'pdf' ? 'PDF' : 'Excel file'} downloaded from the saved report.`);
+        return;
+      }
       const stem = `${metricKey}_${grains.join('-')}`;
-      // Always export the current author form (not a stale saved definition).
+      // Legacy reports keep exporting the current editable author form.
       await apiDownloadBlob(`/api/v1/reports/export`, `${stem}.${fmt}`, {
         method: 'POST',
         body: JSON.stringify({
           metric: metricKey,
           grains,
           filters: buildFilters(),
+          ...(needsPeriod && periodGrain ? { period_grain: periodGrain } : {}),
           format: fmt,
           title: selected?.label || metricKey,
         }),
@@ -371,6 +385,17 @@ export function ReportBuilderView() {
   };
 
   const pickMetric = (next: string) => {
+    if (savedDefinition) {
+      setPeriodFrom('26Q2');
+      setPeriodTo('26Q2');
+      setDistributorId('');
+      setBu('');
+      setVisual('kpi');
+    }
+    setLoadedSavedId(null);
+    setPeriodGrain(null);
+    setActionMsg(null);
+    setActionErr(null);
     setMetricKey(next);
     setResult(null);
     const m = queryableMetrics.find((x) => x.key === next);
@@ -380,6 +405,9 @@ export function ReportBuilderView() {
 
   const loadSaved = (s: SavedReport) => {
     setLoadedSavedId(s.id);
+    setPeriodGrain(s.period_grain ?? null);
+    setActionMsg(null);
+    setActionErr(null);
     setMetricKey(s.metric_key);
     setGrains([...(s.grains || [])]);
     setVisual(savedVisual(s.visual));
@@ -421,7 +449,8 @@ export function ReportBuilderView() {
   const rows = result?.rows ?? [];
   const scope = scopeLabel(result ? ranFilters : buildFilters(), lookups, productLineLabel);
 
-  const runDisabled = runMut.isPending || !metricKey || grains.length === 0;
+  const runDisabled = Boolean(savedDefinition) || runMut.isPending || !metricKey || grains.length === 0;
+  const exportDisabled = exportBusy || (!savedDefinition && (!metricKey || grains.length === 0));
   const sendReason = loadedSavedId == null ? 'Save the report first — sending and scheduling work on a saved report.' : '';
 
   const summaryState = (q: { isLoading: boolean; isError: boolean }) => (q.isLoading ? 'loading' : q.isError ? 'empty' : 'ready') as 'loading' | 'empty' | 'ready';
@@ -536,7 +565,7 @@ export function ReportBuilderView() {
         {/* ---------- question + result ---------- */}
         <Stack spacing={2} sx={{ minWidth: 0, gridColumn: { md: '2' }, gridRow: { md: '1' } }}>
           <Panel
-            title={selected?.label ?? metricLabelOf(metricKey)}
+            title={savedDefinition ? loadedSaved!.name : selected?.label ?? metricLabelOf(metricKey)}
             subtitle={
               result?.ok
                 ? [`by ${grainSetLabel(result.grains)}`, asOfLabel(result) ? `as of ${asOfLabel(result)}` : null, `${rows.length} ${rows.length === 1 ? 'row' : 'rows'}`]
@@ -554,6 +583,16 @@ export function ReportBuilderView() {
             sx={{ height: 'auto' }}
           >
             <Stack spacing={1.5} data-testid="report-builder-author">
+              {savedDefinition ? (
+                <Alert severity="info" data-testid="report-saved-definition-note">
+                  This report uses its saved measures, breakdowns and filters. Download, send or schedule it here.
+                  {savedDefinition.dashboard?.fixed_window
+                    ? ` It uses fixed dates: ${savedDefinition.dashboard.fixed_window.from} to ${savedDefinition.dashboard.fixed_window.to}; schedules keep these dates.`
+                    : ' It has no fixed date range.'}
+                  {' '}To build a different question, use the dashboard builder or start a new report.
+                  <Box sx={{ mt: 1 }}><Button size="small" onClick={() => pickMetric('weeks_of_cover')}>Start a new report</Button></Box>
+                </Alert>
+              ) : <>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap" alignItems={{ sm: 'flex-start' }}>
                 <FormControl size="small" sx={{ minWidth: 220, display: { xs: 'flex', md: 'none' } }}>
                   <InputLabel id="report-metric-label">Metric</InputLabel>
@@ -653,6 +692,7 @@ export function ReportBuilderView() {
                 <Chip size="small" variant="outlined" label={`Breakdown · ${grainSetLabel(result?.ok ? result.grains : grains)}`} />
                 <Chip size="small" variant="outlined" label={`Scope · ${scope}`} />
               </Stack>
+              </>}
 
               {runMut.isError ? <Alert severity="error">{safeDisplayError(runMut.error)}</Alert> : null}
               {actionErr ? (
@@ -666,7 +706,7 @@ export function ReportBuilderView() {
                 </Alert>
               ) : null}
 
-              <ModuleDataSection
+              {!savedDefinition ? <><ModuleDataSection
                 isLoading={catalogQ.isLoading}
                 isError={catalogQ.isError}
                 error={catalogQ.error instanceof Error ? catalogQ.error : null}
@@ -705,18 +745,20 @@ export function ReportBuilderView() {
               </ModuleDataSection>
 
               <AboutFigure metric={selected} result={result?.ok ? result : null} scope={scope} />
+              </> : null}
 
               <Divider />
               <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center" data-testid="report-actions">
-                <Button size="small" variant="outlined" disabled={exportBusy || !metricKey || grains.length === 0} onClick={() => void exportCurrent('xlsx')} data-testid="report-export-xlsx" sx={oneLine}>
+                <Button size="small" variant="outlined" disabled={exportDisabled} onClick={() => void exportCurrent('xlsx')} data-testid="report-export-xlsx" sx={oneLine}>
                   {exportBusy ? 'Exporting…' : 'Export Excel'}
                 </Button>
-                <Button size="small" variant="outlined" disabled={exportBusy || !metricKey || grains.length === 0} onClick={() => void exportCurrent('pdf')} data-testid="report-export-pdf" sx={oneLine}>
+                <Button size="small" variant="outlined" disabled={exportDisabled} onClick={() => void exportCurrent('pdf')} data-testid="report-export-pdf" sx={oneLine}>
                   Export PDF
                 </Button>
                 <Button
                   size="small"
                   variant="outlined"
+                  disabled={Boolean(savedDefinition)}
                   onClick={() => {
                     setSaveName(`${selected?.label || metricLabelOf(metricKey)}`);
                     setSaveOpen(true);
@@ -744,7 +786,7 @@ export function ReportBuilderView() {
                     variant="outlined"
                     disabled={loadedSavedId == null}
                     onClick={() => {
-                      setScheduleName(`${selected?.label || metricLabelOf(metricKey)} schedule`);
+                      setScheduleName(`${loadedSaved?.name || selected?.label || metricLabelOf(metricKey)} schedule`);
                       setScheduleCadence('weekly_monday_0700');
                       setScheduleOpen(true);
                     }}
@@ -769,7 +811,7 @@ export function ReportBuilderView() {
         </Stack>
 
         {/* ---------- result table: spans the question and side columns on wide screens ---------- */}
-        {result?.ok && !runMut.isPending && table && table.rows.length > 0 ? (
+        {!savedDefinition && result?.ok && !runMut.isPending && table && table.rows.length > 0 ? (
           <Box
             sx={{ minWidth: 0, gridColumn: { md: '2', lg: '2 / -1' }, gridRow: { md: '2' } }}
             data-testid={effectiveVisual === 'table' ? 'report-table' : undefined}
@@ -806,8 +848,9 @@ export function ReportBuilderView() {
                     severity={loadedSavedId === s.id ? 'info' : 'neutral'}
                     primary={s.name}
                     secondary={[
-                      metricLabelOf(s.metric_key),
-                      grainSetLabel(s.grains || []),
+                      ...(s.definition_v2 ? ['Saved question', s.definition_v2.dashboard?.fixed_window
+                        ? `Fixed dates: ${s.definition_v2.dashboard.fixed_window.from} to ${s.definition_v2.dashboard.fixed_window.to}`
+                        : 'No fixed date range'] : [metricLabelOf(s.metric_key), grainSetLabel(s.grains || [])]),
                       sched ? CADENCE_LABEL[sched.cadence] ?? 'Scheduled' : s.visibility === 'published' ? 'Shared' : 'Only you',
                     ].join(' · ')}
                     figure={

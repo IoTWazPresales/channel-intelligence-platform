@@ -20,7 +20,7 @@ from app.models.product_line_access import UserProductLineAccess
 from app.models.report_delivery import ReportDelivery, ReportSchedule
 from app.models.saved_reports import SavedReport
 from app.query.engine import execute_query
-from app.services.dashboard_definitions import request_from_definition, runs_v1
+from app.services.dashboard_definitions import check_definition, request_from_definition, runs_v1
 from app.services.report_export import detect_missing_data
 from app.services.saved_report_access import can_view_owned_item, parse_user_id
 
@@ -161,6 +161,32 @@ async def deliver_saved_report(
     return await _deliver_saved_report(db, user=user, **kwargs)
 
 
+async def saved_report_payload(db: AsyncSession, report: SavedReport, *, skip_cache: bool = False) -> dict[str, Any]:
+    """One saved-query execution boundary for export and every delivery trigger."""
+    definition = getattr(report, "definition_v2", None)
+    if not runs_v1(definition):
+        return await _v2_payload(db, definition, tenant_id=report.tenant_id, skip_cache=skip_cache)
+    result = await execute_query(
+        db, metric=report.metric_key, grains=list(report.grains or []),
+        filters=dict(report.filters or {}), tenant_id=report.tenant_id,
+        period_grain=report.period_grain, skip_cache=skip_cache,
+    )
+    payload = result.as_dict()
+    if definition is not None and result.ok:
+        # Old migrated definitions keep their governed/legacy handler authority.
+        # Only v2-defined rows receive v2's implicit ordering and display cap.
+        from app.query.model.execute import present_handler_rows
+        plan = check_definition(definition, tenant_id=report.tenant_id).plan
+        rows = payload.get("rows") or []
+        payload["rows"], truncated = present_handler_rows(rows, plan)
+        payload["truncated"] = truncated
+        payload["data_vintage"] = {
+            **(payload.get("data_vintage") or {}), "row_count": len(rows),
+            "returned_rows": len(payload["rows"]), "truncated": truncated,
+        }
+    return payload
+
+
 async def _deliver_saved_report(
     db: AsyncSession,
     *,
@@ -172,20 +198,7 @@ async def _deliver_saved_report(
     skip_cache: bool = False,
 ) -> ReportDelivery:
     tid = report.tenant_id
-    definition = getattr(report, "definition_v2", None)
-    if runs_v1(definition):
-        # N-0116 s.2.5: no definition, or a v1-equivalent one: exactly the v1 call as before.
-        result = await execute_query(
-            db,
-            metric=report.metric_key,
-            grains=list(report.grains or []),
-            filters=dict(report.filters or {}),
-            tenant_id=tid,
-            skip_cache=skip_cache,
-        )
-        payload = result.as_dict()
-    else:
-        payload = await _v2_payload(db, definition, tenant_id=tid, skip_cache=skip_cache)
+    payload = await saved_report_payload(db, report, skip_cache=skip_cache)
     missing = detect_missing_data(payload)
     vintage = payload.get("data_vintage") or {
         "as_of_utc": datetime.now(timezone.utc).isoformat(),

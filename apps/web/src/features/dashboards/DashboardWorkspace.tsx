@@ -50,6 +50,7 @@ import {
 import { BuilderEditorDialog, definitionFromV1, type BuilderEditorInitial, type BuilderEditorValue } from './builder/BuilderEditorDialog';
 import { measureOf } from './builder/catalog';
 import { DashboardFilterBar, normaliseFilters } from './builder/FilterBar';
+import { requestFor } from './builder/requestFor';
 import { StarterGallery, TemplateChip, TemplateNote } from './builder/Starters';
 import type { CatalogV2, DashboardFilters } from './builder/types';
 import { useDashboardRun } from './builder/useDashboardRun';
@@ -129,6 +130,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
   const [builderOpen, setBuilderOpen] = useState(false);
   const [builderInitial, setBuilderInitial] = useState<BuilderEditorInitial>({});
   const [editorError, setEditorError] = useState<string | null>(null);
+  const [promoteMessage, setPromoteMessage] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -246,11 +248,26 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
   });
 
   const promoteMut = useMutation({
-    mutationFn: async (widgetId: number) => {
+    mutationFn: async (w: DashboardWidget) => {
       if (!active) throw new Error('No dashboard');
-      return apiPost(`/api/v1/dashboards/${active.id}/widgets/${widgetId}/promote`);
+      setPromoteMessage(null);
+      const path = `/api/v1/dashboards/${active.id}/widgets/${w.id}/promote`;
+      if (!w.definition_v2) {
+        await apiPost(path);
+        return 'Saved report. Open Reports to download, send or schedule it.';
+      }
+      const plan = requestFor(w.definition_v2, { catalog: catalogV2, ...ctx });
+      if (plan.status === 'blocked') throw new Error(plan.message);
+      await apiPost(path, { execution: plan.request });
+      return plan.window
+        ? `Saved report with fixed dates: ${plan.window.from} to ${plan.window.to}. Current filters are saved; these dates stay fixed for downloads and schedules.`
+        : 'Saved report with the current filters and no date range. Open Reports to download, send or schedule it.';
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboards'] }),
+    onSuccess: async (message) => {
+      setPromoteMessage(message);
+      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: ['saved-reports'] });
+    },
   });
 
   const saveFiltersMut = useMutation({
@@ -386,6 +403,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
           ? 'Build widgets from the data model: pick measures, break them down, and filter the whole dashboard from the bar or by clicking a chart.'
           : 'Governed metric canvas — one widget is one metric.'}{' '}
         Formula and data vintage sit on every face. Schedules still live on the <Link href="/reports">report builder</Link> after Promote.
+        {builderAvailable ? ' Promote saves the current filters and selected dates as fixed dates for the report.' : ''}
       </Typography>
 
       {listQ.isError && (
@@ -413,6 +431,8 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
           Creating your copy of the starter…
         </Alert>
       ) : null}
+      {promoteMut.isError ? <Alert severity="error" sx={{ mb: 2 }} data-testid="dashboard-promote-error">{safeDisplayError(promoteMut.error)}</Alert> : null}
+      {promoteMessage ? <Alert severity="success" sx={{ mb: 2 }} data-testid="dashboard-promote-result">{promoteMessage}</Alert> : null}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="flex-start">
@@ -520,7 +540,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
                         dashboardName={active.name}
                         onEdit={() => openEdit(w)}
                         onDelete={() => deleteMut.mutate(w.id)}
-                        onPromote={() => promoteMut.mutate(w.id)}
+                        onPromote={() => promoteMut.mutate(w)}
                         onDuplicate={() => duplicateMut.mutate(w)}
                       />
                     )}

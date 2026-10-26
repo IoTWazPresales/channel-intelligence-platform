@@ -20,6 +20,7 @@ from app.services.dashboard_definitions import (
     DefinitionRefused,
     check_dashboard_filters,
     check_definition,
+    definition_for_promotion,
 )
 from app.services.dashboard_widgets import (
     default_layout,
@@ -127,6 +128,10 @@ class DashboardUpdate(BaseModel):
 
 class PublishBody(BaseModel):
     shared_roles: list[str] = Field(default_factory=list)
+
+
+class PromoteBody(BaseModel):
+    execution: dict[str, Any] | None = None
 
 
 def _widget_load():
@@ -680,6 +685,7 @@ async def delete_dashboard_widget(
 async def promote_widget_to_saved_report(
     dashboard_id: int,
     widget_id: int,
+    body: PromoteBody | None = None,
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
@@ -690,8 +696,21 @@ async def promote_widget_to_saved_report(
     if w is None:
         raise HTTPException(status_code=404, detail="Widget not found")
     if w.definition_v2 is not None:
-        # N-0116: the report carries the same v2 definition (re-checked) and its v1 mirror.
-        checked = _checked(w.definition_v2, tid)
+        # Capture the displayed question, not an unfiltered/all-time substitute.
+        bar = dict(row.filters_json or {})
+        date_filter = bar.pop("date", {}) or {}
+        bar.pop("compare", None)
+        requires_context = any(bar.values()) or bool(
+            date_filter and (date_filter.get("preset") != "all_time"
+                             or date_filter.get("from") or date_filter.get("to"))
+        )
+        try:
+            checked = definition_for_promotion(
+                w.definition_v2, tenant_id=tid,
+                execution=body.execution if body else None, requires_context=requires_context,
+            )
+        except DefinitionRefused as exc:
+            raise exc.http() from exc
         report = SavedReport(
             tenant_id=tid,
             owner_user_id=parse_user_id(user),

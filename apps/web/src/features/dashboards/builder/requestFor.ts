@@ -38,7 +38,7 @@ export type RequestPlan =
       /** Names/counts and dates of filters actually applied, including widget-only restrictions. */
       filterCaption: string;
     }
-  | { status: 'blocked'; reason: 'required' | 'empty_intersection' | 'no_measure' | 'catalog_unavailable' | 'invalid_window'; message: string; notFiltered: NotFiltered[] };
+  | { status: 'blocked'; reason: 'required' | 'empty_intersection' | 'no_measure' | 'catalog_unavailable' | 'invalid_window' | 'invalid_filter'; message: string; notFiltered: NotFiltered[] };
 
 export type RequestContext = {
   catalog: CatalogV2 | null | undefined;
@@ -178,6 +178,15 @@ export function requestFor(def: DefinitionV2, ctx: RequestContext): RequestPlan 
   // The widget's own filters, ANDed: intersection on the same key.
   const own = def.query.filters ?? {};
   for (const [key, raw] of Object.entries(own)) {
+    // The model API accepts JSON null, but the builder's picker/value types do not yet represent
+    // it. Refuse the saved question rather than drop its restriction or substitute a text value.
+    if (raw === null || (Array.isArray(raw) && raw.some((value) => value === null))) {
+      return {
+        status: 'blocked', reason: 'invalid_filter',
+        message: `This widget's ${lowerFirst(breakdownLabel(catalog, key))} filter includes a missing value. This builder cannot run or promote filters for missing values yet.`,
+        notFiltered,
+      };
+    }
     const values = asList(raw);
     if (!values.length) continue;
     if (dash[key]) {

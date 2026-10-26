@@ -1,0 +1,38 @@
+[
+    {
+        "path":  "apps/api/app/services/dashboard_definitions.py",
+        "sha256":  "e1064ce63cd7f5abb15590b82225048364e2bd59b83fefeee1bc0d00a768f6ec"
+    },
+    {
+        "path":  "apps/api/app/query/model/execute.py",
+        "sha256":  "eb860e9546b0ba7759b81c55a370350c2659cce04c4d44b289b3c0a5af1e0afa"
+    },
+    {
+        "path":  "apps/api/app/api/v1/endpoints/dashboards.py",
+        "sha256":  "40cfe36af0bb13b5bc290a7cbabf13339ccefbd14b9b5cdd44ee56aaf40fcdbd"
+    },
+    {
+        "path":  "apps/api/app/api/v1/endpoints/report_exports.py",
+        "sha256":  "f63fd341fe01ef9702e3301938b845df47e741c83aff230825808ec080c3cef5"
+    },
+    {
+        "path":  "apps/api/app/services/report_delivery.py",
+        "sha256":  "2e2413d8a878863776f25b5988b2c23a8d6c30f5730932d0d66bcacb7871ba08"
+    },
+    {
+        "path":  "apps/api/tests/test_saved_query_execution_fidelity.py",
+        "sha256":  "6d0018f29bd23921f543002ca8a8be3f70b3a0083fea85078ddb45e01678d19f"
+    },
+    {
+        "path":  "apps/web/src/features/dashboards/DashboardWorkspace.tsx",
+        "sha256":  "da57c84638577533c1f580f5d86521f997a81a5cbeca4d3a265f0db3abe8ae8b"
+    },
+    {
+        "path":  "apps/web/src/features/reports/ReportBuilderView.tsx",
+        "sha256":  "1456f9c89bf4b244b481dc103964a2a42340807281dafbbe5f02568b3ef62b2d"
+    },
+    {
+        "path":  "apps/web/src/features/dashboards/builder/requestFor.ts",
+        "sha256":  "dabdec4466f57263fa79c04a6a7fd958a9a8aa80ca78c86e585361c5851fecb7"
+    }
+]
