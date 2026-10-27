@@ -42,6 +42,7 @@ import type { DashboardRunContext } from './runContext';
 import { rowCount, vintageTo } from './shape';
 import { downloadBlob, exportFileName, exportToast, tableCols, toCsv } from './table';
 import type { CatalogV2, DefinitionV2, V2Measure, V2Request } from './types';
+import { useDashboardLayoutKey } from '../DashboardGrid';
 import { V2WidgetBody } from './V2WidgetBody';
 import { ViewRowsDrawer } from './ViewRowsDrawer';
 import { WidgetMenu, type WidgetAction } from './WidgetMenu';
@@ -134,6 +135,7 @@ export function V2WidgetCard({
   dragHandle?: boolean;
 }) {
   const theme = useTheme();
+  const onLayoutKey = useDashboardLayoutKey();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const closeFullRef = useRef<HTMLButtonElement | null>(null);
@@ -283,9 +285,12 @@ export function V2WidgetCard({
             component="span"
             className="dashboard-widget-drag"
             role="button"
-            aria-label={`Drag ${widget.title}`}
+            tabIndex={onLayoutKey ? 0 : undefined}
+            aria-label={onLayoutKey ? `Move ${widget.title}. Arrow keys move it. Shift and arrow keys resize it.` : `Drag ${widget.title}`}
+            aria-keyshortcuts={onLayoutKey ? 'ArrowLeft ArrowRight ArrowUp ArrowDown' : undefined}
+            onKeyDown={onLayoutKey ? (event) => onLayoutKey(widget.id, event) : undefined}
             data-testid={`dashboard-widget-drag-${widget.id}`}
-            sx={{ cursor: 'grab', display: 'inline-flex', color: 'text.secondary' }}
+            sx={{ cursor: 'grab', display: 'inline-flex', color: 'text.secondary', '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 } }}
           >
             <DragIndicatorIcon fontSize="small" />
           </Box>

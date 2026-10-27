@@ -23,7 +23,7 @@ import {
   Cell,
 } from 'recharts';
 
-import { CONTROLS_MIN_ROWS, ChartControls, useChartControls, type ChartControlsProp } from './ChartControls';
+import { CONTROLS_MIN_ROWS, ChartControls, useChartControls, type ChartControlsProp, type ChartControlsState } from './ChartControls';
 import { applyTopN, sortRows, topNCaption, type RowSort, type TopN } from './chartRows';
 
 /**
@@ -634,6 +634,67 @@ function autoSummary(summary: string | undefined, xAxisTitle?: string, yAxisTitl
   return xAxisTitle ? `${yAxisTitle} by ${xAxisTitle}` : yAxisTitle;
 }
 
+/** Sort from two rows. Top-N toggles only when a choice would hide rows. */
+function renderChartControls(
+  enabled: boolean,
+  total: number,
+  shown: number,
+  state: ChartControlsState,
+  onChange: (next: ChartControlsState) => void,
+  extra?: { caption?: string | null; timeAxis?: boolean },
+) {
+  if (!enabled || total < 2) return null;
+  return (
+    <ChartControls
+      value={state}
+      onChange={onChange}
+      shown={shown}
+      total={total}
+      showTopN={total >= CONTROLS_MIN_ROWS}
+      timeAxis={extra?.timeAxis}
+      caption={extra?.caption}
+    />
+  );
+}
+
+/** Keyboard path for the same category or period a pointer click would filter. */
+function ChartDatumActions({
+  heading,
+  items,
+}: {
+  heading: string;
+  items: { key: string; label: string; onActivate: (e: ReactMouseEvent) => void }[];
+}) {
+  if (!items.length) return null;
+  return (
+    <Box component="details" sx={{ mt: 0.5 }} data-testid="chart-datum-actions">
+      <Typography component="summary" variant="caption">
+        {heading}
+      </Typography>
+      <Box component="ul" sx={{ m: 0, pl: 2, maxHeight: 160, overflowY: 'auto' }}>
+        {items.map((item) => (
+          <Box component="li" key={item.key}>
+            <ButtonBase
+              onClick={item.onActivate}
+              aria-label={item.label}
+              data-testid="chart-datum-action"
+              sx={{
+                display: 'inline-flex',
+                borderRadius: 1,
+                px: 0.5,
+                py: 0.25,
+                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
+              }}
+            >
+              <Typography variant="caption">{item.label}</Typography>
+            </ButtonBase>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 /**
  * Common chart chrome: toolbar (or a standalone "Top N of M" caption), legend, then the figure with
  * the top axis caption, the plot and the bottom axis caption. Controls and legend sit outside the
@@ -647,6 +708,7 @@ function ChartShell({
   legend,
   summary,
   table,
+  actions,
   top,
   bottom,
   children,
@@ -658,6 +720,8 @@ function ChartShell({
   legend?: ReactNode;
   summary?: string;
   table?: ChartDataTable;
+  /** Keyboard equivalents, outside the drawing. */
+  actions?: ReactNode;
   top?: ReactNode;
   bottom?: ReactNode;
   children: ReactNode;
@@ -685,6 +749,7 @@ function ChartShell({
       ) : (
         body
       )}
+      {actions}
     </Box>
   );
 }
@@ -711,6 +776,7 @@ export function CategoryBars({
   horizontal = false,
   timeAxis = false,
   controls = true,
+  initial,
   legend = false,
   summary,
   onRowClick,
@@ -736,6 +802,8 @@ export function CategoryBars({
   timeAxis?: boolean;
   /** Top N / sort toolbar; pass `false` for ordered buckets. */
   controls?: ChartControlsProp;
+  /** Saved top N and sort. Used when `controls` is not an object the parent owns. */
+  initial?: ChartControlsState;
   /** Legend for the single series (off by default). */
   legend?: boolean;
   summary?: string;
@@ -747,7 +815,7 @@ export function CategoryBars({
   const width = measured || FALLBACK_WIDTH;
   useUntitledWarning('CategoryBars', xAxisTitle, yAxisTitle);
   const name = (r: Row) => String(r[x] ?? '');
-  const ctl = useChartControls({ topN: 10, sort: { by: 'value', dir: 'desc' } }, timeAxis ? false : controls);
+  const ctl = useChartControls(initial ?? { topN: 10, sort: { by: 'value', dir: 'desc' } }, timeAxis ? false : controls);
   const { shown, total } = ctl.enabled
     ? applyTopN(sortRows(data, ctl.state.sort, { name, value: (r) => toNumber(r[y]) }), ctl.state.topN)
     : { shown: data, total: data.length };
@@ -779,14 +847,24 @@ export function CategoryBars({
       widthRef={widthRef}
       testId={testId}
       toolbar={
-        ctl.enabled && total >= CONTROLS_MIN_ROWS ? (
-          <ChartControls value={ctl.state} onChange={ctl.setState} shown={shown.length} total={total} />
-        ) : null
+        renderChartControls(ctl.enabled, total, shown.length, ctl.state, ctl.setState)
       }
       caption={topNCaption(shown.length, total)}
       legend={legend ? <ChartLegend items={[{ label: yAxisTitle ?? y, color: c.primary }]} /> : null}
       summary={figureSummary}
       table={table}
+      actions={
+        onRowClick ? (
+          <ChartDatumActions
+            heading="Filter by category"
+            items={shown.map((r, i) => ({
+              key: String(i),
+              label: `Filter by ${name(r)}`,
+              onActivate: (e) => onRowClick(r, e),
+            }))}
+          />
+        ) : null
+      }
       top={<AxisCaption testId="chart-axis-title-top">{isHorizontal ? xAxisTitle : yAxisTitle}</AxisCaption>}
       bottom={
         <AxisCaption testId="chart-axis-title-bottom" align="center" inset={isHorizontal ? left.width : valueWidth}>
@@ -920,9 +998,7 @@ export function PairedBars({
       widthRef={widthRef}
       testId={testId}
       toolbar={
-        ctl.enabled && total >= CONTROLS_MIN_ROWS ? (
-          <ChartControls value={ctl.state} onChange={ctl.setState} shown={shown.length} total={total} />
-        ) : null
+        renderChartControls(ctl.enabled, total, shown.length, ctl.state, ctl.setState)
       }
       caption={topNCaption(shown.length, total)}
       legend={
@@ -1008,6 +1084,9 @@ export function TrendChart({
   onSeriesClick,
   selectedSeries,
   testId,
+  categoryAxis = false,
+  initialControls,
+  datumActions,
 }: {
   data: Row[];
   x: string;
@@ -1038,9 +1117,26 @@ export function TrendChart({
   onSeriesClick?: (seriesKey: string, e?: ChartClickEvent) => void;
   selectedSeries?: string[];
   testId?: string;
+  /** Categories, not time: wrapped ticks, top N / sort, and horizontal bars when labels are long. */
+  categoryAxis?: boolean;
+  /** Saved top N and sort. Viewer changes stay local until this value changes. */
+  initialControls?: ChartControlsState;
+  /** Keyboard list for the same points a click would filter. */
+  datumActions?: 'category' | 'period';
 }) {
   const c = useChartTheme();
   useUntitledWarning('TrendChart', xAxisTitle, yAxisTitle);
+  const [widthRef, measured] = useElementWidth<HTMLDivElement>();
+  const width = measured || FALLBACK_WIDTH;
+  const labelOf = (r: Row) => (xTickFormat ? xTickFormat(r[x]) : String(r[x] ?? ''));
+  const ctl = useChartControls(initialControls ?? { topN: 10, sort: { by: 'value', dir: 'desc' } }, categoryAxis ? true : false);
+  const ranked = categoryAxis
+    ? applyTopN(
+        sortRows(data, ctl.state.sort, { name: labelOf, value: (r) => toNumber(series[0] ? r[series[0].key] : null) }),
+        ctl.state.topN,
+      )
+    : { shown: data, total: data.length };
+  const plotted = ranked.shown;
   const fmt = chartFormatters(unit, format);
   const seriesFmt = (s: (typeof series)[number]) => chartFormatters(s.unit ?? unit, format);
   const hasRight = series.some((s) => s.axis === 'right');
@@ -1055,17 +1151,23 @@ export function TrendChart({
   const colorOf = (s: (typeof series)[number], i: number) =>
     s.tone ? toneColor(c, s.tone) : series.length > 1 ? c.series[i % c.series.length] : c.primary;
   const labelled = lastPointLabel ? series.find((s) => s.kind !== 'bar')?.key : undefined;
-  const lastIndex = data.length - 1;
+  const lastIndex = plotted.length - 1;
   const titled = Boolean(xAxisTitle || yAxisTitle);
   const valueWidth = isMoney(unit) ? 68 : yScale === 'fit' ? 64 : 60;
+  const categoryLabels = plotted.map(labelOf);
+  const bottom = bottomAxisLayout(categoryLabels, Math.max(40, width - valueWidth - 12));
+  const left = leftAxisLayout(categoryLabels, width);
+  const categoryHorizontal =
+    categoryAxis && !hasRight && series.every((s) => s.kind === 'bar') && chooseCategoryLayout(categoryLabels) === 'horizontal';
+  const plotHeight = categoryHorizontal ? Math.max(height ?? 0, 96, plotted.length * left.rowHeight + 36) : height;
   const figureSummary = autoSummary(summary, xAxisTitle, [yAxisTitle, yRightAxisTitle].filter(Boolean).join(' / '));
   const figureTable: ChartDataTable | undefined =
     table ??
     (figureSummary
       ? {
           caption: figureSummary,
-          columns: [xAxisTitle ?? x, ...series.map((s) => s.unit ? axisTitle(s.label, s.unit) : s.label)],
-          rows: data.map((r) => [xTickFormat ? xTickFormat(r[x]) : String(r[x] ?? ''), ...series.map((s) => cellText(seriesFmt(s).full, r[s.key]))]),
+          columns: [xAxisTitle ?? x, ...series.map((s) => (s.unit ? axisTitle(s.label, s.unit) : s.label))],
+          rows: plotted.map((r) => [labelOf(r), ...series.map((s) => cellText(seriesFmt(s).full, r[s.key]))]),
         }
       : undefined);
   const lastLabel = labelled
@@ -1093,7 +1195,9 @@ export function TrendChart({
     : null;
   return (
     <ChartShell
+      widthRef={widthRef}
       testId={testId}
+      toolbar={renderChartControls(Boolean(categoryAxis && ctl.enabled), ranked.total, plotted.length, ctl.state, ctl.setState)}
       legend={
         showLegend ? (
           <ChartLegend
@@ -1104,41 +1208,74 @@ export function TrendChart({
       }
       summary={figureSummary}
       table={figureTable}
+      actions={
+        datumActions && onPointClick ? (
+          <ChartDatumActions
+            heading={datumActions === 'period' ? 'Filter by period' : 'Filter by category'}
+            items={plotted.map((r, i) => ({
+              key: String(i),
+              label: `Filter by ${labelOf(r)}`,
+              onActivate: (e) => onPointClick(r, i, e),
+            }))}
+          />
+        ) : null
+      }
       top={<Stack direction="row" justifyContent="space-between" flexWrap="wrap" useFlexGap spacing={1}>
         <AxisCaption testId="chart-axis-title-top">{yAxisTitle}</AxisCaption>
         {yRightAxisTitle ? <AxisCaption testId="chart-axis-title-right">{yRightAxisTitle}</AxisCaption> : null}
       </Stack>}
       bottom={
-        <AxisCaption testId="chart-axis-title-bottom" align="center" inset={valueWidth}>
+        <AxisCaption testId="chart-axis-title-bottom" align="center" inset={categoryHorizontal ? left.width : valueWidth}>
           {xAxisTitle}
         </AxisCaption>
       }
     >
-      <ChartFrame height={height}>
+      <ChartFrame height={categoryAxis ? plotHeight : height}>
         <ComposedChart
-          data={data}
+          data={categoryAxis ? plotted : data}
+          {...(categoryHorizontal ? { layout: 'vertical' as const } : {})}
           margin={{ top: lastPointLabel ? 18 : 8, right: 12, left: titled ? 0 : -12, bottom: 0 }}
           style={onPointClick ? { cursor: 'pointer' } : undefined}
           onClick={
             onPointClick
               ? (state: unknown, e?: ChartClickEvent) => {
+                  const row = categoryAxis ? plotted : data;
                   const i = (state as { activeTooltipIndex?: number } | null)?.activeTooltipIndex;
-                  if (typeof i === 'number' && data[i]) onPointClick(data[i], i, e);
+                  if (typeof i === 'number' && row[i]) onPointClick(row[i], i, e);
                 }
               : undefined
           }
         >
           <CartesianGrid stroke={c.grid} vertical={false} strokeDasharray="2 4" />
-          <XAxis dataKey={x} tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={xTickFormat} axisLine={false} tickLine={false} />
-          <YAxis
-            yAxisId={hasRight ? 'left' : 0}
-            tick={{ fill: c.axis, fontSize: 11 }}
-            tickFormatter={hasRight ? leftFmt.tick : fmt.tick}
-            axisLine={false}
-            tickLine={false}
-            width={valueWidth}
-            domain={hasRight ? axisDomain(leftSeries) : yScale === 'fit' ? ['auto', 'auto'] : [0, 'auto']}
-          />
+          {categoryHorizontal ? (
+            <XAxis type="number" tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={fmt.tick} axisLine={false} tickLine={false} />
+          ) : categoryAxis ? (
+            <XAxis dataKey={x} tick={categoryTick({ orientation: 'bottom', maxChars: bottom.maxChars, angled: bottom.angled, fill: c.axis, fontSize: 10.5 })}
+              height={bottom.height} interval={0} axisLine={false} tickLine={false} />
+          ) : (
+            <XAxis dataKey={x} tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={xTickFormat} axisLine={false} tickLine={false} />
+          )}
+          {categoryHorizontal ? (
+            <YAxis
+              type="category"
+              dataKey={x}
+              tick={categoryTick({ orientation: 'left', maxChars: left.maxChars, fill: c.axis })}
+              axisLine={false}
+              tickLine={false}
+              width={left.width}
+              interval={0}
+            />
+          ) : (
+            <YAxis
+              yAxisId={hasRight ? 'left' : 0}
+              tick={{ fill: c.axis, fontSize: 11 }}
+              tickFormatter={hasRight ? leftFmt.tick : fmt.tick}
+              axisLine={false}
+              tickLine={false}
+              width={valueWidth}
+              domain={hasRight ? axisDomain(leftSeries) : yScale === 'fit' ? ['auto', 'auto'] : [0, 'auto']}
+            />
+          )}
           {hasRight ? <YAxis yAxisId="right" orientation="right" tick={{ fill: c.axis, fontSize: 11 }}
             tickFormatter={rightFmt.tick} axisLine={false} tickLine={false} width={isMoney(rightUnit) ? 68 : 60}
             domain={axisDomain(rightSeries)} /> : null}
@@ -1312,6 +1449,7 @@ export function RankedBars({
   labelWidth,
   rowHeight = 34,
   controls = true,
+  initial,
   onRowClick,
   testId = 'ranked-bars',
 }: {
@@ -1338,6 +1476,7 @@ export function RankedBars({
   labelWidth?: number;
   rowHeight?: number;
   controls?: ChartControlsProp;
+  initial?: ChartControlsState;
   onRowClick?: (d: RankedBarDatum, e?: ChartClickEvent) => void;
   testId?: string;
 }) {
@@ -1345,7 +1484,7 @@ export function RankedBars({
   const [widthRef, measured] = useElementWidth<HTMLDivElement>();
   const width = measured || FALLBACK_WIDTH;
   useUntitledWarning('RankedBars', xAxisTitle, yAxisTitle);
-  const ctl = useChartControls({ topN: max, sort: RANK_SORT[sort] }, controls);
+  const ctl = useChartControls(initial ?? { topN: max, sort: RANK_SORT[sort] }, controls);
   const valued = data.filter((d) => d.value != null && Number.isFinite(d.value));
   const { shown, total } = applyTopN(
     sortRows(valued, ctl.state.sort, { name: (d) => d.label, value: (d) => d.value }),
@@ -1371,13 +1510,23 @@ export function RankedBars({
       widthRef={widthRef}
       testId={testId}
       toolbar={
-        ctl.enabled && total >= CONTROLS_MIN_ROWS ? (
-          <ChartControls value={ctl.state} onChange={ctl.setState} shown={shown.length} total={total} />
-        ) : null
+        renderChartControls(ctl.enabled, total, shown.length, ctl.state, ctl.setState)
       }
       caption={topNCaption(shown.length, total)}
       summary={summary}
       table={table}
+      actions={
+        onRowClick ? (
+          <ChartDatumActions
+            heading="Filter by category"
+            items={shown.map((d, i) => ({
+              key: d.key ?? String(i),
+              label: `Filter by ${d.label}`,
+              onActivate: (e) => onRowClick(d, e),
+            }))}
+          />
+        ) : null
+      }
       top={<AxisCaption testId="chart-axis-title-top">{xAxisTitle}</AxisCaption>}
       bottom={
         <AxisCaption testId="chart-axis-title-bottom" align="center" inset={left.width}>
@@ -1508,9 +1657,7 @@ export function ShareChart({
     <ChartShell
       testId={testId}
       toolbar={
-        ctl.enabled && total >= CONTROLS_MIN_ROWS ? (
-          <ChartControls value={ctl.state} onChange={ctl.setState} shown={shown.length} total={total} caption={caption} />
-        ) : null
+        renderChartControls(ctl.enabled, total, shown.length, ctl.state, ctl.setState, { caption })
       }
       caption={caption}
       summary={summary}

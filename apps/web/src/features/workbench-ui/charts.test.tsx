@@ -401,6 +401,67 @@ describe('chart rendering (N-0114)', () => {
     expect(screen.queryByText(/Top \d+ of 37/)).toBeNull();
   });
 
+  it('keeps As listed after another sort and sorts a four-row chart', () => {
+    const data = [
+      { label: 'Zed', value: 1 },
+      { label: 'Amy', value: 4 },
+      { label: 'Bea', value: 2 },
+      { label: 'Cam', value: 3 },
+    ];
+    renderWithProviders(<RankedBars data={data} sort="none" summary="Units by customer" unit="units" xAxisTitle="Customer" yAxisTitle="Units (units)" />);
+    expect(screen.queryByRole('button', { name: 'Show top 5' })).toBeNull();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Sort' }));
+    expect(screen.getByRole('option', { name: 'As listed' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'Name A–Z' }));
+    expect(tableRows().map((r) => r[0])).toEqual(['Amy', 'Bea', 'Cam', 'Zed']);
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Sort' }));
+    fireEvent.click(screen.getByRole('option', { name: 'As listed' }));
+    expect(tableRows().map((r) => r[0])).toEqual(['Zed', 'Amy', 'Bea', 'Cam']);
+  });
+
+  it('starts from the saved top N and sort', () => {
+    const data = Array.from({ length: 8 }, (_, i) => ({ name: `Customer ${8 - i}`, v: i + 1 }));
+    renderWithProviders(
+      <CategoryBars data={data} x="name" y="v" xAxisTitle="Customer" yAxisTitle="Units" initial={{ topN: 5, sort: { by: 'name', dir: 'asc' } }} />,
+    );
+    expect(tableRows().map((r) => r[0])).toEqual(['Customer 1', 'Customer 2', 'Customer 3', 'Customer 4', 'Customer 5']);
+  });
+
+  it('filters a category from the keyboard list', () => {
+    const onRowClick = vi.fn();
+    renderWithProviders(
+      <CategoryBars
+        data={[{ name: 'Amy', v: 2 }, { name: 'Bea', v: 1 }]}
+        x="name"
+        y="v"
+        xAxisTitle="Customer"
+        yAxisTitle="Units"
+        onRowClick={onRowClick}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by Amy' }));
+    expect(onRowClick).toHaveBeenCalledWith(expect.objectContaining({ name: 'Amy' }), expect.anything());
+  });
+
+  it('filters a period from the keyboard list and leaves a time axis unsorted', () => {
+    const onPointClick = vi.fn();
+    const data = Array.from({ length: 8 }, (_, i) => ({ period: `2026-0${i + 1}`, v: i + 1 }));
+    renderWithProviders(
+      <TrendChart
+        data={data}
+        x="period"
+        series={[{ key: 'v', label: 'Units', kind: 'bar' }]}
+        xAxisTitle="Period"
+        yAxisTitle="Units"
+        datumActions="period"
+        onPointClick={onPointClick}
+      />,
+    );
+    expect(screen.queryByRole('combobox', { name: 'Sort' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by 2026-01' }));
+    expect(onPointClick).toHaveBeenCalledWith(expect.objectContaining({ period: '2026-01' }), 0, expect.anything());
+  });
+
   it('ShareChart legend shows the full 60-character name and shares of the full total', () => {
     const values = [300, 200, 100, 80, 70, 60, 50, 40, 40, 30, 20, 10]; // sums to 1 000
     const data = values.map((value, i) => ({ label: i === 0 ? LONG_60 : `Retailer ${i + 1}`, value }));

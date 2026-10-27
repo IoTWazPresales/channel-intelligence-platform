@@ -2,7 +2,7 @@
 
 import { getAgGridMuiCssVariables } from '@cip/ui';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
-import type { ColDef, GridOptions } from 'ag-grid-community';
+import type { CellKeyDownEvent, ColDef, GridOptions, RowClickedEvent } from 'ag-grid-community';
 import { AgGridReact } from 'ag-grid-react';
 import { Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -65,7 +65,7 @@ function EnterpriseDataGridInner<T>(
     []
   );
 
-  const { rowSelection, onRowClicked, ...restGridOptions } = gridOptions ?? {};
+  const { rowSelection, onRowClicked, onCellKeyDown, ...restGridOptions } = gridOptions ?? {};
   const clickableRows = typeof onRowClicked === 'function';
 
   const shellSx = useMemo(
@@ -133,6 +133,15 @@ function EnterpriseDataGridInner<T>(
         enableCellTextSelection
         ensureDomOrder
         onRowClicked={onRowClicked}
+        onCellKeyDown={(event: CellKeyDownEvent<T>) => {
+          onCellKeyDown?.(event);
+          if (!clickableRows || event.data == null) return;
+          const native = event.event;
+          const key = native && 'key' in native ? native.key : undefined;
+          if (key !== 'Enter' && key !== ' ') return;
+          native?.preventDefault();
+          onRowClicked?.({ ...event, type: 'rowClicked', event: native } as RowClickedEvent<T>);
+        }}
         rowSelection={rowSelection}
         quickFilterText={quickFilterText}
         theme="legacy"

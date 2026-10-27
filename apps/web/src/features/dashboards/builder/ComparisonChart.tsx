@@ -2,6 +2,7 @@
 
 import { Typography } from '@mui/material';
 import { TrendChart, formatChartValue, type ChartClickEvent } from '@/features/workbench-ui/charts';
+import { categoryPresentation } from '@/features/workbench-ui/ChartControls';
 import { breakdownLabel, measureUnit } from './catalog';
 import { measureHeading } from './advancedShape';
 import { previousField } from './comparison';
@@ -43,14 +44,19 @@ export function ComparisonChart({ response, def, measures, catalog, visual, labe
   const data = [...points.values()];
   if (period) data.sort((a, b) => String(a.x).localeCompare(String(b.x)));
   const xTitle = period ? `Period (${def.query.period?.grain ?? 'quarter'}), bucket start` : cols.map((c) => breakdownLabel(catalog, c.id)).join(' · ');
+  const presentation = period ? undefined : categoryPresentation(def.query.sort, def.display?.top_n, measures.map((m) => m.id), cols.map((c) => c.id), 10);
   return <>
     <TrendChart data={data} x="x" series={series} height={height} unit={measureUnit(measures[0])}
-      xTickFormat={(x) => String(points.get(String(x))?.__label ?? x)} xAxisTitle={xTitle} yAxisTitle={measures.map(measureHeading).join(' / ')}
+      xTickFormat={(tick) => String(points.get(String(tick))?.__label ?? tick)} xAxisTitle={xTitle} yAxisTitle={measures.map(measureHeading).join(' / ')}
+      categoryAxis={!period}
+      initialControls={presentation}
+      datumActions={onSelect ? (period ? 'period' : 'category') : undefined}
+      summary={period ? undefined : 'Current and previous figures; missing values are not zero'}
       onPointClick={onSelect ? (row, _i, e) => { if (row.__cat) onSelect(row.__cat as Cat, e); } : undefined}
       onSeriesClick={onSelect ? (key, e) => { const cat = series.find((s) => s.key === key)?.cat; if (cat) onSelect(cat, e); } : undefined}
       selectedSeries={series.filter((s) => s.cat && selectedKeys?.includes(s.cat.key)).map((s) => s.key)}
-      table={{ caption: 'Current and previous figures; missing values are not zero', columns: [xTitle, ...(period ? ['Previous bucket'] : []), ...series.map((s) => s.label)],
-        rows: data.map((r) => [String(r.__label), ...(period ? [String(r.__previous_period ?? '—')] : []), ...series.map((s) => formatChartValue(typeof r[s.key] === 'number' ? r[s.key] as number : null, s.unit))]) }} />
+      table={period ? { caption: 'Current and previous figures; missing values are not zero', columns: [xTitle, 'Previous bucket', ...series.map((s) => s.label)],
+        rows: data.map((r) => [String(r.__label), String(r.__previous_period ?? '—'), ...series.map((s) => formatChartValue(typeof r[s.key] === 'number' ? r[s.key] as number : null, s.unit))]) } : undefined} />
     {all.length > categories.length ? <Typography variant="caption">{categories.length} categories shown; {all.length - categories.length} not shown. Narrow the filters to see the others.</Typography> : null}
   </>;
 }

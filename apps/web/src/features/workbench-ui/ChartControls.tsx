@@ -16,7 +16,7 @@ export type ChartControlsState = { topN: TopN; sort: RowSort };
 /** `true` (default on category charts): local state. `false`: no toolbar. Object: the container owns the state. */
 export type ChartControlsProp = boolean | (ChartControlsState & { onChange: (next: ChartControlsState) => void });
 
-/** Fewer rows than this and every top-N choice shows everything; the toolbar would only be noise. */
+/** Below this many rows every top-N choice shows the same set. Sort still appears from two rows. */
 export const CONTROLS_MIN_ROWS = 6;
 
 export function useChartControls(
@@ -28,6 +28,20 @@ export function useChartControls(
     return { state: { topN: controls.topN, sort: controls.sort }, setState: controls.onChange, enabled: true };
   }
   return { state: local, setState: setLocal, enabled: controls !== false };
+}
+
+export function categoryPresentation(
+  sort: { by: string; dir: 'asc' | 'desc' } | null | undefined,
+  topN: number | null | undefined,
+  measures: string[],
+  breakdowns: string[],
+  fallbackTopN: TopN,
+): ChartControlsState {
+  const top = topN != null && topN > 0 ? topN : fallbackTopN;
+  let rowSort: RowSort = { by: 'value', dir: 'desc' };
+  if (sort && measures.includes(sort.by)) rowSort = { by: 'value', dir: sort.dir };
+  else if (sort && (breakdowns.includes(sort.by) || sort.by === 'name')) rowSort = { by: 'name', dir: sort.dir === 'desc' ? 'desc' : 'asc' };
+  return { topN: top, sort: rowSort };
 }
 
 type SortKey = 'value-desc' | 'value-asc' | 'name-asc' | 'period';
@@ -51,6 +65,7 @@ export function ChartControls({
   shown,
   total,
   timeAxis = false,
+  showTopN = true,
   caption: captionOverride,
   testId = 'chart-controls',
 }: {
@@ -58,33 +73,35 @@ export function ChartControls({
   onChange: (next: ChartControlsState) => void;
   shown: number;
   total: number;
-  /** Rows are periods: offer "Period" (input order) as a sort. */
+  /** Rows are periods: the input-order choice is labelled "Period". */
   timeAxis?: boolean;
+  /** Top-N toggles. Off when every choice would show the same rows; sort stays. */
+  showTopN?: boolean;
   /** Replaces the default "Top 10 of 37" (the pie adds that shares are of the full total). */
   caption?: string | null;
   testId?: string;
 }) {
   const current = sortKey(value.sort);
-  // Input order is offered when rows are periods, or when the caller's order was the starting point.
-  const showInputOrder = timeAxis || current === 'period';
   const caption = captionOverride !== undefined ? captionOverride : topNCaption(shown, total);
   return (
     <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap sx={{ gap: 1, mb: 1, minWidth: 0 }} data-testid={testId}>
-      <Box sx={{ maxWidth: '100%', overflowX: 'auto' }}>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={TOP_N_OPTIONS.includes(value.topN) ? value.topN : null}
-          onChange={(_e, n: TopN | null) => n != null && onChange({ ...value, topN: n })}
-          aria-label="Rows shown"
-        >
-          {TOP_N_OPTIONS.map((n) => (
-            <ToggleButton key={String(n)} value={n} sx={{ px: 1, py: 0.25, minWidth: 36 }} aria-label={n === 'all' ? 'Show all' : `Show top ${n}`}>
-              {n === 'all' ? 'All' : n}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      </Box>
+      {showTopN ? (
+        <Box sx={{ maxWidth: '100%', overflowX: 'auto' }}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={TOP_N_OPTIONS.includes(value.topN) ? value.topN : null}
+            onChange={(_e, n: TopN | null) => n != null && onChange({ ...value, topN: n })}
+            aria-label="Rows shown"
+          >
+            {TOP_N_OPTIONS.map((n) => (
+              <ToggleButton key={String(n)} value={n} sx={{ px: 1, py: 0.25, minWidth: 36 }} aria-label={n === 'all' ? 'Show all' : `Show top ${n}`}>
+                {n === 'all' ? 'All' : n}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Box>
+      ) : null}
       <Select
         size="small"
         value={current}
@@ -96,7 +113,7 @@ export function ChartControls({
         <MenuItem value="value-desc">Highest first</MenuItem>
         <MenuItem value="value-asc">Lowest first</MenuItem>
         <MenuItem value="name-asc">Name A–Z</MenuItem>
-        {showInputOrder ? <MenuItem value="period">{timeAxis ? 'Period' : 'As listed'}</MenuItem> : null}
+        <MenuItem value="period">{timeAxis ? 'Period' : 'As listed'}</MenuItem>
       </Select>
       {caption ? (
         <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }} data-testid={`${testId}-caption`}>

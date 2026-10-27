@@ -12,6 +12,7 @@ import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { useMemo, type ReactNode } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { categoryPresentation } from '@/features/workbench-ui/ChartControls';
 import { HeadlineFigure } from '@/features/workbench-ui/HeadlineFigure';
 import {
   CategoryBars,
@@ -421,15 +422,16 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
           if (p && p.parts.every((c) => c.value != null)) selectParts(p.parts, e);
         }
       : undefined;
+    const presentation = categoryPresentation(def.query.sort, def.display?.top_n, measureIds, catIds, visual === 'hbar' ? 15 : 10);
     const note = unassignedEntity && onSelect ? 'Unassigned is not filterable: it has no id.' : null;
     if (visual === 'hbar') {
       return frame(
         <RankedBars
+          key={`${presentation.topN}-${presentation.sort.by}-${presentation.sort.dir ?? ''}`}
           data={pts.map((p) => ({ label: p.label, value: p.value, key: p.key, tone: 'primary' as const }))}
           unit={unit}
-          sort="desc"
-          max={def.display?.top_n ?? 15}
-          summary={`${valueTitle} by ${categoryTitle}, biggest first`}
+          initial={presentation}
+          summary={`${valueTitle} by ${categoryTitle}`}
           labelHeader={categoryTitle}
           valueHeader={valueTitle}
           xAxisTitle={categoryTitle}
@@ -442,11 +444,13 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
     }
     return frame(
       <CategoryBars
+        key={`${presentation.topN}-${presentation.sort.by}-${presentation.sort.dir ?? ''}`}
         data={pts.map((p) => ({ label: p.label, value: p.value, key: p.key }))}
         x="label"
         y="value"
         height={plotHeight}
         unit={unit}
+        initial={presentation}
         xAxisTitle={categoryTitle}
         yAxisTitle={valueTitle}
         onRowClick={onRow ? (row, e) => onRow(String(row.key), e) : undefined}
@@ -472,6 +476,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
         selectedSeries={m.series.filter((s) => s.cat && selectedKeys?.includes(s.cat.key)).map((s) => s.key)}
         onSeriesClick={onSelect ? (key, e) => select(m.series.find((s) => s.key === key)?.cat, e) : undefined}
         onPointClick={onSelect ? (row, _i, e) => select(periodCat(row), e) : undefined}
+        datumActions={onSelect ? 'period' : undefined}
       />,
       m.omittedSeries ? `${m.series.length} categories shown; ${m.omittedSeries} not shown. Narrow the filters to see the others.` : null,
     );
@@ -499,13 +504,16 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
         yAxisTitle={valueAxis}
         series={series}
         onPointClick={onSelect ? (row, _i, e) => select(periodCat(row), e) : undefined}
+        datumActions={onSelect ? 'period' : undefined}
       />,
     );
   }
   const pts = categoryPoints(result, measureIds);
   const data = pts.map((p) => ({ label: p.label, __key: p.key, ...p.values }));
+  const presentation = categoryPresentation(def.query.sort, def.display?.top_n, measureIds, catIds, 10);
   return frame(
     <TrendChart
+      key={`${presentation.topN}-${presentation.sort.by}-${presentation.sort.dir ?? ''}`}
       data={data}
       x="label"
       height={plotHeight}
@@ -513,6 +521,9 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
       xAxisTitle={categoryTitle}
       yAxisTitle={valueAxis}
       series={series}
+      categoryAxis
+      initialControls={presentation}
+      datumActions={onSelect ? 'category' : undefined}
       onPointClick={
         onSelect
           ? (row, _i, e) => {

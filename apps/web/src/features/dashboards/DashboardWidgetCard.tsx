@@ -17,6 +17,7 @@ import { downloadBlob, exportFileName, exportToast, guardCell, quoteCell } from 
 import type { CatalogV2 } from './builder/types';
 import { V2WidgetCard } from './builder/V2WidgetCard';
 import { WidgetMenu, type WidgetAction } from './builder/WidgetMenu';
+import { useDashboardLayoutKey } from './DashboardGrid';
 import { formatVintage } from './formatters';
 import type { DashboardWidget, QueryResult, SemanticMetric } from './types';
 import { WidgetBody } from './WidgetBody';
@@ -93,6 +94,7 @@ export function DashboardWidgetCard(props: Props) {
 
 function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate, ctx, dashboardName = 'dashboard' }: Props) {
   const theme = useTheme();
+  const onLayoutKey = useDashboardLayoutKey();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [full, setFull] = useState(false);
@@ -188,9 +190,12 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
           component="span"
           className="dashboard-widget-drag"
           role="button"
-          aria-label={`Drag ${widget.title}`}
+          tabIndex={onLayoutKey ? 0 : undefined}
+          aria-label={onLayoutKey ? `Move ${widget.title}. Arrow keys move it. Shift and arrow keys resize it.` : `Drag ${widget.title}`}
+          aria-keyshortcuts={onLayoutKey ? 'ArrowLeft ArrowRight ArrowUp ArrowDown' : undefined}
+          onKeyDown={onLayoutKey ? (event) => onLayoutKey(widget.id, event) : undefined}
           data-testid={`dashboard-widget-drag-${widget.id}`}
-          sx={{ cursor: 'grab', display: 'inline-flex', color: 'text.secondary' }}
+          sx={{ cursor: 'grab', display: 'inline-flex', color: 'text.secondary', '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 } }}
         >
           <DragIndicatorIcon fontSize="small" />
         </Box>
