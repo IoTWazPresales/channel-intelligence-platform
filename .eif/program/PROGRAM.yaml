@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2792
-  log_sha256: 72d063e7ec76db620f2252fec3e765986d885760d05a5b3ca47ded3e2c1bc520
+  snapshot_revision: 2794
+  log_sha256: 3d345ec9c8b19700616613ff0e554164ddbb4940489c8507e66a20f1cdc8e3ed
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13813,7 +13813,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: validate
-    revision: 23
+    revision: 25
     lease: null
     depends_on:
     - N-0115
@@ -13897,10 +13897,11 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: E4 tested product checkpoint ab5e5de45fbe2f778bf196e278c623387f7f8579; final isolated API3434/22skip, web1155,
-      related99/self20/browser1, lint50warnings/types/isolatedbuild pass. Evidence pins final tree/source. Independent final
-      review UNVERIFIED due usage limits; no overall R3 or original node acceptance. Original89 events preserved, no production/service/migration/grant/main
-      action. Remain validate, release lease and stop at operator-requested bounded checkpoint; next E5 then original E6-E10.
+    stage_note: 'E5 chart work is uncommitted on feat/ns-2-brief-nav-collapse. Focused vitest passed after the time-axis TrendChart
+      was restored to its original axis elements: V2 bar comparison, dual axis, chart controls, period keyboard filter, and
+      dashboard nudge. Browser proof of the live dashboard did not complete because localhost:3000 returns HTTP 400 for /_next/static
+      assets. E4 independent review remains UNVERIFIED. No production, migration, service restart, grant, or main action.
+      Remain validate. Next is a web server that serves static assets, then the dashboard browser proof, then E6.'
     debug_iterations: 0
     split_into: null
     deferred: null
