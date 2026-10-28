@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2679
+**Snapshot revision:** 2794
 
 ## Outcome (verbatim)
 
@@ -135,3 +135,6 @@ _none_
 | N-0111 | Sell-through and distributor history upload readiness (2 years: Amazon, Takealot, Pinnacle) | feature | in_progress | in_progress | yes |  | full loop |
 | N-0112 | Deleting an import job removes the data it loaded and restores what it superseded | feature | in_progress | in_progress | yes |  | full loop |
 | N-0113 | Guarded cleanup of test customers, distributors and products left on cip by test runs | feature | in_progress | in_progress | yes |  | full loop |
+| N-0114 | Chart fixes: axis titles with units, legends, full names, horizontal bars for long labels, top N and sort, unit formatting on every dashboard and report chart | feature | in_progress | in_progress | yes |  | full loop |
+| N-0115 | Data model under the builder: fact models with measures, shared breakdowns, declared walls, calculated measures and one query compiler replacing one hand-written query per metric | inception | in_progress | in_progress | yes |  | full loop |
+| N-0116 | Dashboard builder on the new data model: dashboard and widget filters, full visual set, click to filter, view rows, widget tools, migration of saved dashboards and reports, three starter dashboards | feature | in_progress | in_progress | yes |  | full loop |

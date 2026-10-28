@@ -115,3 +115,6 @@
 - N-0111 **Sell-through and distributor history upload readiness (2 years: Amazon, Takealot, Pinnacle)** `in_progress`/`in_progress` (feature)
 - N-0112 **Deleting an import job removes the data it loaded and restores what it superseded** `in_progress`/`in_progress` (feature)
 - N-0113 **Guarded cleanup of test customers, distributors and products left on cip by test runs** `in_progress`/`in_progress` (feature)
+- N-0114 **Chart fixes: axis titles with units, legends, full names, horizontal bars for long labels, top N and sort, unit formatting on every dashboard and report chart** `in_progress`/`in_progress` (feature)
+- N-0115 **Data model under the builder: fact models with measures, shared breakdowns, declared walls, calculated measures and one query compiler replacing one hand-written query per metric** `in_progress`/`in_progress` (inception)
+- N-0116 **Dashboard builder on the new data model: dashboard and widget filters, full visual set, click to filter, view rows, widget tools, migration of saved dashboards and reports, three starter dashboards** `in_progress`/`in_progress` (feature)
