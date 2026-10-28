@@ -424,6 +424,39 @@ async def test_shipments_apply_the_twin_rule_and_resolved_customer():
 
 
 @pytest.mark.anyio
+async def test_a_customer_with_only_open_lines_is_absent_from_shipped_quantity():
+    db = await _db()
+    try:
+        product = DimProduct(sku=_key("sku")[-32:], name=f"E10open {TAG}", tenant_id=TENANT)
+        shipped_customer = DimCustomer(code=_key("s")[-32:], name=f"Shipped {TAG}", tenant_id=TENANT)
+        open_customer = DimCustomer(code=_key("o")[-32:], name=f"Open {TAG}", tenant_id=TENANT)
+        db.add_all([product, shipped_customer, open_customer])
+        await db.flush()
+        confirmed = date(2026, 3, 2)
+        db.add_all([
+            _ship(product_id=product.id, line_state="shipped", quantity=Decimal("6"), order_no="OS", item_code="IS",
+                  ship_confirm_date=confirmed, resolved_customer_id=shipped_customer.id),
+            _ship(product_id=product.id, line_state="open_order", quantity=Decimal("9"), order_no=None, item_code=None,
+                  resolved_customer_id=open_customer.id),
+        ])
+        await db.flush()
+        clear_model_cache()
+        dm = default_model()
+        req = V2Request(measures=["shipments.quantity"], breakdowns=["customer"])
+        plan = plan_request(dm, req, v1_catalog=load_catalog())
+        assert plan.ok, plan.refusals
+        compiled = compile_plan(dm, plan, tenant_id=TENANT, calendar=BusinessCalendar())
+        rows = (await db.execute(compiled.rows)).mappings().all()
+        label = compiled.measure_labels["shipments.quantity"]
+        by_customer = {row["customer_id"]: float(row[label]) for row in rows}
+        assert by_customer[shipped_customer.id] == 6.0
+        assert open_customer.id not in by_customer
+    finally:
+        await db.rollback()
+        await db.close()
+
+
+@pytest.mark.anyio
 async def test_shipped_quantity_by_period_has_no_null_bucket_and_keeps_its_windowed_total():
     db = await _db()
     try:

@@ -1,0 +1,9 @@
+fact_inbound_shipment on cip. Read only.
+lower(line_state), ship_confirm_date IS NULL, rows, quantity.
+
+open_order	missing_date=True	rows=1775	quantity=127870.0000
+shipped	missing_date=False	rows=13450	quantity=1346944.0000
+shipped	missing_date=True	rows=21	quantity=1331.0000
+
+MISMATCH — definition not changed; decision needed:
+  shipped with null ship_confirm_date: rows=21 quantity=1331.0000

@@ -71,7 +71,11 @@ def test_retail_calendar_buckets_replace_date_trunc():
     dm, plan = _plan(["dsi_sellout.units"], ["period"], "month")
     cal = BusinessCalendar({"type": "retail_445", "fiscal_year_start_month": 1})
     sql = compile_plan(dm, plan, tenant_id="example", calendar=cal).sql_text()
-    assert "date_trunc" not in sql
+    # Facts are summed by day first. The retail bucket itself is not a date_trunc.
+    assert "date_trunc('day'" in sql
+    assert "date_trunc('month'" not in sql
+    assert "date_trunc('quarter'" not in sql
+    assert "date_trunc('year'" not in sql
     assert "bkt_month_" not in sql
     assert "make_date" in sql
 
