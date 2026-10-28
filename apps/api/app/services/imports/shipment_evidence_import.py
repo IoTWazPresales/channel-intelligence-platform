@@ -1145,6 +1145,10 @@ def process_shipment_evidence_import(
     blocking = 0
     global_row = 0
     unknown_reports = 0
+    from app.services.imports.shipment_open_book import line_state_for_shipped_sheet
+    from app.services.imports.shipment_report_date import report_date_for_job
+
+    book_report_date = report_date_for_job(job)
 
     for sheet_name, frame, report_type, line_state in frames:
         if frame is None or len(frame) == 0:
@@ -1238,13 +1242,18 @@ def process_shipment_evidence_import(
                         )
 
                 q_dec = _decimal_or_none(ex["quantity"])
+                stored_line_state = line_state_for_shipped_sheet(
+                    line_state,
+                    ship_confirm_date=ex["ship_confirm_date"],
+                    report_date=book_report_date,
+                )
                 row_values: dict[str, Any] = {
                     "import_job_id": int(job.id),
                     "source_key": source_key,
                     "source_sheet": sheet_name,
                     "source_row_number": pos,
                     "report_type": report_type,
-                    "line_state": line_state,
+                    "line_state": stored_line_state,
                     "raw_source_row": raw_payload,
                     "operating_unit": ex["operating_unit"],
                     "bill_to_raw": ex["bill_to_raw"],

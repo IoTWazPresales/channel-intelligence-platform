@@ -41,7 +41,7 @@ from app.services.imports.shipment_evidence_steward_ops import (
     _apply_map_shipment_customer_without_commit,
     _apply_map_shipment_distributor_without_commit,
 )
-from app.services.imports.shipment_inbound_facts import upsert_inbound_shipment_facts_for_job
+from app.services.imports.shipment_open_book import write_shipment_facts_and_close_book
 
 # Progress callback: (phase, phase_label, current_row, total_rows). Mirrors the meta shape the
 # Celery PROGRESS reader (`/imports/jobs/{job_id}/dsi-progress`) and the global background-task
@@ -174,7 +174,11 @@ def run_shipment_apply_sync(
 
     _emit("writing_facts", "Writing shipment facts", 0, 0)
     try:
-        fact_rows = upsert_inbound_shipment_facts_for_job(db, job_id, on_progress=_facts_progress)
+        job = db.get(ImportJob, job_id)
+        if job is None:
+            raise RuntimeError(f"import job {job_id} disappeared before fact write")
+        written = write_shipment_facts_and_close_book(db, job, on_progress=_facts_progress)
+        fact_rows = int(written["fact_rows"])
         db.commit()
     except Exception as exc:
         logger.exception("run_shipment_apply_sync fact upsert failed job_id=%s", job_id)

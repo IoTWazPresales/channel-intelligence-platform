@@ -3386,3 +3386,49 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Hard constraints** | No cip writes/migration/restart/deploy/main; no new DB identity/grants without authority; no fabricated values or altered amounts to claim parity; no premature acceptance. |
 | **TRIGGER** | Next authorized implementation session on N-0114/15/16, before node acceptance or any deployment; continue E5 category/control/keyboard fidelity after persisted E4 checkpoint and supported ownership; retain the original E1-E10 frontier and acceptance matrix. |
 | **Out of scope** | S20 full v2 report editor/raw-source drill/continuous colour scale/note/cross-model widgets; unrelated old gate debt remediation and production release. |
+
+## BACKLOG-218 — On-board and ETA date slips are not shipment change events
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-10-28 |
+| **Effort** | Small, once the date fields to watch are named. |
+| **Source** | `apps/api/app/services/imports/shipment_change_events.py` `_DATE_SLIP_FIELDS`. Warren, 2026-10-28: 9 ACZA lines whose on-board date moved from 11 Oct to 18 Oct produced no event. |
+| **Idea** | A line's on-board date or ETA can move between ACZA reports and the history does not say so. `date_slip` watches est POD, CRAD, ERD, schedule ship, promise and ex-work only. |
+| **Why it matters / deferrable** | Those moves are how a promise slips while the line is still on the open book. The open-book close now records when a line leaves. It does not record an on-board or ETA move. Safe to defer until the fields are chosen. |
+| **Resume-context** | Add the mapped on-board and ETA columns to `_DATE_SLIP_FIELDS` only. Keep `date_slip`, `qty_change`, `graduated`, `pod_reversal`, `closed_shipped` and `closed_disappeared` as they are. The 11 Oct to 18 Oct example is the fixture. |
+| **Regression traps** | Do not treat an on-board move as a close, a graduation, or a POD reversal. Do not rewrite stored facts to manufacture the event. |
+| **Behavior to retain** | Existing date-slip pairs stay the consecutive observations they already are. Close markers stay out of that chain. |
+| **Out of scope** | Loading a new ACZA file. Changing which sheet counts as shipped. |
+| **TRIGGER** | The next change to `shipment_change_events.py`, or an operator asks for on-board or ETA slips in Attention or the line history. |
+
+## BACKLOG-219 — Shipped-sheet lines with no confirm date need an Attention signal
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-10-28 |
+| **Effort** | Small. A threshold and one Attention row. |
+| **Source** | Warren, 2026-10-28. Example: 9 lines, 731 units (Pepkor 523), on the Shipped sheet with no ship-confirm date since 29 Sep. |
+| **Idea** | A Shipped-sheet row with no ship-confirm date is an open order (`line_state_for_shipped_sheet`). Nothing raises it once it has sat there past a threshold. |
+| **Why it matters / deferrable** | The line is not shipped and not on the Unship sheet, so it is easy to miss. The open book now keeps it as an open order. The exception signal is a separate product decision (threshold, who sees it). |
+| **Resume-context** | Candidate for Attention. Count open orders whose evidence sheet is Shipped and whose ship-confirm date is still empty, aged from the report date of the job that holds them. The 29 Sep example is the fixture, not a hard-coded customer. |
+| **Regression traps** | Do not infer the sheet from a customer name or a template slug. Do not count a row whose confirm date is on or before the report date. Do not close these lines just because they are old. |
+| **Behavior to retain** | Shipped means a mapped ship-confirm date on or before the report date. Open readers already exclude `closed_shipped` and `closed_disappeared`. |
+| **Out of scope** | The one-off reclass of facts that were already stored as shipped with a null confirm date. |
+| **TRIGGER** | Attention next takes a shipment exception, or an operator sets the age threshold. |
+
+## BACKLOG-220 — 27 Oct "BOM not ready" sheet is not loaded
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-10-28 |
+| **Effort** | Small once the file is available: detect the sheet and decide whether those lines are open orders. |
+| **Source** | Warren, 2026-10-28. The 27 Oct ACZA workbook has a "BOM not ready" sheet with 2 Mustek TB lines that are not on the Unship sheet. No shipment evidence sheet by that name is loaded; evidence sheets today are only Shipped and Unship. |
+| **Idea** | Those two lines are part of the open book at that report date and the importer never sees them. |
+| **Why it matters / deferrable** | The newest applied ACZA file on cip is 11 Sep 2026. The 27 Oct file is not loaded, so this sheet is not in the book yet. |
+| **Resume-context** | When that workbook is imported, map the sheet from its name and columns, not from the customer. Keep the lines as evidence. Do not auto-create master records. Decide with Warren whether a BOM-not-ready row is an open order in the same scope as Unship. |
+| **Regression traps** | Do not drop the lines because they are absent from Unship. Do not delete the Unship or Shipped rows to make room. Do not guess a report date when the file name has no single `YYYYMMDD`. |
+| **Behavior to retain** | An ACZA workbook remains the whole open book at its report date. A line that leaves a later book is closed, not deleted. |
+| **Out of scope** | Loading the 27 Oct file in this change. Inventing the two lines without the file. |
+| **TRIGGER** | The 27 Oct ACZA workbook (or a later one with a BOM-not-ready sheet) is offered for import. |
+

@@ -18,7 +18,16 @@ from app.services.imports.shipment_invoice_graduation import (
     lineage_thread_key,
 )
 
-EventType = Literal["date_slip", "qty_change", "graduated", "pod_reversal"]
+EventType = Literal[
+    "date_slip",
+    "qty_change",
+    "graduated",
+    "pod_reversal",
+    "closed_shipped",
+    "closed_disappeared",
+]
+
+_BOOK_CLOSE_STATES = frozenset({"closed_shipped", "closed_disappeared"})
 
 _DATE_SLIP_FIELDS: tuple[tuple[str, str], ...] = (
     ("est_pod_date", "est_pod"),
@@ -92,6 +101,13 @@ def _has_pod(obs: ShipmentEvidenceObservation) -> bool:
 
 def _line_state_norm(obs: ShipmentEvidenceObservation) -> str:
     return (obs.line_state or "").strip().lower()
+
+
+def _book_close_state(obs: ShipmentEvidenceObservation) -> str | None:
+    state = _line_state_norm(obs)
+    if state in _BOOK_CLOSE_STATES:
+        return state
+    return None
 
 
 def _days_delta(before: date | None, after: date | None) -> int | None:
@@ -305,11 +321,14 @@ def derive_change_events(
 
     for key, chain in by_key.items():
         chain.sort(key=lambda o: (o.valid_from, o.id))
-        for i in range(1, len(chain)):
-            pair_events = _diff_consecutive_pair(chain[i - 1], chain[i])
+        # A close marker sits on the history. It is not a version of the line, so the
+        # date, quantity, POD and graduation diffs stay the pairs they were before it.
+        live = [obs for obs in chain if _book_close_state(obs) is None]
+        for i in range(1, len(live)):
+            pair_events = _diff_consecutive_pair(live[i - 1], live[i])
             events.extend(pair_events)
 
-        for obs in chain:
+        for obs in live:
             ogk = order_grain_key(
                 operating_unit=obs.operating_unit,
                 order_no=obs.order_no,
@@ -392,6 +411,33 @@ def derive_change_events(
                     )
                 )
                 blank_invoice_shipped_obs_id = None
+
+    for obs in rows:
+        state = _book_close_state(obs)
+        if state is None:
+            continue
+        raw = obs.raw_source_row if isinstance(obs.raw_source_row, dict) else {}
+        events.append(
+            ShipmentChangeEvent(
+                event_type=state,  # type: ignore[arg-type]
+                line_identity_key=obs.line_identity_key,
+                observation_id=int(obs.id),
+                prior_observation_id=None,
+                import_job_id=int(obs.import_job_id),
+                valid_from=obs.valid_from,
+                operating_unit=obs.operating_unit,
+                order_no=obs.order_no,
+                order_line=obs.order_line,
+                item_code=obs.item_code,
+                delivery_no=obs.delivery_no,
+                details={
+                    "report_date": raw.get("open_book_report_date"),
+                    "closing_job_id": raw.get("open_book_closed_by_job_id"),
+                    "prior_line_state": "open_order",
+                    "current_line_state": state,
+                },
+            )
+        )
 
     if event_types:
         allowed = {t.strip().lower() for t in event_types}

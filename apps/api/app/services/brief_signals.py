@@ -20,6 +20,7 @@ from app.services.channel_ops_derived_stock import replenishment_flag_v1, weeks_
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET
 from app.services.cpor.settle_readiness import case_missing_roe, fx_declared, fx_mode_valid
+from app.services.imports.shipment_open_book import exclude_closed_inbound
 from app.services.shipment_strict_pair import keep_counted_line
 from app.services.woc_observation_read import latest_woc_observations, observations_to_stock_vel
 
@@ -44,6 +45,7 @@ def inbound_not_received_count_stmt(user: dict | None) -> Select[Any]:
         .where(FactInboundShipment.status != "received")
         .where(where_tenant(FactInboundShipment.tenant_id, user))
         .where(keep_counted_line(FactInboundShipment))
+        .where(exclude_closed_inbound(FactInboundShipment))
     )
 
 

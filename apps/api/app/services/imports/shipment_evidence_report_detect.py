@@ -14,6 +14,9 @@ REPORT_UNKNOWN = "unknown"
 
 LINE_SHIPPED = "shipped"
 LINE_OPEN_ORDER = "open_order"
+LINE_CLOSED_SHIPPED = "closed_shipped"
+LINE_CLOSED_DISAPPEARED = "closed_disappeared"
+CLOSED_LINE_STATES = frozenset({LINE_CLOSED_SHIPPED, LINE_CLOSED_DISAPPEARED})
 
 
 def detect_report_type(columns: set[str], *, sheet_name: str | None, file_name: str) -> tuple[str, str]:

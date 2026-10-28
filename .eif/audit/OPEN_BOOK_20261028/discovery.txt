@@ -1,0 +1,701 @@
+current_database=cip
+
+=== staged_metadata keys on applied inbound_shipments jobs ===
+  shipment_evidence: 11
+  import_purpose: 8
+  mail: 3
+  woc_observation: 3
+
+=== ACZA jobs: file name, created_at, completed_at, report types ===
+applied_acza_jobs=11
+  job=32 tenant=default file_date=2026-05-26 created=2026-06-01 10:50:15.244423+02:00 completed=2026-06-01 13:36:32.244045+02:00 status=completed/loaded lines=9307 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260526.xlsx
+  job=34 tenant=default file_date=2026-06-02 created=2026-06-03 17:20:03.481881+02:00 completed=2026-06-03 17:58:59.280275+02:00 status=completed/loaded lines=9317 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260602.xlsx
+  job=40 tenant=default file_date=2026-06-02 created=2026-06-04 11:25:18.018686+02:00 completed=2026-06-04 12:02:30.709058+02:00 status=completed/loaded lines=9317 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260602.xlsx
+  job=147 tenant=default file_date=2023-11-10 created=2026-06-23 18:03:38.823620+02:00 completed=2026-06-24 16:34:50.744574+02:00 status=completed/loaded lines=5322 types=['acza_workbook_shipped'] sheets=['Shipped'] file=Copy of ACZA Shipped Unshipped 20231110.xlsx
+  job=153 tenant=default file_date=2026-06-23 created=2026-06-24 17:05:48.262968+02:00 completed=2026-06-24 17:16:29.954866+02:00 status=completed/loaded lines=9503 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260623.xlsx
+  job=154 tenant=default file_date=NONE created=2026-06-26 09:16:13.632492+02:00 completed=2026-06-26 09:26:26.675516+02:00 status=completed/loaded lines=7215 types=['acza_workbook_shipped'] sheets=['shipped'] file=shipped 2020-2023.xlsx
+  job=601 tenant=default file_date=2026-07-21 created=2026-07-27 17:43:40.752933+02:00 completed=2026-07-27 18:07:05.308368+02:00 status=completed/loaded lines=7291 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260721.xlsx
+  job=605 tenant=default file_date=2026-07-28 created=2026-07-31 21:10:58.665722+02:00 completed=2026-07-31 21:17:16.068988+02:00 status=completed/loaded lines=7328 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260728.xlsx
+  job=1159 tenant=default file_date=2026-08-18 created=2026-08-18 11:54:02.581322+02:00 completed=2026-08-18 11:56:17.634390+02:00 status=completed/loaded lines=7369 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260818_P2.xlsx
+  job=1326 tenant=default file_date=2026-09-01 created=2026-09-02 17:12:25.531999+02:00 completed=2026-09-02 17:22:06.745189+02:00 status=completed/loaded lines=7561 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260901.xlsx
+  job=1339 tenant=default file_date=2026-09-11 created=2026-09-14 09:38:49.682934+02:00 completed=2026-09-14 09:44:47.172568+02:00 status=completed/loaded lines=7638 types=['acza_workbook_shipped', 'acza_workbook_unship'] sheets=['Shipped', 'Unship'] file=ACZA Shipped Unshipped 20260911.xlsx
+acza_jobs_with_yyyymmdd_in_file_name=10 of 11
+
+=== shipment_evidence metadata keys and mail date presence (no addresses) ===
+  shipment_evidence.processed_at: 11
+  shipment_evidence.sheets: 11
+  shipment_evidence.total_lines_written_estimate: 11
+  job=1159 mail_received_at=2026-08-18T09:52:16+00:00 attachment=ACZA Shipped Unshipped 20260818_P2.xlsx has_subject=True
+  job=1326 mail_received_at=2026-09-02T14:03:30+00:00 attachment=ACZA Shipped Unshipped 20260901.xlsx has_subject=True
+  job=1339 mail_received_at=2026-09-14T07:36:57+00:00 attachment=ACZA Shipped Unshipped 20260911.xlsx has_subject=True
+
+=== every inbound job whose file name mentions ACZA, BOM, or Shipped ===
+  job=29 pending/shipment_mapping_ready created=2026-05-31 file=ACZA Shipped Unshipped 20260526.xlsx
+  job=32 completed/loaded created=2026-06-01 file=ACZA Shipped Unshipped 20260526.xlsx
+  job=33 failed/failed created=2026-06-03 file=ACZA Shipped Unshipped 20260602.xlsx
+  job=34 completed/loaded created=2026-06-03 file=ACZA Shipped Unshipped 20260602.xlsx
+  job=40 completed/loaded created=2026-06-04 file=ACZA Shipped Unshipped 20260602.xlsx
+  job=147 completed/loaded created=2026-06-23 file=Copy of ACZA Shipped Unshipped 20231110.xlsx
+  job=152 pending/shipment_mapping_ready created=2026-06-24 file=ACZA Shipped Unshipped 20260623.xlsx
+  job=153 completed/loaded created=2026-06-24 file=ACZA Shipped Unshipped 20260623.xlsx
+  job=154 completed/loaded created=2026-06-26 file=shipped 2020-2023.xlsx
+  job=601 completed/loaded created=2026-07-27 file=ACZA Shipped Unshipped 20260721.xlsx
+  job=605 completed/loaded created=2026-07-31 file=ACZA Shipped Unshipped 20260728.xlsx
+  job=1159 completed/loaded created=2026-08-18 file=ACZA Shipped Unshipped 20260818_P2.xlsx
+  job=1326 completed/loaded created=2026-09-02 file=ACZA Shipped Unshipped 20260901.xlsx
+  job=1339 completed/loaded created=2026-09-14 file=ACZA Shipped Unshipped 20260911.xlsx
+
+=== source sheets on shipment evidence ===
+  sheet='Shipped' type=acza_workbook_shipped lines=74131
+  sheet='shipped' type=acza_workbook_shipped lines=7215
+  sheet='Unship' type=acza_workbook_unship lines=5822
+
+=== open_order facts not on the newest applied Unship lines ===
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=PEPKOR-ZA-DR lines=194 units=12430.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=PINNACLE-ZA-C lines=145 units=10607.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=MUSTEK-ZA-TB lines=13 units=10327.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=RECTRON-ZA-C lines=123 units=9597.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=PINNACLE-ZA-IR lines=155 units=8032.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=MUSTEK-ZA-BB lines=68 units=6979.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=DCC-ZA-BB lines=40 units=4354.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=MUSTEK-ZA-IR lines=89 units=3340.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=RECTRON-ZA-BB lines=31 units=2945.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=MUSTEK-ZA-C lines=38 units=2621.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=PEPKOR-ZA-BB lines=15 units=1482.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=COMPUSPEED-MU-BB lines=27 units=1342.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=ACZA-ZA-C-03 lines=27 units=790.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=DCC-ZA-TB lines=3 units=510.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=BRANDHOUSE-MU-C lines=11 units=384.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=FIRSTTECH-ZA-ET lines=17 units=296.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=SYNTECH-ZA-C-01 lines=12 units=246.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=MITSUMI-AE-C-ZA lines=5 units=180.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=BRANDHOUSE-MU-BB lines=2 units=150.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=COMPUSPEED-MU-C lines=4 units=113.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=HV-MU-C-MG lines=1 units=108.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=DGSTORE-ZA-ET lines=6 units=78.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=HV-MU-BB-MG lines=1 units=38.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=COMPUSPEED-MU-TB lines=1 units=30.0000
+  tenant=default report_type=acza_workbook_unship ou='' bill_to=ACZA-ZA-BB-03 lines=1 units=1.0000
+stale_keyed_lines=1029 stale_keyed_units=76980.0
+all_open_lines=1775 all_open_units=127870.0000 open_unkeyed_lines=0 shipped_lines=13471 shipped_units=1348275.0000 shipped_null_confirm_lines=21 shipped_null_confirm_units=1331.0000
+
+=== newest unship job per scope ===
+  job=1339 tenant=default type=acza_workbook_unship ou='' lines=746 units=50890.0000 completed=2026-09-14 09:44:47.172568+02:00 file=ACZA Shipped Unshipped 20260911.xlsx
+
+=== shipped facts with null ship_confirm_date ===
+  job=1326 type=acza_workbook_shipped sheet='Shipped' bill_to=PEPKOR-ZA-BB lines=2 units=516.0000
+  job=1339 type=acza_workbook_shipped sheet='Shipped' bill_to=RECTRON-ZA-C lines=3 units=306.0000
+  job=1339 type=acza_workbook_shipped sheet='Shipped' bill_to=PEPKOR-ZA-DR lines=2 units=204.0000
+  job=1339 type=acza_workbook_shipped sheet='Shipped' bill_to=PINNACLE-ZA-IR lines=2 units=204.0000
+  job=None type=shipped sheet='' bill_to=(blank) lines=3 units=30.0000
+  job=1339 type=acza_workbook_shipped sheet='Shipped' bill_to=PINNACLE-ZA-C lines=5 units=26.0000
+  job=1339 type=acza_workbook_shipped sheet='Shipped' bill_to=MUSTEK-ZA-IR lines=1 units=18.0000
+  job=1339 type=acza_workbook_shipped sheet='Shipped' bill_to=COMPUSPEED-MU-BB lines=2 units=15.0000
+  job=1339 type=acza_workbook_shipped sheet='Shipped' bill_to=FIRSTTECH-ZA-ET lines=1 units=12.0000
+
+=== open_order facts by job ===
+  job=1339 type=acza_workbook_unship lines=746 units=50890.0000 file=ACZA Shipped Unshipped 20260911.xlsx
+  job=605 type=acza_workbook_unship lines=314 units=19732.0000 file=ACZA Shipped Unshipped 20260728.xlsx
+  job=1326 type=acza_workbook_unship lines=167 units=10617.0000 file=ACZA Shipped Unshipped 20260901.xlsx
+  job=153 type=acza_workbook_unship lines=160 units=13461.0000 file=ACZA Shipped Unshipped 20260623.xlsx
+  job=40 type=acza_workbook_unship lines=130 units=7798.0000 file=ACZA Shipped Unshipped 20260602.xlsx
+  job=1159 type=acza_workbook_unship lines=110 units=9356.0000 file=ACZA Shipped Unshipped 20260818_P2.xlsx
+  job=601 type=acza_workbook_unship lines=62 units=10458.0000 file=ACZA Shipped Unshipped 20260721.xlsx
+  job=32 type=acza_workbook_unship lines=48 units=2350.0000 file=ACZA Shipped Unshipped 20260526.xlsx
+  job=None type=acza_workbook_unship lines=38 units=3208.0000 file=None
+
+=== open_order source_key shared across jobs ===
+open_source_keys_shared_by_jobs=0
+
+
+=== 1b. Readers of open_order or line_state ===
+
+Closing does not add a column. line_state becomes closed_shipped or
+closed_disappeared. Both fit varchar(32). A reader that already requires
+line_state = open_order, or line_state = shipped, does not count a closed
+fact. Readers that keep every non-open row (keep_counted_line) or that count
+status <> received needed an explicit exclusion.
+
+Changed so a closed fact is not an open line:
+- app/services/supply_overview.py headline WHERE. open_lines was status distinct
+  from received. Pipeline was already line_state = open_order.
+- app/services/brief_signals.py inbound_not_received_count_stmt.
+- app/api/v1/endpoints/shipping.py the lines grid, the ETA fact scope, and the
+  summary. still-to-ship already requires line_state = open_order.
+
+Already exclude a closed fact, no code change:
+- app/query/model/rules.py shipment open quantity and open counts require
+  line_state = open_order. A closed row contributes 0.
+- app/services/shipment_strict_pair.py is unchanged. Its window is only
+  shipped and open_order, so a closed row is not a twin and is not an open
+  remainder. keep_counted_line keeps any row that is not an open order, which
+  is why the three callers above exclude closed beside it.
+- app/services/channel_ops_derived_stock.py counts shipped lines with a POD
+  after the snapshot. A closed row is not shipped. Reclassifying a shipped
+  row with no confirm date removes it from that sum only when it also has a POD.
+- app/services/commercial_planner/lineup_po_reconciliation.py,
+  lineup_po_auto_link.py, lineup_bulk_rederivation.py, lineup_po_gap.py and
+  po_management.py count open_order or shipped, not a closed state.
+- app/services/lineup/net_requirement.py keeps open_order and pipeline.
+- app/services/commercial_planner/inbound_lineup_quarter.py returns no bucket
+  for a state other than open, shipped or arrived.
+- app/services/imports/shipment_plan_d_cutover.py and the sell-through stock
+  gap filters count shipped only.
+- app/services/imports/shipment_invoice_graduation.py supersedes a shipped
+  observation only. An open observation stays. An open-then-shipped pair is
+  still the graduated event.
+- app/services/imports/shipment_change_events.py leaves date_slip, qty_change,
+  graduated and pod_reversal on the observations that are not close markers,
+  then emits closed_shipped or closed_disappeared from the marker.
+
+Not an open-book counter:
+- app/services/imports/shipment_inbound_facts.py writes facts. A row that is
+  not shipped uses the open upsert. Closed rows are not sent through it. A
+  report older than the applied book skips the write, so it cannot reopen a
+  closed fact.
+- app/services/imports/import_job_delete_figures.py removes facts by the job
+  that loaded them, whatever the line state. That is the existing delete.
+
+File and line for every apps/api occurrence of open_order or line_state follows.
+
+occurrences=540
+apps/api/tests/test_backfill_shipment_customer_po.py:69:line_state="shipped",
+apps/api/tests/test_backfill_shipment_customer_po.py:122:line_state="shipped",
+apps/api/tests/test_backfill_shipment_customer_po.py:175:line_state="shipped",
+apps/api/tests/test_backfill_shipment_customer_po.py:243:line_state="shipped",
+apps/api/tests/test_channel_ops_derived_stock.py:124:def test_pipeline_open_order_exclusion_is_caller_contract() -> None:
+apps/api/tests/test_channel_ops_derived_stock.py:125:"""Landed units passed in must already exclude pipeline/open_order.
+apps/api/tests/test_channel_ops_derived_stock.py:127:The pure function trusts landed_since; SQL filter enforces line_state=shipped.
+apps/api/tests/test_customer_stock_gap_cause_db.py:76:line_state="shipped",
+apps/api/tests/test_customer_stock_gap_db.py:80:line_state=state,
+apps/api/tests/test_data_integrity_audit.py:49:line_state="shipped",
+apps/api/tests/test_data_integrity_audit.py:223:line_state="shipped",
+apps/api/tests/test_data_integrity_audit.py:247:line_state="shipped",
+apps/api/tests/test_data_integrity_audit.py:269:line_state="shipped",
+apps/api/tests/test_data_integrity_audit.py:285:line_state="shipped",
+apps/api/tests/test_distributor_full_merge.py:173:line_state="shipped",
+apps/api/tests/test_distributor_full_merge.py:185:line_state="shipped",
+apps/api/tests/test_distributor_full_merge.py:267:line_state="shipped",
+apps/api/tests/test_e10_calendar_values_db.py:377:_ship(product_id=product.id, line_state="shipped", quantity=Decimal("10"), order_no="O1", item_code="I1",
+apps/api/tests/test_e10_calendar_values_db.py:379:_ship(product_id=product.id, line_state="open_order", quantity=Decimal("10"), order_no="O1", item_code="I1",
+apps/api/tests/test_e10_calendar_values_db.py:381:_ship(product_id=product.id, line_state="shipped", quantity=Decimal("10"), order_no="O2", item_code="I2",
+apps/api/tests/test_e10_calendar_values_db.py:383:_ship(product_id=product.id, line_state="open_order", quantity=Decimal("25"), order_no="O2", item_code="I2",
+apps/api/tests/test_e10_calendar_values_db.py:385:_ship(product_id=product.id, line_state="open_order", quantity=Decimal("7"), order_no=None, item_code=None,
+apps/api/tests/test_e10_calendar_values_db.py:387:_ship(product_id=product.id, line_state="shipped", quantity=Decimal("4"), order_no="O3", item_code="I3",
+apps/api/tests/test_e10_calendar_values_db.py:437:_ship(product_id=product.id, line_state="shipped", quantity=Decimal("6"), order_no="OS", item_code="IS",
+apps/api/tests/test_e10_calendar_values_db.py:439:_ship(product_id=product.id, line_state="open_order", quantity=Decimal("9"), order_no=None, item_code=None,
+apps/api/tests/test_e10_calendar_values_db.py:469:_ship(product_id=product.id, line_state="shipped", quantity=Decimal("10"), order_no="O1", item_code="I1",
+apps/api/tests/test_e10_calendar_values_db.py:471:_ship(product_id=product.id, line_state="open_order", quantity=Decimal("10"), order_no="O1", item_code="I1",
+apps/api/tests/test_e10_calendar_values_db.py:473:_ship(product_id=product.id, line_state="open_order", quantity=Decimal("7"), order_no=None, item_code=None,
+apps/api/tests/test_grid_fields.py:61:move_line = SimpleNamespace(product_id=7, order_no="SO-1", delivery_no="D-1", quantity=5, line_state="shipped")
+apps/api/tests/test_grid_fields.py:154:inbound = FactInboundShipment(id=9, source_key="s9", line_state="open", status="shipped", raw_source_row={})
+apps/api/tests/test_grid_fields.py:295:assert {"line_state", "eta_date", "tenant_id"}.isdisjoint(fields)
+apps/api/tests/test_inbound_lineup_quarter.py:38:assert lifecycle_bucket("open_order", None) == "pipeline"
+apps/api/tests/test_inbound_lineup_quarter.py:47:line_state="shipped",
+apps/api/tests/test_inbound_lineup_quarter.py:59:line_state="shipped",
+apps/api/tests/test_inbound_lineup_quarter.py:173:line_state="shipped",
+apps/api/tests/test_lineup_case_suggested_pos.py:140:id=n, import_job_id=1, source_key=f"k{n}", source_row_number=n, report_type="test", line_state=state,
+apps/api/tests/test_lineup_case_suggested_pos.py:167:_ev_row(2, "open_order", po=7, product=3, qty=10, order_no="SO-1"),
+apps/api/tests/test_lineup_case_suggested_pos.py:168:_ev_row(3, "open_order", po=7, product=3, qty=50, order_no="SO-2"),
+apps/api/tests/test_lineup_case_suggested_pos.py:174:_ev_row(7, "open_order", po=9, product=3, qty=30, order_no="SO-6"),
+apps/api/tests/test_lineup_case_suggested_pos.py:207:# Summing every line_state would give Dist One 105 and put it first.
+apps/api/tests/test_lineup_po_auto_link.py:184:line_state="shipped",
+apps/api/tests/test_lineup_po_auto_link.py:194:line_state="open_order",
+apps/api/tests/test_lineup_po_auto_link.py:204:line_state="shipped",
+apps/api/tests/test_lineup_po_auto_link.py:236:def test_proposal_totals_keep_shipped_and_open_order_separate():
+apps/api/tests/test_lineup_po_auto_link.py:241:_ProductMatch(product_id=1, shipped_units=100.0, open_order_units=35.0, planned_units=200.0),
+apps/api/tests/test_lineup_po_auto_link.py:242:_ProductMatch(product_id=2, shipped_units=20.0, open_order_units=0.0, planned_units=50.0),
+apps/api/tests/test_lineup_po_auto_link.py:245:total_open = round(sum(m.open_order_units for m in products), 4)
+apps/api/tests/test_lineup_po_auto_link.py:287:AND f.line_state = 'shipped'
+apps/api/tests/test_lineup_po_auto_link.py:365:assert "total_open_order_units" in row
+apps/api/tests/test_lineup_po_reconciliation.py:78:pipeline tuples: (customer_id, product_id, units) — line_state='open_order'.
+apps/api/tests/test_lineup_po_reconciliation.py:107:_R(shipped),  # shipped_rows (resolved_customer_id, product_id, units, value) — line_state='shipped'
+apps/api/tests/test_lineup_po_reconciliation.py:108:_R(pipeline or []),  # pipeline_rows (resolved_customer_id, product_id, units) — line_state='open_order'
+apps/api/tests/test_lineup_po_reconciliation.py:153:def test_open_order_excluded_from_shipped_and_surfaced_as_pipeline():
+apps/api/tests/test_lineup_po_reconciliation.py:154:"""Pipeline (open_order) must NOT count as shipped. A leaky impl would sum 60+40=100
+apps/api/tests/test_lineup_po_reconciliation.py:162:[(5, 10, 60.0, 600.0)],  # line_state='shipped'
+apps/api/tests/test_lineup_po_reconciliation.py:163:pipeline=[(5, 10, 40.0)],  # line_state='open_order'
+apps/api/tests/test_lineup_po_reconciliation.py:170:assert prod["shipped_units"] == 60.0  # open_order excluded
+apps/api/tests/test_plan_vs_executed.py:202:"""open_order (pipeline) inbound must never enter fill; it surfaces as its own tile and
+apps/api/tests/test_plan_vs_executed.py:216:assert sc["pipeline_units_in_plan"] == 70  # 40 + 30 (open_order on in-plan rows)
+apps/api/tests/test_sell_through_overview_db.py:343:tenant_id=TENANT, source_key="sto-ship-1", report_type="t", line_state="shipped", raw_source_row={},
+apps/api/tests/test_semantic_overlay_governed.py:21:"Σ min(shipped, planned) / Σ planned on in-plan rows; shipped = line_state=shipped only"
+apps/api/tests/test_shipment_apply_background.py:31:lambda line, **_: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+apps/api/tests/test_shipment_apply_background.py:34:monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
+apps/api/tests/test_shipment_apply_background.py:53:lambda line, **_: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+apps/api/tests/test_shipment_apply_background.py:56:monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
+apps/api/tests/test_shipment_apply_hardening.py:28:line_state="open_order",
+apps/api/tests/test_shipment_apply_hardening.py:78:def test_open_order_upsert_uses_fact_upsert_constraint() -> None:
+apps/api/tests/test_shipment_apply_hardening.py:82:source = inspect.getsource(facts_mod._upsert_open_order_chunk)
+apps/api/tests/test_shipment_apply_hardening.py:182:"line_state": "open_order",
+apps/api/tests/test_shipment_apply_hardening.py:192:facts_mod._upsert_evidence_chunk(db, tbl, [line], [{"line_state": "open_order"}])
+apps/api/tests/test_shipment_change_events.py:21:line_state: str,
+apps/api/tests/test_shipment_change_events.py:41:report_type="acza_workbook_shipped" if line_state == "shipped" else "acza_workbook_unship",
+apps/api/tests/test_shipment_change_events.py:42:line_state=line_state,
+apps/api/tests/test_shipment_change_events.py:65:prior = _obs(id=1, key=key, job_id=10, line_state="shipped", valid_from=t0, qty=5, est_pod=date(2026, 3, 1))
+apps/api/tests/test_shipment_change_events.py:70:line_state="shipped",
+apps/api/tests/test_shipment_change_events.py:93:prior = _obs(id=1, key=key, job_id=10, line_state="shipped", valid_from=t0, pod=date(2026, 1, 15), delivery="D1")
+apps/api/tests/test_shipment_change_events.py:94:curr = _obs(id=2, key=key, job_id=20, line_state="shipped", valid_from=t1, pod=None, delivery="D1")
+apps/api/tests/test_shipment_change_events.py:112:open_obs = _obs(id=1, key=open_key, job_id=5, line_state="open_order", valid_from=t0, ou="ACZA", order_no="O99", item="ITEM9")
+apps/api/tests/test_shipment_change_events.py:117:line_state="shipped",
+apps/api/tests/test_shipment_change_events.py:141:_obs(id=1, key=k1, job_id=1, line_state="shipped", valid_from=t0, qty=1, delivery="D1"),
+apps/api/tests/test_shipment_change_events.py:142:_obs(id=2, key=k1, job_id=2, line_state="shipped", valid_from=t1, qty=3, delivery="D1"),
+apps/api/tests/test_shipment_change_events.py:143:_obs(id=3, key=k2, job_id=1, line_state="shipped", valid_from=t0, qty=2, delivery="D1"),
+apps/api/tests/test_shipment_change_events.py:144:_obs(id=4, key=k2, job_id=2, line_state="shipped", valid_from=t1, qty=4, delivery="D1"),
+apps/api/tests/test_shipment_change_events.py:168:line_state="open_order",
+apps/api/tests/test_shipment_change_events.py:181:line_state="closed_disappeared",
+apps/api/tests/test_shipment_change_events.py:195:line_state="open_order",
+apps/api/tests/test_shipment_evidence_line_identity.py:24:line_state="shipped",
+apps/api/tests/test_shipment_evidence_line_identity.py:38:line_state="shipped",
+apps/api/tests/test_shipment_evidence_line_identity.py:66:"line_state": "open_order",
+apps/api/tests/test_shipment_evidence_observations.py:70:line_state="open_order",
+apps/api/tests/test_shipment_evidence_orphan_purge.py:45:line_state="open_order",
+apps/api/tests/test_shipment_evidence_orphan_purge.py:55:line_state="open_order",
+apps/api/tests/test_shipment_invoice_graduation.py:50:line_state="shipped",
+apps/api/tests/test_shipment_null_distributor_sibling_po_merge.py:146:line_state="shipped",
+apps/api/tests/test_shipment_null_distributor_sibling_po_merge.py:287:line_state="shipped",
+apps/api/tests/test_shipment_null_distributor_sibling_po_merge.py:373:line_state="shipped",
+apps/api/tests/test_shipment_open_book.py:27:line_state_for_shipped_sheet,
+apps/api/tests/test_shipment_open_book.py:62:line_state_for_shipped_sheet("shipped", ship_confirm_date=None, report_date=report)
+apps/api/tests/test_shipment_open_book.py:63:== "open_order"
+apps/api/tests/test_shipment_open_book.py:66:line_state_for_shipped_sheet("shipped", ship_confirm_date=date(2026, 9, 12), report_date=report)
+apps/api/tests/test_shipment_open_book.py:67:== "open_order"
+apps/api/tests/test_shipment_open_book.py:70:line_state_for_shipped_sheet("shipped", ship_confirm_date=date(2026, 9, 11), report_date=report)
+apps/api/tests/test_shipment_open_book.py:74:line_state_for_shipped_sheet("shipped", ship_confirm_date=date(2026, 9, 1), report_date=report)
+apps/api/tests/test_shipment_open_book.py:78:line_state_for_shipped_sheet("shipped", ship_confirm_date=date(2026, 9, 1), report_date=None)
+apps/api/tests/test_shipment_open_book.py:82:line_state_for_shipped_sheet("open_order", ship_confirm_date=None, report_date=report)
+apps/api/tests/test_shipment_open_book.py:83:== "open_order"
+apps/api/tests/test_shipment_open_book.py:123:line_state: str,
+apps/api/tests/test_shipment_open_book.py:138:line_state=line_state,
+apps/api/tests/test_shipment_open_book.py:161:line_state: str,
+apps/api/tests/test_shipment_open_book.py:176:line_state=line_state,
+apps/api/tests/test_shipment_open_book.py:198:func.lower(FactInboundShipment.line_state) == "open_order",
+apps/api/tests/test_shipment_open_book.py:210:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:220:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:232:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:242:assert gone.line_state == "closed_disappeared"
+apps/api/tests/test_shipment_open_book.py:251:assert obs.line_state == "closed_disappeared"
+apps/api/tests/test_shipment_open_book.py:271:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:281:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:293:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:302:assert fact.line_state == "closed_disappeared"
+apps/api/tests/test_shipment_open_book.py:309:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:321:assert fact.line_state == "closed_disappeared"
+apps/api/tests/test_shipment_open_book.py:338:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:348:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:360:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:367:stored = line_state_for_shipped_sheet("shipped", ship_confirm_date=None, report_date=date(2026, 9, 11))
+apps/api/tests/test_shipment_open_book.py:373:line_state=stored,
+apps/api/tests/test_shipment_open_book.py:380:# The importer stores this line_state on the evidence row. The fact uses that
+apps/api/tests/test_shipment_open_book.py:386:line_state=stored,
+apps/api/tests/test_shipment_open_book.py:394:assert stored == "open_order"
+apps/api/tests/test_shipment_open_book.py:395:assert old.line_state == "closed_disappeared"
+apps/api/tests/test_shipment_open_book.py:401:func.lower(FactInboundShipment.line_state) == "open_order",
+apps/api/tests/test_shipment_open_book.py:417:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:427:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:435:stored = line_state_for_shipped_sheet(
+apps/api/tests/test_shipment_open_book.py:444:line_state=stored,
+apps/api/tests/test_shipment_open_book.py:457:line_state=stored,
+apps/api/tests/test_shipment_open_book.py:466:assert held_fact.line_state == "closed_shipped"
+apps/api/tests/test_shipment_open_book.py:472:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/tests/test_shipment_open_book.py:488:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:507:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:526:line_state="open_order", order_no="SO-SHIP", order_line="1", item_code="ITEM-SHIP"
+apps/api/tests/test_shipment_open_book.py:529:line_state="open_order", order_no="SO-VANISH", order_line="1", item_code="ITEM-VANISH"
+apps/api/tests/test_shipment_open_book.py:541:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:552:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:563:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:574:line_state="shipped",
+apps/api/tests/test_shipment_open_book.py:586:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:597:assert ship_fact.line_state == "closed_shipped"
+apps/api/tests/test_shipment_open_book.py:598:assert vanish_fact.line_state == "closed_disappeared"
+apps/api/tests/test_shipment_open_book.py:599:assert twin.line_state == "shipped"
+apps/api/tests/test_shipment_open_book.py:628:line_state="open_order",
+apps/api/tests/test_shipment_open_book.py:647:line_state="shipped",
+apps/api/tests/test_shipment_open_book.py:667:assert open_obs.line_state == "open_order"
+apps/api/tests/test_shipment_purchase_order_materialize.py:77:line_state="shipped",
+apps/api/tests/test_shipment_purchase_order_materialize.py:147:line_state="shipped",
+apps/api/tests/test_shipment_purchase_order_materialize.py:199:line_state="shipped",
+apps/api/tests/test_shipment_receipt.py:24:"line_state": "shipped",
+apps/api/tests/test_shipment_resolved_entities.py:59:line_state="shipped",
+apps/api/tests/test_shipment_resolved_entities.py:82:line_state="shipped",
+apps/api/tests/test_shipment_resolved_entities.py:100:line_state="shipped",
+apps/api/tests/test_shipment_resolved_entities.py:199:line_state="shipped",
+apps/api/tests/test_shipment_sheet_selection.py:20:assert "line_state" in sql
+apps/api/tests/test_shipment_strict_pair.py:49:line_state: str,
+apps/api/tests/test_shipment_strict_pair.py:67:line_state=line_state,
+apps/api/tests/test_shipment_strict_pair.py:100:sql = f"SELECT id FROM fact_inbound_shipment WHERE lower(line_state) = 'open_order' AND {OPEN_HAS_SHIPPED_TWIN_SQL}"
+apps/api/tests/test_shipment_strict_pair.py:108:open_row, shipped = _row("open_order"), _row("shipped")
+apps/api/tests/test_shipment_strict_pair.py:129:open_row, shipped = _row("open_order", quantity=10), _row("shipped", quantity=4)
+apps/api/tests/test_shipment_strict_pair.py:146:open_row, shipped = _row("open_order"), _row("shipped", **shipped_kwargs)
+apps/api/tests/test_shipment_strict_pair.py:155:a = _row("open_order", order_no=blank)
+apps/api/tests/test_shipment_strict_pair.py:156:b = _row("open_order", item_code=blank)
+apps/api/tests/test_shipment_strict_pair.py:166:open_row = _row("open_order", order_no="SO-9")
+apps/api/tests/test_shipment_strict_pair.py:173:rows = [_row("shipped"), _row("shipped"), _row("arrived"), _row("open_order")]
+apps/api/tests/test_shipment_strict_pair.py:182:_row("open_order"),
+apps/api/tests/test_shipment_strict_pair.py:183:_row("open_order", order_no="SO-2"),
+apps/api/tests/test_shipment_strict_pair.py:184:_row("open_order", item_code=None),
+apps/api/tests/test_shipment_strict_pair.py:192:db.scalars(select(F.id).where(func.lower(F.line_state) == "open_order", open_has_shipped_twin(F))).all()
+apps/api/tests/test_shipment_strict_pair.py:199:db.add_all([_row("open_order"), _row("shipped")])
+apps/api/tests/test_shipment_strict_pair.py:201:before = db.execute(select(F.id, F.line_state, F.quantity, F.updated_at)).all()
+apps/api/tests/test_shipment_strict_pair.py:204:assert db.execute(select(F.id, F.line_state, F.quantity, F.updated_at)).all() == before
+apps/api/tests/test_shipment_strict_pair.py:227:_row("open_order", quantity=10),
+apps/api/tests/test_shipment_strict_pair.py:229:_row("open_order", order_no="SO-2", quantity=5),
+apps/api/tests/test_shipment_strict_pair.py:284:states = dict(db.execute(select(F.id, F.line_state).where(F.id.in_(ids))).all())
+apps/api/tests/test_shipment_strict_pair.py:285:assert sorted(states.values()) == ["open_order", "shipped"]
+apps/api/tests/test_shipment_strict_pair.py:295:by_state = {b["key"]: b["count"] for b in out["by_line_state"]}
+apps/api/tests/test_shipment_strict_pair.py:296:assert by_state == {"open_order": 1, "shipped": 1}
+apps/api/tests/test_shipment_strict_pair.py:305:_row("open_order", quantity=10, **common),
+apps/api/tests/test_shipment_strict_pair.py:307:_row("open_order", order_no="SO-2", quantity=5, **common),
+apps/api/tests/test_shipment_strict_pair.py:359:open_row = _row("open_order", quantity=open_qty)
+apps/api/tests/test_shipment_strict_pair.py:379:open_row = _row("open_order", quantity=10)
+apps/api/tests/test_shipment_strict_pair.py:394:open_row = _row("open_order", quantity=None)
+apps/api/tests/test_shipment_strict_pair.py:401:a = _row("open_order", order_no="", quantity=10)
+apps/api/tests/test_shipment_strict_pair.py:402:b = _row("open_order", item_code=None, quantity=10)
+apps/api/tests/test_shipment_strict_pair.py:403:c = _row("open_order", order_no="SO-9", quantity=7)
+apps/api/tests/test_shipment_strict_pair.py:412:_row("open_order", quantity=10),
+apps/api/tests/test_shipment_strict_pair.py:414:_row("open_order", order_no="SO-2", quantity=5),
+apps/api/tests/test_shipment_strict_pair.py:416:_row("open_order", order_no="SO-3", quantity=5),
+apps/api/tests/test_shipment_strict_pair.py:429:db.add_all([_row("open_order", quantity=10), _row("shipped", quantity=6)])
+apps/api/tests/test_shipment_strict_pair.py:431:before = db.execute(select(F.id, F.line_state, F.quantity, F.updated_at)).all()
+apps/api/tests/test_shipment_strict_pair.py:435:assert db.execute(select(F.id, F.line_state, F.quantity, F.updated_at)).all() == before
+apps/api/tests/test_shipment_strict_pair.py:460:_row("open_order", quantity=10, eta_date=date(2026, 5, 1)),  # covered twin, oldest: skipped
+apps/api/tests/test_shipment_strict_pair.py:462:_row("open_order", order_no="SO-2", quantity=5, eta_date=date(2026, 6, 1)),
+apps/api/tests/test_shipment_strict_pair.py:463:_row("open_order", order_no="SO-3", quantity=10, eta_date=date(2026, 7, 1)),  # partial: kept
+apps/api/tests/test_shipment_strict_pair.py:478:_row("open_order", quantity=10, **window),  # covered twin: skipped
+apps/api/tests/test_shipment_strict_pair.py:480:_row("open_order", order_no="SO-2", quantity=5, **window),
+apps/api/tests/test_shipment_strict_pair.py:481:_row("open_order", order_no="SO-3", quantity=10, **window),  # partial: one line
+apps/api/tests/test_shipment_strict_pair.py:492:_row("open_order", quantity=10),
+apps/api/tests/test_shipment_strict_pair.py:494:_row("open_order", order_no="SO-2", quantity=5),
+apps/api/tests/test_shipment_strict_pair.py:495:_row("open_order", order_no="SO-3", quantity=10),
+apps/api/tests/test_shipment_strict_pair.py:514:"covered_open": _row("open_order", quantity=10, **common),
+apps/api/tests/test_shipment_strict_pair.py:516:"partial_open": _row("open_order", order_no="SO-3", quantity=10, **common),
+apps/api/tests/test_shipment_strict_pair.py:518:"plain_open": _row("open_order", order_no="SO-2", quantity=5, **common),
+apps/api/tests/test_shipment_strict_pair.py:582:assert {b["key"]: b["count"] for b in out["by_line_state"]} == {"open_order": 2, "shipped": 2}
+apps/api/tests/test_shipment_strict_pair.py:603:_row("open_order", quantity=10, unit_price=100, **common),
+apps/api/tests/test_shipment_strict_pair.py:621:_row("open_order", quantity=10, unit_price=100, **common),
+apps/api/tests/test_shipment_strict_pair.py:671:open_row = _row("open_order", quantity=open_qty, amount=amount)
+apps/api/tests/test_shipment_strict_pair.py:689:open_row = _row("open_order", quantity=6, amount=600)
+apps/api/tests/test_shipment_strict_pair.py:707:_row("open_order", order_no="SO-3", quantity=10, amount=1000, currency_code="USD"),
+apps/api/tests/test_shipment_strict_pair.py:709:_row("open_order", quantity=10, amount=1000, currency_code="USD"),  # covered: skipped
+apps/api/tests/test_shipment_strict_pair.py:711:_row("open_order", order_no="SO-2", quantity=5, amount=500, currency_code="EUR"),  # fully open
+apps/api/tests/test_shipment_strict_pair.py:810:def test_po_auto_link_open_order_units_count_remainder(db: Session, monkeypatch) -> None:
+apps/api/tests/test_shipment_strict_pair.py:836:assert p["total_open_order_units"] == 9.0  # open 5 + remainder 4; D-0057 gave 5
+apps/api/tests/test_shipment_strict_pair.py:859:("open_order", "SO-1", 10), ("shipped", "SO-1", 10),  # covered: skipped
+apps/api/tests/test_shipment_strict_pair.py:860:("open_order", "SO-3", 10), ("shipped", "SO-3", 6),  # partial: remainder 4
+apps/api/tests/test_shipment_strict_pair.py:861:("open_order", "SO-2", 5),  # plain open
+apps/api/tests/test_shipment_strict_pair.py:867:valid_from=now, observed_at=now, source_row_number=n, report_type="test", line_state=state,
+apps/api/tests/test_shipped_fact_identity.py:56:line_state="shipped",
+apps/api/tests/test_shipped_fact_identity.py:102:line_state="shipped",
+apps/api/tests/test_shipped_fact_identity.py:112:def test_open_order_fact_upsert_key_uses_source_key() -> None:
+apps/api/tests/test_shipped_fact_identity.py:116:{"line_state": "open_order", "source_key": sk, "order_no": "ORD", "order_line": "1"}
+apps/api/tests/test_shipped_fact_identity.py:134:"line_state": "shipped",
+apps/api/tests/test_shipped_fact_identity.py:141:"line_state": "shipped",
+apps/api/tests/test_shipped_fact_identity.py:156:{"fact_upsert_key": key_a, "line_state": "shipped", "quantity": 36.0, "import_job_id": 153},
+apps/api/tests/test_shipped_fact_identity.py:157:{"fact_upsert_key": key_b, "line_state": "shipped", "quantity": 48.0, "import_job_id": 153},
+apps/api/tests/test_shipped_fact_identity.py:164:def test_dedupe_does_not_merge_open_order_rows() -> None:
+apps/api/tests/test_shipped_fact_identity.py:166:{"fact_upsert_key": "k1", "line_state": "open_order", "quantity": 5.0},
+apps/api/tests/test_shipped_fact_identity.py:167:{"fact_upsert_key": "k1", "line_state": "open_order", "quantity": 7.0},
+apps/api/tests/test_shipped_fact_identity.py:240:line_state="shipped",
+apps/api/tests/test_shipped_fact_identity.py:287:def test_upsert_splits_shipped_and_open_order_paths(monkeypatch) -> None:
+apps/api/tests/test_shipped_fact_identity.py:299:monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", _open)
+apps/api/tests/test_shipped_fact_identity.py:307:"line_state": "shipped" if getattr(line, "shipped", True) else "open_order",
+apps/api/tests/test_shipping_newly_landed.py:104:line_state="shipped",
+apps/api/tests/test_shipping_newly_landed.py:141:line_state="shipped",
+apps/api/tests/test_sticky_pod_carry_forward.py:25:target["line_state"] = "shipped"
+apps/api/alembic/versions/20260801_0001_schema_baseline.py:54:o.line_state,
+apps/api/alembic/versions/20260802_0009_sticky_pod_evidence_current.py:39:o.line_state,
+apps/api/alembic/versions/20260802_0009_sticky_pod_evidence_current.py:114:o.line_state,
+apps/api/alembic/versions/20260817_0017_weeks_of_cover_observation.py:132:ON fact_inbound_shipment (distributor_id, product_id, pod_date, line_state)
+apps/api/alembic/versions/20261009_0026_shipment_evidence_lineage_rls.py:211:o.line_state,
+apps/api/alembic/versions_legacy/20260507_0030_shipment_evidence_line.py:30:sa.Column("line_state", sa.String(length=32), nullable=False),
+apps/api/alembic/versions_legacy/20260507_0030_shipment_evidence_line.py:69:op.create_index("ix_shipment_evidence_line_line_state", "shipment_evidence_line", ["line_state"])
+apps/api/alembic/versions_legacy/20260507_0030_shipment_evidence_line.py:91:op.drop_index("ix_shipment_evidence_line_line_state", table_name="shipment_evidence_line")
+apps/api/alembic/versions_legacy/20260515_0036_fact_inbound_shipment_align_shipment_evidence.py:8:- Full logistics, measures, seven dates, resolution fields, raw_source_row, line_state (new) + status (kept).
+apps/api/alembic/versions_legacy/20260515_0036_fact_inbound_shipment_align_shipment_evidence.py:69:sa.Column("line_state", sa.String(length=32), nullable=False, server_default="legacy"),
+apps/api/alembic/versions_legacy/20260515_0036_fact_inbound_shipment_align_shipment_evidence.py:169:op.alter_column("fact_inbound_shipment", "line_state", server_default=None)
+apps/api/alembic/versions_legacy/20260515_0036_fact_inbound_shipment_align_shipment_evidence.py:218:op.drop_column("fact_inbound_shipment", "line_state")
+apps/api/alembic/versions_legacy/20260623_0050_shipment_evidence_observation.py:36:sa.Column("line_state", sa.String(length=32), nullable=False),
+apps/api/alembic/versions_legacy/20260623_0050_shipment_evidence_observation.py:124:line_state,
+apps/api/alembic/versions_legacy/20260623_0050_shipment_evidence_observation.py:198:sel.line_state,
+apps/api/alembic/versions_legacy/20260630_0060_fact_inbound_shipment_fact_upsert_key.py:36:SELECT id, line_state, source_key, operating_unit, delivery_no, item_code,
+apps/api/alembic/versions_legacy/20260630_0060_fact_inbound_shipment_fact_upsert_key.py:44:if (row["line_state"] or "").strip().lower() == "shipped":
+apps/api/alembic/versions_legacy/20260630_0060_fact_inbound_shipment_fact_upsert_key.py:55:"line_state": row["line_state"],
+apps/api/alembic/versions_legacy/20260630_0062_shipped_fact_upsert_key_po_inclusive.py:33:SELECT id, line_state, source_key, operating_unit, delivery_no, item_code,
+apps/api/alembic/versions_legacy/20260630_0062_shipped_fact_upsert_key_po_inclusive.py:41:if (row["line_state"] or "").strip().lower() == "shipped":
+apps/api/alembic/versions_legacy/20260630_0062_shipped_fact_upsert_key_po_inclusive.py:51:"line_state": row["line_state"],
+apps/api/alembic/versions_legacy/20260630_0062_shipped_fact_upsert_key_po_inclusive.py:81:SELECT id, line_state, source_key, operating_unit, delivery_no, item_code,
+apps/api/alembic/versions_legacy/20260630_0062_shipped_fact_upsert_key_po_inclusive.py:88:if (row["line_state"] or "").strip().lower() == "shipped":
+apps/api/alembic/versions_legacy/20260630_0062_shipped_fact_upsert_key_po_inclusive.py:97:"line_state": row["line_state"],
+apps/api/alembic/versions_legacy/20260702_0066_plan_d_evidence_current_view_grant.py:34:o.line_state,
+apps/api/app/models/facts.py:145:line_state: Mapped[str] = mapped_column(String(32), nullable=False)
+apps/api/app/models/shipment_evidence.py:17:``line_state`` distinguishes executed shipments vs open-order / pipeline rows.
+apps/api/app/models/shipment_evidence.py:26:Index("ix_shipment_evidence_line_line_state", "line_state"),
+apps/api/app/models/shipment_evidence.py:44:line_state: Mapped[str] = mapped_column(String(32), nullable=False)
+apps/api/app/models/shipment_evidence_current.py:32:line_state: Mapped[str] = mapped_column(String(32), nullable=False)
+apps/api/app/models/shipment_evidence_observation.py:49:line_state: Mapped[str] = mapped_column(String(32), nullable=False)
+apps/api/app/services/channel_ops_derived_stock.py:8:and line_state = 'shipped' (POD-landed only)
+apps/api/app/services/channel_ops_derived_stock.py:10:pipeline / open_order lines NEVER count. Variance vs the next reported snapshot
+apps/api/app/services/channel_ops_derived_stock.py:282:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/app/services/channel_ops_derived_stock.py:391:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/app/services/channel_ops_derived_stock.py:512:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/app/services/data_integrity_audit.py:128:if (line.line_state or "").strip().lower() != "shipped":
+apps/api/app/services/data_integrity_audit.py:135:# Legacy rows: shipped line_state with delivery invoice identity.
+apps/api/app/services/data_integrity_audit.py:561:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/app/services/data_integrity_audit.py:664:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/app/services/data_integrity_audit.py:762:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/app/services/data_integrity_audit.py:778:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/app/services/grid_fields.py:66:"line_state",
+apps/api/app/services/seed_demo.py:273:line_state="demo",
+apps/api/app/services/shipment_strict_pair.py:66:lower(line_state) AS state,
+apps/api/app/services/shipment_strict_pair.py:68:sum(CASE WHEN lower(line_state) = 'shipped' THEN coalesce(quantity, 0) ELSE 0 END)
+apps/api/app/services/shipment_strict_pair.py:70:sum(CASE WHEN lower(line_state) = 'shipped' THEN 1 ELSE 0 END) OVER key_window AS n_shipped
+apps/api/app/services/shipment_strict_pair.py:76:AND lower(line_state) IN ('shipped', 'open_order')
+apps/api/app/services/shipment_strict_pair.py:85:WHERE keyed.state = 'open_order'
+apps/api/app/services/shipment_strict_pair.py:88:"""One row per open_order line that has a strict shipped twin: ``fact_id`` and ``counted_qty``.
+apps/api/app/services/shipment_strict_pair.py:141:is_shipped = func.lower(r.line_state) == "shipped"
+apps/api/app/services/shipment_strict_pair.py:146:func.lower(r.line_state).label("state"),
+apps/api/app/services/shipment_strict_pair.py:158:func.lower(r.line_state).in_(("shipped", "open_order")),
+apps/api/app/services/shipment_strict_pair.py:170:w.c.state == "open_order",
+apps/api/app/services/shipment_strict_pair.py:235:.where(w.c.state == "open_order", w.c.n_shipped > 0)
+apps/api/app/services/shipment_strict_pair.py:263:AND lower(fact_inbound_shipment.line_state) <> 'shipped'
+apps/api/app/services/shipment_strict_pair.py:276:WHERE lower(shipped_twin.line_state) = 'shipped'
+apps/api/app/services/shipment_strict_pair.py:284:Use as ``lower(line_state) = 'open_order' AND {OPEN_HAS_SHIPPED_TWIN_SQL}``. The
+apps/api/app/services/shipment_strict_pair.py:294:func.lower(twin.line_state) == "shipped",
+apps/api/app/services/shipment_strict_pair.py:301:func.lower(model.line_state) != "shipped",
+apps/api/app/services/shipment_strict_pair.py:307:"""SQLAlchemy filter (D-0057): drop an open_order row that has a strict shipped twin, partial or not."""
+apps/api/app/services/shipment_strict_pair.py:309:func.lower(model.line_state) != "open_order",
+apps/api/app/services/supply_overview.py:72:count(*) FILTER (WHERE pod_date IS NULL AND line_state = 'open_order') AS pipeline_lines,
+apps/api/app/services/supply_overview.py:74:WHERE pod_date IS NULL AND line_state = 'open_order'
+apps/api/app/services/supply_overview.py:77:WHERE pod_date IS NULL AND line_state = 'shipped'
+apps/api/app/services/supply_overview.py:80:WHERE pod_date IS NULL AND line_state = 'shipped'
+apps/api/app/services/supply_overview.py:83:WHERE pod_date IS NULL AND line_state = 'arrived'
+apps/api/app/services/supply_overview.py:86:WHERE pod_date IS NULL AND line_state = 'arrived'
+apps/api/app/services/supply_overview.py:102:AND lower(coalesce(fact_inbound_shipment.line_state, '')) NOT IN ('closed_shipped', 'closed_disappeared')
+apps/api/app/api/v1/endpoints/channel_ops.py:857:"line_state": line.line_state,
+apps/api/app/api/v1/endpoints/inbound_shipments.py:48:"line_state": s.line_state,
+apps/api/app/api/v1/endpoints/shipment_evidence.py:123:"line_state": row.line_state,
+apps/api/app/api/v1/endpoints/shipment_evidence.py:171:line_state = kwargs.get("line_state")
+apps/api/app/api/v1/endpoints/shipment_evidence.py:178:if line_state:
+apps/api/app/api/v1/endpoints/shipment_evidence.py:179:stmt = stmt.where(model.line_state == line_state)
+apps/api/app/api/v1/endpoints/shipment_evidence.py:1421:line_state: str | None = None,
+apps/api/app/api/v1/endpoints/shipment_evidence.py:1431:"line_state": line_state,
+apps/api/app/api/v1/endpoints/shipping.py:150:line_state = kwargs.get("line_state")
+apps/api/app/api/v1/endpoints/shipping.py:182:if line_state:
+apps/api/app/api/v1/endpoints/shipping.py:183:stmt = stmt.where(FactInboundShipment.line_state == line_state)
+apps/api/app/api/v1/endpoints/shipping.py:305:line_state: str | None = None,
+apps/api/app/api/v1/endpoints/shipping.py:334:"line_state": line_state,
+apps/api/app/api/v1/endpoints/shipping.py:366:"line_state",
+apps/api/app/api/v1/endpoints/shipping.py:590:"""Counted open quantity for the open_order rows of one grid page (D-0065).
+apps/api/app/api/v1/endpoints/shipping.py:596:open_ids = [int(r.id) for r in rows if (r.line_state or "").strip().lower() == "open_order"]
+apps/api/app/api/v1/endpoints/shipping.py:652:"line_state": row.line_state,
+apps/api/app/api/v1/endpoints/shipping.py:815:line_state: str | None = None,
+apps/api/app/api/v1/endpoints/shipping.py:850:line_state=line_state,
+apps/api/app/api/v1/endpoints/shipping.py:1088:line_state: str | None = None,
+apps/api/app/api/v1/endpoints/shipping.py:1121:line_state=line_state,
+apps/api/app/api/v1/endpoints/shipping.py:1204:line_state: str | None = None,
+apps/api/app/api/v1/endpoints/shipping.py:1239:line_state=line_state,
+apps/api/app/api/v1/endpoints/shipping.py:1350:select(FactInboundShipment.line_state, func.count())
+apps/api/app/api/v1/endpoints/shipping.py:1352:.group_by(FactInboundShipment.line_state)
+apps/api/app/api/v1/endpoints/shipping.py:1353:.order_by(FactInboundShipment.line_state)
+apps/api/app/api/v1/endpoints/shipping.py:1395:"by_line_state": rows_to_items(by_state),
+apps/api/app/api/v1/endpoints/shipping.py:1410:line_state: str | None = None,
+apps/api/app/api/v1/endpoints/shipping.py:1446:line_state=line_state,
+apps/api/app/api/v1/endpoints/shipping.py:1622:"line_state": row.line_state,
+apps/api/app/api/v1/endpoints/shipping.py:1728:"line_state": row.line_state,
+apps/api/app/api/v1/endpoints/shipping.py:1779:"line_state": item.line_state,
+apps/api/app/api/v1/endpoints/shipping.py:1812:"line_state": None,
+apps/api/app/query/handlers/a1_pve.py:15:"line_state_shipped_evidence",
+apps/api/app/query/handlers/a1_pve.py:23:"shipment evidence SUM(quantity) WHERE line_state='shipped' GROUP BY customer, product",
+apps/api/app/query/handlers/a1_pve.py:24:"open_order → pipeline_units only (never fill numerator)",
+apps/api/app/query/handlers/a3_stock.py:47:"inbound WHERE pod_date > snapshot AND line_state=shipped",
+apps/api/app/query/model/rules.py:77:is_open = func.lower(f.c.line_state) == "open_order"
+apps/api/app/query/model/rules.py:86:is_open = func.lower(f.c.line_state) == "open_order"
+apps/api/app/services/channel_intelligence/customer_stock_gap.py:334:func.lower(FactInboundShipment.line_state) == "shipped",
+apps/api/app/services/channel_intelligence/customer_stock_gap_cause.py:184:func.lower(sh.line_state) == "shipped",
+apps/api/app/services/channel_intelligence/sell_through_causes.py:121:func.lower(sh.line_state) == "shipped",
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:7:pipeline — ``line_state='open_order'``
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:8:shipped  — ``line_state='shipped'`` and ``pod_date IS NULL``
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:9:arrived  — ``line_state='arrived'`` and ``pod_date IS NULL`` (leaves the open pipeline; counted once)
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:87:def lifecycle_bucket(line_state: str | None, pod_date: date | None) -> LifecycleBucket | None:
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:88:"""Classify one shipment line. A proof-of-delivery date is landed and wins over line_state.
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:95:if line_state == "open_order":
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:97:if line_state == "shipped":
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:99:if line_state == "arrived":
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:106:line_state: str | None,
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:113:if line_state != "shipped" or pod_date is not None:
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:328:bucket = lifecycle_bucket(row.line_state, row.pod_date)
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:338:line_state=row.line_state,
+apps/api/app/services/commercial_planner/inbound_lineup_quarter.py:555:"arrived_units = plan-quarter line_state arrived ∧ pod_date IS NULL, "
+apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:148:# under row security) runs only when open_order rows fall in the window; other rows are never
+apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:157:is_open = func.lower(FactInboundShipment.line_state) == "open_order"
+apps/api/app/services/commercial_planner/lineup_case_suggested_pos.py:30:return func.coalesce(func.sum(EV.quantity).filter(EV.line_state == "shipped"), 0)
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:134:open_order_units: float = 0.0
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:207:line_state = (ship.line_state or "").strip().lower()
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:208:if line_state != "shipped":
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:526:line_state = (ship.line_state or "").strip().lower()
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:596:if line_state == "shipped":
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:598:elif line_state == "open_order":
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:599:pm.open_order_units += ship_qty
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:714:"open_order_units": round(m.open_order_units, 4),
+apps/api/app/services/commercial_planner/lineup_po_auto_link.py:720:"total_open_order_units": round(sum(m.open_order_units for m in products), 4),
+apps/api/app/services/commercial_planner/lineup_po_gap.py:79:(FactInboundShipment.line_state == "shipped", FactInboundShipment.quantity),
+apps/api/app/services/commercial_planner/lineup_po_reconciliation.py:7:``shipped_units`` counts SHIPPED execution only (``line_state='shipped'``). ``open_order``
+apps/api/app/services/commercial_planner/lineup_po_reconciliation.py:184:# SHIPPED execution only (line_state='shipped'). Bitemporal read is ON so
+apps/api/app/services/commercial_planner/lineup_po_reconciliation.py:185:# apply_active_evidence_filter is a no-op — the line_state gate MUST be explicit
+apps/api/app/services/commercial_planner/lineup_po_reconciliation.py:186:# here or open_order (pipeline) inbound leaks into shipped and inflates fill rate.
+apps/api/app/services/commercial_planner/lineup_po_reconciliation.py:208:EV.line_state == LINE_SHIPPED,
+apps/api/app/services/commercial_planner/lineup_po_reconciliation.py:219:# PIPELINE (line_state='open_order'): allocated/inbound, NOT shipped. Surfaced as its
+apps/api/app/services/commercial_planner/lineup_po_reconciliation.py:237:EV.line_state == LINE_OPEN_ORDER,
+apps/api/app/services/commercial_planner/plan_vs_executed.py:410:# Pipeline (open_order) is forward/inbound, never in fill. Tile = open_order units on
+apps/api/app/services/commercial_planner/plan_vs_executed.py:412:# when it has open_order inbound, else "cold". See PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md.
+apps/api/app/services/commercial_planner/plan_vs_executed.py:744:EV.line_state == LINE_SHIPPED,
+apps/api/app/services/commercial_planner/po_management.py:144:(FactInboundShipment.line_state == "shipped", FactInboundShipment.quantity),
+apps/api/app/services/commercial_planner/po_management.py:149:FactInboundShipment.line_state == "shipped",
+apps/api/app/services/imports/dsi_distributor_receipt_disambiguation.py:96:AND line_state = 'shipped'
+apps/api/app/services/imports/dsi_temporal_supersession.py:66:AND line_state = 'shipped'
+apps/api/app/services/imports/import_job_delete_figures.py:821:shipped = [r for r in rows if (r.get("line_state") or "").strip().lower() == "shipped" and r.get("fact_upsert_key")]
+apps/api/app/services/imports/shipment_change_events.py:102:def _line_state_norm(obs: ShipmentEvidenceObservation) -> str:
+apps/api/app/services/imports/shipment_change_events.py:103:return (obs.line_state or "").strip().lower()
+apps/api/app/services/imports/shipment_change_events.py:107:state = _line_state_norm(obs)
+apps/api/app/services/imports/shipment_change_events.py:254:func.lower(func.coalesce(ShipmentEvidenceObservation.line_state, "")) == "shipped",
+apps/api/app/services/imports/shipment_change_events.py:349:st = _line_state_norm(obs)
+apps/api/app/services/imports/shipment_change_events.py:350:if st in ("open_order", "open", "unship"):
+apps/api/app/services/imports/shipment_change_events.py:375:"prior_line_state": "open_order",
+apps/api/app/services/imports/shipment_change_events.py:376:"current_line_state": "shipped",
+apps/api/app/services/imports/shipment_change_events.py:406:"prior_line_state": "shipped",
+apps/api/app/services/imports/shipment_change_events.py:407:"current_line_state": "shipped",
+apps/api/app/services/imports/shipment_change_events.py:436:"prior_line_state": "open_order",
+apps/api/app/services/imports/shipment_change_events.py:437:"current_line_state": state,
+apps/api/app/services/imports/shipment_evidence_import.py:750:"line_state": ex.line_state,
+apps/api/app/services/imports/shipment_evidence_import.py:1018:"""List of (sheet_name, dataframe, report_type, line_state).
+apps/api/app/services/imports/shipment_evidence_import.py:1148:from app.services.imports.shipment_open_book import line_state_for_shipped_sheet
+apps/api/app/services/imports/shipment_evidence_import.py:1153:for sheet_name, frame, report_type, line_state in frames:
+apps/api/app/services/imports/shipment_evidence_import.py:1245:stored_line_state = line_state_for_shipped_sheet(
+apps/api/app/services/imports/shipment_evidence_import.py:1246:line_state,
+apps/api/app/services/imports/shipment_evidence_import.py:1256:"line_state": stored_line_state,
+apps/api/app/services/imports/shipment_evidence_line_identity.py:18:line_state: Any = None,
+apps/api/app/services/imports/shipment_evidence_line_identity.py:34:"line_state": line_state,
+apps/api/app/services/imports/shipment_evidence_line_identity.py:43:state = (line_state or "").strip().lower()
+apps/api/app/services/imports/shipment_evidence_line_identity.py:79:line_state=values.get("line_state"),
+apps/api/app/services/imports/shipment_evidence_line_identity.py:133:line_state = (values.get("line_state") or "").strip().lower()
+apps/api/app/services/imports/shipment_evidence_line_identity.py:134:if line_state == "shipped":
+apps/api/app/services/imports/shipment_evidence_line_identity.py:184:"line_state",
+apps/api/app/services/imports/shipment_evidence_observations.py:31:"line_state",
+apps/api/app/services/imports/shipment_evidence_report_detect.py:16:LINE_OPEN_ORDER = "open_order"
+apps/api/app/services/imports/shipment_evidence_report_detect.py:23:"""Return (report_type, line_state). Column names are compared case-insensitively."""
+apps/api/app/services/imports/shipment_field_mapping.py:387:"line_state": ls,
+apps/api/app/services/imports/shipment_inbound_facts.py:39:"line_state",
+apps/api/app/services/imports/shipment_inbound_facts.py:119:"line_state": line.line_state,
+apps/api/app/services/imports/shipment_inbound_facts.py:202:if (existing.get("line_state") or "").strip().lower() == "shipped" and (
+apps/api/app/services/imports/shipment_inbound_facts.py:203:row.get("line_state") or ""
+apps/api/app/services/imports/shipment_inbound_facts.py:223:def _upsert_open_order_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) -> None:
+apps/api/app/services/imports/shipment_inbound_facts.py:238:line_state = (row_values.get("line_state") or "").strip().lower()
+apps/api/app/services/imports/shipment_inbound_facts.py:239:if line_state == "shipped":
+apps/api/app/services/imports/shipment_inbound_facts.py:242:_upsert_open_order_chunk(db, tbl, [row_values])
+apps/api/app/services/imports/shipment_inbound_facts.py:253:shipped_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() == "shipped"]
+apps/api/app/services/imports/shipment_inbound_facts.py:254:open_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() != "shipped"]
+apps/api/app/services/imports/shipment_inbound_facts.py:257:_upsert_open_order_chunk(db, tbl, open_rows)
+apps/api/app/services/imports/shipment_invoice_graduation.py:45:o.line_state,
+apps/api/app/services/imports/shipment_invoice_graduation.py:130:def _line_state_norm(obs: ShipmentEvidenceObservation) -> str:
+apps/api/app/services/imports/shipment_invoice_graduation.py:131:return (obs.line_state or "").strip().lower()
+apps/api/app/services/imports/shipment_invoice_graduation.py:135:if _line_state_norm(obs) != "shipped":
+apps/api/app/services/imports/shipment_invoice_graduation.py:144:if _line_state_norm(obs) != "shipped":
+apps/api/app/services/imports/shipment_open_book.py:9:``line_state`` is already ``varchar(32)``. ``closed_shipped`` and
+apps/api/app/services/imports/shipment_open_book.py:50:return func.lower(func.coalesce(model.line_state, "")).notin_(tuple(CLOSED_LINE_STATES))
+apps/api/app/services/imports/shipment_open_book.py:53:def line_state_for_shipped_sheet(
+apps/api/app/services/imports/shipment_open_book.py:54:line_state: str | None,
+apps/api/app/services/imports/shipment_open_book.py:65:state = (line_state or "").strip().lower()
+apps/api/app/services/imports/shipment_open_book.py:67:return line_state or ""
+apps/api/app/services/imports/shipment_open_book.py:138:SET line_state = 'open_order', updated_at = now()
+apps/api/app/services/imports/shipment_open_book.py:139:WHERE lower(line_state) = 'shipped'
+apps/api/app/services/imports/shipment_open_book.py:183:WHERE lower(line_state) = 'shipped'
+apps/api/app/services/imports/shipment_open_book.py:340:itself only touches ``open_order`` rows.
+apps/api/app/services/imports/shipment_open_book.py:353:AND lower(s.line_state) = 'shipped'
+apps/api/app/services/imports/shipment_open_book.py:367:lower(f.line_state) = 'open_order'
+apps/api/app/services/imports/shipment_open_book.py:370:AND lower(f.line_state) = 'shipped'
+apps/api/app/services/imports/shipment_open_book.py:384:SET line_state = {_CLASSIFY_SQL},
+apps/api/app/services/imports/shipment_open_book.py:388:AND lower(f.line_state) = 'open_order'
+apps/api/app/services/imports/shipment_open_book.py:389:RETURNING f.id, f.line_state, f.quantity, f.order_no, f.item_code,
+apps/api/app/services/imports/shipment_open_book.py:395:SELECT f.id, {_CLASSIFY_SQL} AS line_state, f.quantity, f.order_no, f.item_code,
+apps/api/app/services/imports/shipment_open_book.py:454:"line_state": fact.line_state,
+apps/api/app/services/imports/shipment_open_book.py:494:line_state=LINE_OPEN_ORDER,
+apps/api/app/services/imports/shipment_open_book.py:527:"line_state": row["line_state"],
+apps/api/app/services/imports/shipment_open_book.py:548:"closed_shipped": sum(1 for row in listed if row["line_state"] == LINE_CLOSED_SHIPPED),
+apps/api/app/services/imports/shipment_open_book.py:549:"closed_disappeared": sum(1 for row in listed if row["line_state"] == LINE_CLOSED_DISAPPEARED),
+apps/api/app/services/imports/shipment_plan_d_cutover.py:86:"line_state": obs.line_state,
+apps/api/app/services/imports/shipment_plan_d_cutover.py:153:WHERE lower(line_state) = 'shipped'
+apps/api/app/services/imports/shipment_plan_d_cutover.py:172:def count_open_order_identity_keys_in_view(db: Session) -> int:
+apps/api/app/services/imports/shipment_plan_d_cutover.py:201:WHERE lower(line_state) = 'shipped'
+apps/api/app/services/imports/shipment_plan_d_cutover.py:223:open_order_keys = count_open_order_identity_keys_in_view(db)
+apps/api/app/services/imports/shipment_plan_d_cutover.py:227:expected_min = shipped_groups + open_order_keys
+apps/api/app/services/imports/shipment_plan_d_cutover.py:229:abs(view_count - (shipped_groups + open_order_keys)) <= 200
+apps/api/app/services/imports/shipment_plan_d_cutover.py:238:"open_order_keys_in_view": open_order_keys,
+apps/api/app/services/imports/shipment_plan_d_cutover.py:281:def open_order_shipped_fact_double_count_diagnostic(db: Session) -> dict[str, Any]:
+apps/api/app/services/imports/shipment_plan_d_cutover.py:289:WHERE lower(line_state) = 'open_order'
+apps/api/app/services/imports/shipment_plan_d_cutover.py:296:WHERE lower(line_state) = 'shipped'
+apps/api/app/services/imports/shipment_shipped_fact_identity_twin_merge.py:68:select(FactInboundShipment).where(FactInboundShipment.line_state == "shipped")
+apps/api/app/services/imports/shipment_shipped_fact_identity_twin_merge.py:103:if (f.line_state or "").strip().lower() != "shipped":
+apps/api/app/services/imports/shipment_shipped_fact_identity_twin_merge.py:119:if (f.line_state or "").strip().lower() != "shipped":
+apps/api/app/services/imports/shipment_shipped_fact_identity_twin_merge.py:197:select(FactInboundShipment).where(FactInboundShipment.line_state == "shipped")
+apps/api/app/services/imports/shipment_shipped_fact_identity_twin_merge.py:370:).where(FactInboundShipment.line_state == "shipped")
+apps/api/app/services/imports/shipment_shipped_fact_identity_twin_merge.py:378:FactInboundShipment.line_state == "shipped",
+apps/api/app/services/imports/shipment_shipped_fact_identity_twin_merge.py:431:FactInboundShipment.line_state == "shipped",
+apps/api/app/services/imports/woc_observation.py:163:AND lower(sh.line_state) = 'shipped'
+apps/api/app/services/lineup/net_requirement.py:43:_OPEN_PO_LINE_STATES = frozenset({"open_order", "pipeline"})
+apps/api/app/services/lineup/net_requirement.py:195:FactInboundShipment.line_state == "shipped",
+apps/api/app/services/lineup/net_requirement.py:198:open_po = FactInboundShipment.line_state.in_(tuple(_OPEN_PO_LINE_STATES))
+apps/api/app/services/lineup/net_requirement.py:380:"shipped∧pod_date IS NULL OR line_state∈{open_order,pipeline}; "
+apps/api/scripts/ops/append_open_book_readers.py:1:"""Append the open_order / line_state reader list to the discovery note.
+apps/api/scripts/ops/append_open_book_readers.py:15:=== 1b. Readers of open_order or line_state ===
+apps/api/scripts/ops/append_open_book_readers.py:17:Closing does not add a column. line_state becomes closed_shipped or
+apps/api/scripts/ops/append_open_book_readers.py:19:line_state = open_order, or line_state = shipped, does not count a closed
+apps/api/scripts/ops/append_open_book_readers.py:25:from received. Pipeline was already line_state = open_order.
+apps/api/scripts/ops/append_open_book_readers.py:28:summary. still-to-ship already requires line_state = open_order.
+apps/api/scripts/ops/append_open_book_readers.py:32:line_state = open_order. A closed row contributes 0.
+apps/api/scripts/ops/append_open_book_readers.py:34:shipped and open_order, so a closed row is not a twin and is not an open
+apps/api/scripts/ops/append_open_book_readers.py:42:po_management.py count open_order or shipped, not a closed state.
+apps/api/scripts/ops/append_open_book_readers.py:43:- app/services/lineup/net_requirement.py keeps open_order and pipeline.
+apps/api/scripts/ops/append_open_book_readers.py:63:File and line for every apps/api occurrence of open_order or line_state follows.
+apps/api/scripts/ops/append_open_book_readers.py:74:if "open_order" in line or "line_state" in line:
+apps/api/scripts/ops/backfill_sticky_pod_facts.py:71:FactInboundShipment.line_state == "shipped",
+apps/api/scripts/ops/backfill_sticky_pod_facts.py:112:WHERE lower(coalesce(line_state,'')) = 'shipped' AND pod_date IS NULL
+apps/api/scripts/ops/close_open_book.py:4:reclassify shipped facts with no ship-confirm date to open_order, close open facts
+apps/api/scripts/ops/close_open_book.py:41:count(*) FILTER (WHERE lower(line_state) = 'open_order') AS open_lines,
+apps/api/scripts/ops/close_open_book.py:42:coalesce(sum(quantity) FILTER (WHERE lower(line_state) = 'open_order'), 0) AS open_units,
+apps/api/scripts/ops/close_open_book.py:43:count(*) FILTER (WHERE lower(line_state) = 'shipped') AS shipped_lines,
+apps/api/scripts/ops/close_open_book.py:44:coalesce(sum(quantity) FILTER (WHERE lower(line_state) = 'shipped'), 0) AS shipped_units,
+apps/api/scripts/ops/close_open_book.py:46:WHERE lower(line_state) = 'shipped' AND ship_confirm_date IS NOT NULL
+apps/api/scripts/ops/close_open_book.py:49:WHERE lower(line_state) = 'shipped' AND pod_date IS NOT NULL
+apps/api/scripts/ops/close_open_book.py:51:count(*) FILTER (WHERE lower(line_state) = 'closed_shipped') AS closed_shipped_lines,
+apps/api/scripts/ops/close_open_book.py:52:coalesce(sum(quantity) FILTER (WHERE lower(line_state) = 'closed_shipped'), 0) AS closed_shipped_units,
+apps/api/scripts/ops/close_open_book.py:53:count(*) FILTER (WHERE lower(line_state) = 'closed_disappeared') AS closed_disappeared_lines,
+apps/api/scripts/ops/close_open_book.py:54:coalesce(sum(quantity) FILTER (WHERE lower(line_state) = 'closed_disappeared'), 0) AS closed_disappeared_units
+apps/api/scripts/ops/close_open_book.py:89:"closed_shipped": sum(1 for row in rows if row["line_state"] == "closed_shipped"),
+apps/api/scripts/ops/close_open_book.py:90:"closed_disappeared": sum(1 for row in rows if row["line_state"] == "closed_disappeared"),
+apps/api/scripts/ops/open_book_discovery.py:30:lines: list[str] = ["", "=== readers of open_order or line_state under apps/api ==="]
+apps/api/scripts/ops/open_book_discovery.py:39:if "open_order" in line or "line_state" in line:
+apps/api/scripts/ops/run_plan_d_phase1_clone_proof.py:22:open_order_shipped_fact_double_count_diagnostic,
+apps/api/scripts/ops/run_plan_d_phase1_clone_proof.py:148:diag = open_order_shipped_fact_double_count_diagnostic(db)
+apps/api/scripts/ops/session_d_readonly_evidence.py:112:SELECT line_state, count(*) AS cnt
+apps/api/scripts/ops/session_d_readonly_evidence.py:114:GROUP BY line_state
+apps/api/scripts/ops/session_d_readonly_evidence.py:115:ORDER BY line_state
+apps/api/scripts/ops/session_d_readonly_evidence.py:117:"7.4 fact_inbound_shipment by line_state",
+apps/api/scripts/ops/session_d_readonly_evidence.py:130:WHERE line_state = 'shipped' AND pod_date IS NULL
+apps/api/scripts/ops/session_d_readonly_evidence.py:133:WHERE line_state = 'shipped' AND pod_date IS NULL
+apps/api/scripts/ops/session_d_unit6f_cip_test_walk.py:191:line_state="shipped",
+apps/api/scripts/ops/session_d_unit6f_cip_test_walk.py:207:line_state="shipped",
+apps/api/scripts/ops/session_d_unit6f_cip_test_walk.py:223:line_state="shipped",
+apps/api/scripts/ops/w1_pve_recon_audit.py:164:SELECT line_state, report_type, COUNT(*) AS row_count, COALESCE(SUM(quantity),0) AS qty_sum
+apps/api/scripts/ops/w1_pve_recon_audit.py:167:GROUP BY line_state, report_type
+apps/api/scripts/ops/w1_pve_recon_audit.py:168:ORDER BY report_type, line_state
+apps/api/scripts/ops/w1_pve_recon_audit.py:183:SELECT line_state, COUNT(*) AS row_count, COALESCE(SUM(quantity),0) AS qty_sum
+apps/api/scripts/ops/w1_pve_recon_audit.py:186:GROUP BY line_state
+apps/api/scripts/ops/w1_pve_recon_audit.py:199:AND line_state = 'shipped'
+apps/api/scripts/ops/w1_pve_recon_audit.py:219:def _sum_by_state(rows: list[dict], report_type: str, line_state: str) -> tuple[int, float]:
+apps/api/scripts/ops/w1_pve_recon_audit.py:221:if r.get("report_type") == report_type and r.get("line_state") == line_state:
+apps/api/scripts/ops/w1_pve_recon_audit.py:226:un_rt, un_st = "acza_workbook_unship", "open_order"
+apps/api/scripts/ops/w1_pve_recon_audit.py:233:fact_all_ship = sum(float(r["qty_sum"]) for r in fact if r.get("line_state") == "shipped")
+apps/api/scripts/ops/w1_pve_recon_audit.py:234:fact_all_un = sum(float(r["qty_sum"]) for r in fact if r.get("line_state") == "open_order")
+apps/api/scripts/ops/w1_pve_recon_audit.py:235:fact_j310_ship = sum(float(r["qty_sum"]) for r in fact_totals if r.get("line_state") == "shipped")
+apps/api/scripts/ops/w1_pve_recon_audit.py:236:fact_j310_un = sum(float(r["qty_sum"]) for r in fact_totals if r.get("line_state") == "open_order")

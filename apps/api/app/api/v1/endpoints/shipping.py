@@ -32,6 +32,7 @@ from app.services.shipping.amount_scale import (
     amount_scale_not_suspect_clause,
     amount_scale_suspect_clause,
 )
+from app.services.imports.shipment_open_book import exclude_closed_inbound
 from app.services.shipment_strict_pair import keep_counted_line, skipped_open_twin_line, twin_remainder
 from app.services.shipping.newly_landed import newly_landed_transitions
 from app.services.shipping.observation_transitions import (
@@ -168,6 +169,7 @@ def _apply_fact_where_clause(
     stmt = stmt.where(FactInboundShipment.tenant_id == tenant_id)
     # D-0057 + D-0065: skip an open line its strict shipped twins cover; a partly shipped one stays.
     stmt = stmt.where(keep_counted_line(FactInboundShipment))
+    stmt = stmt.where(exclude_closed_inbound(FactInboundShipment))
 
     if import_job_id is not None:
         stmt = stmt.where(FactInboundShipment.import_job_id == import_job_id)
@@ -747,6 +749,7 @@ async def _eta_shift_metrics(
     ).select_from(FactInboundShipment)
     # Same line scope as the KPI tiles on every path, filtered or not (D-0057 + D-0065).
     fact_scope = fact_scope.where(keep_counted_line(FactInboundShipment))
+    fact_scope = fact_scope.where(exclude_closed_inbound(FactInboundShipment))
     if require_current_incoming:
         fact_scope = fact_scope.where(predicate_current_incoming(ref))
     if scoped_ids is not None:
@@ -1338,7 +1341,11 @@ async def shipping_evidence_summary(
     many were skipped. There are no unit totals here.
     """
     tenant_scope = where_tenant(FactInboundShipment.tenant_id, user)
-    tenant_f = and_(tenant_scope, keep_counted_line(FactInboundShipment))
+    tenant_f = and_(
+        tenant_scope,
+        keep_counted_line(FactInboundShipment),
+        exclude_closed_inbound(FactInboundShipment),
+    )
     by_state = await db.execute(
         select(FactInboundShipment.line_state, func.count())
         .where(tenant_f)

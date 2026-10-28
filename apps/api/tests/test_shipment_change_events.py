@@ -155,6 +155,70 @@ def test_split_lines_independent_chains():
     assert by_key[k1][0].line_identity_key != by_key[k2][0].line_identity_key
 
 
+def test_close_marker_keeps_the_earlier_date_slip():
+    """A close observation dated between two opens must not replace the date slip."""
+    t0 = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    mid = datetime(2026, 9, 11, tzinfo=timezone.utc)
+    t1 = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    key = "order:|SO-SLIP|1|ITEM-SLIP"
+    prior = _obs(
+        id=1,
+        key=key,
+        job_id=10,
+        line_state="open_order",
+        valid_from=t0,
+        qty=5,
+        est_pod=date(2026, 10, 11),
+        ou="",
+        order_no="SO-SLIP",
+        order_line="1",
+        item="ITEM-SLIP",
+    )
+    closed = _obs(
+        id=2,
+        key=key,
+        job_id=20,
+        line_state="closed_disappeared",
+        valid_from=mid,
+        qty=5,
+        est_pod=date(2026, 10, 18),
+        ou="",
+        order_no="SO-SLIP",
+        order_line="1",
+        item="ITEM-SLIP",
+    )
+    closed.raw_source_row = {"open_book_report_date": "2026-09-11", "open_book_closed_by_job_id": 20}
+    later = _obs(
+        id=3,
+        key=key,
+        job_id=30,
+        line_state="open_order",
+        valid_from=t1,
+        qty=5,
+        est_pod=date(2026, 10, 18),
+        ou="",
+        order_no="SO-SLIP",
+        order_line="1",
+        item="ITEM-SLIP",
+    )
+
+    class _FakeDB:
+        def scalars(self, stmt):
+            return _FakeResult([prior, closed, later])
+
+    events = derive_change_events(_FakeDB(), line_identity_key=key, limit=100)
+    slips = [e for e in events if e.event_type == "date_slip"]
+    assert len(slips) == 1
+    assert slips[0].details["days_moved"] == 7
+    assert slips[0].prior_observation_id == 1
+    assert slips[0].observation_id == 3
+    closes = [e for e in events if e.event_type == "closed_disappeared"]
+    assert len(closes) == 1
+    assert closes[0].observation_id == 2
+    assert closes[0].details["report_date"] == "2026-09-11"
+    assert not any(e.event_type in ("qty_change", "graduated", "pod_reversal") for e in events)
+
+
 class _FakeResult:
     def __init__(self, items):
         self._items = items
