@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-10-28 - **Memory:** E6–E9 recorded as committed (`a4118c30`, pin `31d96a7a`). Programme views published through snapshot 2794 (N-0114–N-0116, proposed D-0116–D-0130) in `e3b3c7ce`. E4 and E10 stay UNVERIFIED. No node acceptance, no migration, no main.
 - 2026-10-28 - **Dashboard home:** model measures listed on the left; a new chart grows in height only, and widgets already on the board keep their size. Editor stays a dialog. Commit `a4118c30`. Not node acceptance. E10 still wants an independent pass.
 - 2026-10-27 - **E6–E9 on one branch:** returns, sell-in, shipment quantity, distributor on-hand, lineup units, recorded prices; day grain on day-floored facts only; prior-year, running total, share of total; non-default calendars use BusinessCalendar buckets. Cover, value and open stay the existing refusals. E10 not independently verified. Dashboard long charts grow into more cells. Not committed. No node acceptance, no migration, no main.
 - 2026-10-27 - **E6 tenant overlay on v2 counterparts:** hide/narrow/label applies to the legacy measure, its line avg/min/max, and calculated inputs. Allowlisted `specs_json` keys use a bound extract. Graph+E6 38 passed. Spec/avg SQL 1 passed on cip_test, rolled back. Not committed. No node acceptance, no migration, no main. E4 review stays UNVERIFIED. E7 not started.
