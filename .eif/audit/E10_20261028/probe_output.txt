@@ -1,0 +1,17 @@
+A.db = cip_test
+A1 prior_year window 2026-03..04 rows={'2026-03-01': (Decimal('29.0000'), None), '2026-04-01': (Decimal('6.0000'), None)}  expected 2026-03-01 prior_year=100
+A1b prior_year no window rows={'2025-03-01': (Decimal('100.0000'), None), '2026-03-01': (Decimal('29.0000'), Decimal('100.0000')), '2026-04-01': (Decimal('6.0000'), None), '2026-12-01': (Decimal('2.0000'), None), '2027-01-01': (Decimal('9.0000'), None)}
+A2 sunday weeks + prior rows=[('2026-03-15', 7.0), ('2026-03-22', 0.0), ('2026-03-29', 7.0)] rows_sum=14.0 total=19.0
+A2b sunday weeks control rows=[('2026-03-01', 5.0), ('2026-03-15', 7.0), ('2026-03-22', 0.0), ('2026-03-29', 7.0)] rows_sum=19.0 total=19.0
+A3 retail_445 month + prior rows=[('P03 FY25', '2025-02-24', Decimal('100.0000'), None), ('P03 FY26', '2026-02-23', Decimal('22.0000'), None), ('P04 FY26', '2026-03-30', Decimal('13.0000'), None), ('P01 FY27', '2026-12-28', Decimal('11.0000'), None)]
+A4 share sum over rows=1.000000 rows=5 total_units=46.0
+A4 rows=[('2026-03-01', 5186, 19.0, 19.0), ('2026-03-01', 5187, 10.0, 10.0), ('2026-04-01', 5186, 6.0, 25.0), ('2026-12-01', 5186, 2.0, 27.0), ('2027-01-01', 5187, 9.0, 19.0)]
+B.db = cip
+B1 shipment line_state: [('open_order', 1775, 0, Decimal('127870.0000')), ('shipped', 13471, 13450, Decimal('1348275.0000'))]
+B2 open lines raw vs twin-counted: (1775, Decimal('127870.0000'), Decimal('85250.0000'), 0)
+B3 shipment customer_id null but resolved set / distributor same / customer differs: (1231, 48, 1231)
+B4 sell-in rows, distinct day-of-month, on day 1, on Monday, min, max: (0, 0, 0, 0, None, None)
+B5 fact_pricing currencies: []
+B6 lineup cases with null commercial_status / all: (0, 36)
+B7 week grain platform: rows=144 ms=265
+B7 week grain retail_445: rows=144 ms=1858
