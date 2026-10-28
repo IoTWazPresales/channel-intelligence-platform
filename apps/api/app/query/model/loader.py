@@ -37,8 +37,12 @@ CALC_KINDS = frozenset({
 TIME_FLOORS = frozenset({"day", "stored_period_type"})
 NULL_KEYS = frozenset({"unassigned", "exclude_when_grouped"})
 # Rules and measure expressions that need SQL are built in code (rules.py); the file only names them.
-KNOWN_RULES = frozenset({"cpor_portfolio_lines", "lineup_current_cases", "shipment_twin_remainder"})
-KNOWN_MEASURE_RULES = frozenset({"cpor_line_support_usd", "shipment_counted_quantity"})
+KNOWN_RULES = frozenset({"cpor_portfolio_lines", "lineup_current_cases"})
+KNOWN_MEASURE_RULES = frozenset({
+    "cpor_line_support_usd",
+    "shipment_open_quantity",
+    "shipment_open_line",
+})
 
 _ID = re.compile(r"^[a-z][a-z0-9_]*$")
 _MEASURE_ID = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
@@ -134,6 +138,8 @@ class Measure:
     additivity: str
     legacy_key: str | None
     kind: str = "base"
+    # False: the planner refuses a period breakdown or a period window for this measure.
+    allows_period: bool = True
 
 
 @dataclass(frozen=True)
@@ -446,6 +452,7 @@ def _parse_model(
             latest_per=latest_per or None,
             additivity=additivity,
             legacy_key=(str(mb["legacy_key"]) if mb.get("legacy_key") else None),
+            allows_period=mb.get("period", True) is not False,
         )
 
     return FactModel(

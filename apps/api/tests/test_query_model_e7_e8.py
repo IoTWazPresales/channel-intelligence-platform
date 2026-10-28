@@ -1,5 +1,8 @@
 """E7 models and E8 day / calendar / calculated measures. No database."""
 
+from datetime import date
+
+from app.query.model import compiler
 from app.query.model.compiler import compile_plan
 from app.query.model.graph import DAILY_REFUSAL, V2Request, plan_request
 from app.query.model.loader import clear_model_cache, default_model
@@ -82,11 +85,90 @@ def test_retail_week_bucket_is_not_a_thousand_arm_case():
     assert "isodow" in sql
 
 
-def test_shipments_count_the_twin_remainder_on_the_resolved_customer():
+def test_shipments_count_shipped_lines_on_the_resolved_customer():
     dm, plan = _plan(["shipments.quantity", "shipments.lines"], ["customer"])
+    assert plan.ok, plan.refusals
+    sql = compile_plan(dm, plan, tenant_id="example").sql_text()
+    assert "f.resolved_customer_id" in sql
+    assert "f.customer_id" not in sql
+    assert "ship_confirm_date IS NOT NULL" in sql
+    assert "counted_qty" not in sql
+    assert "MATERIALIZED" not in sql
+
+
+def test_open_shipments_use_the_twin_remainder_and_refuse_a_period():
+    dm, plan = _plan(["shipments.open_quantity", "shipments.open_lines"], ["customer"])
     assert plan.ok, plan.refusals
     sql = compile_plan(dm, plan, tenant_id="example").sql_text()
     assert "f.resolved_customer_id" in sql
     assert "f.customer_id" not in sql
     assert "counted_qty" in sql
     assert "MATERIALIZED" in sql
+    _, refused = _plan(["shipments.open_quantity"], ["period"], "month")
+    assert not refused.ok
+    assert refused.measures == []
+    assert "period" in refused.refusals[0].reason
+    _, windowed = _plan(
+        ["shipments.open_quantity"],
+        ["customer"],
+        period_from="2026-01-01",
+        period_to="2026-03-31",
+    )
+    assert not windowed.ok
+    _, mixed = _plan(["shipments.quantity", "shipments.open_quantity"], ["period"], "month")
+    assert mixed.ok
+    assert [m.id for m in mixed.measures] == ["shipments.quantity"]
+    assert any(r.measure == "shipments.open_quantity" for r in mixed.refusals)
+
+
+def test_retail_prior_year_receives_the_bucket_start(monkeypatch):
+    seen = []
+    real = compiler.prior_year_bucket_expr
+
+    def spy(col, grain, calendar):
+        seen.append(col)
+        return real(col, grain, calendar)
+
+    monkeypatch.setattr(compiler, "prior_year_bucket_expr", spy)
+    cal = BusinessCalendar({"type": "retail_445"})
+    for grain in ("week", "month"):
+        seen.clear()
+        dm, plan = _plan(
+            ["dsi_sellout.units", "dsi_sellout.units_prior_year"],
+            ["period"],
+            grain,
+            period_from="2026-03-01",
+            period_to="2026-04-30",
+        )
+        assert plan.ok, plan.refusals
+        compile_plan(dm, plan, tenant_id="example", calendar=cal)
+        assert seen, grain
+        assert all(col.key == "bucket_start" for col in seen), grain
+
+
+def test_the_same_custom_calendar_request_compiles_to_the_same_sql():
+    periods = []
+    cursor = date(2024, 1, 5)
+    for _ in range(24):
+        periods.append({
+            "start": cursor.isoformat(),
+            "fiscal_year": cursor.year,
+            "quarter": (cursor.month - 1) // 3 + 1,
+        })
+        month = cursor.month + 1
+        year = cursor.year + (1 if month > 12 else 0)
+        cursor = date(year, 1 if month > 12 else month, 5)
+    cal = BusinessCalendar({"type": "custom", "custom_periods": periods})
+    dm, plan = _plan(
+        ["dsi_sellout.units", "dsi_sellout.units_prior_year"],
+        ["period"],
+        "month",
+        period_from="2026-03-01",
+        period_to="2026-04-30",
+    )
+    assert plan.ok, plan.refusals
+    first = compile_plan(dm, plan, tenant_id="example", calendar=cal).sql_text()
+    second = compile_plan(dm, plan, tenant_id="example", calendar=cal).sql_text()
+    assert first == second
+    assert "cumonth_0_from" in first
+    assert "cyst_0_from" in first

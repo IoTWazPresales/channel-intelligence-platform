@@ -33,7 +33,12 @@ from app.query.calendar_grain import PERIOD_GRAINS, bucket_end as _v1_bucket_end
 from app.query.model.calendar_sql import bucket_end_exclusive, bucket_start_expr, prior_year_bucket_expr
 from app.query.model.graph import Plan
 from app.query.model.loader import DataModel, FactModel, Measure, _tables
-from app.query.model.rules import MEASURE_RULES, MODEL_RULES
+from app.query.model.rules import (
+    MEASURE_RULES,
+    MODEL_RULES,
+    OPEN_MEASURE_RULES,
+    shipment_open_counts,
+)
 from app.query.model.tenant_restrictions import SPEC_KEY_RE, SPEC_PREFIX
 
 UNASSIGNED = "Unassigned"
@@ -204,16 +209,17 @@ class _Ctx:
         self.refs: dict[str, Any] = {}
         self.join_notes: list[str] = []
         self.calendar: Any = None
-        self.shipment_counted_qty: Any = None
-        self.shipment_kept: Any = None
+        self.include_open_twin = False
+        self.open_only = False
+        self.shipment_twin: Any = None
 
     def owner(self, via: str | None) -> Any:
         return self.f if via is None else self.base[via]
 
     def aliases(self) -> dict[str, Any]:
         out = {"__base__": self.f, **self.base}
-        if self.shipment_counted_qty is not None:
-            out["__shipment_counted_qty__"] = self.shipment_counted_qty
+        if self.shipment_twin is not None:
+            out["__shipment_twin__"] = self.shipment_twin
         return out
 
     def dim(self, did: str) -> Any:
@@ -251,16 +257,15 @@ class _Ctx:
             ref = self.dm.dimensions[did].references[rid]
             fr = fr.outerjoin(r, r.c[ref.key] == self.dims[did].c[ref.fk])
             self.join_notes.append(f"LEFT JOIN {ref.table} AS r_{rid} via d_{did} (current; null -> {UNASSIGNED})")
-        if "shipment_twin_remainder" in model.rules:
+        if self.include_open_twin:
             from app.models.facts import FactInboundShipment
             from app.services.shipment_strict_pair import twin_remainder
 
             twin = twin_remainder(FactInboundShipment)
             fr = fr.outerjoin(twin.subquery, twin.subquery.c.fact_id == self.f.c.id)
-            self.shipment_counted_qty = func.coalesce(twin.subquery.c.counted_qty, self.f.c.quantity)
-            self.shipment_kept = or_(twin.subquery.c.fact_id.is_(None), twin.subquery.c.counted_qty > 0)
+            self.shipment_twin = twin.subquery
             self.join_notes.append(
-                "LEFT JOIN shipment twin remainder (covered open lines left out; a partial line keeps the remainder)"
+                "LEFT JOIN shipment twin remainder (open measures only: covered open lines count 0)"
             )
         return fr
 
@@ -374,6 +379,9 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
     assert model is not None
     ctx = _Ctx(dm, model, tenant_id)
     ctx.calendar = None if platform_calendar(calendar) else calendar
+    open_measures = [m for m in plan.base_measures if m.rule in OPEN_MEASURE_RULES]
+    ctx.include_open_twin = bool(open_measures)
+    ctx.open_only = bool(plan.base_measures) and len(open_measures) == len(plan.base_measures)
     grain = plan.period_grain
     tcol = ctx.owner(model.time.on).c[model.time.column] if model.time is not None else None
 
@@ -383,9 +391,16 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
     # --- WHERE (shared by rows, totals and the stored-period check)
     conds: list[ColumnElement[bool]] = list(ctx.tenant_conds())
     for rule in model.rules:
-        if rule == "shipment_twin_remainder":
-            continue
         conds.extend(MODEL_RULES[rule](ctx.aliases()))
+    # A period of a null date is a null bucket. Shipped lines are dated; leave the undated
+    # rows out of a period breakdown so a window does not change the total.
+    if (
+        plan.period_grain
+        and model.time is not None
+        and plan.base_measures
+        and all(m.when_not_null == model.time.column for m in plan.base_measures)
+    ):
+        conds.append(tcol.is_not(None))
     for i, flt in enumerate(plan.filters):
         expr = filter_bds[flt.breakdown].filter_expr
         vals = [UNASSIGNED if v is None else v for v in flt.values]
@@ -452,8 +467,8 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
         )
 
     fr = ctx.from_clause()
-    if ctx.shipment_kept is not None:
-        conds.append(ctx.shipment_kept)
+    if ctx.open_only and ctx.shipment_twin is not None:
+        conds.append(shipment_open_counts(ctx.f, ctx.shipment_twin))
     if latest is not None:
         fr = fr.outerjoin(latest, latest.c.k == ctx.f.c[latest_measures[0].latest_per])
         ctx.join_notes.append("LEFT JOIN latest stock report date per customer (on or before period.to)")

@@ -407,6 +407,19 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if request_refusal is not None:
             plan.refusals.append(Refusal(measure=m.id, reason=request_refusal.reason, wall=request_refusal.wall))
             continue
+        if isinstance(m, Measure) and not m.allows_period and (
+            period_in or plan.period_from is not None or plan.period_to is not None
+        ):
+            plan.refusals.append(
+                Refusal(
+                    measure=m.id,
+                    reason=(
+                        f"{m.label} is not dated by a ship confirm date, so it cannot be "
+                        "broken down or filtered by period."
+                    ),
+                )
+            )
+            continue
         if isinstance(m, Measure) and m.additivity == "semi_additive" and period_in:
             wall = dm.wall("W-SNAPSHOT-NOT-SUMMED")
             plan.refusals.append(

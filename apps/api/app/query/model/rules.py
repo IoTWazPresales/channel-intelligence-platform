@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, case, func, literal_column
+from sqlalchemy import and_, case, func, literal, literal_column, or_
 from sqlalchemy.sql import ColumnElement
 
 # The remark markers is_voided_line looks for (services/cpor/pivot.py).
@@ -69,9 +69,30 @@ def cpor_line_support_usd(aliases: dict[str, Any]) -> ColumnElement[Any]:
     )
 
 
-def shipment_counted_quantity(aliases: dict[str, Any]) -> ColumnElement[Any]:
-    """Units after the strict-pair remainder. The compiler joins that remainder for the model rule."""
-    return aliases["__shipment_counted_qty__"]
+OPEN_MEASURE_RULES = frozenset({"shipment_open_quantity", "shipment_open_line"})
+
+
+def shipment_open_counts(f: Any, twin: Any) -> ColumnElement[bool]:
+    """An open line that still counts: no shipped twin, or a remainder above zero (D-0057, D-0065)."""
+    is_open = func.lower(f.c.line_state) == "open_order"
+    unpaired = and_(is_open, twin.c.fact_id.is_(None))
+    return or_(unpaired, twin.c.counted_qty > 0)
+
+
+def shipment_open_quantity(aliases: dict[str, Any]) -> ColumnElement[Any]:
+    """Uncovered open units. A covered open line is 0. A partial line is its remainder."""
+    f = aliases["__base__"]
+    twin = aliases["__shipment_twin__"]
+    is_open = func.lower(f.c.line_state) == "open_order"
+    unpaired = and_(is_open, twin.c.fact_id.is_(None))
+    return case((unpaired, f.c.quantity), (twin.c.counted_qty > 0, twin.c.counted_qty), else_=0)
+
+
+def shipment_open_line(aliases: dict[str, Any]) -> ColumnElement[Any]:
+    """1 when the open line counts, else 0. Summed, so a covered open line is not a line."""
+    f = aliases["__base__"]
+    twin = aliases["__shipment_twin__"]
+    return case((shipment_open_counts(f, twin), literal(1)), else_=literal(0))
 
 
 def lineup_current_cases(aliases: dict[str, Any]) -> list[ColumnElement[bool]]:
@@ -89,5 +110,6 @@ MODEL_RULES = {
 }
 MEASURE_RULES = {
     "cpor_line_support_usd": cpor_line_support_usd,
-    "shipment_counted_quantity": shipment_counted_quantity,
+    "shipment_open_quantity": shipment_open_quantity,
+    "shipment_open_line": shipment_open_line,
 }

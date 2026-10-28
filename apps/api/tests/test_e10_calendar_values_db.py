@@ -2,8 +2,8 @@
 
 The committed E8 tests compare SQL text. These execute the compiled statements and
 compare bucket starts, previous period, prior year, and the other calculated kinds
-with BusinessCalendar. Shipment quantity uses the strict-pair remainder and
-resolved_customer_id.
+with BusinessCalendar. Shipped quantity counts lines with a ship confirm date.
+Open quantity is the strict-pair remainder. Both use resolved_customer_id.
 """
 
 from __future__ import annotations
@@ -398,10 +398,154 @@ async def test_shipments_apply_the_twin_rule_and_resolved_customer():
         qty = compiled.measure_labels["shipments.quantity"]
         lines = compiled.measure_labels["shipments.lines"]
         by_customer = {row["customer_id"]: (float(row[qty]), float(row[lines])) for row in rows}
-        # A: shipped 10 + shipped 10 + remainder 15 + unpaired open 7. The covered open 10 is out.
-        assert by_customer[customer_a.id] == (42.0, 4.0)
+        # Shipped only. A: 10 + 10. B: 4, even though customer_id is A. The covered open is not a shipped line.
+        assert by_customer[customer_a.id] == (20.0, 2.0)
         assert by_customer[customer_b.id] == (4.0, 1.0)
         assert None not in by_customer
+
+        open_req = V2Request(
+            measures=["shipments.open_quantity", "shipments.open_lines"],
+            breakdowns=["customer"],
+        )
+        open_plan = plan_request(dm, open_req, v1_catalog=load_catalog())
+        assert open_plan.ok, open_plan.refusals
+        open_compiled = compile_plan(dm, open_plan, tenant_id=TENANT, calendar=BusinessCalendar())
+        open_rows = (await db.execute(open_compiled.rows)).mappings().all()
+        oq = open_compiled.measure_labels["shipments.open_quantity"]
+        ol = open_compiled.measure_labels["shipments.open_lines"]
+        open_by = {row["customer_id"]: (float(row[oq]), float(row[ol])) for row in open_rows}
+        # A: remainder 15 + unpaired 7. The covered open 10 counts 0 and is not a line.
+        assert open_by[customer_a.id] == (22.0, 2.0)
+        assert customer_b.id not in open_by
+        assert None not in open_by
+    finally:
+        await db.rollback()
+        await db.close()
+
+
+@pytest.mark.anyio
+async def test_shipped_quantity_by_period_has_no_null_bucket_and_keeps_its_windowed_total():
+    db = await _db()
+    try:
+        product = DimProduct(sku=_key("sku")[-32:], name=f"E10ship {TAG}", tenant_id=TENANT)
+        customer_a = DimCustomer(code=_key("a")[-32:], name=f"A {TAG}", tenant_id=TENANT)
+        db.add_all([product, customer_a])
+        await db.flush()
+        confirmed = date(2026, 3, 2)
+        db.add_all([
+            _ship(product_id=product.id, line_state="shipped", quantity=Decimal("10"), order_no="O1", item_code="I1",
+                  ship_confirm_date=confirmed, resolved_customer_id=customer_a.id),
+            _ship(product_id=product.id, line_state="open_order", quantity=Decimal("10"), order_no="O1", item_code="I1",
+                  resolved_customer_id=customer_a.id),
+            _ship(product_id=product.id, line_state="open_order", quantity=Decimal("7"), order_no=None, item_code=None,
+                  resolved_customer_id=customer_a.id),
+        ])
+        await db.flush()
+        cal = BusinessCalendar()
+        clear_model_cache()
+        dm = default_model()
+
+        def _shipped(period_from=None, period_to=None):
+            req = V2Request(
+                measures=["shipments.quantity"],
+                breakdowns=["period"],
+                period_grain="month",
+                period_from=period_from,
+                period_to=period_to,
+                filters={"customer": customer_a.id},
+            )
+            plan = plan_request(dm, req, v1_catalog=load_catalog())
+            assert plan.ok, plan.refusals
+            compiled = compile_plan(dm, plan, tenant_id=TENANT, calendar=cal)
+            return compiled
+
+        bare = _shipped()
+        bare_rows = (await db.execute(bare.rows)).mappings().all()
+        label = bare.measure_labels["shipments.quantity"]
+        assert bare_rows
+        assert all(row["bucket_start"] is not None for row in bare_rows)
+        bare_total = sum(float(row[label]) for row in bare_rows)
+        assert bare_total == 10.0
+        bucket = _as_date(bare_rows[0]["bucket_start"])
+        assert bucket == cal.bucket(confirmed, "month").start
+
+        windowed = _shipped(period_from=bucket.isoformat(), period_to=cal.bucket(confirmed, "month").end.isoformat())
+        window_rows = (await db.execute(windowed.rows)).mappings().all()
+        wlabel = windowed.measure_labels["shipments.quantity"]
+        assert all(row["bucket_start"] is not None for row in window_rows)
+        assert sum(float(row[wlabel]) for row in window_rows) == bare_total
+    finally:
+        await db.rollback()
+        await db.close()
+
+
+def test_planner_refuses_a_period_breakdown_on_the_open_measure():
+    clear_model_cache()
+    dm = default_model()
+    req = V2Request(measures=["shipments.open_quantity"], breakdowns=["period"], period_grain="week")
+    plan = plan_request(dm, req, v1_catalog=load_catalog())
+    assert not plan.ok
+    assert plan.measures == []
+    assert "Open order quantity" in plan.refusals[0].reason
+    assert "period" in plan.refusals[0].reason
+    windowed = plan_request(
+        dm,
+        V2Request(
+            measures=["shipments.open_quantity"],
+            breakdowns=["customer"],
+            period_from="2026-01-01",
+            period_to="2026-03-31",
+        ),
+        v1_catalog=load_catalog(),
+    )
+    assert not windowed.ok
+
+
+@pytest.mark.anyio
+async def test_prior_year_is_the_whole_year_ago_bucket_when_the_window_opens_mid_bucket():
+    db = await _db()
+    try:
+        product = DimProduct(sku=_key("sku")[-32:], name=f"E10py {TAG}", tenant_id=TENANT)
+        db.add(product)
+        await db.flush()
+        cases = (
+            (BusinessCalendar({"week_start_day": 6}), "week"),
+            (BusinessCalendar({"week_start_day": 6}), "month"),
+            (BusinessCalendar({"type": "retail_445"}), "week"),
+            (BusinessCalendar({"type": "retail_445"}), "month"),
+        )
+        for cal, grain in cases:
+            customer = DimCustomer(code=_key("cust")[-32:], name=f"Py {TAG}", tenant_id=TENANT)
+            db.add(customer)
+            await db.flush()
+            current = next(
+                b for b in cal.buckets(date(2026, 3, 1), date(2026, 6, 30), grain) if b.days >= 7
+            )
+            opened = current.start + timedelta(days=3)
+            assert cal.bucket(opened, grain).start == current.start
+            prior = cal.bucket(cal.same_day_last_year(current.start), grain)
+            later = prior.start + timedelta(days=2)
+            assert cal.bucket(later, grain).start == prior.start
+            for day, units in (
+                (current.start, 9),
+                (opened, 4),
+                (prior.start, 100),
+                (later, 30),
+            ):
+                db.add(FactSalesSellout(
+                    source_key=_key("so"), tenant_id=TENANT, product_id=product.id, customer_id=customer.id,
+                    period_start=day, transaction_date=day, units=units, revenue=0,
+                ))
+            await db.flush()
+            rows, compiled = await _run(
+                db, ["dsi_sellout.units", "dsi_sellout.units_prior_year"], ["period"], grain, cal,
+                tenant=TENANT, period_from=opened, period_to=current.end, filters={"customer": customer.id},
+            )
+            assert len(rows) == 1, (cal.type, grain, rows)
+            assert _as_date(rows[0]["bucket_start"]) == current.start
+            vals = {mid: _num(rows[0][lab]) for mid, lab in compiled.measure_labels.items()}
+            assert vals["dsi_sellout.units"] == 4, (cal.type, grain)
+            assert vals["dsi_sellout.units_prior_year"] == 130, (cal.type, grain)
     finally:
         await db.rollback()
         await db.close()

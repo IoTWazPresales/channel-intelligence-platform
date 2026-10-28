@@ -15,7 +15,6 @@ them with ``BusinessCalendar.bucket``.
 from __future__ import annotations
 
 from datetime import date, timedelta
-from itertools import count
 from typing import Any
 
 from sqlalchemy import Date, Integer, and_, bindparam, case, cast, func, literal_column
@@ -25,11 +24,10 @@ from sqlalchemy.sql.expression import FunctionElement
 
 from app.services.business_calendar import _RETAIL_PATTERNS, BusinessCalendar
 
-_BINDS = count()
 
-
-def _date_bind(prefix: str, value: date) -> ColumnElement[Any]:
-    return bindparam(f"{prefix}_{next(_BINDS)}", value=value, type_=Date)
+def _date_bind(name: str, value: date) -> ColumnElement[Any]:
+    """Bind name is the prefix plus the bucket index, so the same request compiles to the same SQL."""
+    return bindparam(name, value=value, type_=Date)
 
 
 def _as_date(expr: Any) -> ColumnElement[Any]:
@@ -199,10 +197,13 @@ def _span_case(col: Any, buckets: list[Any], else_expr: Any, prefix: str, *, val
     """``value`` is ``start`` or ``end``: the date returned when ``col`` falls in the bucket."""
     d = _as_date(col)
     whens = []
-    for b in buckets:
-        inside = and_(d >= _date_bind(prefix, b.start), d <= _date_bind(prefix, b.end))
+    for i, b in enumerate(buckets):
+        inside = and_(
+            d >= _date_bind(f"{prefix}_{i}_from", b.start),
+            d <= _date_bind(f"{prefix}_{i}_to", b.end),
+        )
         chosen = b.start if value == "start" else b.end
-        whens.append((inside, _date_bind(prefix, chosen)))
+        whens.append((inside, _date_bind(f"{prefix}_{i}_{value}", chosen)))
     return case(*whens, else_=else_expr)
 
 
@@ -254,8 +255,11 @@ def _custom_end_exclusive(start_col: Any, grain: str, calendar: BusinessCalendar
     buckets = calendar.buckets(first, last_end, grain)
     d = _as_date(start_col)
     whens = [
-        (d == _date_bind(f"cue{grain}", b.start), _date_bind(f"cue{grain}", b.end + timedelta(days=1)))
-        for b in buckets
+        (
+            d == _date_bind(f"cue{grain}_{i}_at", b.start),
+            _date_bind(f"cue{grain}_{i}_end", b.end + timedelta(days=1)),
+        )
+        for i, b in enumerate(buckets)
     ]
     return case(*whens, else_=bucket_end_exclusive(start_col, grain, greg))
 
@@ -293,6 +297,11 @@ def bucket_end_exclusive(start_col: Any, grain: str, calendar: BusinessCalendar)
 
 def prior_year_bucket_expr(col: Any, grain: str, calendar: BusinessCalendar) -> ColumnElement[Any]:
     """Bucket start of the same bucket one financial year earlier.
+
+    For a retail calendar the result is correct only when ``col`` is already a bucket
+    start. Month, quarter and year do not re-bucket the shifted day: the expression
+    moves the offset from the year start into the previous year and returns that day.
+    Week grain then applies the week start. The compiler passes ``agg.bucket_start``.
 
     A retail period or week starts a whole number of weeks after its year start, so the
     prior bucket is that same offset in the previous year. The shift is one SQL subquery,

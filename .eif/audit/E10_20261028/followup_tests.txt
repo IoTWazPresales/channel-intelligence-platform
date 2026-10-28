@@ -1,0 +1,13 @@
+=== ruff ===
+
+C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Scripts\python.exe: No module named ruff
+
+ruff exit 1
+=== pytest cip_test ===
+..................................................................       [100%]
+66 passed in 72.34s (0:01:12)
+
+
+pytest exit 0
+
+Note: apps/api/.venv has no ruff module (`No module named ruff`), so the API ruff config in pyproject.toml was not executed. Root `pnpm typecheck` is the web package and was not run; there is no API typecheck script. The pytest run imported the changed modules.

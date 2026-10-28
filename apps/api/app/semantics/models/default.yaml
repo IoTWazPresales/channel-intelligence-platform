@@ -290,8 +290,8 @@ models:
     label: Inbound shipments
     table: fact_inbound_shipment
     tenant_column: tenant_id
-    # Covered open lines are left out; a partly shipped open line keeps the remainder (D-0057, D-0065).
-    rules: [shipment_twin_remainder]
+    # Shipped measures are lines with a ship confirm date. Open measures are the strict-pair
+    # remainder (D-0057, D-0065) and are not dated: eta_date is present and unused.
     time: {column: ship_confirm_date, floor: day}
     joins:
       product: {fk: product_id, null_keys: unassigned}
@@ -299,16 +299,32 @@ models:
       customer: {fk: resolved_customer_id, null_keys: unassigned}
     measures:
       quantity:
-        label: Shipment quantity (ship confirm date)
+        label: Shipped quantity (ship confirm date)
         unit: units
         agg: sum
-        rule: shipment_counted_quantity
+        column: quantity
+        when_not_null: ship_confirm_date
         additivity: additive
       lines:
-        label: Shipment lines
+        label: Shipped lines (ship confirm date)
         unit: count
         agg: count
+        when_not_null: ship_confirm_date
         additivity: additive
+      open_quantity:
+        label: Open order quantity (not yet shipped)
+        unit: units
+        agg: sum
+        rule: shipment_open_quantity
+        additivity: additive
+        period: false
+      open_lines:
+        label: Open order lines (not yet shipped)
+        unit: count
+        agg: sum
+        rule: shipment_open_line
+        additivity: additive
+        period: false
 
   distributor_stock:
     label: Distributor reported stock

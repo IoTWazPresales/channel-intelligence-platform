@@ -1,0 +1,70 @@
+E10 follow-up. dsi_sellout.units by period, week grain, tenant_id=default.
+Read only on cip. set_config('cip.product_lines','*',true). statement_timeout 60s.
+E10 before: platform 265 ms, old retail CASE 1,858 ms.
+
+database = cip
+===== platform wall_ms=251.8 sql_chars=420 =====
+Limit  (cost=5027.85..5029.10 rows=501 width=36) (actual time=61.046..61.060 rows=144.00 loops=1)
+  Buffers: shared hit=3 read=1336
+  ->  Sort  (cost=5027.85..5029.77 rows=768 width=36) (actual time=61.045..61.051 rows=144.00 loops=1)
+        Sort Key: ((date_trunc('week'::text, (f.transaction_date)::timestamp with time zone))::date)
+        Sort Method: quicksort  Memory: 30kB
+        Buffers: shared hit=3 read=1336
+        ->  HashAggregate  (cost=4975.68..4991.04 rows=768 width=36) (actual time=60.967..61.000 rows=144.00 loops=1)
+              Group Key: (date_trunc('week'::text, (f.transaction_date)::timestamp with time zone))::date
+              Batches: 1  Memory Usage: 105kB
+              Buffers: shared read=1336
+              ->  Seq Scan on fact_sales_sellout f  (cost=1964.86..4828.91 rows=29355 width=9) (actual time=0.450..48.109 rows=58128.00 loops=1)
+                    Filter: ((tenant_id = 'default'::text) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1))))
+                    Buffers: shared read=1336
+                    SubPlan 1
+                      ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                            Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+Planning:
+  Buffers: shared hit=328 read=16
+Planning Time: 134.694 ms
+Execution Time: 61.225 ms
+
+===== retail_445 wall_ms=59.5 sql_chars=762 =====
+Limit  (cost=5630.31..5631.56 rows=501 width=36) (actual time=51.615..51.628 rows=144.00 loops=1)
+  Buffers: shared hit=1336
+  ->  Sort  (cost=5630.31..5632.23 rows=768 width=36) (actual time=51.614..51.619 rows=144.00 loops=1)
+        Sort Key: (((f.transaction_date + (((- mod(((((EXTRACT(isodow FROM f.transaction_date))::integer - 1) - 0) + 7), 7)))::double precision * '1 day'::interval)))::date)
+        Sort Method: quicksort  Memory: 30kB
+        Buffers: shared hit=1336
+        ->  HashAggregate  (cost=5562.78..5593.50 rows=768 width=36) (actual time=51.545..51.586 rows=144.00 loops=1)
+              Group Key: ((f.transaction_date + (((- mod(((((EXTRACT(isodow FROM f.transaction_date))::integer - 1) - 0) + 7), 7)))::double precision * '1 day'::interval)))::date
+              Batches: 1  Memory Usage: 105kB
+              Buffers: shared hit=1336
+              ->  Seq Scan on fact_sales_sellout f  (cost=1964.86..5416.01 rows=29355 width=9) (actual time=0.026..40.811 rows=58128.00 loops=1)
+                    Filter: ((tenant_id = 'default'::text) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1))))
+                    Buffers: shared hit=1336
+                    SubPlan 1
+                      ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                            Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+Planning Time: 0.425 ms
+Execution Time: 51.694 ms
+
+===== retail_445_sunday_nearest wall_ms=57.8 sql_chars=762 =====
+Limit  (cost=5630.31..5631.56 rows=501 width=36) (actual time=56.060..56.075 rows=144.00 loops=1)
+  Buffers: shared hit=1336
+  ->  Sort  (cost=5630.31..5632.23 rows=768 width=36) (actual time=56.058..56.065 rows=144.00 loops=1)
+        Sort Key: (((f.transaction_date + (((- mod(((((EXTRACT(isodow FROM f.transaction_date))::integer - 1) - 6) + 7), 7)))::double precision * '1 day'::interval)))::date)
+        Sort Method: quicksort  Memory: 30kB
+        Buffers: shared hit=1336
+        ->  HashAggregate  (cost=5562.78..5593.50 rows=768 width=36) (actual time=55.985..56.024 rows=144.00 loops=1)
+              Group Key: ((f.transaction_date + (((- mod(((((EXTRACT(isodow FROM f.transaction_date))::integer - 1) - 6) + 7), 7)))::double precision * '1 day'::interval)))::date
+              Batches: 1  Memory Usage: 105kB
+              Buffers: shared hit=1336
+              ->  Seq Scan on fact_sales_sellout f  (cost=1964.86..5416.01 rows=29355 width=9) (actual time=0.024..44.559 rows=58128.00 loops=1)
+                    Filter: ((tenant_id = 'default'::text) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1))))
+                    Buffers: shared hit=1336
+                    SubPlan 1
+                      ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                            Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+Planning Time: 0.386 ms
+Execution Time: 56.135 ms
+
+saved rows naming shipments.quantity or shipments.lines: [('saved_report', 0), ('dashboard_widget', 0)]
+
+Conclusion: week-grain retail SQL is the weekday shift, not the old CASE. Execution time is 61.2 ms (platform), 51.7 ms (retail_445) and 56.1 ms (retail_445, week_start_day 6, year_end_rule nearest). Neither retail plan is more than 2x the platform time. No day pre-aggregation.
