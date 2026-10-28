@@ -76,9 +76,9 @@ function LoadingSkeleton({ visual, height }: { visual: WidgetVisual; height: num
   if (visual === 'kpi') {
     return (
       <Box role="status" aria-label={label} aria-busy sx={{ p: 1 }} data-testid="widget-skeleton" data-shape="kpi">
-        <Skeleton variant="text" width="40%" />
-        <Skeleton variant="rounded" width="60%" height={32} sx={{ mt: 0.5 }} />
-        <Skeleton variant="text" width="30%" />
+        <Skeleton animation="wave" variant="text" width="40%" />
+        <Skeleton animation="wave" variant="rounded" width="60%" height={32} sx={{ mt: 0.5 }} />
+        <Skeleton animation="wave" variant="text" width="30%" />
       </Box>
     );
   }
@@ -86,7 +86,7 @@ function LoadingSkeleton({ visual, height }: { visual: WidgetVisual; height: num
     return (
       <Stack role="status" aria-label={label} aria-busy spacing={1} sx={{ p: 1 }} data-testid="widget-skeleton" data-shape={visual}>
         {[92, 76, 64, 48, 36, 24].map((w) => (
-          <Skeleton key={w} variant="rounded" height={14} width={`${w}%`} />
+          <Skeleton animation="wave" key={w} variant="rounded" height={14} width={`${w}%`} />
         ))}
       </Stack>
     );
@@ -94,10 +94,10 @@ function LoadingSkeleton({ visual, height }: { visual: WidgetVisual; height: num
   if (visual === 'pie' || visual === 'donut') {
     return (
       <Stack role="status" aria-label={label} aria-busy direction="row" spacing={2} alignItems="center" sx={{ p: 1 }} data-testid="widget-skeleton" data-shape="share">
-        <Skeleton variant="circular" width={Math.min(140, height - 40)} height={Math.min(140, height - 40)} />
+        <Skeleton animation="wave" variant="circular" width={Math.min(140, height - 40)} height={Math.min(140, height - 40)} />
         <Stack spacing={1} sx={{ flex: 1 }}>
           {[80, 60, 50, 40].map((w) => (
-            <Skeleton key={w} variant="text" width={`${w}%`} />
+            <Skeleton animation="wave" key={w} variant="text" width={`${w}%`} />
           ))}
         </Stack>
       </Stack>
@@ -106,7 +106,7 @@ function LoadingSkeleton({ visual, height }: { visual: WidgetVisual; height: num
   return (
     <Box role="status" aria-label={label} aria-busy sx={{ p: 1, display: 'flex', alignItems: 'flex-end', gap: 1, height: Math.max(120, height - 40) }} data-testid="widget-skeleton" data-shape="chart">
       {[40, 65, 50, 80, 55, 70, 45, 90, 60, 75].map((h, i) => (
-        <Skeleton key={i} variant="rounded" sx={{ flex: 1 }} height={`${h}%`} />
+        <Skeleton animation="wave" key={i} variant="rounded" sx={{ flex: 1 }} height={`${h}%`} />
       ))}
     </Box>
   );
@@ -293,8 +293,8 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
   if (visual === 'table') {
     const firstBd = breakdownColumns(result)[0];
     return (
-      <Stack sx={{ height: '100%', minHeight: 160 }} data-testid={`dashboard-widget-table-${testKey}`}>
-        <Box sx={{ flex: 1, minHeight: 120 }}>
+      <Stack sx={{ minHeight: Math.max(160, (displayed?.rows ?? result.rows).length * 32 + 56) }} data-testid={`dashboard-widget-table-${testKey}`}>
+        <Box sx={{ height: Math.max(120, (displayed?.rows ?? result.rows).length * 32 + 40) }}>
         <EnterpriseDataGrid<V2Row>
           rowData={displayed?.rows ?? result.rows}
           columnDefs={colDefs}
@@ -323,7 +323,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
   const categoryTitle = catIds.map((b) => breakdownLabel(catalog, b)).join(' · ') || 'Category';
   const periodTitle = `Period (${def.query.period?.grain ?? 'bucket'})`;
   const frame = (child: ReactNode, note?: string | null) => (
-    <Box data-testid="dashboard-widget-chart" sx={{ height, overflowY: 'auto', overflowX: 'hidden' }}>
+    <Box data-testid="dashboard-widget-chart" sx={{ minHeight: height, overflow: 'visible' }}>
       {child}
       {comparisonNote ? <Typography variant="caption" display="block" data-testid="widget-comparison-note">{comparisonNote}</Typography> : null}
       {note ? (

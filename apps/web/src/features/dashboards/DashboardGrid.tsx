@@ -125,7 +125,7 @@ export function DashboardGrid({ widgets, onLayoutPersist, renderWidget }: Props)
           <ReactGridLayout
             width={width}
             layout={layout}
-            gridConfig={{ cols: 12, rowHeight: 36, margin: [12, 12] }}
+            gridConfig={{ cols: 12, rowHeight: 36, margin: [8, 8] }}
             dragConfig={{ enabled: !stacked, handle: '.dashboard-widget-drag' }}
             resizeConfig={{ enabled: !stacked }}
             compactor={verticalCompactor}

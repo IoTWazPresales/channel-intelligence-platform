@@ -95,10 +95,14 @@ def list_semantic_dimensions(user: dict | None = Depends(get_optional_current_us
 
 
 class OverlayBody(BaseModel):
-    """Admin-authored overlay. formula / source_facts / owner_surface are ignored on save."""
+    """Admin-authored overlay. formula / source_facts / owner_surface are ignored on save.
+
+    spec_keys names top-level dim_product.specs_json keys. Omitted leaves the saved list.
+    """
 
     metrics: dict[str, dict[str, Any]] = Field(default_factory=dict)
     composed: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    spec_keys: list[str] | None = None
 
 
 def _overlay_editor_payload(tenant_id: str) -> dict:
@@ -147,7 +151,7 @@ def put_semantic_overlay(
     tid = tenant_id_from_user(admin)
     try:
         tenant_profile.save_tenant_profile_overrides(
-            tid, {"semantic_overlay": body.model_dump()}
+            tid, {"semantic_overlay": body.model_dump(exclude_none=True)}
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

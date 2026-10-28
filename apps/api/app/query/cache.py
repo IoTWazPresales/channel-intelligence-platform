@@ -67,7 +67,7 @@ def cache_key(
     return f"cip:query:v3:{digest}"
 
 
-def cache_key_v2(*, tenant_id: str, request: dict[str, Any], catalog_version: str) -> str:
+def cache_key_v2(*, tenant_id: str, request: dict[str, Any], catalog_version: str, calendar: dict[str, Any] | None = None) -> str:
     """Key for a v2 (model compiler) query: the WHOLE canonical request plus tenant, model and
     catalog version, product-line scope and role. Distinct prefix, so it never meets a v1 key."""
     from app.core.product_line_scope import request_product_lines, request_role, scope_csv
@@ -79,6 +79,8 @@ def cache_key_v2(*, tenant_id: str, request: dict[str, Any], catalog_version: st
         "product_lines": scope_csv(request_product_lines.get()),
         "role": request_role.get(),
     }
+    if calendar is not None:
+        canonical["calendar"] = calendar
     raw = json.dumps(canonical, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     return f"cip:query:model:v1:{digest}"

@@ -22,13 +22,22 @@ import yaml
 
 MODEL_PATH = Path(__file__).resolve().parents[2] / "semantics" / "models" / "default.yaml"
 
-AGGS = frozenset({"sum", "count", "count_distinct", "latest_sum"})
+AGGS = frozenset({"sum", "count", "count_distinct", "latest_sum", "avg", "min", "max"})
 ADDITIVITY = frozenset({"additive", "semi_additive", "non_additive"})
-CALC_KINDS = frozenset({"ratio", "difference", "prior_period", "pct_change", "per_week_rate"})
+CALC_KINDS = frozenset({
+    "ratio",
+    "difference",
+    "prior_period",
+    "pct_change",
+    "per_week_rate",
+    "prior_year",
+    "running_total",
+    "share_of_total",
+})
 TIME_FLOORS = frozenset({"day", "stored_period_type"})
 NULL_KEYS = frozenset({"unassigned", "exclude_when_grouped"})
 # Rules and measure expressions that need SQL are built in code (rules.py); the file only names them.
-KNOWN_RULES = frozenset({"cpor_portfolio_lines"})
+KNOWN_RULES = frozenset({"cpor_portfolio_lines", "lineup_current_cases"})
 KNOWN_MEASURE_RULES = frozenset({"cpor_line_support_usd"})
 
 _ID = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -218,6 +227,8 @@ class DataModel:
         for model in self.models.values():
             if bid in model.local:
                 return model.local[bid].label, model.local[bid].group
+        if bid.startswith("spec_"):
+            return f"Spec: {bid[5:]}", "Product"
         return bid, ""
 
     def breakdown_ids(self) -> frozenset[str]:
@@ -484,7 +495,10 @@ def _parse_calculated(raw: dict[str, Any], measures: dict[str, Measure]) -> dict
             _need(src is not None, f"calculated {cid}: unknown input {i!r}")
             assert src is not None
             if isinstance(src, Calculated):
-                _need(src.kind == "prior_period", f"calculated {cid}: a calculated input must be a prior_period")
+                _need(
+                    src.kind in ("prior_period", "prior_year"),
+                    f"calculated {cid}: a calculated input must be a prior_period or prior_year",
+                )
             else:
                 _need(src.additivity != "semi_additive", f"calculated {cid}: {i} is semi-additive")
             models.add(src.model)
@@ -494,7 +508,7 @@ def _parse_calculated(raw: dict[str, Any], measures: dict[str, Measure]) -> dict
         _need(cid.split(".", 1)[0] == model, f"calculated {cid}: id must start with its model {model}")
         if kind == "difference":
             _need(units[0] == units[1], f"calculated {cid}: difference needs the same units")
-        additivity = "additive" if kind in ("prior_period", "difference") else "non_additive"
+        additivity = "additive" if kind in ("prior_period", "prior_year", "difference", "running_total") else "non_additive"
         out[cid] = Calculated(
             id=cid,
             model=model,
@@ -563,7 +577,7 @@ def load_model(path: Path | None = None, *, check_v1: bool = True) -> DataModel:
         default_grain=str(pb.get("default_grain") or "quarter"),
     )
     for g in period.grains:
-        _need(g in ("week", "month", "quarter", "year"), f"period grain {g!r} unknown")
+        _need(g in ("day", "week", "month", "quarter", "year"), f"period grain {g!r} unknown")
 
     dims = _parse_dimensions(data.get("dimensions") or {}, tables)
     models: dict[str, FactModel] = {}

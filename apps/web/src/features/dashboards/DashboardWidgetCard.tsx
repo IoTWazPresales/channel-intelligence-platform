@@ -3,9 +3,9 @@
 import CloseIcon from '@mui/icons-material/Close';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { Box, Button, Collapse, Dialog, DialogContent, DialogTitle, IconButton, Paper, Skeleton, Snackbar, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Dialog, DialogContent, DialogTitle, Fade, IconButton, Paper, Skeleton, Snackbar, Stack, Tooltip, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -18,6 +18,7 @@ import type { CatalogV2 } from './builder/types';
 import { V2WidgetCard } from './builder/V2WidgetCard';
 import { WidgetMenu, type WidgetAction } from './builder/WidgetMenu';
 import { useDashboardLayoutKey } from './DashboardGrid';
+import { FigureAboutButton } from './FigureAboutButton';
 import { formatVintage } from './formatters';
 import type { DashboardWidget, QueryResult, SemanticMetric } from './types';
 import { WidgetBody } from './WidgetBody';
@@ -35,6 +36,7 @@ type Props = {
   /** The dashboard's filters for v2 widgets (v1 widgets run unfiltered, as before). */
   ctx?: DashboardRunContext;
   dashboardName?: string;
+  onFitLayout?: (id: number, span: { w: number; h: number }) => void;
 };
 
 function plainDefinition(formula: unknown, metricKey: string): string | null {
@@ -86,6 +88,7 @@ export function DashboardWidgetCard(props: Props) {
         ctx={props.ctx ?? NO_FILTERS}
         dashboardName={props.dashboardName ?? 'dashboard'}
         actions={{ onEdit: props.onEdit, onDuplicate: props.onDuplicate, onPromote: props.onPromote, onDelete: props.onDelete }}
+        onFit={props.onFitLayout ? (span) => props.onFitLayout!(widget.id, span) : undefined}
       />
     );
   }
@@ -94,9 +97,9 @@ export function DashboardWidgetCard(props: Props) {
 
 function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate, ctx, dashboardName = 'dashboard' }: Props) {
   const theme = useTheme();
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const onLayoutKey = useDashboardLayoutKey();
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  const [aboutOpen, setAboutOpen] = useState(false);
   const [full, setFull] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const q = useQuery({
@@ -202,6 +205,19 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
         <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1 }} noWrap component="h3">
           {widget.title}
         </Typography>
+        <FigureAboutButton testId={`dashboard-widget-about-${widget.id}`}>
+          <Typography variant="body2">
+            {definition ?? 'A plain-language definition is not available for this tile.'}
+          </Typography>
+          {vintage ? (
+            <Typography variant="body2" sx={{ mt: 1 }} data-testid={`dashboard-widget-vintage-${widget.id}`}>
+              Coverage: {vintage}.
+            </Typography>
+          ) : null}
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+            This widget runs on the governed metric path; dashboard filters do not apply to it.
+          </Typography>
+        </FigureAboutButton>
         <Tooltip title="Edit">
           <IconButton size="small" aria-label={`Edit ${widget.title}`} onClick={onEdit} data-testid={`dashboard-widget-edit-${widget.id}`}>
             <EditOutlinedIcon fontSize="small" />
@@ -214,37 +230,11 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
           ⚠ Not filtered by the dashboard filters: this widget runs on the older metric path. Edit it to move it onto the new data model.
         </Typography>
       ) : null}
-      <Box sx={{ px: 1, py: 0.25 }}>
-        <Button
-          size="small"
-          variant="text"
-          onClick={() => setAboutOpen((open) => !open)}
-          aria-expanded={aboutOpen}
-          endIcon={<ExpandMoreIcon sx={{ transform: aboutOpen ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }} />}
-          sx={{ px: 0.5 }}
-          data-testid={`dashboard-widget-about-${widget.id}`}
-        >
-          About this figure
-        </Button>
-        <Collapse in={aboutOpen}>
-          <Box sx={{ px: 0.5, pb: 0.5 }} data-testid={`dashboard-widget-formula-${widget.id}`}>
-            <Typography variant="body2">
-              {definition ?? 'A plain-language definition is not available for this tile.'}
-            </Typography>
-            {vintage ? (
-              <Typography variant="body2" sx={{ mt: 1 }} data-testid={`dashboard-widget-vintage-${widget.id}`}>
-                Coverage: {vintage}.
-              </Typography>
-            ) : null}
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-              This widget runs on the governed metric path; dashboard filters do not apply to it.
-            </Typography>
-          </Box>
-        </Collapse>
-      </Box>
-      <Box ref={bodyRef} sx={{ flex: 1, px: 1.5, pb: 1.5, minHeight: 0 }}>
-        {body()}
-      </Box>
+      <Fade in appear timeout={reduceMotion ? 0 : 420} key={q.isLoading ? 'loading' : 'shown'}>
+        <Box ref={bodyRef} sx={{ flex: 1, px: 0.5, pb: 0.5, minHeight: 0 }}>
+          {body()}
+        </Box>
+      </Fade>
       <Dialog fullScreen open={full} onClose={() => setFull(false)}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}>
           <Box sx={{ flex: 1 }}>{widget.title}</Box>

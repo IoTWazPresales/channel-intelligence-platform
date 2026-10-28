@@ -514,3 +514,58 @@ async def test_scope_and_timeout_are_bound_inside_the_compiled_transaction():
         request_product_lines.reset(t1)
         request_editable_product_lines.reset(t2)
         request_role.reset(t3)
+
+
+def test_spec_json_extract_and_line_avg_execute_on_cip_test():
+    """Allowed specs_json key and avg/min/max run as SQL. Null specs land in Unassigned."""
+    import asyncio
+
+    asyncio.run(_spec_json_extract_and_line_avg())
+
+
+async def _spec_json_extract_and_line_avg():
+    from dataclasses import replace
+
+    from app.query.model.compiler import compile_plan
+    from app.query.model.graph import plan_request
+    from app.query.model.loader import clear_model_cache, default_model
+    from app.semantics.registry import load_catalog
+
+    clear_model_cache()
+    db = await _session_or_skip()
+    try:
+        s = await _seed(db)
+        s.pA1.specs_json = {"gpu": "rtx"}
+        s.pA2.specs_json = None
+        await db.flush()
+        catalog = replace(load_catalog(), spec_keys=("gpu",))
+        dm = default_model()
+        plan = plan_request(
+            dm,
+            V2Request(
+                measures=[
+                    "dsi_sellout.units",
+                    "dsi_sellout.units_avg",
+                    "dsi_sellout.units_min",
+                    "dsi_sellout.units_max",
+                ],
+                breakdowns=["spec_gpu"],
+            ),
+            v1_catalog=catalog,
+        )
+        assert plan.ok, [r.reason for r in plan.refusals]
+        compiled = compile_plan(dm, plan, tenant_id=TA)
+        rows = (await db.execute(compiled.rows)).all()
+        by = {r._mapping["spec_gpu"]: r._mapping for r in rows}
+        rtx, bare = by["rtx"], by["Unassigned"]
+        assert float(rtx["out0"]) == 29
+        assert float(rtx["out1"]) == pytest.approx(29 / 6)
+        assert float(rtx["out2"]) == 0
+        assert float(rtx["out3"]) == 10
+        assert float(bare["out0"]) == 17
+        assert float(bare["out1"]) == pytest.approx(17 / 3)
+        assert float(bare["out2"]) == 3
+        assert float(bare["out3"]) == 9
+        await db.rollback()
+    finally:
+        await db.close()

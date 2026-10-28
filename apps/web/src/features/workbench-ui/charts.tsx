@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, ButtonBase, Stack, Typography } from '@mui/material';
+import { Box, ButtonBase, Stack, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import {
@@ -460,6 +460,12 @@ function useChartTheme() {
   };
 }
 
+function useChartMotion() {
+  const reduce = useMediaQuery('(prefers-reduced-motion: reduce)');
+  if (reduce) return { isAnimationActive: false, animationDuration: 0, animationEasing: 'ease-out' as const };
+  return { isAnimationActive: true, animationDuration: 800, animationEasing: 'ease-out' as const };
+}
+
 function toneColor(c: ReturnType<typeof useChartTheme>, t?: ChartTone): string {
   switch (t) {
     case 'secondary':
@@ -811,6 +817,7 @@ export function CategoryBars({
   testId?: string;
 }) {
   const c = useChartTheme();
+  const motion = useChartMotion();
   const [widthRef, measured] = useElementWidth<HTMLDivElement>();
   const width = measured || FALLBACK_WIDTH;
   useUntitledWarning('CategoryBars', xAxisTitle, yAxisTitle);
@@ -907,7 +914,7 @@ export function CategoryBars({
           )}
           <Tooltip {...c.tooltip} formatter={(v) => fmt.full(Number(v))} cursor={{ fill: c.cursor }} />
           <Bar
-            isAnimationActive={false}
+            {...motion}
             dataKey={y}
             name={yAxisTitle ?? y}
             radius={isHorizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]}
@@ -968,6 +975,7 @@ export function PairedBars({
   testId?: string;
 }) {
   const c = useChartTheme();
+  const motion = useChartMotion();
   const [widthRef, measured] = useElementWidth<HTMLDivElement>();
   const width = measured || FALLBACK_WIDTH;
   useUntitledWarning('PairedBars', xAxisTitle, yAxisTitle);
@@ -1051,8 +1059,8 @@ export function PairedBars({
             <YAxis tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={fmt.tick} axisLine={false} tickLine={false} width={valueWidth} />
           )}
           <Tooltip {...c.tooltip} formatter={(v) => fmt.full(Number(v))} cursor={{ fill: c.cursor }} />
-          <Bar isAnimationActive={false} dataKey={a} name={aLabel} fill={c.muted} radius={isHorizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]} maxBarSize={isHorizontal ? 12 : 28} />
-          <Bar isAnimationActive={false} dataKey={b} name={bLabel} fill={c.primary} radius={isHorizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]} maxBarSize={isHorizontal ? 12 : 28} />
+          <Bar {...motion} dataKey={a} name={aLabel} fill={c.muted} radius={isHorizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]} maxBarSize={isHorizontal ? 12 : 28} />
+          <Bar {...motion} dataKey={b} name={bLabel} fill={c.primary} radius={isHorizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]} maxBarSize={isHorizontal ? 12 : 28} />
         </BarChart>
       </ChartFrame>
     </ChartShell>
@@ -1125,6 +1133,7 @@ export function TrendChart({
   datumActions?: 'category' | 'period';
 }) {
   const c = useChartTheme();
+  const motion = useChartMotion();
   useUntitledWarning('TrendChart', xAxisTitle, yAxisTitle);
   const [widthRef, measured] = useElementWidth<HTMLDivElement>();
   const width = measured || FALLBACK_WIDTH;
@@ -1288,7 +1297,7 @@ export function TrendChart({
             s.kind === 'bar' ? (
               <Bar
                 yAxisId={hasRight ? s.axis ?? 'left' : 0}
-                isAnimationActive={false}
+                {...motion}
                 key={`${s.key}-${i}`}
                 dataKey={s.key}
                 name={s.label}
@@ -1303,7 +1312,7 @@ export function TrendChart({
             ) : s.kind === 'area' ? (
               <Area
                 yAxisId={hasRight ? s.axis ?? 'left' : 0}
-                isAnimationActive={false}
+                {...motion}
                 key={`${s.key}-${i}`}
                 dataKey={s.key}
                 name={s.label}
@@ -1321,7 +1330,7 @@ export function TrendChart({
             ) : (
               <Line
                 yAxisId={hasRight ? s.axis ?? 'left' : 0}
-                isAnimationActive={false}
+                {...motion}
                 key={`${s.key}-${i}`}
                 dataKey={s.key}
                 name={s.label}
@@ -1363,6 +1372,7 @@ export function ScatterPlot({ data, xUnit, yUnit, xAxisTitle, yAxisTitle, summar
   onPointClick?: (point: ScatterPoint, e?: ChartClickEvent) => void; testId?: string;
 }) {
   const c = useChartTheme();
+  const motion = useChartMotion();
   const table: ChartDataTable = { caption: summary,
     columns: ['Category', xAxisTitle, yAxisTitle],
     rows: data.map((d) => [d.label, formatChartValue(d.x, xUnit), formatChartValue(d.y, yUnit)]),
@@ -1389,7 +1399,7 @@ export function ScatterPlot({ data, xUnit, yUnit, xAxisTitle, yAxisTitle, summar
             <Typography variant="caption" display="block">{yAxisTitle}: {formatChartValue(d.y, yUnit)}</Typography>
           </Box>;
         }} />
-        <Scatter data={data} fill={c.primary} isAnimationActive={false}
+        <Scatter data={data} fill={c.primary} {...motion}
           cursor={onPointClick ? 'pointer' : undefined}
           onClick={onPointClick ? (entry: unknown, _i: number, e?: ChartClickEvent) => {
             const d = (entry as { payload?: ScatterPoint }).payload;
@@ -1481,6 +1491,7 @@ export function RankedBars({
   testId?: string;
 }) {
   const c = useChartTheme();
+  const motion = useChartMotion();
   const [widthRef, measured] = useElementWidth<HTMLDivElement>();
   const width = measured || FALLBACK_WIDTH;
   useUntitledWarning('RankedBars', xAxisTitle, yAxisTitle);
@@ -1572,7 +1583,7 @@ export function RankedBars({
             />
           ) : null}
           <Bar
-            isAnimationActive={false}
+            {...motion}
             dataKey="value"
             name={yAxisTitle ?? valueHeader}
             radius={[0, 3, 3, 0]}
@@ -1640,6 +1651,7 @@ export function ShareChart({
   testId?: string;
 }) {
   const c = useChartTheme();
+  const motion = useChartMotion();
   const whole = totalOverride ?? data.reduce((s, d) => s + (Number.isFinite(d.value) ? d.value : 0), 0);
   const ctl = useChartControls({ topN: data.length <= 9 ? 'all' : 5, sort: { by: 'value', dir: 'desc' } }, controls);
   const accessors = { name: (d: ShareDatum) => d.label, value: (d: ShareDatum) => d.value };
@@ -1675,7 +1687,7 @@ export function ShareChart({
                 outerRadius="90%"
                 stroke={c.paper}
                 strokeWidth={2}
-                isAnimationActive={false}
+                {...motion}
                 cursor={onSliceClick ? 'pointer' : undefined}
                 onClick={
                   onSliceClick

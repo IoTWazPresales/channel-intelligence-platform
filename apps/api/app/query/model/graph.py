@@ -19,6 +19,13 @@ from typing import Any
 
 from app.query.calendar_grain import is_daily_grain, normalize_period_grain, parse_period_bound
 from app.query.model.loader import Calculated, DataModel, FactModel, Measure
+from app.query.model.tenant_restrictions import (
+    SPEC_PREFIX,
+    counterpart_policy,
+    grain_message,
+    hidden_message,
+    spec_breakdown_ids,
+)
 
 MAX_BREAKDOWNS = 3
 MAX_MEASURES = 20
@@ -92,6 +99,7 @@ class Plan:
     sort_dir: str = "desc"
     limit: int = DEFAULT_LIMIT
     needs_prev: bool = False
+    needs_prior_year: bool = False
     walls_checked: list[str] = field(default_factory=list)
     refusals: list[Refusal] = field(default_factory=list)
     governed: Any = None  # v1 MetricDef when the single measure is a governed metric
@@ -150,12 +158,29 @@ def measure_breakdowns(dm: DataModel, m: Measure | Calculated) -> list[str]:
 
 
 def needs_period(dm: DataModel, m: Measure | Calculated) -> bool:
-    """prior_period / pct_change (and a difference over a prior) need a period breakdown."""
+    """prior_period / pct_change (and a difference over a prior) need the previous bucket."""
     if not isinstance(m, Calculated):
         return False
     if m.kind in ("prior_period", "pct_change"):
         return True
     return any(needs_period(dm, dm.measure(i)) for i in m.inputs if dm.measure(i) is not None)  # type: ignore[arg-type]
+
+
+def needs_prior_year(dm: DataModel, m: Measure | Calculated) -> bool:
+    if not isinstance(m, Calculated):
+        return False
+    if m.kind == "prior_year":
+        return True
+    return any(needs_prior_year(dm, dm.measure(i)) for i in m.inputs if dm.measure(i) is not None)  # type: ignore[arg-type]
+
+
+def needs_period_breakdown(dm: DataModel, m: Measure | Calculated) -> bool:
+    """Period comparisons and a running total are only defined along period."""
+    if not isinstance(m, Calculated):
+        return False
+    if m.kind in ("prior_period", "pct_change", "prior_year", "running_total"):
+        return True
+    return any(needs_period_breakdown(dm, dm.measure(i)) for i in m.inputs if dm.measure(i) is not None)  # type: ignore[arg-type]
 
 
 def base_inputs(dm: DataModel, m: Measure | Calculated) -> list[Measure]:
@@ -227,6 +252,11 @@ def _breakdown_refusal(dm: DataModel, model: FactModel, b: str, allowed: list[st
     wall = _wall_blocks(dm, model.id, b)
     if wall is not None:
         return Refusal(measure=None, reason=wall.reason, wall=wall.id)
+    if b.startswith(SPEC_PREFIX):
+        return Refusal(
+            measure=None,
+            reason="Unknown product spec key. Only keys on the tenant overlay are extracted from specs_json.",
+        )
     if b not in dm.breakdown_ids():
         return Refusal(measure=None, reason=f"Unknown breakdown {b!r}. Use the breakdowns in the v2 catalog.")
     return Refusal(measure=None, reason=f"{dm.breakdown_label(b)[0]} is not a breakdown of {model.label}.")
@@ -311,6 +341,10 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         return plan
 
     allowed = derived_breakdowns(dm, model)
+    if "product" in model.joins:
+        for spec_id in spec_breakdown_ids(v1_catalog):
+            if spec_id not in allowed:
+                allowed.append(spec_id)
     request_refusal: Refusal | None = None
     for b in breakdowns:
         request_refusal = _breakdown_refusal(dm, model, b, allowed)
@@ -324,8 +358,13 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if grain is None:
             grain = dm.period.default_grain
         if is_daily_grain(grain):
-            plan.refusals.append(Refusal(measure=None, reason=DAILY_REFUSAL))
-            return plan
+            # v2 day is the stored day on a day-floored fact. Weekly or monthly
+            # sell-through stays refused with the v1 sentence (never split into days).
+            if model.time is not None and model.time.floor == "day":
+                grain = "day"
+            else:
+                plan.refusals.append(Refusal(measure=None, reason=DAILY_REFUSAL))
+                return plan
         if grain not in dm.period.grains:
             plan.refusals.append(
                 Refusal(
@@ -358,6 +397,13 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if exact is not None:
             plan.refusals.append(exact)
             continue
+        policy = counterpart_policy(dm, m, v1_catalog)
+        if policy is not None and policy.hidden:
+            plan.refusals.append(Refusal(measure=m.id, reason=hidden_message(policy)))
+            continue
+        if policy is not None and policy.grains is not None and req_set not in policy.grains:
+            plan.refusals.append(Refusal(measure=m.id, reason=grain_message(policy, req_set)))
+            continue
         if request_refusal is not None:
             plan.refusals.append(Refusal(measure=m.id, reason=request_refusal.reason, wall=request_refusal.wall))
             continue
@@ -367,7 +413,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                 Refusal(measure=m.id, reason=wall.reason if wall else "Stock is never summed across dates.", wall="W-SNAPSHOT-NOT-SUMMED")
             )
             continue
-        if needs_period(dm, m) and not period_in:
+        if needs_period_breakdown(dm, m) and not period_in:
             plan.refusals.append(Refusal(measure=m.id, reason=f"{m.label} needs period as a breakdown."))
             continue
         if isinstance(m, Calculated) and m.kind == "per_week_rate" and not period_in and not (
@@ -449,6 +495,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                 base.append(b)
     plan.base_measures = base
     plan.needs_prev = any(needs_period(dm, m) for m in plan.measures)
+    plan.needs_prior_year = any(needs_prior_year(dm, m) for m in plan.measures)
     if model.time is not None and model.time.floor == "stored_period_type" and period_in:
         plan.walls_checked.append("W-ONE-STORED-PERIOD")
     return plan

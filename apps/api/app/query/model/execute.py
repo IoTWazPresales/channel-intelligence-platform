@@ -18,7 +18,14 @@ from app.query.cache import DEFAULT_TTL_SECONDS, cache_key_v2, get_cached, set_c
 from app.query.calendar_grain import as_date, coarsest_stored_rank, finer_than_stored_message
 from app.query.labels import attach_names
 from app.query.model.calc import total_for, window_weeks
-from app.query.model.compiler import STATEMENT_TIMEOUT_SQL, UNASSIGNED, Compiled, bucket_fields, compile_plan
+from app.query.model.compiler import (
+    STATEMENT_TIMEOUT_SQL,
+    UNASSIGNED,
+    Compiled,
+    bucket_fields,
+    compile_plan,
+    platform_calendar,
+)
 from app.query.model.explain import build_explain
 from app.query.model.graph import Plan, Refusal, V2Request, plan_request
 from app.query.model.loader import DataModel, default_model
@@ -84,7 +91,7 @@ async def _rows_from(db: AsyncSession, plan: Plan, compiled: Compiled, result: l
             elif col.id == "period":
                 bs = as_date(m["bucket_start"])
                 if bs is not None and plan.period_grain:
-                    row.update(bucket_fields(bs, plan.period_grain))
+                    row.update(bucket_fields(bs, plan.period_grain, getattr(plan, "calendar", None)))
             elif len(col.fields) == 2:  # entity / reference: id + name
                 row[col.fields[0]] = m[col.fields[0]]
                 if col.fields[1] in m:
@@ -124,14 +131,23 @@ async def run_v2(
     if not plan.measures:
         return _response(ok=False, refusals=plan.refusals, explain=build_explain(dm, plan, None, catalog_version=version))
 
-    compiled = compile_plan(dm, plan, tenant_id=tid)
+    from app.services.business_calendar import tenant_calendar
+
+    cal = tenant_calendar(tid)
+    plan.calendar = None if platform_calendar(cal) else cal
+    compiled = compile_plan(dm, plan, tenant_id=tid, calendar=cal)
     if explain_only:
         explain = build_explain(dm, plan, compiled, catalog_version=version)
         if compiled.stored_types is not None:
             explain["notes"].append("The stored-period check (W-ONE-STORED-PERIOD) runs at execute.")
         return _response(ok=True, columns=_columns_payload(compiled), refusals=plan.refusals, explain=explain)
 
-    key = cache_key_v2(tenant_id=tid, request=req.canonical(), catalog_version=version)
+    key = cache_key_v2(
+        tenant_id=tid,
+        request=req.canonical(),
+        catalog_version=version,
+        calendar=None if plan.calendar is None else dict(plan.calendar.config),
+    )
     if not skip_cache:
         cached = get_cached(key)
         if cached is not None:

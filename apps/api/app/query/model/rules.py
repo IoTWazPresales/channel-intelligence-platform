@@ -69,5 +69,17 @@ def cpor_line_support_usd(aliases: dict[str, Any]) -> ColumnElement[Any]:
     )
 
 
-MODEL_RULES = {"cpor_portfolio_lines": cpor_portfolio_lines}
+def lineup_current_cases(aliases: dict[str, Any]) -> list[ColumnElement[bool]]:
+    """Current lineup cases, matching lineup_period_canonical: not cancelled or superseded."""
+    case_t = aliases["case"]
+    return [
+        case_t.c.superseded_by_case_id.is_(None),
+        case_t.c.commercial_status.notin_(("cancelled", "superseded")),
+    ]
+
+
+MODEL_RULES = {
+    "cpor_portfolio_lines": cpor_portfolio_lines,
+    "lineup_current_cases": lineup_current_cases,
+}
 MEASURE_RULES = {"cpor_line_support_usd": cpor_line_support_usd}

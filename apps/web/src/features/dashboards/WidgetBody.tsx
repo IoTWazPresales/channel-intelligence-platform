@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Typography } from '@mui/material';
+import { Alert, Box, Skeleton, Typography } from '@mui/material';
 import type { ColDef } from 'ag-grid-community';
 import { useMemo } from 'react';
 
@@ -41,7 +41,21 @@ export function WidgetBody({ metricKey, metricLabel, formula, visual: saved, gra
     [result?.rows, unit],
   );
 
-  if (loading) return <Typography variant="body2">Loading…</Typography>;
+  if (loading) {
+    return (
+      <Box
+        role="status"
+        aria-label="Loading"
+        aria-busy
+        data-testid={`dashboard-widget-loading-${testKey}`}
+        sx={{ p: 1, display: 'flex', alignItems: 'flex-end', gap: 1, height: Math.max(96, (chartHeight ?? 180) - 24) }}
+      >
+        {(visual === 'table' ? [88, 72, 60, 48] : [40, 65, 50, 80, 55, 70, 45, 90]).map((h, i) => (
+          <Skeleton key={i} animation="wave" variant="rounded" sx={{ flex: visual === 'table' ? undefined : 1, width: visual === 'table' ? `${h}%` : undefined }} height={visual === 'table' ? 12 : `${h}%`} />
+        ))}
+      </Box>
+    );
+  }
   if (error) return <Alert severity="error">{safeDisplayError(error)}</Alert>;
   if (!result) return null;
   if (!result.ok) {

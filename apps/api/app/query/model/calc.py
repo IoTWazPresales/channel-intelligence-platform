@@ -62,8 +62,14 @@ def total_for(
     if isinstance(measure, Measure):
         return _dec(base_totals.get(measure.id))
     kind = measure.kind
-    if kind in ("prior_period", "pct_change"):
+    if kind in ("prior_period", "pct_change", "prior_year", "running_total"):
         return None
+    if kind == "share_of_total":
+        src = dm.measure(measure.inputs[0])
+        base = total_for(dm, src, base_totals, weeks=weeks) if src is not None else None
+        if base is None or base == 0:
+            return None
+        return Decimal(1)
     inputs = [dm.measure(i) for i in measure.inputs]
     if any(i is None for i in inputs):
         return None

@@ -44,7 +44,7 @@ export function WidgetChart({ visual, grains, series, rows, unit = 'number', met
   }
 
   const frame = (child: ReactNode) => (
-    <Box data-testid="dashboard-widget-chart" sx={{ height, overflowY: 'auto', overflowX: 'hidden' }}>
+    <Box data-testid="dashboard-widget-chart" sx={{ minHeight: height, overflow: 'visible' }}>
       {child}
     </Box>
   );

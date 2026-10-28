@@ -94,6 +94,7 @@ class SemanticCatalog:
     metrics: tuple[MetricDef, ...]
     tenant_id: str = "default"
     overlay_applied: bool = False
+    spec_keys: tuple[str, ...] = ()
 
     def dimension_ids(self) -> frozenset[str]:
         return frozenset(d.id for d in self.dimensions)
@@ -111,6 +112,7 @@ class SemanticCatalog:
             "source_doc": self.source_doc,
             "tenant_id": self.tenant_id,
             "overlay_applied": self.overlay_applied,
+            "spec_keys": list(self.spec_keys),
             "dimensions": [
                 {"id": d.id, "label": d.label, "description": d.description} for d in self.dimensions
             ],
@@ -197,6 +199,7 @@ def _catalog_from_data(
     *,
     tenant_id: str = "default",
     overlay_applied: bool = False,
+    spec_keys: tuple[str, ...] = (),
 ) -> SemanticCatalog:
     dims = tuple(
         DimensionDef(
@@ -214,6 +217,7 @@ def _catalog_from_data(
         metrics=metrics,
         tenant_id=tenant_id,
         overlay_applied=overlay_applied,
+        spec_keys=spec_keys,
     )
 
 
@@ -425,10 +429,15 @@ def catalog_for_tenant(tenant_id: str | None = None) -> SemanticCatalog:
     composed_dicts = _composed_metric_dicts(profile_overlay, list(merged.get("metrics") or []))
     if composed_dicts:
         merged["metrics"] = list(merged.get("metrics") or []) + composed_dicts
-    overlay_state = {"patches": applied, "composed": composed_dicts}
-    overlay_applied = bool(applied or composed_dicts)
+    from app.query.model.tenant_restrictions import normalize_spec_keys
+
+    spec_keys = tuple(normalize_spec_keys(profile_overlay.get("spec_keys"), strict=False))
+    overlay_state = {"patches": applied, "composed": composed_dicts, "spec_keys": list(spec_keys)}
+    overlay_applied = bool(applied or composed_dicts or spec_keys)
     merged["version"] = _fold_overlay_version(int(base.get("version") or 1), overlay_state if overlay_applied else {})
-    return _catalog_from_data(merged, tenant_id=tid, overlay_applied=overlay_applied)
+    return _catalog_from_data(
+        merged, tenant_id=tid, overlay_applied=overlay_applied, spec_keys=spec_keys
+    )
 
 
 @lru_cache(maxsize=1)

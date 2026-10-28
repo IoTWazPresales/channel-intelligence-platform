@@ -10,12 +10,11 @@
 import CloseIcon from '@mui/icons-material/Close';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Alert,
   Box,
   Button,
-  Collapse,
+  Fade,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -28,8 +27,11 @@ import {
   Typography,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+import { slotForSeries } from '../chartSlots';
+import { FigureAboutButton } from '../FigureAboutButton';
 import type { DashboardWidget } from '../types';
 import { useV2Query } from './BuilderData';
 import { breakdownLabel, definitionMeasures, modelOf } from './catalog';
@@ -125,6 +127,7 @@ export function V2WidgetCard({
   dashboardName,
   actions,
   dragHandle = true,
+  onFit,
 }: {
   widget: DashboardWidget;
   def: DefinitionV2;
@@ -133,13 +136,15 @@ export function V2WidgetCard({
   dashboardName: string;
   actions: CardActions;
   dragHandle?: boolean;
+  /** Grow the grid cell when the answer is longer than the cell. */
+  onFit?: (span: { w: number; h: number }) => void;
 }) {
   const theme = useTheme();
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const onLayoutKey = useDashboardLayoutKey();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const closeFullRef = useRef<HTMLButtonElement | null>(null);
-  const [aboutOpen, setAboutOpen] = useState(false);
   const [full, setFull] = useState(false);
   const [rowsOpen, setRowsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -163,6 +168,18 @@ export function V2WidgetCard({
   const sparkQ = useV2Query(sparkReq, { tag: 'sparkline' });
 
   const data = main.data;
+  useEffect(() => {
+    if (!onFit || !data?.ok) return;
+    const box = widget.layout_json || {};
+    const top = def.display?.top_n;
+    const next = slotForSeries(
+      visual,
+      data.rows.length,
+      { w: typeof box.w === 'number' ? box.w : 6, h: typeof box.h === 'number' ? box.h : 8 },
+      typeof top === 'number' ? top : undefined,
+    );
+    if (next) onFit(next);
+  }, [data, def.display, onFit, visual, widget.layout_json]);
   const filterCaption = plan.status === 'ready' ? plan.filterCaption : ctx.filterCaption;
   const compared = useMemo(() => seriesCompare && compareReq && plan.status === 'ready' && data?.ok && !main.isPlaceholderData && compareQ.data?.ok && !compareQ.isPlaceholderData
     ? mergeComparison(data, compareQ.data, def, plan.window, comparisonWindow, ctx.compareLabel ?? 'previous period') : null,
@@ -298,6 +315,12 @@ export function V2WidgetCard({
         <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap title={widget.title} component="h3">
           {widget.title}
         </Typography>
+        <FigureAboutButton testId={`dashboard-widget-about-${widget.id}`}>
+          <Typography variant="body2">
+            {aboutText(catalog, def)}
+            {plan.status === 'ready' && plan.applied.length ? ` Filtered by ${plan.applied.map((k) => breakdownLabel(catalog, k).toLowerCase()).join(', ')}.` : ''}
+          </Typography>
+        </FigureAboutButton>
         {actions.onEdit ? (
           <Tooltip title="Edit">
             <IconButton size="small" aria-label={`Edit ${widget.title}`} onClick={actions.onEdit} data-testid={`dashboard-widget-edit-${widget.id}`}>
@@ -308,28 +331,11 @@ export function V2WidgetCard({
         <WidgetMenu widgetId={widget.id} title={widget.title} actions={menu} buttonRef={menuButtonRef} />
       </Stack>
       <NotFilteredLine items={plan.notFiltered} testId={`dashboard-widget-not-filtered-${widget.id}`} />
-      <Box sx={{ px: 1, py: 0 }}>
-        <Button
-          size="small"
-          variant="text"
-          onClick={() => setAboutOpen((o) => !o)}
-          aria-expanded={aboutOpen}
-          endIcon={<ExpandMoreIcon sx={{ transform: aboutOpen ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }} />}
-          sx={{ px: 0.5, py: 0 }}
-          data-testid={`dashboard-widget-about-${widget.id}`}
-        >
-          About this figure
-        </Button>
-        <Collapse in={aboutOpen}>
-          <Typography variant="body2" sx={{ px: 0.5, pb: 0.5 }} data-testid={`dashboard-widget-formula-${widget.id}`}>
-            {aboutText(catalog, def)}
-            {plan.status === 'ready' && plan.applied.length ? ` Filtered by ${plan.applied.map((k) => breakdownLabel(catalog, k).toLowerCase()).join(', ')}.` : ''}
-          </Typography>
-        </Collapse>
-      </Box>
-      <Box ref={bodyRef} sx={{ flex: 1, px: 1.5, pb: 0.5, minHeight: 0 }}>
-        {body()}
-      </Box>
+      <Fade in appear timeout={reduceMotion ? 0 : 420} key={main.isLoading && !data ? 'loading' : 'shown'}>
+        <Box ref={bodyRef} sx={{ flex: 1, px: 0.5, pb: 0, minHeight: 0 }}>
+          {body()}
+        </Box>
+      </Fade>
       {footer}
 
       <Dialog fullScreen open={full} onClose={() => setFull(false)} data-testid={`dashboard-widget-fullscreen-${widget.id}`}

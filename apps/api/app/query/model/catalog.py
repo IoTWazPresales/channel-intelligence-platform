@@ -18,6 +18,12 @@ from app.query.model.graph import (
     needs_period,
 )
 from app.query.model.loader import Calculated, DataModel
+from app.query.model.tenant_restrictions import (
+    counterpart_policy,
+    narrowed_breakdowns,
+    spec_breakdown_ids,
+    spec_keys_of,
+)
 
 COMBINATION_RULE = (
     f"Any up to {MAX_BREAKDOWNS} of a measure's breakdowns, one model per query, unless a wall applies; "
@@ -25,7 +31,19 @@ COMBINATION_RULE = (
 )
 
 
-def _breakdowns(dm: DataModel) -> list[dict[str, Any]]:
+def _visible_breakdowns(dm: DataModel, model_id: str, allowed: list[str], catalog: Any, policy: Any) -> list[str]:
+    if policy is not None and policy.grains is not None:
+        return narrowed_breakdowns(allowed, policy.grains)
+    if "product" not in dm.models[model_id].joins:
+        return allowed
+    out = list(allowed)
+    for spec_id in spec_breakdown_ids(catalog):
+        if spec_id not in out:
+            out.append(spec_id)
+    return out
+
+
+def _breakdowns(dm: DataModel, spec_keys: tuple[str, ...] = ()) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = [
         {"id": "period", "label": dm.period.label, "group": dm.period.group, "kind": "period", "grains": list(dm.period.grains)}
     ]
@@ -44,6 +62,16 @@ def _breakdowns(dm: DataModel) -> list[dict[str, Any]]:
     for b in out:
         if b.get("kind") == "local":
             b["models"] = [m.id for m in dm.models.values() if b["id"] in m.local]
+    for key in spec_keys:
+        out.append(
+            {
+                "id": f"spec_{key}",
+                "label": f"Spec: {key}",
+                "group": "Product",
+                "kind": "spec",
+                "of": "product",
+            }
+        )
     return out
 
 
@@ -54,44 +82,53 @@ def catalog_v2(dm: DataModel, v1_catalog: Any, *, is_admin: bool) -> dict[str, A
     measures: list[dict[str, Any]] = []
     for model in dm.models.values():
         for m in model.measures.values():
-            allowed = measure_breakdowns(dm, m)
-            measures.append(
-                {
-                    "id": m.id,
-                    "label": m.label,
-                    "unit": m.unit,
-                    "model": m.model,
-                    "kind": "base",
-                    "additivity": m.additivity,
-                    "breakdowns": allowed,
-                    "period_grains": list(dm.period.grains) if "period" in allowed else [],
-                    "requires": [],
-                    "legacy_key": m.legacy_key,
-                }
-            )
+            policy = counterpart_policy(dm, m, v1_catalog)
+            if policy is not None and policy.hidden and not is_admin:
+                continue
+            allowed = _visible_breakdowns(dm, m.model, measure_breakdowns(dm, m), v1_catalog, policy)
+            entry: dict[str, Any] = {
+                "id": m.id,
+                "label": policy.label if policy is not None else m.label,
+                "unit": m.unit,
+                "model": m.model,
+                "kind": "base",
+                "additivity": m.additivity,
+                "breakdowns": allowed,
+                "period_grains": list(dm.period.grains) if "period" in allowed else [],
+                "requires": [],
+                "legacy_key": m.legacy_key,
+            }
+            if policy is not None and policy.hidden:
+                entry["hidden"] = True
+            measures.append(entry)
     for c in dm.calculated.values():
+        policy = counterpart_policy(dm, c, v1_catalog)
+        if policy is not None and policy.hidden and not is_admin:
+            continue
         allowed = measure_breakdowns(dm, c)
         for i in c.inputs:
             src = dm.measure(i)
             if src is not None and not isinstance(src, Calculated):
                 allowed = [b for b in allowed if b in measure_breakdowns(dm, src)]
+        allowed = _visible_breakdowns(dm, c.model, allowed, v1_catalog, policy)
         requires = ["period"] if needs_period(dm, c) else (["period or period.from+to"] if c.kind == "per_week_rate" else [])
-        measures.append(
-            {
-                "id": c.id,
-                "label": c.label,
-                "unit": c.unit,
-                "model": c.model,
-                "kind": "calculated",
-                "calc": c.kind,
-                "inputs": list(c.inputs),
-                "additivity": c.additivity,
-                "breakdowns": allowed,
-                "period_grains": list(dm.period.grains) if "period" in allowed else [],
-                "requires": requires,
-                "legacy_key": None,
-            }
-        )
+        entry = {
+            "id": c.id,
+            "label": c.label,
+            "unit": c.unit,
+            "model": c.model,
+            "kind": "calculated",
+            "calc": c.kind,
+            "inputs": list(c.inputs),
+            "additivity": c.additivity,
+            "breakdowns": allowed,
+            "period_grains": list(dm.period.grains) if "period" in allowed else [],
+            "requires": requires,
+            "legacy_key": None,
+        }
+        if policy is not None and policy.hidden:
+            entry["hidden"] = True
+        measures.append(entry)
 
     legacy = {m.legacy_key for m in dm.measures.values() if m.legacy_key}
     for metric in v1_catalog.metrics:
@@ -128,7 +165,7 @@ def catalog_v2(dm: DataModel, v1_catalog: Any, *, is_admin: bool) -> dict[str, A
         "model_version": dm.version,
         "source_doc": dm.source_doc,
         "groups": list(dm.groups),
-        "breakdowns": _breakdowns(dm),
+        "breakdowns": _breakdowns(dm, spec_keys_of(v1_catalog)),
         "models": [
             {
                 "id": m.id,

@@ -22,7 +22,7 @@ groups: [Time, Product, Customer, Distributor, Store, Promotion]
 period:
   label: Period
   group: Time
-  grains: [week, month, quarter, year]
+  grains: [day, week, month, quarter, year]
   default_grain: quarter
 
 dimensions:
@@ -98,6 +98,26 @@ models:
         agg: count_distinct
         column: customer_id
         additivity: non_additive
+      # Line-level avg/min/max of the same units column the sum uses. Not a price
+      # and not an average per customer. Empty groups stay null (not zero).
+      units_avg:
+        label: Sell-out units per line (average)
+        unit: units
+        agg: avg
+        column: units
+        additivity: non_additive
+      units_min:
+        label: Sell-out units per line (minimum)
+        unit: units
+        agg: min
+        column: units
+        additivity: non_additive
+      units_max:
+        label: Sell-out units per line (maximum)
+        unit: units
+        agg: max
+        column: units
+        additivity: non_additive
 
   cst_sellthrough:
     label: Customer sell-through (CST)
@@ -135,6 +155,24 @@ models:
         unit: count
         agg: count_distinct
         column: site_label
+        additivity: non_additive
+      units_avg:
+        label: Sell-through units per line (average)
+        unit: units
+        agg: avg
+        column: units_sold
+        additivity: non_additive
+      units_min:
+        label: Sell-through units per line (minimum)
+        unit: units
+        agg: min
+        column: units_sold
+        additivity: non_additive
+      units_max:
+        label: Sell-through units per line (maximum)
+        unit: units
+        agg: max
+        column: units_sold
         additivity: non_additive
       # Same rule as sell_through_overview.load_stock_positions: each customer's latest stock
       # report on or before the period end (never dropped for age); a product missing from that
@@ -209,6 +247,134 @@ models:
         column: case_id
         additivity: non_additive
 
+
+  returns:
+    label: Distributor returns
+    table: fact_returns
+    tenant_via: dim_product
+    time: {column: transaction_date, floor: day}
+    joins:
+      product: {fk: product_id}
+      customer: {fk: customer_id, role: dsi_dealer}
+      distributor: {fk: distributor_id}
+    measures:
+      units:
+        label: Return units
+        unit: units
+        agg: sum
+        column: return_quantity
+        additivity: additive
+      lines:
+        label: Return lines
+        unit: count
+        agg: count
+        additivity: additive
+
+  sellin:
+    label: Distributor sell-in
+    table: fact_sales_sellin
+    tenant_via: dim_product
+    time: {column: period_start, floor: day}
+    joins:
+      product: {fk: product_id}
+      distributor: {fk: distributor_id}
+    measures:
+      units:
+        label: Sell-in units
+        unit: units
+        agg: sum
+        column: units
+        additivity: additive
+
+  shipments:
+    label: Inbound shipments
+    table: fact_inbound_shipment
+    tenant_column: tenant_id
+    time: {column: ship_confirm_date, floor: day}
+    joins:
+      product: {fk: product_id, null_keys: unassigned}
+      distributor: {fk: distributor_id, null_keys: unassigned}
+      customer: {fk: customer_id, null_keys: unassigned}
+    measures:
+      quantity:
+        label: Shipment quantity (ship confirm date)
+        unit: units
+        agg: sum
+        column: quantity
+        additivity: additive
+      lines:
+        label: Shipment lines
+        unit: count
+        agg: count
+        additivity: additive
+
+  distributor_stock:
+    label: Distributor reported stock
+    table: fact_inventory_distributor
+    tenant_column: tenant_id
+    time: {column: as_of_date, floor: day}
+    joins:
+      product: {fk: product_id}
+      distributor: {fk: distributor_id}
+    measures:
+      on_hand:
+        label: Distributor on-hand units (latest stock date)
+        unit: units
+        agg: latest_sum
+        column: on_hand_units
+        latest_per: distributor_id
+        additivity: semi_additive
+
+  lineup:
+    label: Commercial lineup (planned units)
+    table: commercial_lineup_line
+    tenant_via: dim_product
+    base_joins:
+      case: {table: commercial_lineup_case, fk: case_id, key: id}
+    rules: [lineup_current_cases]
+    time: {column: inferred_period_start, via: case, floor: day}
+    joins:
+      product: {fk: product_id}
+      customer: {fk: customer_id, null_keys: unassigned}
+      distributor: {fk: distributor_id, null_keys: unassigned}
+    local:
+      status: {column: commercial_status, via: case, label: Lineup status, group: Plan}
+    measures:
+      units:
+        label: Planned lineup units (resolved product)
+        unit: units
+        agg: sum
+        column: quantity_units
+        additivity: additive
+      lines:
+        label: Lineup lines (resolved product)
+        unit: count
+        agg: count
+        additivity: additive
+
+  recorded_prices:
+    label: Recorded prices
+    table: fact_pricing
+    tenant_via: dim_product
+    time: {column: effective_date, floor: day}
+    joins:
+      product: {fk: product_id}
+      customer: {fk: customer_id, null_keys: unassigned}
+    local:
+      currency: {column: currency, label: Currency, group: Price}
+    measures:
+      net_price_avg:
+        label: Average recorded net price
+        unit: price
+        agg: avg
+        column: net_price
+        additivity: non_additive
+      list_price_avg:
+        label: Average recorded list price
+        unit: price
+        agg: avg
+        column: list_price
+        additivity: non_additive
 calculated:
   dsi_sellout.units_prior_period: {kind: prior_period, inputs: [dsi_sellout.units], label: "Sell-out units, previous period", unit: units}
   dsi_sellout.units_change: {kind: difference, inputs: [dsi_sellout.units, dsi_sellout.units_prior_period], label: "Sell-out units change vs previous period", unit: units}
@@ -218,6 +384,12 @@ calculated:
   cst_sellthrough.units_change: {kind: difference, inputs: [cst_sellthrough.units, cst_sellthrough.units_prior_period], label: "Sell-through units change vs previous period", unit: units}
   cst_sellthrough.units_pct_change: {kind: pct_change, inputs: [cst_sellthrough.units], label: "Sell-through units % change vs previous period", unit: ratio}
   cst_sellthrough.units_per_week: {kind: per_week_rate, inputs: [cst_sellthrough.units], label: "Sell-through units per week", unit: units_per_week}
+  dsi_sellout.units_prior_year: {kind: prior_year, inputs: [dsi_sellout.units], label: "Sell-out units, same bucket one year earlier", unit: units}
+  dsi_sellout.units_running_total: {kind: running_total, inputs: [dsi_sellout.units], label: "Sell-out units, running total", unit: units}
+  dsi_sellout.units_share: {kind: share_of_total, inputs: [dsi_sellout.units], label: "Sell-out units, share of the filtered total", unit: ratio}
+  cst_sellthrough.units_prior_year: {kind: prior_year, inputs: [cst_sellthrough.units], label: "Sell-through units, same bucket one year earlier", unit: units}
+  cst_sellthrough.units_running_total: {kind: running_total, inputs: [cst_sellthrough.units], label: "Sell-through units, running total", unit: units}
+  cst_sellthrough.units_share: {kind: share_of_total, inputs: [cst_sellthrough.units], label: "Sell-through units, share of the filtered total", unit: ratio}
   cpor.delivery_rate: {kind: ratio, inputs: [cpor.result_units, cpor.estimate_units], label: "Delivery rate (window start in period)", unit: ratio}
   cpor.support_per_unit_usd: {kind: ratio, inputs: [cpor.support_usd, cpor.result_units], label: "Support USD per unit sold (window start in period)", unit: usd_per_unit}
 
@@ -307,8 +479,5 @@ pending:
   - {id: cst_sellthrough.restock_flag, reason: "Restock flags live in the sell-through overview's SKU problem rules (per-customer config, forward cover); not a compiler measure tonight."}
   - {id: cpor.open_cases, reason: "Which CPOR status counts as open is a proposed decision; break cases down by status or workflow_status instead."}
   - {id: cpor.value, reason: "Which value a CPOR 'value' means (support USD, support ZAR or estimate) is a proposed decision."}
-  - {id: shipments, reason: "Model declared later (mixed currencies)."}
-  - {id: distributor_stock, reason: "Model declared later; Channel Ops stock stays the governed channel_stock metric."}
-  - {id: returns, reason: "Model declared later (no tenant_id; tenant via dim_product)."}
-  - {id: lineup_plan, reason: "Model declared later (no tenant_id; tenant via dim_product)."}
-  - {id: recorded_prices, reason: "Not buildable as written: listing_observation has no product_id, tenant_id or observed date column."}
+  - {id: shipments.amount, reason: "Shipment amount is not summed: currency differs by row. Use shipment quantity."}
+  - {id: listing_observation, reason: "listing_observation has no product, tenant or observed date. Recorded prices are fact_pricing."}

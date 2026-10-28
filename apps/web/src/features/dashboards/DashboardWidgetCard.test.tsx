@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DashboardWidgetCard } from './DashboardWidgetCard';
@@ -45,13 +46,15 @@ const metric: SemanticMetric = {
 };
 
 describe('DashboardWidgetCard', () => {
-  it('shows the KPI on a headline figure and keeps the definition behind About this figure', () => {
+  it('shows the KPI on a headline figure and keeps the definition behind About this figure', async () => {
+    const user = userEvent.setup();
     render(<DashboardWidgetCard widget={widget} metric={metric} onEdit={() => undefined} onDelete={() => undefined} onPromote={() => undefined} />);
     expect(screen.getByTestId('dashboard-widget-value-7')).toHaveTextContent('12');
     expect(screen.getByText('Sell-out units')).toBeTruthy();
     const about = screen.getByRole('button', { name: 'About this figure' });
-    expect(about).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('dashboard-widget-formula-7')).toBeNull();
+    await user.hover(about);
+    expect(await screen.findByTestId('dashboard-widget-formula-7')).toHaveTextContent('Sum of distributor sell-out units');
     expect(document.body.textContent ?? '').not.toContain('sellout_units');
-    expect(screen.getByTestId('dashboard-widget-formula-7')).toHaveTextContent('Sum of distributor sell-out units');
   });
 });

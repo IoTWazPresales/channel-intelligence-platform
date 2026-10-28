@@ -25,7 +25,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Date, Numeric, and_, bindparam, cast, func, literal_column, or_, select
+from sqlalchemy import Date, Numeric, and_, bindparam, case, cast, func, literal_column, or_, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import ColumnElement, Select
 
@@ -33,22 +33,53 @@ from app.query.calendar_grain import PERIOD_GRAINS, bucket_end as _v1_bucket_end
 from app.query.model.graph import Plan
 from app.query.model.loader import DataModel, FactModel, Measure, _tables
 from app.query.model.rules import MEASURE_RULES, MODEL_RULES
+from app.query.model.tenant_restrictions import SPEC_KEY_RE, SPEC_PREFIX
 
 UNASSIGNED = "Unassigned"
 _UNASSIGNED_SQL = literal_column(f"'{UNASSIGNED}'")
 _INTERVAL = {
+    "day": literal_column("interval '1 day'"),
     "week": literal_column("interval '1 week'"),
     "month": literal_column("interval '1 month'"),
     "quarter": literal_column("interval '3 months'"),
     "year": literal_column("interval '1 year'"),
 }
+
+
+def platform_calendar(calendar: Any) -> bool:
+    """Gregorian months, Monday weeks, year starting in January: the date_trunc path."""
+    if calendar is None:
+        return True
+    cfg = getattr(calendar, "config", None) or {}
+    return (
+        getattr(calendar, "type", None) == "gregorian"
+        and int(cfg.get("fiscal_year_start_month") or 1) == 1
+        and int(cfg.get("week_start_day") or 0) == 0
+        and not cfg.get("custom_periods")
+    )
+
+
+def _calendar_case(col: Any, grain: str, calendar: Any, *, prefix: str) -> ColumnElement[Any]:
+    bounds = calendar.buckets(date(2016, 1, 1), date(2036, 12, 31), grain)
+    whens = [
+        (
+            and_(col >= b.start, col <= b.end),
+            bindparam(f"{prefix}_{grain}_{i}", value=b.start, type_=Date),
+        )
+        for i, b in enumerate(bounds)
+    ]
+    return case(*whens, else_=None)
 STATEMENT_TIMEOUT_SQL = "SET LOCAL statement_timeout = '10s'"
 
 
 # ----------------------------------------------------------------------------- calendar helpers
 
 
-def bucket_expr(col: Any, grain: str) -> ColumnElement[Any]:
+def bucket_expr(col: Any, grain: str, calendar: Any = None) -> ColumnElement[Any]:
+    if grain == "day":
+        return cast(func.date_trunc(literal_column("'day'"), col), Date)
+    if calendar is not None and not platform_calendar(calendar):
+        return _calendar_case(col, grain, calendar, prefix="bkt")
     if grain in PERIOD_GRAINS:
         return date_trunc_expr(col, grain)
     if grain == "year":
@@ -57,6 +88,8 @@ def bucket_expr(col: Any, grain: str) -> ColumnElement[Any]:
 
 
 def bucket_start_of(d: date, grain: str) -> date:
+    if grain == "day":
+        return d
     if grain == "week":
         return d - timedelta(days=d.weekday())
     if grain == "month":
@@ -67,6 +100,8 @@ def bucket_start_of(d: date, grain: str) -> date:
 
 
 def prev_bucket_start(bs: date, grain: str) -> date:
+    if grain == "day":
+        return bs - timedelta(days=1)
     if grain == "week":
         return bs - timedelta(days=7)
     months = {"month": 1, "quarter": 3, "year": 12}[grain]
@@ -78,18 +113,25 @@ def prev_bucket_start(bs: date, grain: str) -> date:
 
 
 def bucket_last_day(bs: date, grain: str) -> date:
+    if grain == "day":
+        return bs
     if grain == "year":
         return date(bs.year, 12, 31)
     return _v1_bucket_end(bs, grain)
 
 
 def bucket_key(bs: date, grain: str) -> str:
+    if grain == "day":
+        return bs.isoformat()
     if grain == "year":
         return f"{bs.year:04d}"
     return bucket_start_to_key(bs, grain)
 
 
-def bucket_fields(bs: date, grain: str) -> dict[str, str]:
+def bucket_fields(bs: date, grain: str, calendar: Any = None) -> dict[str, str]:
+    if calendar is not None and not platform_calendar(calendar):
+        b = calendar.bucket(bs, grain)
+        return {"bucket_key": b.label, "bucket_start": b.start.isoformat(), "bucket_end": b.end.isoformat()}
     return {
         "bucket_key": bucket_key(bs, grain),
         "bucket_start": bs.isoformat(),
@@ -145,6 +187,7 @@ class _Ctx:
         self.dims: dict[str, Any] = {}
         self.refs: dict[str, Any] = {}
         self.join_notes: list[str] = []
+        self.calendar: Any = None
 
     def owner(self, via: str | None) -> Any:
         return self.f if via is None else self.base[via]
@@ -212,7 +255,7 @@ def _breakdown(ctx: _Ctx, bid: str, grain: str | None) -> _Breakdown:
     if bid == "period":
         assert model.time is not None and grain is not None
         tcol = ctx.owner(model.time.on).c[model.time.column]
-        return _Breakdown(id=bid, kind="period", key_expr=bucket_expr(tcol, grain))
+        return _Breakdown(id=bid, kind="period", key_expr=bucket_expr(tcol, grain, ctx.calendar))
     if bid in model.joins:
         j = model.joins[bid]
         col = ctx.owner(j.on).c[j.fk]
@@ -243,6 +286,13 @@ def _breakdown(ctx: _Ctx, bid: str, grain: str | None) -> _Breakdown:
                 name_expr=r.c[ref.name_column],
                 filter_expr=r.c[ref.key],
             )
+    if bid.startswith(SPEC_PREFIX) and "product" in model.joins:
+        key = bid[len(SPEC_PREFIX):]
+        if SPEC_KEY_RE.fullmatch(key):
+            # One fixed extractor. The key is a bound parameter, never concatenated SQL.
+            extracted = ctx.dim("product").c.specs_json.op("->>")(bindparam(f"spec_key_{key}", value=key))
+            expr = func.coalesce(extracted, _UNASSIGNED_SQL)
+            return _Breakdown(id=bid, kind="attribute", key_expr=expr, filter_expr=expr)
     raise ValueError(f"breakdown {bid!r} is not on model {model.id}")  # graph refused it already
 
 
@@ -267,10 +317,19 @@ def _measure_expr(ctx: _Ctx, m: Measure, window: ColumnElement[bool] | None, lat
         agg = func.sum(value)
     elif m.agg == "count":
         agg = func.count()
+    elif m.agg == "avg":
+        agg = func.avg(value)
+    elif m.agg == "min":
+        agg = func.min(value)
+    elif m.agg == "max":
+        agg = func.max(value)
     else:  # count_distinct
         agg = func.count(func.distinct(value))
     if conds:
         agg = agg.filter(and_(*conds))
+    # avg/min/max of no rows is null. Coalescing them to 0 would invent a quantity.
+    if m.agg in {"avg", "min", "max"}:
+        return agg
     return func.coalesce(agg, literal_column("0"))
 
 
@@ -278,10 +337,11 @@ def _num(x: Any) -> Any:
     return cast(x, Numeric)
 
 
-def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str) -> Compiled:
+def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = None) -> Compiled:
     model = plan.model
     assert model is not None
     ctx = _Ctx(dm, model, tenant_id)
+    ctx.calendar = None if platform_calendar(calendar) else calendar
     grain = plan.period_grain
     tcol = ctx.owner(model.time.on).c[model.time.column] if model.time is not None else None
 
@@ -412,6 +472,14 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str) -> Compiled:
         on.extend(prev.c[k].is_not_distinct_from(agg.c[k]) for k in key_cols if k != "bucket_start")
         from_final = agg.outerjoin(prev, and_(*on))
 
+    yearago = None
+    if plan.needs_prior_year and grain:
+        yearago = agg.alias("yearago")
+        shifted = bucket_expr(agg.c.bucket_start - literal_column("interval '1 year'"), grain, ctx.calendar)
+        on_year = [yearago.c.bucket_start == shifted]
+        on_year.extend(yearago.c[k].is_not_distinct_from(agg.c[k]) for k in key_cols if k != "bucket_start")
+        from_final = from_final.outerjoin(yearago, and_(*on_year))
+
     weeks_in_window: Decimal | None = None
     if plan.period_from is not None and plan.period_to is not None:
         weeks_in_window = Decimal((plan.period_to - plan.period_from).days + 1) / Decimal(7)
@@ -436,6 +504,16 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str) -> Compiled:
         if m.kind == "prior_period":
             assert prev is not None
             return prev.c[measure_labels[a]]
+        if m.kind == "prior_year":
+            assert yearago is not None
+            return yearago.c[measure_labels[a]]
+        if m.kind == "running_total":
+            base = expr_for(a)
+            parts = [agg.c[k] for k in key_cols if k != "bucket_start"]
+            return func.sum(base).over(partition_by=parts or None, order_by=agg.c.bucket_start)
+        if m.kind == "share_of_total":
+            base = expr_for(a)
+            return _num(base) / func.nullif(func.sum(_num(base)).over(), 0)
         if m.kind == "pct_change":
             assert prev is not None
             cur_v, prev_v = _num(agg.c[measure_labels[a]]), _num(prev.c[measure_labels[a]])

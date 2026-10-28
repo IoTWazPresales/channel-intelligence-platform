@@ -604,6 +604,10 @@ def _normalize_semantic_overlay(raw: object, *, strict: bool = False) -> dict[st
     out: dict[str, Any] = {"metrics": out_metrics}
     if out_composed:
         out["composed"] = out_composed
+    if isinstance(parsed, dict) and "spec_keys" in parsed:
+        from app.query.model.tenant_restrictions import normalize_spec_keys
+
+        out["spec_keys"] = normalize_spec_keys(parsed.get("spec_keys"), strict=strict)
     return out
 
 
@@ -616,6 +620,8 @@ def semantic_overlay_for_tenant(tenant_id: str = "default") -> dict[str, Any]:
     out: dict[str, Any] = {"metrics": metrics}
     if isinstance(raw.get("composed"), dict) and raw["composed"]:
         out["composed"] = raw["composed"]
+    if isinstance(raw.get("spec_keys"), list):
+        out["spec_keys"] = raw["spec_keys"]
     return out
 
 
@@ -701,7 +707,7 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
                 normalized = _normalize_semantic_overlay(value, strict=False)
             except (TypeError, ValueError):
                 continue
-            if normalized.get("metrics") or normalized.get("composed"):
+            if normalized.get("metrics") or normalized.get("composed") or normalized.get("spec_keys"):
                 out[key] = normalized
             continue
         text = str(value).strip()
@@ -730,7 +736,11 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
             if raw is None or raw == "" or raw == {}:
                 continue
             normalized = _normalize_semantic_overlay(raw, strict=True)
-            if normalized.get("metrics") or normalized.get("composed"):
+            if isinstance(raw, dict) and "spec_keys" not in raw:
+                previous = existing.get("semantic_overlay")
+                if isinstance(previous, dict) and previous.get("spec_keys"):
+                    normalized["spec_keys"] = previous["spec_keys"]
+            if normalized.get("metrics") or normalized.get("composed") or normalized.get("spec_keys"):
                 clean[key] = normalized
             continue
         if key == "lineup_export_columns":

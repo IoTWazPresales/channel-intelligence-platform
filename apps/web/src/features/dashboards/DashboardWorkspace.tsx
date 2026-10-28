@@ -31,7 +31,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
@@ -49,6 +49,7 @@ import {
 } from './builder/api';
 import { BuilderEditorDialog, definitionFromV1, type BuilderEditorInitial, type BuilderEditorValue } from './builder/BuilderEditorDialog';
 import { measureOf } from './builder/catalog';
+import { MeasurePalette } from './builder/MeasurePalette';
 import { DashboardFilterBar, normaliseFilters } from './builder/FilterBar';
 import { requestFor } from './builder/requestFor';
 import { StarterGallery, TemplateChip, TemplateNote } from './builder/Starters';
@@ -144,6 +145,12 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
   }, [catalogQ.data]);
 
   const active = (listQ.data?.items ?? []).find((d) => d.id === activeId) ?? listQ.data?.items?.[0];
+  // Widgets already on the board when it opened keep the size they were given.
+  // A chart added afterwards may grow in height only.
+  const openedWith = useRef(new Map<number, Set<number>>());
+  if (active && listQ.isSuccess && !openedWith.current.has(active.id)) {
+    openedWith.current.set(active.id, new Set((active.widgets ?? []).map((w) => w.id)));
+  }
 
   // Filter bar: the saved filters of the active dashboard, edited locally until "Save filters".
   // Keyed by content, not identity: a refetch after a widget save must not wipe unsaved bar edits.
@@ -436,8 +443,18 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="flex-start">
-        <Stack spacing={2} sx={{ width: { xs: '100%', md: 280 }, flexShrink: 0 }}>
-        <Paper sx={{ p: 2 }}>
+        <Stack
+          spacing={1}
+          sx={{
+            width: { xs: '100%', md: 300 },
+            flexShrink: 0,
+            position: { md: 'sticky' },
+            top: 8,
+            maxHeight: { md: 'calc(100vh - 96px)' },
+            alignSelf: 'flex-start',
+          }}
+        >
+        <Paper sx={{ p: 1.5, maxHeight: { md: 220 }, overflow: 'auto' }}>
           <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
             Yours
           </Typography>
@@ -462,17 +479,32 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
             )}
           </Stack>
         </Paper>
-        {active && (
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="subtitle1" fontWeight={700}>
-              Metrics
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-              Click to build a widget, or drag onto the canvas.
-            </Typography>
+        <Paper sx={{ p: 1.5, flex: 1, minHeight: 240, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Typography variant="subtitle1" fontWeight={700}>
+            Measures
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+            Click to build a widget, or drag it onto the canvas.
+          </Typography>
+          {catalogV2 ? (
+            <MeasurePalette
+              catalog={catalogV2}
+              onPick={(id) => {
+                if (!active) {
+                  setCreateOpen(true);
+                  return;
+                }
+                openAdd(id);
+              }}
+            />
+          ) : catalogV2Q.isLoading ? (
+            <Typography variant="body2" color="text.secondary">Loading measures…</Typography>
+          ) : active ? (
             <MetricBrowser metrics={queryableMetrics} onPick={(k) => openAdd(k)} draggable maxHeight="60vh" />
-          </Paper>
-        )}
+          ) : (
+            <Typography variant="body2" color="text.secondary">The measure list could not be loaded.</Typography>
+          )}
+        </Paper>
         </Stack>
 
         <Box sx={{ flex: 1, width: '100%', minWidth: 0 }}>
@@ -542,6 +574,23 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
                         onDelete={() => deleteMut.mutate(w.id)}
                         onPromote={() => promoteMut.mutate(w)}
                         onDuplicate={() => duplicateMut.mutate(w)}
+                        onFitLayout={(id, span) => {
+                          if (openedWith.current.get(active.id)?.has(id)) return;
+                          persistLayoutMut.mutate(
+                            (active.widgets || []).map((item) => {
+                              const box = item.layout_json || {};
+                              return {
+                                id: item.id,
+                                layout: {
+                                  x: typeof box.x === 'number' ? box.x : 0,
+                                  y: typeof box.y === 'number' ? box.y : 0,
+                                  w: item.id === id ? span.w : typeof box.w === 'number' ? box.w : 6,
+                                  h: item.id === id ? span.h : typeof box.h === 'number' ? box.h : 8,
+                                },
+                              };
+                            }),
+                          );
+                        }}
                       />
                     )}
                   />

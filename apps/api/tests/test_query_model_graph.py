@@ -51,13 +51,13 @@ def _reasons(plan):
 
 
 def test_model_file_loads_with_three_models_and_tenant_paths(dm):
-    assert set(dm.models) == {"dsi_sellout", "cst_sellthrough", "cpor"}
+    assert {"dsi_sellout", "cst_sellthrough", "cpor"} <= set(dm.models)
     assert dm.models["dsi_sellout"].tenant_via is None and dm.models["dsi_sellout"].tenant_column == "tenant_id"
     assert dm.models["cst_sellthrough"].tenant_via is None
     assert dm.models["cpor"].tenant_via == "case"  # cpor_case_line has no tenant_id
     assert dm.measures["dsi_sellout.units"].legacy_key == "sellout_units"
     assert dm.measures["cst_sellthrough.units"].legacy_key == "cst_sellthrough_units"
-    assert {c.kind for c in dm.calculated.values()} == {"ratio", "difference", "prior_period", "pct_change", "per_week_rate"}
+    assert {c.kind for c in dm.calculated.values()} >= {"ratio", "difference", "prior_period", "pct_change", "per_week_rate", "prior_year", "running_total", "share_of_total"}
 
 
 def _write(tmp_path: Path, mutate) -> Path:
@@ -250,7 +250,7 @@ def test_governed_metric_is_answered_alone_at_its_v1_grains(dm, v1):
 
 
 def test_day_grain_refused_with_the_v1_text(dm, v1):
-    p = _plan(dm, v1, measures=["dsi_sellout.units"], breakdowns=["period"], period_grain="day")
+    p = _plan(dm, v1, measures=["cst_sellthrough.units"], breakdowns=["period"], period_grain="day")
     assert _reasons(p) == [DAILY_REFUSAL]
     v = validate_metric_grain("sellout_units", ["period"], catalog=v1, period_grain="day")
     assert v.message == DAILY_REFUSAL
