@@ -374,7 +374,11 @@ def _num(x: Any) -> Any:
     return cast(x, Numeric)
 
 
-def _retail_day_agg(
+def _day_of(tcol: Any) -> Any:
+    return cast(func.date_trunc(literal_column("'day'"), tcol), Date)
+
+
+def _retail_day_lookup(
     ctx: _Ctx,
     bds: list[Any],
     plan: Plan,
@@ -385,44 +389,47 @@ def _retail_day_agg(
     flow_window: Any,
     latest: Any,
 ) -> Select:
-    """Sum each additive measure by day, then apply the retail bucket to those days."""
-    day_expr = cast(func.date_trunc(literal_column("'day'"), tcol), Date)
-    inner_cols: list[Any] = [day_expr.label("day")]
-    inner_group: list[Any] = [day_expr]
-    passthrough: list[str] = []
+    """Bucket each distinct day once, then aggregate the facts that fall on that day.
+
+    Summing a daily count or average would change a distinct-dealer count and a line
+    average. The retail expression runs on the day list. The fact aggregation is the
+    measure's own aggregation.
+    """
+    days = (
+        select(_day_of(tcol).label("day"))
+        .select_from(fr)
+        .where(*where)
+        .distinct()
+        .cte("retail_days")
+        .prefix_with("MATERIALIZED")
+    )
+    bucketed = (
+        select(
+            days.c.day,
+            bucket_expr(days.c.day, grain, ctx.calendar).label("bucket_start"),
+        )
+        .cte("retail_buckets")
+        .prefix_with("MATERIALIZED")
+    )
+    joined = fr.join(bucketed, _day_of(tcol) == bucketed.c.day)
+    out_cols: list[Any] = [bucketed.c.bucket_start]
+    group: list[Any] = [bucketed.c.bucket_start]
     for b in bds:
         if b.kind == "period":
             continue
         if b.kind == "reference":
-            inner_cols.append(b.key_expr.label(f"{b.id}_id"))
-            inner_cols.append(func.coalesce(b.name_expr, _UNASSIGNED_SQL).label(f"{b.id}_name"))
-            inner_group.extend([b.key_expr, b.name_expr])
-            passthrough.extend([f"{b.id}_id", f"{b.id}_name"])
+            out_cols.append(b.key_expr.label(f"{b.id}_id"))
+            out_cols.append(func.coalesce(b.name_expr, _UNASSIGNED_SQL).label(f"{b.id}_name"))
+            group.extend([b.key_expr, b.name_expr])
         elif b.kind == "entity":
-            inner_cols.append(b.key_expr.label(f"{b.id}_id"))
-            inner_group.append(b.key_expr)
-            passthrough.append(f"{b.id}_id")
+            out_cols.append(b.key_expr.label(f"{b.id}_id"))
+            group.append(b.key_expr)
         else:
-            inner_cols.append(b.key_expr.label(b.id))
-            inner_group.append(b.key_expr)
-            passthrough.append(b.id)
+            out_cols.append(b.key_expr.label(b.id))
+            group.append(b.key_expr)
     for i, m in enumerate(plan.base_measures):
-        inner_cols.append(_measure_expr(ctx, m, flow_window, latest).label(f"m{i}"))
-    days = select(*inner_cols).select_from(fr).where(*where).group_by(*inner_group).subquery("days")
-    bucketed_cols: list[Any] = [bucket_expr(days.c.day, grain, ctx.calendar).label("bucket_start")]
-    bucketed_cols.extend(days.c[name] for name in passthrough)
-    for i, _m in enumerate(plan.base_measures):
-        bucketed_cols.append(days.c[f"m{i}"])
-    bucketed = select(*bucketed_cols).subquery("bucketed")
-    out_cols: list[Any] = [bucketed.c.bucket_start]
-    group: list[Any] = [bucketed.c.bucket_start]
-    for name in passthrough:
-        out_cols.append(bucketed.c[name])
-        group.append(bucketed.c[name])
-    for i, _m in enumerate(plan.base_measures):
-        summed = func.coalesce(func.sum(bucketed.c[f"m{i}"]), literal_column("0"))
-        out_cols.append(summed.label(f"m{i}"))
-    return select(*out_cols).group_by(*group)
+        out_cols.append(_measure_expr(ctx, m, flow_window, latest).label(f"m{i}"))
+    return select(*out_cols).select_from(joined).where(*where).group_by(*group)
 
 
 def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = None) -> Compiled:
@@ -538,8 +545,9 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
     measure_labels: dict[str, str] = {}
     for i, m in enumerate(plan.base_measures):
         measure_labels[m.id] = f"m{i}"
-    # Retail month, quarter and year expressions are expensive per fact row. Sum the
-    # facts by day first, then bucket those days. Week grain is a weekday shift and stays direct.
+    # Retail month, quarter and year expressions are expensive per fact row. Bucket the
+    # distinct days in the window once, then join the facts back on the day. Week grain
+    # is a weekday shift and stays direct. A latest-stock measure is not a day bucket.
     retail_day_first = (
         ctx.calendar is not None
         and getattr(ctx.calendar, "type", None) in {"retail_445", "retail_454", "retail_544"}
@@ -548,13 +556,14 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
         and tcol is not None
         and latest is None
         and bool(plan.base_measures)
-        and all(m.agg in {"sum", "count"} for m in plan.base_measures)
     )
     if retail_day_first:
-        agg_q = _retail_day_agg(
+        agg_q = _retail_day_lookup(
             ctx, bds, plan, fr, where_for(widened), tcol, grain, flow_window, latest
         )
-        ctx.join_notes.append("retail period bucket applied to one row per day, then summed")
+        ctx.join_notes.append(
+            "retail period bucket applied once per distinct day, then joined to the facts"
+        )
     else:
         agg_cols: list[Any] = []
         group_by: list[Any] = []

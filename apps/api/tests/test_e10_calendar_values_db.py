@@ -582,3 +582,42 @@ async def test_prior_year_is_the_whole_year_ago_bucket_when_the_window_opens_mid
     finally:
         await db.rollback()
         await db.close()
+
+
+@pytest.mark.anyio
+async def test_dealers_by_retail_month_count_a_dealer_once():
+    """A dealer who sells on two days of one retail month is one dealer, and the units still add."""
+    db = await _db()
+    try:
+        cal = BusinessCalendar({"type": "retail_445"})
+        month = next(b for b in cal.buckets(date(2026, 3, 1), date(2026, 6, 30), "month") if b.days >= 7)
+        later = month.start + timedelta(days=2)
+        assert cal.bucket(later, "month").start == month.start
+        product = DimProduct(sku=_key("sku")[-32:], name=f"E10d {TAG}", tenant_id=TENANT)
+        distributor = DimDistributor(code=_key("dist")[-32:], name=f"Dist {TAG}", tenant_id=TENANT)
+        dealer_a = DimCustomer(code=_key("cust")[-32:], name=f"A {TAG}", tenant_id=TENANT)
+        dealer_b = DimCustomer(code=_key("cust")[-32:], name=f"B {TAG}", tenant_id=TENANT)
+        db.add_all([product, distributor, dealer_a, dealer_b])
+        await db.flush()
+        for day, customer, units in (
+            (month.start, dealer_a, 1),
+            (later, dealer_a, 1),
+            (later, dealer_b, 4),
+        ):
+            db.add(FactSalesSellout(
+                source_key=_key("so"), tenant_id=TENANT, product_id=product.id, customer_id=customer.id,
+                distributor_id=distributor.id, period_start=day, transaction_date=day, units=units, revenue=0,
+            ))
+        await db.flush()
+        rows, compiled = await _run(
+            db, ["dsi_sellout.units", "dsi_sellout.dealers"], ["period"], "month", cal,
+            tenant=TENANT, period_from=month.start, period_to=month.end,
+        )
+        assert len(rows) == 1
+        assert _as_date(rows[0]["bucket_start"]) == month.start
+        vals = {mid: _num(rows[0][lab]) for mid, lab in compiled.measure_labels.items()}
+        assert vals["dsi_sellout.units"] == 6
+        assert vals["dsi_sellout.dealers"] == 2
+    finally:
+        await db.rollback()
+        await db.close()
