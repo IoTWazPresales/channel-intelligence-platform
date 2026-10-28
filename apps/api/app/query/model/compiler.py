@@ -25,11 +25,12 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Date, Numeric, and_, bindparam, case, cast, func, literal_column, or_, select
+from sqlalchemy import Date, Numeric, and_, bindparam, cast, func, literal_column, or_, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import ColumnElement, Select
 
 from app.query.calendar_grain import PERIOD_GRAINS, bucket_end as _v1_bucket_end, bucket_start_to_key, date_trunc_expr
+from app.query.model.calendar_sql import bucket_end_exclusive, bucket_start_expr, prior_year_bucket_expr
 from app.query.model.graph import Plan
 from app.query.model.loader import DataModel, FactModel, Measure, _tables
 from app.query.model.rules import MEASURE_RULES, MODEL_RULES
@@ -59,16 +60,6 @@ def platform_calendar(calendar: Any) -> bool:
     )
 
 
-def _calendar_case(col: Any, grain: str, calendar: Any, *, prefix: str) -> ColumnElement[Any]:
-    bounds = calendar.buckets(date(2016, 1, 1), date(2036, 12, 31), grain)
-    whens = [
-        (
-            and_(col >= b.start, col <= b.end),
-            bindparam(f"{prefix}_{grain}_{i}", value=b.start, type_=Date),
-        )
-        for i, b in enumerate(bounds)
-    ]
-    return case(*whens, else_=None)
 STATEMENT_TIMEOUT_SQL = "SET LOCAL statement_timeout = '10s'"
 
 
@@ -79,12 +70,37 @@ def bucket_expr(col: Any, grain: str, calendar: Any = None) -> ColumnElement[Any
     if grain == "day":
         return cast(func.date_trunc(literal_column("'day'"), col), Date)
     if calendar is not None and not platform_calendar(calendar):
-        return _calendar_case(col, grain, calendar, prefix="bkt")
+        return bucket_start_expr(col, grain, calendar)
     if grain in PERIOD_GRAINS:
         return date_trunc_expr(col, grain)
     if grain == "year":
         return cast(func.date_trunc(literal_column("'year'"), col), Date)
     raise ValueError(f"Illegal period grain {grain!r}")
+
+
+def _shift_year(d: date) -> date:
+    try:
+        return d.replace(year=d.year - 1)
+    except ValueError:
+        return d.replace(year=d.year - 1, day=28)
+
+
+def _bucket_floor(d: date, grain: str, calendar: Any) -> date:
+    if calendar is None:
+        return bucket_start_of(d, grain)
+    return calendar.bucket(d, grain).start
+
+
+def _previous_floor(bucket_start: date, grain: str, calendar: Any) -> date:
+    if calendar is None:
+        return prev_bucket_start(bucket_start, grain)
+    return calendar.bucket(bucket_start - timedelta(days=1), grain).start
+
+
+def _prior_year_floor(bucket_start: date, grain: str, calendar: Any) -> date:
+    if calendar is None:
+        return bucket_start_of(_shift_year(bucket_start), grain)
+    return calendar.bucket(calendar.same_day_last_year(bucket_start), grain).start
 
 
 def bucket_start_of(d: date, grain: str) -> date:
@@ -188,12 +204,17 @@ class _Ctx:
         self.refs: dict[str, Any] = {}
         self.join_notes: list[str] = []
         self.calendar: Any = None
+        self.shipment_counted_qty: Any = None
+        self.shipment_kept: Any = None
 
     def owner(self, via: str | None) -> Any:
         return self.f if via is None else self.base[via]
 
     def aliases(self) -> dict[str, Any]:
-        return {"__base__": self.f, **self.base}
+        out = {"__base__": self.f, **self.base}
+        if self.shipment_counted_qty is not None:
+            out["__shipment_counted_qty__"] = self.shipment_counted_qty
+        return out
 
     def dim(self, did: str) -> Any:
         if did not in self.dims:
@@ -230,6 +251,17 @@ class _Ctx:
             ref = self.dm.dimensions[did].references[rid]
             fr = fr.outerjoin(r, r.c[ref.key] == self.dims[did].c[ref.fk])
             self.join_notes.append(f"LEFT JOIN {ref.table} AS r_{rid} via d_{did} (current; null -> {UNASSIGNED})")
+        if "shipment_twin_remainder" in model.rules:
+            from app.models.facts import FactInboundShipment
+            from app.services.shipment_strict_pair import twin_remainder
+
+            twin = twin_remainder(FactInboundShipment)
+            fr = fr.outerjoin(twin.subquery, twin.subquery.c.fact_id == self.f.c.id)
+            self.shipment_counted_qty = func.coalesce(twin.subquery.c.counted_qty, self.f.c.quantity)
+            self.shipment_kept = or_(twin.subquery.c.fact_id.is_(None), twin.subquery.c.counted_qty > 0)
+            self.join_notes.append(
+                "LEFT JOIN shipment twin remainder (covered open lines left out; a partial line keeps the remainder)"
+            )
         return fr
 
     def tenant_conds(self) -> list[ColumnElement[bool]]:
@@ -351,6 +383,8 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
     # --- WHERE (shared by rows, totals and the stored-period check)
     conds: list[ColumnElement[bool]] = list(ctx.tenant_conds())
     for rule in model.rules:
+        if rule == "shipment_twin_remainder":
+            continue
         conds.extend(MODEL_RULES[rule](ctx.aliases()))
     for i, flt in enumerate(plan.filters):
         expr = filter_bds[flt.breakdown].filter_expr
@@ -371,14 +405,20 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
         window_parts.append(tcol <= bindparam("period_to", value=plan.period_to, type_=Date))
     window = and_(*window_parts) if window_parts else None
 
-    # Widen by one bucket so the first bucket's previous period is read (rows filtered after).
+    # Read the previous bucket, and when a prior year is asked for, the year-earlier buckets.
+    # Both stop at the first displayed bucket, so days of that bucket before period.from stay out.
     first_bucket: date | None = None
     widened = window
-    if plan.needs_prev and grain and plan.period_from is not None and tcol is not None:
-        first_bucket = bucket_start_of(plan.period_from, grain)
-        prev_start = prev_bucket_start(first_bucket, grain)
+    if grain and plan.period_from is not None and tcol is not None and (plan.needs_prev or plan.needs_prior_year):
+        first_bucket = _bucket_floor(plan.period_from, grain, ctx.calendar)
+        if plan.needs_prior_year:
+            extra_from = _prior_year_floor(first_bucket, grain, ctx.calendar)
+            extra_name = "prior_year_from"
+        else:
+            extra_from = _previous_floor(first_bucket, grain, ctx.calendar)
+            extra_name = "prev_bucket_from"
         early = and_(
-            tcol >= bindparam("prev_bucket_from", value=prev_start, type_=Date),
+            tcol >= bindparam(extra_name, value=extra_from, type_=Date),
             tcol < bindparam("first_bucket_start", value=first_bucket, type_=Date),
         )
         widened = or_(window, early) if window is not None else early
@@ -412,6 +452,8 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
         )
 
     fr = ctx.from_clause()
+    if ctx.shipment_kept is not None:
+        conds.append(ctx.shipment_kept)
     if latest is not None:
         fr = fr.outerjoin(latest, latest.c.k == ctx.f.c[latest_measures[0].latest_per])
         ctx.join_notes.append("LEFT JOIN latest stock report date per customer (on or before period.to)")
@@ -468,14 +510,23 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
     from_final: Any = agg
     if plan.needs_prev and grain:
         prev = agg.alias("prev")
-        on = [prev.c.bucket_start == cast(agg.c.bucket_start - _INTERVAL[grain], Date)]
+        if ctx.calendar is None:
+            prev_bucket = cast(agg.c.bucket_start - _INTERVAL[grain], Date)
+        else:
+            prev_bucket = bucket_start_expr(
+                agg.c.bucket_start - literal_column("interval '1 day'"), grain, ctx.calendar
+            )
+        on = [prev.c.bucket_start == prev_bucket]
         on.extend(prev.c[k].is_not_distinct_from(agg.c[k]) for k in key_cols if k != "bucket_start")
         from_final = agg.outerjoin(prev, and_(*on))
 
     yearago = None
     if plan.needs_prior_year and grain:
         yearago = agg.alias("yearago")
-        shifted = bucket_expr(agg.c.bucket_start - literal_column("interval '1 year'"), grain, ctx.calendar)
+        if ctx.calendar is None:
+            shifted = bucket_expr(agg.c.bucket_start - literal_column("interval '1 year'"), grain, None)
+        else:
+            shifted = prior_year_bucket_expr(agg.c.bucket_start, grain, ctx.calendar)
         on_year = [yearago.c.bucket_start == shifted]
         on_year.extend(yearago.c[k].is_not_distinct_from(agg.c[k]) for k in key_cols if k != "bucket_start")
         from_final = from_final.outerjoin(yearago, and_(*on_year))
@@ -487,7 +538,10 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
     def weeks_expr() -> Any:
         if "period" in plan.breakdowns and grain:
             start: Any = agg.c.bucket_start
-            end_excl: Any = cast(agg.c.bucket_start + _INTERVAL[grain], Date)
+            if ctx.calendar is None:
+                end_excl: Any = cast(agg.c.bucket_start + _INTERVAL[grain], Date)
+            else:
+                end_excl = bucket_end_exclusive(agg.c.bucket_start, grain, ctx.calendar)
             if plan.period_from is not None:
                 start = func.greatest(start, bindparam("rate_from", value=plan.period_from, type_=Date))
             if plan.period_to is not None:

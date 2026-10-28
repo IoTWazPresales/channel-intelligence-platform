@@ -69,6 +69,11 @@ def cpor_line_support_usd(aliases: dict[str, Any]) -> ColumnElement[Any]:
     )
 
 
+def shipment_counted_quantity(aliases: dict[str, Any]) -> ColumnElement[Any]:
+    """Units after the strict-pair remainder. The compiler joins that remainder for the model rule."""
+    return aliases["__shipment_counted_qty__"]
+
+
 def lineup_current_cases(aliases: dict[str, Any]) -> list[ColumnElement[bool]]:
     """Current lineup cases, matching lineup_period_canonical: not cancelled or superseded."""
     case_t = aliases["case"]
@@ -82,4 +87,7 @@ MODEL_RULES = {
     "cpor_portfolio_lines": cpor_portfolio_lines,
     "lineup_current_cases": lineup_current_cases,
 }
-MEASURE_RULES = {"cpor_line_support_usd": cpor_line_support_usd}
+MEASURE_RULES = {
+    "cpor_line_support_usd": cpor_line_support_usd,
+    "shipment_counted_quantity": shipment_counted_quantity,
+}

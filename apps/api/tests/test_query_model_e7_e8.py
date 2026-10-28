@@ -11,9 +11,9 @@ def setup_function() -> None:
     clear_model_cache()
 
 
-def _plan(measures, breakdowns=(), grain=None):
+def _plan(measures, breakdowns=(), grain=None, **kw):
     dm = default_model()
-    req = V2Request(measures=list(measures), breakdowns=list(breakdowns), period_grain=grain)
+    req = V2Request(measures=list(measures), breakdowns=list(breakdowns), period_grain=grain, **kw)
     return dm, plan_request(dm, req, v1_catalog=load_catalog())
 
 
@@ -53,11 +53,14 @@ def test_prior_year_running_total_and_share_compile():
         ["dsi_sellout.units", "dsi_sellout.units_prior_year", "dsi_sellout.units_running_total", "dsi_sellout.units_share"],
         ["period"],
         "month",
+        period_from="2026-03-01",
+        period_to="2026-04-30",
     )
     assert plan.ok
     sql = compile_plan(dm, plan, tenant_id="example").sql_text()
     assert "yearago" in sql
     assert "interval '1 year'" in sql
+    assert "prior_year_from" in sql
     assert "OVER" in sql.upper()
 
 
@@ -66,4 +69,24 @@ def test_retail_calendar_buckets_replace_date_trunc():
     cal = BusinessCalendar({"type": "retail_445", "fiscal_year_start_month": 1})
     sql = compile_plan(dm, plan, tenant_id="example", calendar=cal).sql_text()
     assert "date_trunc" not in sql
-    assert "bkt_month_0" in sql
+    assert "bkt_month_" not in sql
+    assert "make_date" in sql
+
+
+def test_retail_week_bucket_is_not_a_thousand_arm_case():
+    dm, plan = _plan(["dsi_sellout.units"], ["period"], "week")
+    cal = BusinessCalendar({"type": "retail_445", "week_start_day": 6})
+    sql = compile_plan(dm, plan, tenant_id="example", calendar=cal).sql_text()
+    assert "bkt_week_" not in sql
+    assert len(sql) < 8000
+    assert "isodow" in sql
+
+
+def test_shipments_count_the_twin_remainder_on_the_resolved_customer():
+    dm, plan = _plan(["shipments.quantity", "shipments.lines"], ["customer"])
+    assert plan.ok, plan.refusals
+    sql = compile_plan(dm, plan, tenant_id="example").sql_text()
+    assert "f.resolved_customer_id" in sql
+    assert "f.customer_id" not in sql
+    assert "counted_qty" in sql
+    assert "MATERIALIZED" in sql

@@ -290,17 +290,19 @@ models:
     label: Inbound shipments
     table: fact_inbound_shipment
     tenant_column: tenant_id
+    # Covered open lines are left out; a partly shipped open line keeps the remainder (D-0057, D-0065).
+    rules: [shipment_twin_remainder]
     time: {column: ship_confirm_date, floor: day}
     joins:
       product: {fk: product_id, null_keys: unassigned}
       distributor: {fk: distributor_id, null_keys: unassigned}
-      customer: {fk: customer_id, null_keys: unassigned}
+      customer: {fk: resolved_customer_id, null_keys: unassigned}
     measures:
       quantity:
         label: Shipment quantity (ship confirm date)
         unit: units
         agg: sum
-        column: quantity
+        rule: shipment_counted_quantity
         additivity: additive
       lines:
         label: Shipment lines
