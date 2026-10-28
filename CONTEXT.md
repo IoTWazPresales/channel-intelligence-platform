@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-28 - **E10 calendar and shipment counts:** prior-year window read, Sunday-week partial bucket, 4-4-5 previous period, shipment twin remainder on `resolved_customer_id`, retail bucket SQL as one subquery, value tests on cip_test rolled back. E4 and E10 stay UNVERIFIED. No node, no migration, no main.
+- 2026-10-28 - **E10 calendar and shipment counts:** prior-year window read, Sunday-week partial bucket, 4-4-5 previous period, shipment twin remainder on `resolved_customer_id`, retail bucket SQL as one subquery, value tests on cip_test rolled back. E4 and E10 stay UNVERIFIED. No node, no migration, no main. Commit `0245c0d9`.
 - 2026-10-28 - **Memory:** E6–E9 recorded as committed (`a4118c30`, pin `31d96a7a`). Programme views published through snapshot 2794 (N-0114–N-0116, proposed D-0116–D-0130) in `e3b3c7ce`. E4 and E10 stay UNVERIFIED. No node acceptance, no migration, no main. Commit `dacaab17`.
 - 2026-10-28 - **Dashboard home:** model measures listed on the left; a new chart grows in height only, and widgets already on the board keep their size. Editor stays a dialog. Commit `a4118c30`. Not node acceptance. E10 still wants an independent pass.
 - 2026-10-27 - **E6–E9 on one branch:** returns, sell-in, shipment quantity, distributor on-hand, lineup units, recorded prices; day grain on day-floored facts only; prior-year, running total, share of total; non-default calendars use BusinessCalendar buckets. Cover, value and open stay the existing refusals. E10 not independently verified. Dashboard long charts grow into more cells. Not committed. No node acceptance, no migration, no main.
