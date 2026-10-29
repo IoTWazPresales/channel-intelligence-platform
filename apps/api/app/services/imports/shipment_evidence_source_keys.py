@@ -20,6 +20,10 @@ Per-report business keys (minimal stable fields, not row position):
 * **acza_workbook_unship** — Open pipeline sheet: ``Order No.``, ``Order Line``, ``Item`` plus
   ``operating_unit`` when present, matching the unship column set used in detection.
 
+* **acza_workbook_bom_not_ready** — BOM not ready sheet. The line identity is the
+  RET/AUT/QUOTE number (stored on ``order_no`` when SO# is blank), with customer PO
+  and item so two lines do not collapse.
+
 When all business segments are empty, a deterministic digest of the extracted dict is used so
 re-import remains stable for odd rows without inventing positional keys.
 
@@ -35,6 +39,7 @@ import re
 from typing import Any, Callable
 
 from app.services.imports.shipment_evidence_report_detect import (
+    REPORT_ACZA_BOM,
     REPORT_ACZA_SHIPPED,
     REPORT_ACZA_UNSHIP,
     REPORT_XXOMRPT0025,
@@ -88,11 +93,18 @@ def _business_order_om(ex: dict[str, Any]) -> str:
     return body if body else f"digest:{_digest_ex(ex)}"
 
 
+def _business_bom(ex: dict[str, Any]) -> str:
+    """BOM not ready: RET/AUT/QUOTE identity (on order_no when SO# is blank) + customer PO + item."""
+    body = _pipe(ex.get("order_no"), ex.get("customer_po"), ex.get("item_code"))
+    return body if body else f"digest:{_digest_ex(ex)}"
+
+
 _BUSINESS_KEY_BY_REPORT: dict[str, Callable[[dict[str, Any]], str]] = {
     REPORT_XXOMRPT0025: _business_shipment_om,
     REPORT_ACZA_SHIPPED: _business_shipment_om,
     REPORT_XXOMRPT0027: _business_order_om,
     REPORT_ACZA_UNSHIP: _business_order_om,
+    REPORT_ACZA_BOM: _business_bom,
 }
 
 

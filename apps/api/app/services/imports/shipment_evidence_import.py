@@ -63,6 +63,7 @@ from app.services.imports.shipment_evidence_source_keys import (
 from app.services.imports.shipment_evidence_report_detect import (
     LINE_OPEN_ORDER,
     LINE_SHIPPED,
+    REPORT_ACZA_BOM,
     REPORT_ACZA_SHIPPED,
     REPORT_ACZA_UNSHIP,
     REPORT_UNKNOWN,
@@ -190,13 +191,13 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
         bill_to_stored = normalize_shipment_cell_value(bill)
     ship = by_canon("ship_to_raw") or col("Ship To", "ship to")
     ou = by_canon("operating_unit") or col("Operating Unit", "OU NAME", "ou name")
-    return {
+    extracted = {
         "operating_unit": normalize_shipment_cell_value(ou),
         "bill_to_raw": bill_to_stored,
         "ship_to_raw": normalize_shipment_cell_value(ship),
         "order_no": normalize_shipment_cell_value(
             by_canon("order_no")
-            or col("Order No.", "Order No", "order no.", "order no", "ORDER NO", "Order number")
+            or col("Order No.", "Order No", "order no.", "order no", "ORDER NO", "Order number", "SO#", "SO #", "SO No.", "SO No")
         ),
         "customer_po": normalize_shipment_cell_value(
             by_canon("customer_po")
@@ -208,6 +209,7 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
                 "PO No",
                 "PO No.",
                 "PO Number",
+                "PO",
             )
         ),
         "order_line": normalize_shipment_cell_value(by_canon("order_line") or col("Order Line", "order line")),
@@ -217,7 +219,9 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
         ),
         "invoice_line": normalize_shipment_cell_value(by_canon("invoice_line") or col("Invoice Line")),
         "item_code": normalize_shipment_cell_value(by_canon("item_code") or col("Item")),
-        "sales_model_name": normalize_shipment_cell_value(by_canon("sales_model_name") or col("Sales Model Name")),
+        "sales_model_name": normalize_shipment_cell_value(
+            by_canon("sales_model_name") or col("Sales Model Name", "Model Name")
+        ),
         "customer_item": normalize_shipment_cell_value(by_canon("customer_item") or col("Customer Item")),
         "ean_code": _ean_upc_str(
             _normalized_identifier_cell(by_canon("ean_code") or col("EAN Code"))
@@ -228,7 +232,7 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
         "mpor_item_no": normalize_shipment_cell_value(by_canon("mpor_item_no") or col("MPOR Item No.")),
         "quantity": by_canon("quantity")
         if by_canon("quantity") is not None
-        else _tabular_cell_scalar(row.get("Qty") if "Qty" in row.index else row.get("Qty ")),
+        else _quantity_cell(row),
         "unit_price": by_canon("unit_price")
         if by_canon("unit_price") is not None
         else _tabular_cell_scalar(row.get("Unit Price") if "Unit Price" in row.index else None),
@@ -270,7 +274,58 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
                 "CUSTOMER REMARKS",
             )
         ),
+        "shipway": normalize_shipment_cell_value(by_canon("shipway") or col("Shipway", "Ship Way")),
+        "ret_aut_quote_no": normalize_shipment_cell_value(
+            by_canon("ret_aut_quote_no") or _ret_aut_quote_cell(row)
+        ),
     }
+    if not extracted["order_no"] and extracted["ret_aut_quote_no"]:
+        # SO# is usually blank on BOM not ready. The RET/AUT/QUOTE number is the line identity.
+        extracted["order_no"] = extracted["ret_aut_quote_no"]
+    return extracted
+
+
+def _quantity_cell(row: pd.Series) -> Any:
+    for name in ("Qty", "Qty ", "QTY", "QTY "):
+        if name in row.index:
+            return _tabular_cell_scalar(row.get(name))
+    return None
+
+
+def _ret_aut_quote_cell(row: pd.Series) -> Any:
+    from app.services.imports.shipment_field_mapping import is_ret_aut_quote_header
+
+    for name in row.index:
+        if is_ret_aut_quote_header(str(name)):
+            return _tabular_cell_scalar(row.get(name))
+    return None
+
+
+def _po_item_key(customer_po: str | None, item_code: str | None) -> tuple[str, str] | None:
+    """Customer PO + item, compared trimmed and case-folded. Blank either side is not a pair."""
+    po = (customer_po or "").strip().lower()
+    item = (item_code or "").strip().lower()
+    if not po or not item:
+        return None
+    return po, item
+
+
+def _unship_po_item_keys(
+    frames: list[tuple[str | None, pd.DataFrame, str, str]],
+    header_by_canonical: dict[str, str] | None,
+) -> set[tuple[str, str]]:
+    """Customer PO + item already on the Unship sheet of this report."""
+    keys: set[tuple[str, str]] = set()
+    for _sheet_name, frame, report_type, _line_state in frames:
+        if report_type != REPORT_ACZA_UNSHIP or frame is None or len(frame) == 0:
+            continue
+        for _, row in frame.iterrows():
+            series = row if isinstance(row, pd.Series) else pd.Series(row, index=frame.columns)
+            extracted = _extract_common(series, header_by_canonical)
+            key = _po_item_key(extracted.get("customer_po"), extracted.get("item_code"))
+            if key is not None:
+                keys.add(key)
+    return keys
 
 
 def _decimal_or_none(v: Any) -> Decimal | None:
@@ -983,11 +1038,11 @@ def _openpyxl_sheet_to_dataframe(ws: Any) -> pd.DataFrame:
     return pd.DataFrame(list(data_rows), columns=header, dtype=object)
 
 
-_PREFERRED_SHEET_KEYS = frozenset({"shipped", "unship", "unshipped"})
+_PREFERRED_SHEET_KEYS = frozenset({"shipped", "unship", "unshipped", "bom not ready"})
 
 
 def default_selected_sheets(sheet_names: list[str]) -> list[str]:
-    """Sheets to import before the operator confirms. Shipped and Unship start on; other tabs stay off.
+    """Sheets to import before the operator confirms. Shipped, Unship and BOM not ready start on.
 
     A workbook with none of those names keeps every sheet, so a one-tab file is not dropped.
     """
@@ -1149,6 +1204,7 @@ def process_shipment_evidence_import(
     from app.services.imports.shipment_report_date import report_date_for_job
 
     book_report_date = report_date_for_job(job)
+    unship_pairs = _unship_po_item_keys(frames, header_by_canonical)
 
     for sheet_name, frame, report_type, line_state in frames:
         if frame is None or len(frame) == 0:
@@ -1163,6 +1219,11 @@ def process_shipment_evidence_import(
                 series = row if isinstance(row, pd.Series) else pd.Series(row, index=frame.columns)
                 raw_payload = _row_dict(series)
                 ex = _extract_common(series, header_by_canonical)
+                if report_type == REPORT_ACZA_BOM and _po_item_key(ex.get("customer_po"), ex.get("item_code")) in unship_pairs:
+                    # The Unship sheet of this report already carries the line. Count it once.
+                    continue
+                if ex.get("shipway"):
+                    raw_payload["shipway"] = ex["shipway"]
                 source_key = stable_source_key_for_row(report_type=report_type, sheet_name=sheet_name, ex=ex)
 
                 evidence_date = coalesce_shipment_evidence_date(

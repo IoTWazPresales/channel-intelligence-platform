@@ -25,9 +25,10 @@ EventType = Literal[
     "pod_reversal",
     "closed_shipped",
     "closed_disappeared",
+    "closed_moved",
 ]
 
-_BOOK_CLOSE_STATES = frozenset({"closed_shipped", "closed_disappeared"})
+_BOOK_CLOSE_STATES = frozenset({"closed_shipped", "closed_disappeared", "closed_moved"})
 
 _DATE_SLIP_FIELDS: tuple[tuple[str, str], ...] = (
     ("est_pod_date", "est_pod"),

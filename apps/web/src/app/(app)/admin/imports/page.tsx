@@ -193,6 +193,7 @@ type Job = {
   import_mode?: string | null;
   archived_at?: string | null;
   staged_metadata?: Record<string, unknown> | null;
+  open_book_notice?: { headline: string; reason: string; code?: string } | null;
 };
 
 type ImportJobsListResponse = {
@@ -4022,6 +4023,15 @@ function AdminImportsPageContent() {
         {activeStep === 6 && isShipmentEvidence && selectedTemplate ? (
           <Stack spacing={2}>
             <Typography variant="subtitle2">Apply inbound shipments</Typography>
+            {(shipmentImportJob?.open_book_notice ?? jobDetail?.open_book_notice) ? (
+              <Alert severity="info" data-testid="open-book-did-not-close">
+                <strong>
+                  {(shipmentImportJob?.open_book_notice ?? jobDetail?.open_book_notice)?.headline}
+                </strong>
+                {' '}
+                {(shipmentImportJob?.open_book_notice ?? jobDetail?.open_book_notice)?.reason}
+              </Alert>
+            ) : null}
             {shipmentEvidencePollJobId != null &&
             importJobApplyIsLoaded(shipmentStageTrim, shipmentStatus) ? (
               <ImportJobLoadedSuccessCallout

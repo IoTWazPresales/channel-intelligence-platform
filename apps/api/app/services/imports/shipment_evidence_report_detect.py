@@ -10,13 +10,15 @@ REPORT_XXOMRPT0025 = "xxomrpt0025_shipment"
 REPORT_XXOMRPT0027 = "xxomrpt0027_order"
 REPORT_ACZA_SHIPPED = "acza_workbook_shipped"
 REPORT_ACZA_UNSHIP = "acza_workbook_unship"
+REPORT_ACZA_BOM = "acza_workbook_bom_not_ready"
 REPORT_UNKNOWN = "unknown"
 
 LINE_SHIPPED = "shipped"
 LINE_OPEN_ORDER = "open_order"
 LINE_CLOSED_SHIPPED = "closed_shipped"
 LINE_CLOSED_DISAPPEARED = "closed_disappeared"
-CLOSED_LINE_STATES = frozenset({LINE_CLOSED_SHIPPED, LINE_CLOSED_DISAPPEARED})
+LINE_CLOSED_MOVED = "closed_moved"
+CLOSED_LINE_STATES = frozenset({LINE_CLOSED_SHIPPED, LINE_CLOSED_DISAPPEARED, LINE_CLOSED_MOVED})
 
 
 def detect_report_type(columns: set[str], *, sheet_name: str | None, file_name: str) -> tuple[str, str]:
@@ -25,6 +27,9 @@ def detect_report_type(columns: set[str], *, sheet_name: str | None, file_name: 
     sn = (sheet_name or "").strip().lower()
     c = {str(x).strip().lower() for x in columns}
 
+    # The sheet name is the detector. Column shape must not turn this tab into Unship.
+    if sn == "bom not ready":
+        return REPORT_ACZA_BOM, LINE_OPEN_ORDER
     if "operating unit" in c and "delivery no" in c and "invoice line" in c:
         return REPORT_XXOMRPT0025, LINE_SHIPPED
     if "ou name" in c and "order no." in c:

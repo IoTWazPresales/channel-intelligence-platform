@@ -99,7 +99,7 @@ def _headline_sql(today_sql: str, week_start_sql: str) -> str:
     LEFT JOIN twin_rem ON twin_rem.fact_id = fact_inbound_shipment.id
     WHERE fact_inbound_shipment.tenant_id = :tenant
       AND {_KEPT}
-      AND lower(coalesce(fact_inbound_shipment.line_state, '')) NOT IN ('closed_shipped', 'closed_disappeared')
+      AND lower(coalesce(fact_inbound_shipment.line_state, '')) NOT IN ('closed_shipped', 'closed_disappeared', 'closed_moved')
     """
 
 

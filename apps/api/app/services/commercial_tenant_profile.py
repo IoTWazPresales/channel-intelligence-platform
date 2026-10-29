@@ -163,6 +163,7 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "business_calendar",
     "vat_rate_pct",
     "sales_value_vat_basis",
+    "open_book",
 )
 
 # N-0111: every customer and distributor reports Monday-Sunday weeks (Warren 2026-10-16).
@@ -675,6 +676,85 @@ def _tenant_profile_override_path(tenant_id: str) -> Path:
     return _tenant_profiles_dir() / f"{safe}.json"
 
 
+OPEN_BOOK_REPORT_DATE_FILENAME = "filename_yyyymmdd"
+_OPEN_BOOK_TYPE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
+
+
+def default_open_book_report_types() -> tuple[str, ...]:
+    """Report types that are one complete open book for the default tenant.
+
+    A type that is not on the tenant's list never closes open orders.
+    """
+    from app.services.imports.shipment_evidence_report_detect import (
+        REPORT_ACZA_BOM,
+        REPORT_ACZA_SHIPPED,
+        REPORT_ACZA_UNSHIP,
+    )
+
+    return (REPORT_ACZA_UNSHIP, REPORT_ACZA_SHIPPED, REPORT_ACZA_BOM)
+
+
+def _normalize_open_book(value: object, *, strict: bool) -> dict[str, Any] | None:
+    """Validate the open-book override. Loose load keeps the default book when the value is unusable."""
+    if not isinstance(value, dict):
+        if strict:
+            raise ValueError("open_book: an object with complete_report_types and report_date_rule is required")
+        return None
+    raw_types = value.get("complete_report_types")
+    if raw_types is None:
+        types = list(default_open_book_report_types())
+    elif not isinstance(raw_types, list):
+        if strict:
+            raise ValueError("open_book: complete_report_types must be a list of report types")
+        types = list(default_open_book_report_types())
+    else:
+        types = []
+        for item in raw_types:
+            slug = str(item).strip().lower()
+            if not _OPEN_BOOK_TYPE_RE.fullmatch(slug):
+                if strict:
+                    raise ValueError(f"open_book: invalid report type {item!r}")
+                continue
+            if slug not in types:
+                types.append(slug)
+        if not types:
+            if strict:
+                raise ValueError("open_book: complete_report_types must list at least one report type")
+            types = list(default_open_book_report_types())
+    rule_raw = value.get("report_date_rule")
+    rule = str(rule_raw).strip() if rule_raw is not None else OPEN_BOOK_REPORT_DATE_FILENAME
+    if rule != OPEN_BOOK_REPORT_DATE_FILENAME:
+        if strict:
+            raise ValueError(
+                "open_book: report_date_rule must be filename_yyyymmdd "
+                "(the single YYYYMMDD in the file name)"
+            )
+        rule = OPEN_BOOK_REPORT_DATE_FILENAME
+    return {"complete_report_types": types, "report_date_rule": rule}
+
+
+def complete_open_book_report_types(tenant_id: str = "default") -> tuple[str, ...]:
+    """Report types whose file is the whole open book. Missing override → the default tenant list."""
+    raw = load_tenant_profile_overrides(tenant_id).get("open_book")
+    if not isinstance(raw, dict):
+        return default_open_book_report_types()
+    types = raw.get("complete_report_types")
+    if not isinstance(types, list) or not types:
+        return default_open_book_report_types()
+    return tuple(str(item) for item in types)
+
+
+def open_book_report_date_rule(tenant_id: str = "default") -> str:
+    """How this tenant's report date is read. The default is one YYYYMMDD in the file name."""
+    raw = load_tenant_profile_overrides(tenant_id).get("open_book")
+    if not isinstance(raw, dict):
+        return OPEN_BOOK_REPORT_DATE_FILENAME
+    rule = str(raw.get("report_date_rule") or "").strip()
+    if rule != OPEN_BOOK_REPORT_DATE_FILENAME:
+        return OPEN_BOOK_REPORT_DATE_FILENAME
+    return rule
+
+
 def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
     """Read persisted overrides for ``tenant_id``. Missing/unreadable file → ``{}`` (FLAG != BLOCK)."""
     path = _tenant_profile_override_path(tenant_id)
@@ -709,6 +789,11 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
                 continue
             if normalized.get("metrics") or normalized.get("composed") or normalized.get("spec_keys"):
                 out[key] = normalized
+            continue
+        if key == "open_book":
+            normalized_book = _normalize_open_book(value, strict=False)
+            if normalized_book is not None:
+                out[key] = normalized_book
             continue
         text = str(value).strip()
         if text:
@@ -754,6 +839,11 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
             from app.services.business_calendar import normalize_calendar_config
 
             clean[key] = normalize_calendar_config(raw, strict=True)
+            continue
+        if key == "open_book":
+            if raw is None or raw == "" or raw == {}:
+                continue
+            clean[key] = _normalize_open_book(raw, strict=True)
             continue
         if key == "vat_rate_pct":
             if raw is None or str(raw).strip() == "":
@@ -845,6 +935,10 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "vat_rate_pct": vat_rate_pct(tenant_id),
         "sales_value_vat_basis": sales_value_vat_basis(tenant_id),
         "reporting_timezone": REPORTING_TIMEZONE,
+        "open_book": {
+            "complete_report_types": list(complete_open_book_report_types(tenant_id)),
+            "report_date_rule": open_book_report_date_rule(tenant_id),
+        },
     }
 
 

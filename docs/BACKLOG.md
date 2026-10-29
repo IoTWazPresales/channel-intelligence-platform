@@ -3421,7 +3421,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-10-28 |
+| **Status / parked** | **Done** · 2026-10-29. The sheet is report type `acza_workbook_bom_not_ready` and loads as `open_order`. The 27 Oct file itself was not imported. |
 | **Effort** | Small once the file is available: detect the sheet and decide whether those lines are open orders. |
 | **Source** | Warren, 2026-10-28. The 27 Oct ACZA workbook has a "BOM not ready" sheet with 2 Mustek TB lines that are not on the Unship sheet. No shipment evidence sheet by that name is loaded; evidence sheets today are only Shipped and Unship. |
 | **Idea** | Those two lines are part of the open book at that report date and the importer never sees them. |

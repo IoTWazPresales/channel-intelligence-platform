@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pandas as pd
@@ -57,6 +58,8 @@ SHIPMENT_CANONICAL_TARGETS: tuple[str, ...] = (
     "pod_date",
     "crad_date",
     "customer_dealer_token",
+    "shipway",
+    "ret_aut_quote_no",
 )
 
 # Longer helper text for mapping UI (aligned with DSI column-mapping hints where concepts match).
@@ -88,11 +91,24 @@ SHIPMENT_FIELD_TARGET_DESCRIPTIONS: dict[str, str] = {
         "Customer Required Arrival Date from the workbook CRAD column (commercial planning anchor; "
         "distinct from logistics POD/ship-confirm dates)."
     ),
+    "shipway": "Shipway text from the workbook. Kept on the raw source row; there is no separate column.",
+    "ret_aut_quote_no": (
+        "RET/AUT/QUOTE number. This is the line identity on a BOM-not-ready row when SO# is blank."
+    ),
 }
 
 
 def _norm_header(h: str) -> str:
     return (h or "").strip().lower()
+
+
+def _compact_header(h: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", _norm_header(h))
+
+
+def is_ret_aut_quote_header(header: str) -> bool:
+    """True for the RET/AUT/QUOTE number column (SO# is a different field and is usually blank)."""
+    return _compact_header(header) in {"retautquote", "retautquoteno", "retautquotenumber"}
 
 
 CUSTOMER_PO_HEADER_ALIASES_NORMALIZED: frozenset[str] = frozenset(
@@ -105,6 +121,7 @@ CUSTOMER_PO_HEADER_ALIASES_NORMALIZED: frozenset[str] = frozenset(
         "po no.",
         "po number",
         "customer_po",
+        "po",
     }
 )
 
@@ -282,6 +299,18 @@ def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefin
             "customer_remarks",
         ):
             mapping[col] = "customer_dealer_token"
+        elif key in ("po", "p.o.", "p/o"):
+            mapping[col] = "customer_po"
+        elif key in ("model name", "model_name"):
+            mapping[col] = "sales_model_name"
+        elif key in ("so#", "so #", "so no", "so no."):
+            mapping[col] = "order_no"
+        elif key == "crad":
+            mapping[col] = "crad_date"
+        elif key in ("shipway", "ship way"):
+            mapping[col] = "shipway"
+        elif is_ret_aut_quote_header(col):
+            mapping[col] = "ret_aut_quote_no"
     return mapping
 
 

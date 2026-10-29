@@ -13,6 +13,36 @@ def _isolate_tenant_profiles_dir(tmp_path, monkeypatch):
     yield
 
 
+def test_open_book_defaults_and_roundtrip() -> None:
+    assert profile.complete_open_book_report_types("acme") == (
+        "acza_workbook_unship",
+        "acza_workbook_shipped",
+        "acza_workbook_bom_not_ready",
+    )
+    assert profile.open_book_report_date_rule("acme") == profile.OPEN_BOOK_REPORT_DATE_FILENAME
+    saved = profile.save_tenant_profile_overrides(
+        "acme",
+        {
+            "open_book": {
+                "complete_report_types": ["acza_workbook_unship"],
+                "report_date_rule": "filename_yyyymmdd",
+            }
+        },
+    )
+    assert saved["open_book"]["complete_report_types"] == ["acza_workbook_unship"]
+    assert profile.complete_open_book_report_types("acme") == ("acza_workbook_unship",)
+    with pytest.raises(ValueError, match="report_date_rule"):
+        profile.save_tenant_profile_overrides(
+            "acme",
+            {
+                "open_book": {
+                    "complete_report_types": ["acza_workbook_unship"],
+                    "report_date_rule": "upload_time",
+                }
+            },
+        )
+
+
 def test_load_overrides_missing_file_returns_empty() -> None:
     assert profile.load_tenant_profile_overrides("acme") == {}
 

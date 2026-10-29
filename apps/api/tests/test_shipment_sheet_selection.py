@@ -4,7 +4,7 @@ from app.services.supply_overview import _OPEN_TWIN_REMAINDER
 
 def test_default_sheets_prefer_shipped_and_unship():
     chosen = default_selected_sheets(["Cover", "Shipped", "BOM Not Ready", "Unship"])
-    assert chosen == ["Shipped", "Unship"]
+    assert chosen == ["Shipped", "BOM Not Ready", "Unship"]
 
 
 def test_default_sheets_keep_a_workbook_with_no_preferred_names():

@@ -1,0 +1,33 @@
+Part B/C tests
+Date: 2026-10-29
+Database: cip_test (host localhost, port 5432)
+ALLOW_TESTS_ON_DEV_DB: not set
+Each database test uses the open-book session fixture: current_database() is not cip, and the session rolls back.
+
+Command: pytest -q --tb=line
+  tests/test_shipment_open_book.py
+  tests/test_shipment_evidence_detect.py
+  tests/test_shipment_sheet_selection.py
+  tests/test_shipment_evidence_source_keys.py
+  tests/test_shipment_customer_po.py
+  tests/test_shipment_change_events.py
+  tests/test_shipment_strict_pair.py
+  tests/test_channel_ops_api.py
+  tests/test_channel_ops_derived_stock.py
+  tests/test_supply_plan_unit_coverage.py
+  tests/test_commercial_tenant_profile_p6_persistence.py
+
+Result: 132 passed in 13.74s. 0 failed.
+
+Cases in test_shipment_open_book.py:
+- dated xxomrpt0027_order job closes nothing and shows no flag
+- undated ACZA job closes nothing and shows "This load did not close open orders" (no_report_date)
+- older ACZA job shows the same headline (older_than_applied_book)
+- BOM not ready row loads as open_order (order_no is the RET/AUT/QUOTE number; shipway on the raw row; fact payload line_state open_order)
+- BOM row with the same customer PO and item as Unship loads once
+- BOM row that moves onto Unship closes closed_moved; a BOM row that does not closes closed_disappeared
+- existing open-book tests in the same file
+
+The fact INSERT … ON CONFLICT path was not executed on cip_test: that database has no constraint uq_fact_inbound_shipment_fact_upsert_key. The load test asserts the evidence line and the fact-row payload the writer builds from it.
+
+result=PASS

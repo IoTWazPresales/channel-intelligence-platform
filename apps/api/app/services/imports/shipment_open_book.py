@@ -32,10 +32,13 @@ from app.services.imports.shipment_evidence_line_identity import (
 from app.services.imports.shipment_evidence_observations import _observation_insert_statement
 from app.services.imports.shipment_evidence_report_detect import (
     LINE_CLOSED_DISAPPEARED,
+    LINE_CLOSED_MOVED,
     LINE_CLOSED_SHIPPED,
     LINE_OPEN_ORDER,
     LINE_SHIPPED,
     CLOSED_LINE_STATES,
+    REPORT_ACZA_BOM,
+    REPORT_ACZA_UNSHIP,
 )
 from app.services.imports.shipment_report_date import report_date_for_job
 from app.utils.json_safe import to_jsonable
@@ -82,6 +85,39 @@ def job_is_older_than_applied_book(db: Session, job: ImportJob) -> bool:
     return latest is not None and mine < latest
 
 
+OPEN_BOOK_NOTICE_HEADLINE = "This load did not close open orders"
+
+
+def open_book_close_notice(db: Session, job: ImportJob) -> dict[str, str] | None:
+    """Flag, not a block: this complete-book load did not close open orders, and why.
+
+    Shown on the Import Center job detail. A report type that is not a complete
+    book is not this flag — it never closes, and the job is otherwise unchanged.
+    """
+    if (getattr(job, "template_slug", None) or "") != "inbound_shipments":
+        return None
+    from app.services.commercial_tenant_profile import complete_open_book_report_types
+
+    tenant_id = str(getattr(job, "tenant_id", None) or "default")
+    complete = set(complete_open_book_report_types(tenant_id))
+    carried = {str(scope["report_type"]) for scope in _scopes_for_job(db, int(job.id))}
+    if not carried.intersection(complete):
+        return None
+    if report_date_for_job(job) is None:
+        return {
+            "headline": OPEN_BOOK_NOTICE_HEADLINE,
+            "reason": "The file name does not contain a single YYYYMMDD report date.",
+            "code": "no_report_date",
+        }
+    if job_is_older_than_applied_book(db, job):
+        return {
+            "headline": OPEN_BOOK_NOTICE_HEADLINE,
+            "reason": "This report date is older than the newest applied book.",
+            "code": "older_than_applied_book",
+        }
+    return None
+
+
 def write_shipment_facts_and_close_book(
     db: Session,
     job: ImportJob,
@@ -107,12 +143,27 @@ def write_shipment_facts_and_close_book(
 
 
 def close_open_book_for_job(db: Session, job: ImportJob) -> list[dict[str, Any]]:
-    """Close earlier open facts in each scope this job carries. No-op when this report is older or undated."""
+    """Close earlier open facts in each complete-book scope this job carries.
+
+    A report type that is not on the tenant's complete-book list closes nothing.
+    No-op when this report is older or undated. A BOM line that is absent from this
+    report closes too: ``closed_moved`` when the same customer PO and item is on
+    this report's Unship sheet, otherwise ``closed_disappeared``.
+    """
     report_date = report_date_for_job(job)
     if report_date is None or job_is_older_than_applied_book(db, job):
         return []
+    from app.services.commercial_tenant_profile import complete_open_book_report_types
+
+    tenant_id = str(getattr(job, "tenant_id", None) or "default")
+    complete = set(complete_open_book_report_types(tenant_id))
+    scopes = [scope for scope in _scopes_for_job(db, int(job.id)) if scope["report_type"] in complete]
+    if not scopes:
+        return []
     closed: list[dict[str, Any]] = []
-    for scope in _scopes_for_job(db, int(job.id)):
+    for scope in scopes:
+        if scope["report_type"] == REPORT_ACZA_BOM:
+            continue
         closed.extend(
             _close_scope(
                 db,
@@ -123,9 +174,21 @@ def close_open_book_for_job(db: Session, job: ImportJob) -> list[dict[str, Any]]
                 report_date=report_date,
             )
         )
+    if REPORT_ACZA_BOM in complete:
+        closed.extend(
+            _close_scope(
+                db,
+                closing_job_id=int(job.id),
+                tenant_id=tenant_id,
+                report_type=REPORT_ACZA_BOM,
+                operating_unit="",
+                report_date=report_date,
+                any_operating_unit=True,
+            )
+        )
     if closed:
         _append_close_observations(db, closed, closing_job_id=int(job.id), report_date=report_date)
-        _write_audit(db, tenant_id=str(getattr(job, "tenant_id", None) or "default"), job_id=int(job.id), closed=closed, report_date=report_date)
+        _write_audit(db, tenant_id=tenant_id, job_id=int(job.id), closed=closed, report_date=report_date)
     return closed
 
 
@@ -153,7 +216,11 @@ def close_against_newest_reports(db: Session, *, apply: bool = True) -> list[dic
     date, which the one-off reclassifies to open before it closes them.
     """
     closed: list[dict[str, Any]] = []
+    from app.services.commercial_tenant_profile import complete_open_book_report_types
+
     for scope in _newest_scopes(db):
+        if scope["report_type"] not in set(complete_open_book_report_types(str(scope["tenant_id"]))):
+            continue
         job = db.get(ImportJob, int(scope["job_id"]))
         if job is None:
             continue
@@ -306,6 +373,23 @@ def _newest_scopes(db: Session) -> list[dict[str, Any]]:
 
 _CLASSIFY_SQL = """
 CASE
+    WHEN f.report_type = 'acza_workbook_bom_not_ready'
+     AND f.customer_po IS NOT NULL
+     AND f.item_code IS NOT NULL
+     AND trim(f.customer_po) <> ''
+     AND trim(f.item_code) <> ''
+     AND EXISTS (
+        SELECT 1 FROM shipment_evidence_line u
+        WHERE u.import_job_id = :closing_job_id
+          AND u.report_type = 'acza_workbook_unship'
+          AND u.customer_po IS NOT NULL
+          AND u.item_code IS NOT NULL
+          AND lower(trim(u.customer_po)) = lower(trim(f.customer_po))
+          AND lower(trim(u.item_code)) = lower(trim(f.item_code))
+     )
+    THEN 'closed_moved'
+    WHEN f.report_type = 'acza_workbook_bom_not_ready'
+    THEN 'closed_disappeared'
     WHEN f.order_no IS NOT NULL
      AND f.item_code IS NOT NULL
      AND trim(f.order_no) <> ''
@@ -332,6 +416,7 @@ def _close_scope(
     report_date: date,
     include_unconfirmed_shipped: bool = False,
     apply: bool = True,
+    any_operating_unit: bool = False,
 ) -> list[dict[str, Any]]:
     """Mark, or only list, open facts in this scope from an earlier or undated report.
 
@@ -373,7 +458,10 @@ def _close_scope(
                 )
                   AND f.tenant_id = :tenant
                   AND f.report_type = :report_type
-                  AND coalesce(f.operating_unit, '') = :operating_unit
+                  AND (
+                    CAST(:any_operating_unit AS boolean)
+                    OR coalesce(f.operating_unit, '') = :operating_unit
+                  )
                   AND f.import_job_id IS DISTINCT FROM :closing_job_id
                   AND (o.report_date IS NULL OR o.report_date < :report_date)
             )
@@ -407,6 +495,7 @@ def _close_scope(
             "closing_job_id": closing_job_id,
             "report_date": report_date,
             "include_unconfirmed": include_unconfirmed_shipped,
+            "any_operating_unit": any_operating_unit,
         },
     ).mappings().all()
     out = []
@@ -547,6 +636,7 @@ def _write_audit(
                 "closed_count": len(listed),
                 "closed_shipped": sum(1 for row in listed if row["line_state"] == LINE_CLOSED_SHIPPED),
                 "closed_disappeared": sum(1 for row in listed if row["line_state"] == LINE_CLOSED_DISAPPEARED),
+                "closed_moved": sum(1 for row in listed if row["line_state"] == LINE_CLOSED_MOVED),
                 "facts": listed,
             },
         )

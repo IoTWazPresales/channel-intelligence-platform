@@ -27,4 +27,17 @@ def report_date_from_file_name(file_name: str | None) -> date | None:
 
 
 def report_date_for_job(job) -> date | None:
+    """Report date for this job under the tenant's rule.
+
+    The default rule is the single YYYYMMDD in the file name. A rule this
+    process does not implement yields no date, so the job closes nothing.
+    """
+    from app.services.commercial_tenant_profile import (
+        OPEN_BOOK_REPORT_DATE_FILENAME,
+        open_book_report_date_rule,
+    )
+
+    tenant_id = str(getattr(job, "tenant_id", None) or "default")
+    if open_book_report_date_rule(tenant_id) != OPEN_BOOK_REPORT_DATE_FILENAME:
+        return None
     return report_date_from_file_name(getattr(job, "file_name", None))

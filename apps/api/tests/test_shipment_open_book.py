@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import uuid
 from datetime import date, datetime, timezone
 
@@ -12,7 +13,7 @@ from sqlalchemy import func, select, text
 from app.db.session_sync import SessionLocal
 from app.models.facts import FactInboundShipment
 from app.models.iam import Tenant
-from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
+from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.models.platform_audit import PlatformAuditEvent
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
@@ -23,14 +24,31 @@ from app.services.imports.shipment_invoice_graduation import (
     process_invoice_graduation_after_job,
 )
 from app.services.imports.shipment_open_book import (
+    OPEN_BOOK_NOTICE_HEADLINE,
     close_open_book_for_job,
     line_state_for_shipped_sheet,
+    open_book_close_notice,
     write_shipment_facts_and_close_book,
 )
 from app.services.imports.shipment_report_date import report_date_from_file_name
 
 UNSHIP = "acza_workbook_unship"
 SHIPPED = "acza_workbook_shipped"
+BOM = "acza_workbook_bom_not_ready"
+XXOM_ORDER = "xxomrpt0027_order"
+_BOM_HEADERS = [
+    "Bill To",
+    "PO",
+    "Model Name",
+    "Item",
+    "QTY",
+    "Unit Price",
+    "Schedule Ship Date",
+    "CRAD",
+    "Shipway",
+    "SO#",
+    "RET/AUT/QUOTE",
+]
 
 
 @pytest.fixture
@@ -317,6 +335,10 @@ def test_older_report_loaded_late_closes_and_reopens_nothing(db):
     assert result["skipped_reason"] == "older_report_date"
     assert result["fact_rows"] == 0
     assert result["closed"] == 0
+    notice = open_book_close_notice(db, late)
+    assert notice is not None
+    assert notice["headline"] == OPEN_BOOK_NOTICE_HEADLINE
+    assert notice["code"] == "older_than_applied_book"
     db.refresh(fact)
     assert fact.line_state == "closed_disappeared"
     assert fact.import_job_id == int(earlier.id)
@@ -665,3 +687,303 @@ def test_invoice_graduation_leaves_an_open_observation_in_place(db):
     db.refresh(open_obs)
     assert open_obs.superseded_by_id is None
     assert open_obs.line_state == "open_order"
+
+
+def test_dated_xxom_order_job_closes_nothing(db):
+    earlier = _job(db, "XXOMRPT0027 Orders 20980101.xlsx")
+    fact = _fact(
+        db,
+        earlier,
+        report_type=XXOM_ORDER,
+        line_state="open_order",
+        source_key=f"xxom-{uuid.uuid4().hex}",
+        order_no="SO-XXOM",
+        item_code="ITEM-XXOM",
+        quantity=4,
+    )
+    _line(
+        db,
+        earlier,
+        report_type=XXOM_ORDER,
+        line_state="open_order",
+        source_key=fact.source_key,
+        order_no="SO-XXOM",
+        item_code="ITEM-XXOM",
+        quantity=4,
+        sheet="Orders",
+    )
+    newer = _job(db, "XXOMRPT0027 Orders 20990101.xlsx")
+    _line(
+        db,
+        newer,
+        report_type=XXOM_ORDER,
+        line_state="open_order",
+        source_key=f"xxom-new-{uuid.uuid4().hex}",
+        order_no="SO-XXOM-NEW",
+        item_code="ITEM-XXOM-NEW",
+        quantity=1,
+        sheet="Orders",
+    )
+    assert close_open_book_for_job(db, newer) == []
+    assert open_book_close_notice(db, newer) is None
+    db.refresh(fact)
+    assert fact.line_state == "open_order"
+
+
+def test_undated_acza_job_closes_nothing_and_shows_the_flag(db):
+    earlier = _job(db, "ACZA Shipped Unshipped 20980101.xlsx")
+    fact = _fact(
+        db,
+        earlier,
+        report_type=UNSHIP,
+        line_state="open_order",
+        source_key=f"undated-{uuid.uuid4().hex}",
+        order_no="SO-UNDATED",
+        item_code="ITEM-UNDATED",
+        quantity=2,
+    )
+    _line(
+        db,
+        earlier,
+        report_type=UNSHIP,
+        line_state="open_order",
+        source_key=fact.source_key,
+        order_no="SO-UNDATED",
+        item_code="ITEM-UNDATED",
+        quantity=2,
+        sheet="Unship",
+    )
+    undated = _job(db, "ACZA Shipped Unshipped.xlsx")
+    _line(
+        db,
+        undated,
+        report_type=UNSHIP,
+        line_state="open_order",
+        source_key=f"undated-new-{uuid.uuid4().hex}",
+        order_no="SO-NO-DATE",
+        item_code="ITEM-NO-DATE",
+        quantity=1,
+        sheet="Unship",
+    )
+    assert close_open_book_for_job(db, undated) == []
+    db.refresh(fact)
+    assert fact.line_state == "open_order"
+    notice = open_book_close_notice(db, undated)
+    assert notice is not None
+    assert notice["headline"] == OPEN_BOOK_NOTICE_HEADLINE
+    assert notice["code"] == "no_report_date"
+    assert "YYYYMMDD" in notice["reason"]
+
+
+def _bom_workbook(sheets: dict[str, list[list]]) -> bytes:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    first = True
+    for name, rows in sheets.items():
+        ws = wb.active if first else wb.create_sheet(name)
+        ws.title = name
+        first = False
+        ws.append(_BOM_HEADERS)
+        for row in rows:
+            ws.append(row)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _load_workbook_job(db, monkeypatch, *, file_name: str, sheets: dict[str, list[list]]) -> ImportJob:
+    import pandas as pd
+
+    from app.services.imports.shipment_evidence_import import process_shipment_evidence_import
+    from app.services.imports.shipment_field_mapping import build_initial_shipment_field_mapping
+
+    blob = _bom_workbook(sheets)
+    job = _job(db, file_name)
+    mapping = build_initial_shipment_field_mapping(_BOM_HEADERS, None)
+    job.field_mapping = mapping
+    db.add(
+        RawFileMetadata(
+            job_id=int(job.id),
+            storage_key=f"imports/test/{uuid.uuid4().hex}.xlsx",
+            byte_size=len(blob),
+        )
+    )
+    db.flush()
+
+    class _Store:
+        def read(self, _key: str) -> bytes:
+            return blob
+
+    monkeypatch.setattr(
+        "app.services.imports.shipment_evidence_import.get_storage_backend",
+        lambda: _Store(),
+    )
+    blocking = process_shipment_evidence_import(db, job, pd.DataFrame(), mapping)
+    if blocking:
+        errors = db.scalars(select(ImportRowResult).where(ImportRowResult.job_id == int(job.id))).all()
+        pytest.fail("; ".join(f"{row.code}: {row.message}" for row in errors))
+    return job
+
+
+def test_bom_line_loads_open(db, monkeypatch):
+    job = _load_workbook_job(
+        db,
+        monkeypatch,
+        file_name="ACZA Shipped Unshipped 20990101.xlsx",
+        sheets={
+            "BOM not ready": [
+                [
+                    "ACME",
+                    "PO-1",
+                    "Model X",
+                    "ITEM-1",
+                    4,
+                    12.5,
+                    date(2026, 10, 1),
+                    date(2026, 10, 15),
+                    "AIR",
+                    None,
+                    "RET-100",
+                ]
+            ]
+        },
+    )
+    lines = db.scalars(
+        select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == int(job.id))
+    ).all()
+    assert len(lines) == 1
+    line = lines[0]
+    assert line.report_type == BOM
+    assert line.line_state == "open_order"
+    assert line.order_no == "RET-100"
+    assert line.customer_po == "PO-1"
+    assert line.item_code == "ITEM-1"
+    assert line.sales_model_name == "Model X"
+    assert line.bill_to_raw == "ACME"
+    assert float(line.quantity) == 4
+    assert float(line.unit_price) == 12.5
+    assert line.schedule_ship_date == date(2026, 10, 1)
+    assert line.crad_date == date(2026, 10, 15)
+    assert line.raw_source_row["shipway"] == "AIR"
+    from app.services.imports.shipment_inbound_facts import _row_values_from_evidence
+
+    payload = _row_values_from_evidence(line)
+    assert payload["line_state"] == "open_order"
+    assert payload["report_type"] == BOM
+    assert payload["order_no"] == "RET-100"
+    assert payload["customer_po"] == "PO-1"
+    assert payload["item_code"] == "ITEM-1"
+    assert payload["reference"] == "RET-100"
+
+
+def test_bom_line_also_on_unship_loads_once(db, monkeypatch):
+    job = _load_workbook_job(
+        db,
+        monkeypatch,
+        file_name="ACZA Shipped Unshipped 20990101.xlsx",
+        sheets={
+            "Unship": [
+                [
+                    "ACME",
+                    "PO-1",
+                    "Model X",
+                    "ITEM-1",
+                    4,
+                    12.5,
+                    date(2026, 10, 1),
+                    date(2026, 10, 15),
+                    "SEA",
+                    "SO-1",
+                    None,
+                ]
+            ],
+            "BOM not ready": [
+                [
+                    "ACME",
+                    "PO-1",
+                    "Model X",
+                    "ITEM-1",
+                    4,
+                    12.5,
+                    date(2026, 10, 1),
+                    date(2026, 10, 15),
+                    "AIR",
+                    None,
+                    "RET-DUP",
+                ],
+                [
+                    "ACME",
+                    "PO-2",
+                    "Model Y",
+                    "ITEM-2",
+                    1,
+                    9,
+                    date(2026, 10, 2),
+                    date(2026, 10, 20),
+                    "AIR",
+                    None,
+                    "RET-ONLY",
+                ],
+            ],
+        },
+    )
+    lines = db.scalars(
+        select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == int(job.id))
+    ).all()
+    assert len(lines) == 2
+    by_order = {line.order_no: line for line in lines}
+    assert set(by_order) == {"SO-1", "RET-ONLY"}
+    assert by_order["SO-1"].report_type == UNSHIP
+    assert by_order["RET-ONLY"].report_type == BOM
+    assert by_order["RET-ONLY"].line_state == "open_order"
+    assert by_order["RET-ONLY"].customer_po == "PO-2"
+
+
+def test_bom_line_moving_to_unship_closes_as_moved(db):
+    earlier = _job(db, "ACZA Shipped Unshipped 20980101.xlsx")
+    moved = _fact(
+        db,
+        earlier,
+        report_type=BOM,
+        line_state="open_order",
+        source_key=f"bom-moved-{uuid.uuid4().hex}",
+        order_no="RET-MOVE",
+        item_code="ITEM-1",
+        quantity=3,
+    )
+    moved.customer_po = "PO-1"
+    gone = _fact(
+        db,
+        earlier,
+        report_type=BOM,
+        line_state="open_order",
+        source_key=f"bom-gone-{uuid.uuid4().hex}",
+        order_no="RET-GONE",
+        item_code="ITEM-9",
+        quantity=1,
+    )
+    gone.customer_po = "PO-9"
+    db.flush()
+    newer = _job(db, "ACZA Shipped Unshipped 20990101.xlsx")
+    unship = _line(
+        db,
+        newer,
+        report_type=UNSHIP,
+        line_state="open_order",
+        source_key=f"unship-move-{uuid.uuid4().hex}",
+        order_no="SO-1",
+        item_code="ITEM-1",
+        quantity=3,
+        sheet="Unship",
+    )
+    unship.customer_po = "PO-1"
+    db.flush()
+    closed = close_open_book_for_job(db, newer)
+    db.refresh(moved)
+    db.refresh(gone)
+    assert moved.line_state == "closed_moved"
+    assert gone.line_state == "closed_disappeared"
+    by_order = {row["order_no"]: row["line_state"] for row in closed}
+    assert by_order["RET-MOVE"] == "closed_moved"
+    assert by_order["RET-GONE"] == "closed_disappeared"

@@ -638,7 +638,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 "required": False,
             },
             "order_no": {
-                "aliases": ["Order No.", "Order No", "ORDER NO", "Order number", "order no.", "order no"],
+                "aliases": ["Order No.", "Order No", "ORDER NO", "Order number", "order no.", "order no", "SO#", "SO #"],
                 "required": False,
             },
             "customer_po": {
@@ -650,6 +650,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                     "PO No",
                     "PO No.",
                     "PO Number",
+                    "PO",
                 ],
                 "required": False,
             },
@@ -667,12 +668,12 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
             },
             "invoice_line": {"aliases": ["Invoice Line"], "required": False},
             "item_code": {"aliases": ["Item"], "required": False},
-            "sales_model_name": {"aliases": ["Sales Model Name"], "required": False},
+            "sales_model_name": {"aliases": ["Sales Model Name", "Model Name"], "required": False},
             "customer_item": {"aliases": ["Customer Item"], "required": False},
             "ean_code": {"aliases": ["EAN Code"], "required": False},
             "upc_code": {"aliases": ["UPC Code"], "required": False},
             "mpor_item_no": {"aliases": ["MPOR Item No.", "MPOR Item No"], "required": False},
-            "quantity": {"aliases": ["Qty", "Qty "], "required": False},
+            "quantity": {"aliases": ["Qty", "Qty ", "QTY", "QTY "], "required": False},
             "unit_price": {"aliases": ["Unit Price"], "required": False},
             "amount": {"aliases": ["Amount"], "required": False},
             "currency_code": {"aliases": ["Currency"], "required": False},
@@ -700,6 +701,16 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 "required": False,
             },
             "crad_date": {"aliases": ["CRAD", "crad"], "required": False},
+            "shipway": {"aliases": ["Shipway", "Ship Way"], "required": False},
+            "ret_aut_quote_no": {
+                "aliases": [
+                    "RET/AUT/QUOTE",
+                    "RET/AUT/QUOTE No",
+                    "RET/AUT/QUOTE No.",
+                    "RET/AUT/QUOTE Number",
+                ],
+                "required": False,
+            },
             "customer_dealer_token": {
                 "aliases": ["Customer Remarks", "Customer Remark", "CUSTOMER REMARKS", "customer remarks"],
                 "required": False,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.services.imports.shipment_evidence_report_detect import (
     LINE_OPEN_ORDER,
     LINE_SHIPPED,
+    REPORT_ACZA_BOM,
     REPORT_ACZA_SHIPPED,
     REPORT_ACZA_UNSHIP,
     REPORT_XXOMRPT0025,
@@ -44,6 +45,14 @@ def test_detect_acza_sheet_names() -> None:
     rt2, ls2 = detect_report_type(set(), sheet_name="Unship", file_name="ACZA.xlsx")
     assert rt2 == REPORT_ACZA_UNSHIP
     assert ls2 == LINE_OPEN_ORDER
+
+
+def test_bom_not_ready_sheet_is_its_own_open_order_report() -> None:
+    # Column shape looks like Unship. The sheet name still wins.
+    cols = {"po", "model name", "item", "qty", "so#", "ret/aut/quote"}
+    rt, ls = detect_report_type(cols, sheet_name="BOM not ready", file_name="ACZA 20261027.xlsx")
+    assert rt == REPORT_ACZA_BOM
+    assert ls == LINE_OPEN_ORDER
 
 
 def test_ean_upc_float() -> None:

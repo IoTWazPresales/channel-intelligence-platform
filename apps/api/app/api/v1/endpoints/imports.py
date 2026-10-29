@@ -1375,6 +1375,23 @@ async def get_job_load_report(job_id: int, db: AsyncSession = Depends(get_db)):
             "report": report}
 
 
+async def _open_book_notice(db, job):
+    """Import Center flag when a complete open book did not close earlier orders."""
+    if (job.template_slug or "") != "inbound_shipments":
+        return None
+
+    def _read(sync_db):
+        from app.models.ingestion import ImportJob as SyncImportJob
+        from app.services.imports.shipment_open_book import open_book_close_notice
+
+        sync_job = sync_db.get(SyncImportJob, int(job.id))
+        if sync_job is None:
+            return None
+        return open_book_close_notice(sync_db, sync_job)
+
+    return await db.run_sync(_read)
+
+
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
     from app.services.imports.import_load_report import display_status, load_reports_async
@@ -1398,6 +1415,7 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
         "import_mode": job.import_mode,
         "archived_at": job.archived_at,
         "staged_metadata": job.staged_metadata,
+        "open_book_notice": await _open_book_notice(db, job),
     }
 
 
