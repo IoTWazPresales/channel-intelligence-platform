@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>On the water</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#14161a}
+a{color:#3db8e8}a:hover{color:#7fd3f2}
+button{font:inherit}
+@keyframes cipPulse{0%{transform:translate(-50%,-50%) scale(.6);opacity:.9}100%{transform:translate(-50%,-50%) scale(2.6);opacity:0}}
+.pulse{animation:cipPulse 2.4s ease-out infinite}
+@media (prefers-reduced-motion: reduce){.pulse{animation:none;opacity:.35}}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; background: #14161a; color: rgba(245,247,250,0.96); font-family: Inter, 'Segoe UI', system-ui, sans-serif; padding: 28px 32px 40px; display: flex; flex-direction: column; gap: 20px;">
+
+  <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: rgba(186,198,210,0.78);">Supply · Inbound</div>
+      <h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.01em;">On the water</h1>
+      <div style="font-size: 13px; color: rgba(186,198,210,0.8);">ACZA Shipped / Unshipped · report of 27 Oct 2026 · compared with 3 earlier reports since 29 Sep</div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+      <span style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(212,161,90,0.5); color: #e8bf86; font-size: 12px; font-weight: 600;">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #d4a15a;"></span>Positions estimated · live tracking Planned
+      </span>
+      <div role="group" aria-label="View" style="display: inline-flex; border: 1px solid rgba(120,160,190,0.35); border-radius: 10px; overflow: hidden;">
+        <button type="button" aria-pressed="true" style="min-height: 36px; padding: 0 14px; border: 0; background: rgba(61,184,232,0.18); color: #bfe9f9; font-size: 13px; font-weight: 600; cursor: pointer;">Map</button>
+        <button type="button" aria-pressed="false" style="min-height: 36px; padding: 0 14px; border: 0; border-left: 1px solid rgba(120,160,190,0.35); background: transparent; color: rgba(186,198,210,0.85); font-size: 13px; cursor: pointer;">Table</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px;">
+    <div style="background: #1a1d23; border: 1px solid rgba(120,160,190,0.22); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 12px; color: rgba(186,198,210,0.8);">At sea</div>
+      <div style="font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums;">15,009 <span style="font-size: 14px; font-weight: 500; color: rgba(186,198,210,0.8);">units</span></div>
+      <div style="font-size: 12px; color: rgba(186,198,210,0.8);">US$9.22M · 7 vessels · 178 lines</div>
+    </div>
+    <div style="background: #1a1d23; border: 1px solid rgba(120,160,190,0.22); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 12px; color: rgba(186,198,210,0.8);">Arrived, not yet delivered</div>
+      <div style="font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums;">5,512 <span style="font-size: 14px; font-weight: 500; color: rgba(186,198,210,0.8);">units</span></div>
+      <div style="font-size: 12px; color: rgba(186,198,210,0.8);">City Deep 5,108 · Port Louis 404</div>
+    </div>
+    <div style="background: #1a1d23; border: 1px solid rgba(120,160,190,0.22); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 12px; color: rgba(186,198,210,0.8);">Booked, not on board yet</div>
+      <div style="font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums;">851 <span style="font-size: 14px; font-weight: 500; color: rgba(186,198,210,0.8);">units</span></div>
+      <div style="font-size: 12px; color: rgba(186,198,210,0.8);">34 lines with a future on-board date</div>
+    </div>
+    <div style="background: #1a1d23; border: 1px solid rgba(212,161,90,0.45); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 12px; color: #e8bf86;">ETA moved since 29 Sep</div>
+      <div style="font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums;">6 of 7 <span style="font-size: 14px; font-weight: 500; color: rgba(186,198,210,0.8);">vessels</span></div>
+      <div style="font-size: 12px; color: rgba(186,198,210,0.8);">Later by 5 to 14 days · from report history</div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch;">
+
+    <div style="flex: 999 1 640px; min-width: 0; background: radial-gradient(ellipse at 60% 55%, #18222c 0%, #121519 70%); border: 1px solid rgba(120,160,190,0.22); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; padding: 2px 4px;">
+        <div style="font-size: 14px; font-weight: 600;">Vessels and lanes</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: rgba(186,198,210,0.85);">
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 18px; border-top: 2px dotted #3db8e8;"></span>Sea lane</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 18px; border-top: 2px dashed #d4a15a;"></span>Truck / rail leg</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #3db8e8; box-shadow: 0 0 0 3px rgba(61,184,232,0.25);"></span>Vessel (estimated)</span>
+        </div>
+      </div>
+
+      <div style="position: relative; width: 100%; aspect-ratio: 1000 / 646; border-radius: 8px; overflow: hidden;">
+        <img src="/_blob/acfffcc89c972433baadccb95a34de41" alt="Map from Western Europe to East Asia showing the sea lanes into Durban" style="position: absolute; inset: 0; width: 100%; height: 100%; display: block;">
+
+        <sc-for list="{{ports}}" as="p" hint-placeholder-count="8">
+          <div style="{{p.style}}">
+            <span style="display: block; width: 7px; height: 7px; border-radius: 50%; background: #f5f7fa; box-shadow: 0 0 0 2px rgba(20,22,26,0.9);"></span>
+            <span style="position: absolute; left: 12px; top: -6px; white-space: nowrap; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: rgba(245,247,250,0.9); text-shadow: 0 1px 2px #000;">{{p.label}}</span>
+          </div>
+        </sc-for>
+
+        <div aria-hidden="true" class="pulse" style="position: absolute; left: 33.54%; top: 86.18%; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #d4a15a;"></div>
+
+        <sc-for list="{{vessels}}" as="v" hint-placeholder-count="7">
+          <button type="button" onClick="{{v.pick}}" onMouseEnter="{{v.hoverOn}}" onMouseLeave="{{hoverOff}}" onFocus="{{v.hoverOn}}" onBlur="{{hoverOff}}" aria-label="{{v.aria}}" style="{{v.markerStyle}}">
+            <span style="{{v.dotStyle}}"></span>
+          </button>
+        </sc-for>
+
+        <sc-for list="{{labels}}" as="l" hint-placeholder-count="4">
+          <div style="{{l.style}}">
+            <div style="font-size: 12px; font-weight: 700; color: #f5f7fa;">{{l.title}}</div>
+            <div style="font-size: 11px; color: rgba(186,198,210,0.9); font-variant-numeric: tabular-nums;">{{l.sub}}</div>
+          </div>
+        </sc-for>
+
+        <sc-if value="{{hasHover}}" hint-placeholder-val="{{ false }}">
+          <div role="tooltip" style="{{hov.cardStyle}}">
+            <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline;">
+              <span style="font-size: 13px; font-weight: 700; color: #f5f7fa;">{{hov.fwd}}</span>
+              <span style="font-size: 11px; color: rgba(186,198,210,0.9); font-variant-numeric: tabular-nums;">ETA {{hov.eta}} · {{hov.qtyText}} u · {{hov.amtText}}</span>
+            </div>
+            <div style="font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: rgba(186,198,210,0.7); margin-top: 8px;">Distributors</div>
+            <div style="font-size: 12px; color: rgba(245,247,250,0.92); line-height: 1.45; font-variant-numeric: tabular-nums;">{{hov.custs}}</div>
+            <div style="font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: rgba(186,198,210,0.7); margin-top: 8px;">Top products · units</div>
+            <div style="font-size: 12px; color: rgba(245,247,250,0.92); line-height: 1.45; font-variant-numeric: tabular-nums;">{{hov.prods}}</div>
+            <div style="font-size: 11px; color: rgba(186,198,210,0.75); margin-top: 6px;">{{hov.moreText}}</div>
+          </div>
+        </sc-if>
+
+        <div style="position: absolute; left: 39%; top: 90.5%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(20,22,26,0.88); border: 1px solid rgba(212,161,90,0.55); font-size: 11px; color: #e8bf86; white-space: nowrap;">
+          Durban · anchorage wait [port feed] · <span style="font-weight: 700;">Planned</span>
+        </div>
+
+        <div style="position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: rgba(186,198,210,0.75);">As of 27 Oct 2026 · position = share of on-board → ETA elapsed, along the usual lane</div>
+      </div>
+    </div>
+
+    <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 12px;">
+
+      <div style="background: #1a1d23; border: 1px solid rgba(61,184,232,0.45); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 12px; color: rgba(186,198,210,0.8);">Selected vessel · inferred</div>
+            <div style="font-size: 18px; font-weight: 700;">{{sel.fwd}}</div>
+            <div style="font-size: 12px; color: rgba(186,198,210,0.85);">{{sel.lane}}</div>
+          </div>
+          <span style="{{sel.slipStyle}}">{{sel.slipText}}</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: rgba(186,198,210,0.85);"><span>On board {{sel.onboard}}</span><span>ETA {{sel.eta}} · {{sel.daysText}}</span></div>
+          <div style="height: 6px; border-radius: 3px; background: #2a2f38; overflow: hidden;"><div style="{{sel.barStyle}}"></div></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+          <div><div style="font-size: 11px; color: rgba(186,198,210,0.8);">Units</div><div style="font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;">{{sel.qtyText}}</div></div>
+          <div><div style="font-size: 11px; color: rgba(186,198,210,0.8);">Value</div><div style="font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;">{{sel.amtText}}</div></div>
+          <div><div style="font-size: 11px; color: rgba(186,198,210,0.8);">Deliveries</div><div style="font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;">{{sel.deliv}}</div></div>
+        </div>
+        <div style="font-size: 12px; color: rgba(186,198,210,0.9); line-height: 1.5;"><span style="color: rgba(186,198,210,0.7);">Distributors </span>{{sel.custs}}</div>
+        <div style="font-size: 12px; color: rgba(186,198,210,0.9); line-height: 1.5;"><span style="color: rgba(186,198,210,0.7);">Top products </span>{{sel.prods}}</div>
+        <div style="font-size: 12px; color: rgba(186,198,210,0.9);"><span style="color: rgba(186,198,210,0.7);">ETA history </span>{{sel.history}}</div>
+        <div style="font-size: 11px; color: rgba(186,198,210,0.7); border-top: 1px solid rgba(120,160,190,0.18); padding-top: 10px;">Grouped by matching on-board date and ETA. Vessel name and container numbers are not on the report yet.</div>
+      </div>
+
+      <div style="background: #1a1d23; border: 1px solid rgba(120,160,190,0.22); border-radius: 12px; padding: 8px; display: flex; flex-direction: column;">
+        <div style="font-size: 13px; font-weight: 600; padding: 8px 10px;">Arriving next</div>
+        <sc-for list="{{vessels}}" as="v" hint-placeholder-count="7">
+          <button type="button" onClick="{{v.pick}}" aria-pressed="{{v.pressed}}" style="{{v.rowStyle}}">
+            <span style="display: flex; flex-direction: column; gap: 2px; text-align: left; min-width: 0;">
+              <span style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{v.fwd}}</span>
+              <span style="font-size: 11px; color: rgba(186,198,210,0.8); font-variant-numeric: tabular-nums;">{{v.qtyText}} units · {{v.amtText}}</span>
+            </span>
+            <span style="display: flex; flex-direction: column; gap: 2px; align-items: flex-end;">
+              <span style="font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;">{{v.eta}}</span>
+              <span style="{{v.slipChip}}">{{v.slipShort}}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">
+
+    <div style="background: #1a1d23; border: 1px solid rgba(120,160,190,0.22); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 14px; font-weight: 600;">Port conditions</div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;"><span>Durban (ZADUR)</span><span style="color: #e8bf86;">Anchorage wait · Planned</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;"><span>City Deep (ZAJNB) · rail</span><span style="font-variant-numeric: tabular-nums;">5,108 units waiting</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;"><span>Port Louis (MUPLU)</span><span style="font-variant-numeric: tabular-nums;">404 units waiting</span></div>
+      <div style="font-size: 11px; color: rgba(186,198,210,0.7);">Waiting = arrived at port, no proof of delivery yet. Wait times need a port-congestion feed.</div>
+    </div>
+
+    <div style="background: #1a1d23; border: 1px solid rgba(196,92,92,0.5); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 14px; font-weight: 600;">Needs a look</div>
+      <div style="font-size: 13px; line-height: 1.5;">9 lines, 731 units, on the Shipped sheet with no ship confirm date since 29 Sep. On-board date moved 11 Oct → 18 Oct.</div>
+      <div style="font-size: 12px; color: rgba(186,198,210,0.85);">Pepkor 523 · DCC 130 · Mustek 57 · Rectron 21</div>
+      <a href="#" style="font-size: 13px; font-weight: 600; min-height: 32px; display: inline-flex; align-items: center;">Open the 9 lines</a>
+    </div>
+
+    <div style="background: #1a1d23; border: 1px solid rgba(120,160,190,0.22); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 14px; font-weight: 600;">Where the data comes from</div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;"><span>On-board, ETA, arrival, POD, forwarder, port</span><span style="color: #7fcfa3;">Every report</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;"><span>ETA changes across reports</span><span style="color: #7fcfa3;">Report history</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;"><span>Live vessel position</span><span style="color: #e8bf86;">Planned · needs vessel / B/L</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;"><span>Port waiting times</span><span style="color: #e8bf86;">Planned · congestion feed</span></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picked: 'v4', hovered: null };
+  }
+  renderVals() {
+    var raw = [
+      { id: 'v1', prods: 'AP4600 Backpack 2,400 · AC68-01 adapter 270 · W5000 kb+mouse 150 · U2000 kb+mouse 150', pmore: 3, fwd: 'Premiere', lane: 'Rotterdam → Durban → City Deep', onboard: '31 Aug', eta: '27 Oct', days: 0, pct: 100, qty: 3170, amt: 75365, deliv: 3, slip: 14, first: '13 Oct', custs: 'Mustek 1,990 · DCC 1,180', x: 33.54, y: 86.18 },
+      { id: 'v2', prods: 'DC320 USB-C dock 40', pmore: 0, fwd: 'Premiere', lane: 'Rotterdam → Durban → City Deep', onboard: '6 Sep', eta: '29 Oct', days: 2, pct: 96, qty: 40, amt: 3796, deliv: 1, slip: 5, first: '24 Oct', custs: 'DCC 40', x: 31.2, y: 89.13 },
+      { id: 'v3', prods: 'PM5406CKA 145 · P3606CCA 108 · P5405CSA 90 · P500SV 84', pmore: 8, fwd: 'KGIL + WWP', lane: 'Shanghai → Durban → City Deep', onboard: '1 Sep', eta: '30 Oct', days: 3, pct: 95, qty: 803, amt: 784170, deliv: 10, slip: 11, first: '19 Oct', custs: 'Mustek 529 · Rectron 142 · Pinnacle 96 · Pepkor 36', x: 37.36, y: 84.78 },
+      { id: 'v4', prods: 'P1503CVAY 708 · X1504VAP 612 · M1502XA 612 · P1403CVAY 468', pmore: 17, fwd: 'COSCO', lane: 'Chongqing / Shenzhen → Durban → City Deep', onboard: '19 Sep', eta: '5 Nov', days: 9, pct: 81, qty: 4286, amt: 3216610, deliv: 26, slip: 0, first: '5 Nov', custs: 'Rectron 1,498 · Mustek 1,350 · Pepkor 972 · DCC 418 · Pinnacle 48', x: 46.1, y: 74.86 },
+      { id: 'v5', prods: 'X1504MA BL2W 1,692 · X1504MA BL1W 1,080 · FX610JH 48 · UX3405CA 36', pmore: 5, fwd: 'COSCO', lane: 'Chongqing → Durban → City Deep', onboard: '20 Oct', eta: '7 Nov', days: 11, pct: 39, qty: 2913, amt: 1578840, deliv: 10, slip: 7, first: '31 Oct', custs: 'Pepkor 2,832 · Pinnacle 81', x: 73.56, y: 51.47 },
+      { id: 'v6', prods: 'P3606CCAP 523 · P1503CVAY 304 · BR1402FGA 270 · P1503CVAY C5 228', pmore: 29, fwd: 'KGIL + WWP', lane: 'Chongqing / Shanghai → Durban → City Deep', onboard: '18 Oct', eta: '18 Nov', days: 22, pct: 29, qty: 3433, amt: 3240942, deliv: 41, slip: 7, first: '11 Nov', custs: 'DCC 1,675 · Mustek 992 · Pepkor 547 · Pinnacle 198 · Rectron 21', x: 80.21, y: 55.26 },
+      { id: 'v7', prods: 'D501MER 165 · P440VAK 120 · P500SV 56 · V470VAK 21', pmore: 1, fwd: 'WWP', lane: 'China → Durban → City Deep', onboard: '24 Oct', eta: '25 Nov', days: 29, pct: 9, qty: 364, amt: 317694, deliv: 5, slip: 13, first: '12 Nov', custs: 'Mustek 176 · Rectron 165 · Pepkor 21 · FirstTech 2', x: 89.01, y: 36.25 }
+    ];
+    var picked = this.state.picked;
+    var self = this;
+    var money = function (a) { return a >= 1e6 ? 'US$' + (a / 1e6).toFixed(2) + 'M' : 'US$' + Math.round(a / 1e3) + 'k'; };
+    var vessels = raw.map(function (v) {
+      var on = v.id === picked;
+      var late = v.slip > 0;
+      var c = on ? '#7fd3f2' : (late ? '#d4a15a' : '#3db8e8');
+      return Object.assign({}, v, {
+        qtyText: v.qty.toLocaleString('en-US'),
+        amtText: money(v.amt),
+        pressed: on ? 'true' : 'false',
+        slipShort: late ? '+' + v.slip + ' days' : 'On time',
+        slipChip: 'font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; ' + (late ? 'color: #e8bf86; background: rgba(212,161,90,0.14);' : 'color: #7fcfa3; background: rgba(61,155,106,0.16);'),
+        aria: v.fwd + ', ETA ' + v.eta + ', ' + v.qty + ' units',
+        pick: function () { self.setState({ picked: v.id }); },
+        hoverOn: function () { self.setState({ hovered: v.id }); },
+        markerStyle: 'position: absolute; left: ' + v.x + '%; top: ' + v.y + '%; transform: translate(-50%, -50%); width: 44px; height: 44px; padding: 0; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center;',
+        dotStyle: 'display: block; width: ' + (on ? 16 : 11) + 'px; height: ' + (on ? 16 : 11) + 'px; border-radius: 50%; background: ' + c + '; box-shadow: 0 0 0 ' + (on ? 6 : 4) + 'px ' + (on ? 'rgba(127,211,242,0.28)' : 'rgba(61,184,232,0.18)') + ', 0 0 18px ' + c + ';',
+        rowStyle: 'display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 10px; border: 0; border-radius: 8px; cursor: pointer; color: rgba(245,247,250,0.96); ' + (on ? 'background: rgba(61,184,232,0.14); box-shadow: inset 2px 0 0 #3db8e8;' : 'background: transparent;')
+      });
+    });
+    var sel = vessels.filter(function (v) { return v.id === picked; })[0] || vessels[0];
+    var hv = vessels.filter(function (v) { return v.id === self.state.hovered; })[0] || null;
+    var hov = hv ? Object.assign({}, hv, {
+      moreText: hv.pmore > 0 ? '+' + hv.pmore + ' more models · click to see every line' : 'Click to see every line',
+      cardStyle: 'position: absolute; z-index: 5; width: 300px; top: calc(' + hv.y + '% - 12px); ' + (hv.x > 55 ? 'right: calc(' + (100 - hv.x) + '% + 26px);' : 'left: calc(' + hv.x + '% + 26px);') + ' transform: translateY(-50%); padding: 12px 14px; border-radius: 10px; background: rgba(20,22,26,0.96); border: 1px solid rgba(127,211,242,0.6); box-shadow: 0 12px 32px rgba(0,0,0,0.5); pointer-events: none;'
+    }) : {};
+    var lab = function (v, dx, dy) {
+      return { title: v.fwd + ' · ' + v.qtyText + ' u', sub: 'ETA ' + v.eta + (v.slip ? ' · +' + v.slip + 'd' : ' · on time'),
+        style: 'position: absolute; left: calc(' + v.x + '% + ' + dx + 'px); top: calc(' + v.y + '% + ' + dy + 'px); padding: 6px 9px; border-radius: 8px; background: rgba(20,22,26,0.86); border: 1px solid ' + (v.id === picked ? 'rgba(127,211,242,0.7)' : 'rgba(120,160,190,0.3)') + '; white-space: nowrap; pointer-events: none;' };
+    };
+    var labels = [lab(vessels[3], 18, -46), lab(vessels[4], -150, -58), lab(vessels[5], 20, 8), lab(vessels[6], -150, -20)];
+    labels.push({ title: '3 vessels at or near Durban', sub: '4,013 u · ETA 27–30 Oct', style: 'position: absolute; left: calc(37.4% + 20px); top: calc(84.8% - 52px); padding: 6px 9px; border-radius: 8px; background: rgba(20,22,26,0.86); border: 1px solid rgba(212,161,90,0.55); white-space: nowrap; pointer-events: none;' });
+    var port = function (label, x, y) { return { label: label, style: 'position: absolute; left: ' + x + '%; top: ' + y + '%; transform: translate(-50%, -50%);' }; };
+    var ports = [port('SHANGHAI', 90.82, 26.27), port('SHENZHEN', 86.14, 34.91), port('CHONGQING', 81.33, 27.85), port('SINGAPORE', 79.62, 55.59), port('ROTTERDAM', 16.65, 5.93), port('PORT LOUIS', 50.32, 76.63), port('CITY DEEP', 31.71, 82.56), port('DURBAN', 33.54, 86.18)];
+    return {
+      hasHover: !!hv,
+      hov: hov,
+      hoverOff: function () { self.setState({ hovered: null }); },
+      vessels: vessels,
+      labels: labels,
+      ports: ports,
+      sel: Object.assign({}, sel, {
+        daysText: sel.days === 0 ? 'due today' : 'in ' + sel.days + ' days',
+        slipText: sel.slip ? 'ETA +' + sel.slip + ' days' : 'ETA unchanged',
+        slipStyle: 'font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; ' + (sel.slip ? 'color: #e8bf86; background: rgba(212,161,90,0.16);' : 'color: #7fcfa3; background: rgba(61,155,106,0.18);'),
+        barStyle: 'height: 100%; width: ' + sel.pct + '%; background: linear-gradient(90deg, #1c6f93, #3db8e8);',
+        history: sel.slip ? sel.first + ' on 29 Sep → ' + sel.eta + ' on 27 Oct' : sel.eta + ' in every report since 29 Sep'
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>
