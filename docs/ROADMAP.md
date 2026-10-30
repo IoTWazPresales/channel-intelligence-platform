@@ -568,9 +568,12 @@ Still open (authoritative detail: `docs/OPEN_QUESTIONS.md`; domain mirror:
 | 3 | ~~Hosting target~~ | — | **Closed** — local-only (Warren 2026-08-09) | Q-003 |
 | 4 | Per-customer CST file formats (8 customers) | P4 forward multi-format | **Discovered at load** — nothing further from Warren. Amazon ASIN FLAG + optional Game W27 are soak residuals, not an open architecture question. | Q-004 |
 
-**Deferred by design (not an open question — see Out of scope):** branch/location modelling;
-never alias branches to parent customers. Blocks tagged-customer sell-through until a
-deliberate model ships.
+**Store and distribution-centre level — priority, not deferred (Warren, 2026-10-30):** sales and
+stock at store and DC level, and replenishment (which stock goes to which store, from rate of sale,
+run rate, promotions, lead times and history), are core to CIP. The earlier "deferred by design"
+wording here was never Warren's decision and is withdrawn. The standing rule stays: never alias a
+branch or store to its parent customer; facts carry a location (`customer_location_id` /
+`distributor_location`).
 
 **Resolved (do not re-ask):**
 
@@ -589,4 +592,3 @@ budget constraint type (Q-001) · reservation derivation (Q-002).
 
 - Field-merchandising mobile app — separate product, separate timeline
 - CST historical backfill — optional job after P4 proves the pipe
-- Branch/location model — deferred; never alias branches to parent customers
