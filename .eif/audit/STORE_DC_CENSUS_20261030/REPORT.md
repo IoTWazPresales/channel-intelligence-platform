@@ -320,3 +320,322 @@ Included when the distributor has a location master row, distributor staging, a 
 | Tarsus | PARTIAL | 1 non-blank ship_to_raw values |
 | Three | PARTIAL | 3 non-blank ship_to_raw values |
 
+## D. Customer distribution centres
+
+Read 2026-10-30 15:31 on `cip` as `cip`, read-only (`default_transaction_read_only=on`). Produced by `census_dc.py`; queries in `queries_section_d.sql`.
+
+Model (Warren, 30 Oct): customers run their own distribution centres, distributors deliver into them, and the DCs supply the stores. So DC stock and DC-level sell-in are a separate level between distributor and store.
+
+Raw key match: names containing `dc`, `d/c`, `distribution`, `warehouse`, `wh`, `depot`, `hub`, `jhb`, `cpt`, `dbn`, `midrand`, `centurion` (short tokens only as whole words), or `stock`/`soh`/`on hand` combined with a place word (dc, warehouse, depot, hub, store, site, branch, location, and the city codes). Site-label match uses the same words on the label value. Fill rate is non-blank values over all rows for that customer (fact `raw_source_row`, or staging `raw_row_payload`).
+
+Classes: DC STOCK REPORTED = rows or columns with units or SOH at a DC-like place. DC NAMED ONLY = a DC-like key or label exists with no stock or sales figure on it. NO DC DATA = nothing DC-like found. A negative describes this search and its patterns, not proof of absence.
+
+**Result.** No customer reports DC stock. No raw key (fact or staging) and no site label matched a DC word for any of the 8 customers with sell-through rows, so D1 and D2 are empty and `customer_location` has no rows (D5). The only DC-shaped signal is the shipment ship-to `PEPKOR-ZA-DR-01` (1,603 lines, 162,982 units), which receives for Incredible Connection, Hifi, JD Furniture and the Homeless lines: that is Pepkor's DC, named on inbound shipments only. Game's and Makro's store lists use store names; a DC filed under a plain store-style name would not match these words, so the label list should be eyeballed once with Warren before this is read as proof that those customers have no DC.
+
+### D1. Raw keys matching a DC word
+
+_No rows._
+
+
+### D2. Site labels that look like a DC
+
+_No rows._
+
+
+### D3. ship_to_raw on lines that resolve to a customer (direct)
+
+315 customer/ship-to pairs across 156 customers; the top three ship-to values per customer by units are shown. Every pair is in `queries_section_d.sql` (D4_ship_to_direct_customers). Ship-to codes look like `DISTRIBUTOR-COUNTRY-CHANNEL-NN`; the DC-style ones are in D4.
+
+| Customer | Distributor | ship_to_raw | Dealer tokens | Lines | Units |
+| --- | --- | --- | --- | --- | --- |
+| 3g Mobile | Three | THREE-MU-BB | 3 | 9 | 668 |
+| 3g Mobile | Three | THREE-MU-C | 5 | 14 | 569 |
+| ABSA | Mustek | MUSTEK-ZA-TB-01 | 1 | 12 | 3,900 |
+| ABSA | Mustek | MUSTEK-ZA-BB-01 | 1 | 1 | 2,000 |
+| AMAZON COMMERCIAL SERVICES (SOUTH AFRICA) | Pinnacle | PINNACLE-ZA-IR-01 | 4 | 255 | 6,765 |
+| AMAZON COMMERCIAL SERVICES (SOUTH AFRICA) | Pinnacle | PINNACLE-ZA-IET-01 | 1 | 2 | 48 |
+| Afrihost | Rectron | RECTRON-ZA-BB | 2 | 2 | 152 |
+| Afrocentric | Mustek | MUSTEK-ZA-TB-01 | 2 | 6 | 800 |
+| Agriculture Limpopo | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 109 |
+| Ally Pool | Pinnacle | PINNACLE-ZA-C-01 | 2 | 3 | 540 |
+| Apex High School | Mustek | MUSTEK-ZA-TB-01 | 2 | 4 | 1,300 |
+| Apex High School | Rectron | RECTRON-ZA-TB | 2 | 2 | 235 |
+| Attorney General's Chambers Botswana | Rectron | RECTRON-ZA-TB | 1 | 1 | 105 |
+| Auckland PARK Preparatory School | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 125 |
+| BASA School | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 80 |
+| BASA School | Rectron | RECTRON-ZA-TB | 1 | 1 | 40 |
+| BB - Marketing Sample | ACZA | ACZA-ZA-BB-03 | 1 | 3 | 3 |
+| BB - Marketing Sample | ACZA | ACZA-ZA-C-03 | 1 | 3 | 3 |
+| BT GAMES (PTY) LTD | Pinnacle | PINNACLE-ZA-IR-01 | 2 | 21 | 212 |
+| BUSINESS CONNEXION (PTY) LTD | Pinnacle | PINNACLE-ZA-BB-01 | 1 | 1 | 20 |
+| Bank Info: Citibank | Stylus | STYLUS-AO-C-02 | 1 | 2 | 1,881 |
+| Beyond Zero | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 72 |
+| Bitou Municipality | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 114 |
+| Botswana Communications Regulatory Authority | Rectron | RECTRON-ZA-TB | 1 | 2 | 505 |
+| Cape Nature | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 40 |
+| Cape Winelands | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 120 |
+| Central BANK Mauritius | Three | THREE-MU-BB | 1 | 1 | 15 |
+| Central BANK Mauritius | Three | THREE-MU-BB-01 | 1 | 1 | 10 |
+| City Of Johannesburg | Mustek | MUSTEK-ZA-TB-01 | 2 | 3 | 360 |
+| City Of Tshwane | Mustek | MUSTEK-ZA-TB-01 | 2 | 3 | 650 |
+| Cloudedu | Rectron | RECTRON-ZA-C | 1 | 7 | 764 |
+| Coghsta Limpopo | Mustek | MUSTEK-ZA-TB-01 | 1 | 6 | 267 |
+| Community Safety Gauteng | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 120 |
+| Computer Mania | Mustek | MUSTEK-ZA-IR-01 | 6 | 1,286 | 72,309 |
+| Computer Mania | Mustek | MUSTEK-ZA-BB-01 | 6 | 49 | 1,909 |
+| Computer Mania | Pinnacle | PINNACLE-ZA-IR-01 | 1 | 20 | 1,183 |
+| Computer Mania Homeless | Mustek | MUSTEK-ZA-IR-01 | 1 | 2 | 14 |
+| DBE | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 255 |
+| DHS | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 284 |
+| DOE Limpopo | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 293 |
+| DOE Limpopo | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 5 | 223 |
+| Department Of Education MP | Mustek | MUSTEK-ZA-TB-01 | 1 | 4 | 4 |
+| Department Of Health Gauteng | Mustek | MUSTEK-ZA-TB-01 | 1 | 3 | 248 |
+| Department Of Sport EC | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 60 |
+| Dept Of Education Limpopo | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 115 |
+| Dept Oh Health Limpopo | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 825 |
+| Dubai Hub | Superdist | SUPERDIST-MU-BB-MG-01 | 1 | 2 | 130 |
+| Dubai Hub | Compuspeed | COMPUSPEED-MU-BB | 1 | 4 | 94 |
+| ESQUIRE TECHNOLOGIES | Pinnacle | PINNACLE-ZA-IR-01 | 3 | 11 | 4,446 |
+| ESQUIRE TECHNOLOGIES | Rectron | RECTRON-ZA-C | 2 | 7 | 802 |
+| ESQUIRE TECHNOLOGIES | Pinnacle | PINNACLE-ZA-C-01 | 3 | 10 | 780 |
+| Ecole Du Centre | Compuspeed | COMPUSPEED-MU-TB | 2 | 3 | 85 |
+| Elangeni TVET College | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 2 | 390 |
+| Eshop | Pinnacle | PINNACLE-ZA-ESH-01 | 8 | 126 | 2,710 |
+| Eshop | Dgstore | DGSTORE-ZA-ET-01 | 5 | 137 | 1,363 |
+| Eshop | Mustek | MUSTEK-ZA-ESH-01 | 2 | 44 | 1,063 |
+| Eskom | Mustek | MUSTEK-ZA-TB-01 | 2 | 5 | 5 |
+| Evetech | Pinnacle | PINNACLE-ZA-IET-01 | 4 | 402 | 15,575 |
+| Evetech | Pinnacle | PINNACLE-ZA-IR-01 | 8 | 409 | 12,870 |
+| Evetech | Mustek | MUSTEK-ZA-IR-01 | 5 | 256 | 10,917 |
+| FNB | Mustek | MUSTEK-ZA-IR-01 | 3 | 22 | 1,332 |
+| FNB | Mustek | MUSTEK-ZA-IET-01 | 4 | 28 | 1,115 |
+| FNB | Mustek | MUSTEK-ZA-C-01 | 1 | 8 | 669 |
+| Financial And Fiscal Commission | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 30 |
+| Firsttech | Pinnacle | PINNACLE-ZA-C-01 | 1 | 1 | 216 |
+| Furnmart | Pinnacle | PINNACLE-ZA-IR-01 | 5 | 42 | 10,296 |
+| Furnmart | Rectron | RECTRON-ZA-IR | 1 | 15 | 1,584 |
+| Furnmart | Pinnacle | PINNACLE-ZA-C-01 | 1 | 6 | 576 |
+| GP Education | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 334 |
+| GP Education | DCC | DCC-ZA-TB | 1 | 1 | 167 |
+| GP Health | Mustek | MUSTEK-ZA-TB-01 | 1 | 6 | 99 |
+| Game | Pinnacle | PINNACLE-ZA-IR-01 | 11 | 450 | 98,308 |
+| Game | Pinnacle | PINNACLE-ZA-IR-02 | 5 | 129 | 42,793 |
+| Game | Pinnacle | PINNACLE-ZA-TB-01 | 2 | 2 | 5,181 |
+| Gauteng Department Of Health | Mustek | MUSTEK-ZA-TB-01 | 1 | 4 | 375 |
+| Google South Africa | Mustek | MUSTEK-ZA-TB-01 | 2 | 5 | 38 |
+| HOMECHOICE (PTY) LTD | Rectron | RECTRON-ZA-IR | 1 | 1 | 1,215 |
+| Hifi | Pepkor | PEPKOR-ZA-DR-01 | 13 | 302 | 38,322 |
+| Hifi | Pinnacle | PINNACLE-ZA-IR-01 | 12 | 83 | 12,566 |
+| Hifi | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 1,188 |
+| Hilton College | Mustek | MUSTEK-ZA-BB-01 | 1 | 1 | 120 |
+| Hilton College | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 5 |
+| Hilton School | Rectron | RECTRON-ZA-TB | 1 | 3 | 150 |
+| Homeless | Rectron | RECTRON-ZA-C | 4 | 176 | 13,084 |
+| Homeless | Mustek | MUSTEK-ZA-C-01 | 3 | 66 | 4,659 |
+| Homeless | Pinnacle | PINNACLE-ZA-C-01 | 3 | 49 | 3,808 |
+| Homeless Q4 Retail | Pepkor | PEPKOR-ZA-BB-01 | 1 | 1 | 114 |
+| Homeless Q4 Retail | Rectron | RECTRON-ZA-BB | 1 | 1 | 114 |
+| IC Entry | Pinnacle | PINNACLE-ZA-IR-01 | 1 | 4 | 2,544 |
+| IC Entry | Pinnacle | PINNACLE-ZA-C-01 | 1 | 1 | 684 |
+| IC Homeless | Pepkor | PEPKOR-ZA-DR-01 | 1 | 2 | 24 |
+| IC Online | Pinnacle | PINNACLE-ZA-C-01 | 1 | 3 | 136 |
+| IEC | Mustek | MUSTEK-ZA-TB-01 | 1 | 5 | 880 |
+| Icasa | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 55 |
+| Impact Catalyst | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 846 |
+| Incredible Connection | Pepkor | PEPKOR-ZA-DR-01 | 9 | 1,267 | 122,960 |
+| Incredible Connection | Pinnacle | PINNACLE-ZA-IR-01 | 8 | 736 | 121,763 |
+| Incredible Connection | Pepkor | PEPKOR-ZA-BB-01 | 10 | 142 | 8,801 |
+| Inscape | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 24 |
+| JD Furniture | Pinnacle | PINNACLE-ZA-IR-01 | 5 | 38 | 6,966 |
+| JD Furniture | Pinnacle | PINNACLE-ZA-C-01 | 1 | 1 | 1,485 |
+| JD Furniture | Pepkor | PEPKOR-ZA-DR-01 | 2 | 7 | 1,116 |
+| LOOT | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 40 |
+| Laerskool Van Riebeeckpark | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 40 |
+| Lebone School | Rectron | RECTRON-ZA-EDU | 1 | 2 | 225 |
+| Lewi | Pinnacle | PINNACLE-ZA-IR-01 | 3 | 16 | 9,867 |
+| Lewi | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 2 | 1,988 |
+| Lewi | Pinnacle | PINNACLE-ZA-C-01 | 1 | 1 | 1,485 |
+| Lewis Furniture | Pinnacle | PINNACLE-ZA-IR-01 | 4 | 56 | 14,364 |
+| Lewis Furniture | Rectron | RECTRON-ZA-IET | 1 | 1 | 216 |
+| Lighthouse Primary & Secondary School | S4dl | S4DL-MU-TB | 2 | 2 | 116 |
+| Lighthouse Primary & Secondary School | Brandhouse | BRANDHOUSE-MU-TB | 1 | 1 | 34 |
+| Limpopo Economic Dev | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 75 |
+| Limpopo Education | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 280 |
+| Limpopo Provincial Government | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 90 |
+| Limpopo Social Dev | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 124 |
+| Limpopo Sport Arts And Culture | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 320 |
+| Limpopo Transport | Mustek | MUSTEK-ZA-TB-01 | 1 | 4 | 370 |
+| MARKETING | ACZA | ACZA-ZA-C-01 | 1 | 1 | 200 |
+| MICRO-D (PTY) LTD | Mustek | MUSTEK-ZA-BB-01 | 1 | 2 | 108 |
+| MICROPOINT (SA) (PTY) LTD | Rectron | RECTRON-ZA-C | 1 | 3 | 324 |
+| MICROPOINT (SA) (PTY) LTD | Rectron | RECTRON-ZA-BB | 1 | 1 | 280 |
+| MKT Sample | Mustek | MUSTEK-ZA-C-01 | 2 | 11 | 406 |
+| MKT Sample | Pinnacle | PINNACLE-ZA-C-01 | 1 | 2 | 402 |
+| MKT Sample | ACZA | ACZA-ZA-C-01 | 9 | 20 | 119 |
+| MP Education | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 1,634 |
+| MP Health | Mustek | MUSTEK-ZA-TB-01 | 3 | 5 | 1,010 |
+| MP Health | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 2 | 361 |
+| Makro | Pinnacle | PINNACLE-ZA-IR-01 | 9 | 783 | 151,849 |
+| Makro | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 2,970 |
+| Makro | Pinnacle | PINNACLE-ZA-BB-01 | 4 | 33 | 1,664 |
+| Makro Homeless | Pinnacle | PINNACLE-ZA-IR-01 | 1 | 18 | 228 |
+| Mango 5 | Rectron | RECTRON-ZA-TB | 1 | 4 | 76 |
+| Maranatha Christion School | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 50 |
+| Marketiing Material Order By Estelle | ACZA | ACZA-ZA-C-01 | 1 | 5 | 68 |
+| Matrix | Mustek | MUSTEK-ZA-IR-01 | 10 | 95 | 8,146 |
+| Matrix | Rectron | RECTRON-ZA-IR | 3 | 26 | 2,484 |
+| Matrix | Mustek | MUSTEK-ZA-C-01 | 1 | 5 | 934 |
+| Media Sample | ACZA | ACZA-ZA-C-01 | 2 | 6 | 10 |
+| Media Sample | ACZA | ACZA-ZA-BB-03 | 1 | 2 | 2 |
+| Microman | Mustek | MUSTEK-ZA-C-01 | 3 | 19 | 1,456 |
+| Microman | Mustek | MUSTEK-ZA-IR-01 | 1 | 15 | 1,028 |
+| Ministry Of Education Mauritius | Compuspeed | COMPUSPEED-MU-TB | 1 | 1 | 125 |
+| Ministy OR Labour | NITI | NITI-AE-TB-MU-01 | 1 | 2 | 70 |
+| Motheo TVET | Pinnacle | PINNACLE-ZA-IR-01 | 1 | 2 | 2,970 |
+| Mustek Deal | Mustek | MUSTEK-ZA-TB-01 | 1 | 11 | 14,000 |
+| Nelson Mandela University | DCC | DCC-ZA-TB | 1 | 6 | 1,020 |
+| Nsfa | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 2,772 |
+| OK FURNITURE | Rectron | RECTRON-ZA-IR | 1 | 1 | 990 |
+| Omni Digital (Pty) Ltd | Rectron | RECTRON-ZA-IR | 1 | 1 | 990 |
+| Omni Digital (Pty) Ltd | Rectron | RECTRON-ZA-BB | 1 | 3 | 368 |
+| Open Channel | Rectron | RECTRON-ZA-C | 20 | 1,327 | 103,480 |
+| Open Channel | Mustek | MUSTEK-ZA-BB-01 | 18 | 743 | 71,919 |
+| Open Channel | Pinnacle | PINNACLE-ZA-C-01 | 21 | 1,028 | 70,389 |
+| Orient Islamic School | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 70 |
+| Orient School | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 90 |
+| PC PALACE CC | Mustek | MUSTEK-ZA-BB-01 | 1 | 1 | 8 |
+| Polytechnic | Compuspeed | COMPUSPEED-MU-TB | 1 | 1 | 50 |
+| Q2 Retail | Rectron | RECTRON-ZA-BB | 1 | 2 | 60 |
+| Retail - Incredible | Pepkor | PEPKOR-ZA-BB-01 | 2 | 2 | 206 |
+| Retail - Incredible | Rectron | RECTRON-ZA-BB | 1 | 2 | 80 |
+| Returnable Tiger Lake PR Media Review Sample | ACZA | ACZA-ZA-C-01 | 1 | 2 | 2 |
+| Rivonia Primary School | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 23 |
+| Rondebosch Boys' Preparatory School | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 2 | 252 |
+| SADC | HV | HV-MU-BB-MG-01 | 1 | 3 | 190 |
+| SADC - NITI | Compuspeed | COMPUSPEED-MU-BB | 1 | 3 | 310 |
+| SAPS | Mustek | MUSTEK-ZA-TB-01 | 2 | 22 | 5,817 |
+| SITA | Mustek | MUSTEK-ZA-TB-01 | 2 | 5 | 1,690 |
+| SITA | Rectron | RECTRON-ZA-TB | 1 | 4 | 1,284 |
+| SITA | Mustek | MUSTEK-ZA-BB-01 | 2 | 10 | 704 |
+| Saasta | Redington | REDINGTON-AE-TB-ZA-01 | 1 | 4 | 106 |
+| Sacaa | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 180 |
+| Sample - MP Sample | ACZA | ACZA-ZA-C-01 | 1 | 1 | 1 |
+| Sample - Media Review Sample | ACZA | ACZA-ZA-C-01 | 1 | 1 | 4 |
+| Sample ADV | Rectron | RECTRON-ZA-TB | 1 | 1 | 1 |
+| Samples | ACZA | ACZA-ZA-C-01 | 10 | 57 | 125 |
+| Samples | ACZA | ACZA-ZA-C-03 | 4 | 22 | 38 |
+| Samples | ACZA | ACZA-ZA-BB-03 | 2 | 4 | 5 |
+| Sapsc5 | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 500 |
+| Shoprite | Pinnacle | PINNACLE-ZA-C-01 | 1 | 13 | 1,920 |
+| Smartlab | Rectron | RECTRON-ZA-TB | 2 | 6 | 1,692 |
+| Smollan Group | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 1 |
+| Social Development | Mustek | MUSTEK-ZA-TB-01 | 5 | 7 | 901 |
+| Sports Arts And Culture Eastern Cape | Redington | REDINGTON-AE-TB-ZA-01 | 1 | 6 | 135 |
+| St Charles | Rectron | RECTRON-ZA-TB | 1 | 1 | 40 |
+| St John's Diocesan School For Girl | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 2 | 90 |
+| St Patrick’s College | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 72 |
+| St. John School | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 2 |
+| Sub-d | Rectron | RECTRON-ZA-BB | 2 | 14 | 1,252 |
+| Sub-d | Pinnacle | PINNACLE-ZA-BB-01 | 1 | 2 | 160 |
+| TAL | Mustek | MUSTEK-ZA-C-01 | 1 | 13 | 501 |
+| TB - Dept Of Comm Safety | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 12 |
+| TBH | Brandhouse | BRANDHOUSE-MU-C | 5 | 190 | 11,320 |
+| TBH | Brandhouse | BRANDHOUSE-MU-BB | 3 | 21 | 637 |
+| TCS | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 30 |
+| TFG | Mustek | MUSTEK-ZA-IR-01 | 5 | 48 | 9,263 |
+| TUT | Mustek | MUSTEK-ZA-TB-01 | 1 | 6 | 486 |
+| TUT | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 3 | 233 |
+| TUT | DCC | DCC-ZA-TB | 1 | 1 | 33 |
+| TWK | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 600 |
+| Takealot | Pinnacle | PINNACLE-ZA-IET-01 | 9 | 208 | 19,975 |
+| Takealot | Pinnacle | PINNACLE-ZA-IR-01 | 10 | 313 | 18,364 |
+| Takealot | Rectron | RECTRON-ZA-IET | 4 | 73 | 5,700 |
+| Technolab | Pinnacle | PINNACLE-ZA-C-01 | 1 | 4 | 396 |
+| Telkom | Pinnacle | PINNACLE-ZA-ITL-01 | 3 | 10 | 2,380 |
+| Telkom | Pinnacle | PINNACLE-ZA-C-01 | 1 | 4 | 1,485 |
+| Umgungundlovu TVET | Mustek | MUSTEK-ZA-TB-01 | 1 | 1 | 132 |
+| University Of Johannesburg | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 1 | 45 |
+| Ux482_returnable Media Review Sample By Juan | ACZA | ACZA-ZA-C-01 | 1 | 1 | 2 |
+| VAN SCHAIK BOOKSTORE | Mustek | MUSTEK-ZA-IR-01 | 1 | 1 | 297 |
+| Vodacom | Rectron | RECTRON-ZA-ITL | 5 | 61 | 14,111 |
+| Vodacom | Pinnacle | PINNACLE-ZA-ITL-01 | 3 | 27 | 3,762 |
+| Vodacom | Rectron | RECTRON-ZA-IR | 2 | 11 | 3,062 |
+| WINELANDS STUDIO (PTY)LTD | Mustek | MUSTEK-ZA-TB-01 | 1 | 2 | 83 |
+| WOOTWARE COMPUTERS | Rectron | RECTRON-ZA-IET | 4 | 31 | 834 |
+| WOOTWARE COMPUTERS | Rectron | RECTRON-ZA-C | 2 | 9 | 174 |
+| WOOTWARE COMPUTERS | Pinnacle | PINNACLE-ZA-C-01 | 1 | 2 | 48 |
+| WSL | Pinnacle | PINNACLE-ZA-TB-01 | 1 | 8 | 5,214 |
+| WSL | Pinnacle | PINNACLE-ZA-IR-01 | 1 | 3 | 1,221 |
+| Wza260200006 | ACZA | ACZA-ZA-C-03 | 1 | 4 | 400 |
+| Wza260700035 | ACZA | ACZA-ZA-C-03 | 1 | 2 | 30 |
+| Wza260700036 | ACZA | ACZA-ZA-C-03 | 1 | 8 | 24 |
+| Wza260700038 | ACZA | ACZA-ZA-C-03 | 1 | 3 | 91 |
+| Wza260700043 | ACZA | ACZA-ZA-C-03 | 1 | 7 | 245 |
+| École Du Nord | Compuspeed | COMPUSPEED-MU-TB | 1 | 1 | 30 |
+
+
+### D4. ship_to_raw with a `-DR-`, `-DC-`, `-WH-` or DC word, all lines
+
+| Distributor | ship_to_raw | Lines | Units |
+| --- | --- | --- | --- |
+| Pepkor | PEPKOR-ZA-DR-01 | 1,603 | 162,982 |
+
+
+`-DR-` lines by customer/dealer token (who is the receiver):
+
+| Dealer token | Distributor | ship_to_raw | Lines | Units |
+| --- | --- | --- | --- | --- |
+| Q4 IC | Pepkor | PEPKOR-ZA-DR-01 | 370 | 30,824 |
+| Q3 IC | Pepkor | PEPKOR-ZA-DR-01 | 352 | 29,055 |
+| Q1 IC | Pepkor | PEPKOR-ZA-DR-01 | 235 | 25,837 |
+| Q2 IC | Pepkor | PEPKOR-ZA-DR-01 | 198 | 15,488 |
+| Q4 IC RFP | Pepkor | PEPKOR-ZA-DR-01 | 65 | 12,852 |
+| Q4 Hifi | Pepkor | PEPKOR-ZA-DR-01 | 82 | 7,440 |
+| Q1 Hifi | Pepkor | PEPKOR-ZA-DR-01 | 34 | 5,188 |
+| Q3 Hifi | Pepkor | PEPKOR-ZA-DR-01 | 51 | 4,794 |
+| Q3 IC RFP | Pepkor | PEPKOR-ZA-DR-01 | 26 | 4,628 |
+| Q4 HiFi RFP | Pepkor | PEPKOR-ZA-DR-01 | 22 | 4,536 |
+| Q1 IC RFP | Pepkor | PEPKOR-ZA-DR-01 | 19 | 3,612 |
+| Q3 HiFi RFP | Pepkor | PEPKOR-ZA-DR-01 | 17 | 3,024 |
+| Q4 HiFi | Pepkor | PEPKOR-ZA-DR-01 | 20 | 2,572 |
+| Q2 HiFi | Pepkor | PEPKOR-ZA-DR-01 | 21 | 2,476 |
+| Q1 HiFi | Pepkor | PEPKOR-ZA-DR-01 | 13 | 2,412 |
+| Q2 Hifi | Pepkor | PEPKOR-ZA-DR-01 | 17 | 2,232 |
+| Q1 HiFi RFP | Pepkor | PEPKOR-ZA-DR-01 | 9 | 1,836 |
+| Q3 HiFi | Pepkor | PEPKOR-ZA-DR-01 | 13 | 1,332 |
+| Q4 JD Furn | Pepkor | PEPKOR-ZA-DR-01 | 3 | 648 |
+| Q1 JD Furn | Pepkor | PEPKOR-ZA-DR-01 | 4 | 468 |
+| Q4 IC/Hifi RFP | Pepkor | PEPKOR-ZA-DR-01 | 1 | 408 |
+| Q1 HIFI | Pepkor | PEPKOR-ZA-DR-01 | 2 | 372 |
+| Q3 Homeless | Pepkor | PEPKOR-ZA-DR-01 | 14 | 324 |
+| Q3 IC Cycling Deal | Pepkor | PEPKOR-ZA-DR-01 | 1 | 256 |
+| Q1 Homeless | Pepkor | PEPKOR-ZA-DR-01 | 6 | 144 |
+| Q3 HIFI | Pepkor | PEPKOR-ZA-DR-01 | 1 | 108 |
+| Q4 Homeless | Pepkor | PEPKOR-ZA-DR-01 | 5 | 92 |
+| Q4 IC Homeless | Pepkor | PEPKOR-ZA-DR-01 | 2 | 24 |
+
+
+### D5. customer_location types
+
+_No rows._
+
+
+### D6. Classification
+
+| Customer | Class | Basis |
+| --- | --- | --- |
+| Hifi | DC NAMED ONLY | shipments go to `PEPKOR-ZA-DR-01` (302 lines, 38,322 units) with no stock reported there |
+| Homeless | DC NAMED ONLY | shipments go to `PEPKOR-ZA-DR-01` (24 lines, 532 units) with no stock reported there |
+| IC Homeless | DC NAMED ONLY | shipments go to `PEPKOR-ZA-DR-01` (2 lines, 24 units) with no stock reported there |
+| Incredible Connection | DC NAMED ONLY | shipments go to `PEPKOR-ZA-DR-01` (1,267 lines, 122,960 units) with no stock reported there |
+| JD Furniture | DC NAMED ONLY | shipments go to `PEPKOR-ZA-DR-01` (7 lines, 1,116 units) with no stock reported there |
+| AMAZON COMMERCIAL SERVICES (SOUTH AFRICA) | NO DC DATA | no DC-like raw key, no DC-like site label, no DC-style ship-to |
+| Computer Mania | NO DC DATA | no DC-like raw key, no DC-like site label, no DC-style ship-to |
+| Evetech | NO DC DATA | no DC-like raw key, no DC-like site label, no DC-style ship-to |
+| Game | NO DC DATA | no DC-like raw key, no DC-like site label, no DC-style ship-to |
+| Makro | NO DC DATA | no DC-like raw key, no DC-like site label, no DC-style ship-to |
+| Takealot | NO DC DATA | no DC-like raw key, no DC-like site label, no DC-style ship-to |
+
+
+145 further customers appear only on shipment lines (no sell-through rows) and show no DC-like ship-to: NO DC DATA. Counts by class over all 156 customers: DC STOCK REPORTED 0, DC NAMED ONLY 5, NO DC DATA 151.
