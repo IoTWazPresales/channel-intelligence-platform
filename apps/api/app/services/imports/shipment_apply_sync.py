@@ -13,6 +13,7 @@ shape (validate and bulk steward already have it).
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import time
 from typing import Any, Callable
 
 import logging
@@ -79,8 +80,18 @@ def _shipment_candidate_eligible_for_apply_auto_map(cand: ImportEntityMappingCan
     return False
 
 
+def _log_shipment_stage(job_id: int, stage: str, started: float) -> None:
+    logger.info(
+        "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
+        int(job_id),
+        stage,
+        time.perf_counter() - started,
+    )
+
+
 def apply_high_confidence_shipment_mapping_candidates(import_job_id: int) -> int:
     """Map high-confidence planner suggestions; enrich and commit once per entity type (not per candidate)."""
+    started = time.perf_counter()
     applied: list[int] = []
     any_customer = False
     any_distributor = False
@@ -136,6 +147,7 @@ def apply_high_confidence_shipment_mapping_candidates(import_job_id: int) -> int
                     s, import_job_id=int(import_job_id), source_definition_id=sid
                 )
                 s.commit()
+    _log_shipment_stage(int(import_job_id), "apply_high_confidence_mappings", started)
     return len(applied)
 
 
@@ -159,6 +171,7 @@ def run_shipment_apply_sync(
             except Exception:
                 pass
 
+    started = time.perf_counter()
     job = db.get(ImportJob, job_id)
     if job is None or (job.template_slug or "") != "inbound_shipments":
         return {"id": job_id, "outcome": "not_found"}
@@ -167,7 +180,9 @@ def run_shipment_apply_sync(
     db.commit()
 
     _emit("applying_mappings", "Applying high-confidence mappings", 0, 0)
+    stage_started = time.perf_counter()
     auto_applied = apply_high_confidence_shipment_mapping_candidates(job_id)
+    _log_shipment_stage(job_id, "run_apply_auto_map", stage_started)
 
     def _facts_progress(current: int, total: int) -> None:
         _emit("writing_facts", "Writing shipment facts", current, total)
@@ -177,7 +192,9 @@ def run_shipment_apply_sync(
         job = db.get(ImportJob, job_id)
         if job is None:
             raise RuntimeError(f"import job {job_id} disappeared before fact write")
+        stage_started = time.perf_counter()
         written = write_shipment_facts_and_close_book(db, job, on_progress=_facts_progress)
+        _log_shipment_stage(job_id, "run_apply_write_facts", stage_started)
         fact_rows = int(written["fact_rows"])
         db.commit()
     except Exception as exc:
@@ -255,6 +272,7 @@ def run_shipment_apply_sync(
         )
 
     _emit("complete", "Apply complete", fact_rows, fact_rows)
+    _log_shipment_stage(job_id, "run_shipment_apply_sync", started)
     return {
         "id": job_id,
         "outcome": "applied",

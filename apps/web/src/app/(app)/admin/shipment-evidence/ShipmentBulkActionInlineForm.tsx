@@ -1,5 +1,7 @@
 'use client';
 
+import { useCallback, useState } from 'react';
+
 import {
   Alert,
   Button,
@@ -8,13 +10,16 @@ import {
   Typography,
 } from '@mui/material';
 
-import { safeDisplayError } from '@/lib/api';
+import { apiGet, safeDisplayError } from '@/lib/api';
+import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 
 import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import type { StewardBulkTestIds } from '@/features/import-steward/stewardEngine.types';
 import type { useStewardBulkSteward } from '@/features/import-steward/useStewardBulkSteward';
 
 type BulkSteward = ReturnType<typeof useStewardBulkSteward>;
+type CustomerHit = { id: number; customer_code: string; customer_name: string };
+type DistributorHit = { id: number; distributor_code: string; distributor_name: string };
 
 export function ShipmentBulkActionInlineForm({
   bulk,
@@ -34,15 +39,31 @@ export function ShipmentBulkActionInlineForm({
   const {
     bulkAction,
     setBulkAction,
-    bulkCustomerId,
     setBulkCustomerId,
-    bulkDistributorId,
     setBulkDistributorId,
     bulkPreview,
     bulkApply,
     bulkFormReady,
     applyReady,
   } = bulk;
+  const [customer, setCustomer] = useState<CustomerHit | null>(null);
+  const [distributor, setDistributor] = useState<DistributorHit | null>(null);
+  const fetchCustomers = useCallback(async (q: string, signal: AbortSignal) => {
+    if (q.trim().length < 1) return [];
+    const res = await apiGet<{ items: CustomerHit[] }>(
+      `/api/v1/customers?q=${encodeURIComponent(q)}&page_size=20`,
+      { signal },
+    );
+    return res.items ?? [];
+  }, []);
+  const fetchDistributors = useCallback(async (q: string, signal: AbortSignal) => {
+    if (q.trim().length < 1) return [];
+    const res = await apiGet<{ items: DistributorHit[] }>(
+      `/api/v1/distributors?q=${encodeURIComponent(q)}&page_size=20`,
+      { signal },
+    );
+    return res.items ?? [];
+  }, []);
 
   return (
     <Stack
@@ -93,21 +114,29 @@ export function ShipmentBulkActionInlineForm({
         </Button>
       </Stack>
       {bulkAction === 'map_customer' ? (
-        <TextField
+        <EntitySearchAutocomplete<CustomerHit>
+          label="Customer"
           size="small"
-          label="Customer ID"
-          value={bulkCustomerId}
-          onChange={(e) => setBulkCustomerId(e.target.value)}
-          sx={{ maxWidth: 280 }}
+          value={customer}
+          onChange={(next) => {
+            setCustomer(next);
+            setBulkCustomerId(next ? String(next.id) : '');
+          }}
+          fetchOptions={fetchCustomers}
+          getOptionLabel={(row) => `${row.customer_name} (${row.customer_code})`}
         />
       ) : null}
       {bulkAction === 'map_distributor' ? (
-        <TextField
+        <EntitySearchAutocomplete<DistributorHit>
+          label="Distributor"
           size="small"
-          label="Distributor ID"
-          value={bulkDistributorId}
-          onChange={(e) => setBulkDistributorId(e.target.value)}
-          sx={{ maxWidth: 280 }}
+          value={distributor}
+          onChange={(next) => {
+            setDistributor(next);
+            setBulkDistributorId(next ? String(next.id) : '');
+          }}
+          fetchOptions={fetchDistributors}
+          getOptionLabel={(row) => `${row.distributor_name} (${row.distributor_code})`}
         />
       ) : null}
       {bulkAction === 'create_provisional_customer' ? (

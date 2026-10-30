@@ -38,6 +38,7 @@ from app.services.imports.import_dispatch import enqueue_import_worker_task
 from app.services.imports.shipment_field_mapping import (
     infer_shipment_import_job_sync,
     merge_shipment_mapping_memory,
+    remember_selected_sheets,
     sanitize_shipment_field_mapping,
     shipment_mapping_gate_errors,
     shipment_mapping_state_dict,
@@ -151,6 +152,28 @@ def _enqueue_import_pipeline_job(job_id: int, *, log_label: str, in_process_thre
         in_process_thread_name=in_process_thread_name,
         sync_work=process_import_job_sync,
     )
+
+
+def _maybe_autostart_shipment_validate(job: ImportJob) -> None:
+    """Start validation when the saved mapping covers these headers and sheets are already chosen."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    if not meta.get("shipment_mapping_auto"):
+        return
+    available = meta.get("available_sheets") if isinstance(meta.get("available_sheets"), list) else []
+    if not meta.get("sheet_selection_confirmed") and len(available) > 1:
+        return
+    claim_import_pipeline_dispatch(int(job.id), import_mode="validate")
+    dispatched, task_id = _enqueue_import_pipeline_job(
+        int(job.id),
+        log_label="Shipment validate",
+        in_process_thread_name=f"shipment-validate-{job.id}",
+    )
+    if dispatched and task_id:
+        with SessionLocal() as meta_db:
+            j_meta = meta_db.get(ImportJob, int(job.id))
+            if j_meta is not None:
+                set_task_slot_on_job(j_meta, SLOT_MAIN, task_id=task_id)
+                meta_db.commit()
 
 
 from app.services.imports.import_pipeline_dispatch_claim import (
@@ -789,6 +812,8 @@ async def create_job(
     elif tpl.slug == "inbound_shipments":
         with SessionLocal() as sync_db:
             infer_shipment_import_job_sync(sync_db, job.id)
+        await db.refresh(job)
+        _maybe_autostart_shipment_validate(job)
         await db.refresh(job)
 
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
@@ -1723,9 +1748,15 @@ async def post_shipment_sheets(job_id: int, body: dict[str, Any] = Body(...), db
     meta["sheet_selection_confirmed"] = True
     job.staged_metadata = meta
     await db.commit()
+    if job.source_id is not None:
+        with SessionLocal() as sync_db:
+            remember_selected_sheets(sync_db, source_id=int(job.source_id), sheet_names=chosen)
+            sync_db.commit()
     with SessionLocal() as sync_db:
         infer_shipment_import_job_sync(sync_db, job_id)
         sync_db.commit()
+    await db.refresh(job)
+    _maybe_autostart_shipment_validate(job)
     await db.refresh(job)
     return shipment_mapping_state_dict(job)
 

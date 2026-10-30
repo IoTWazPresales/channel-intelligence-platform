@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -145,9 +146,16 @@ def shipment_apply_task(self, job_id: int) -> dict:
         except Exception:
             pass
 
+    started = time.perf_counter()
     try:
         with SessionLocal() as db:
             result = run_shipment_apply_sync(db, job_id, on_progress=_on_progress)
+            logger.info(
+                "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
+                int(job_id),
+                "shipment_apply_task",
+                time.perf_counter() - started,
+            )
             if result.get("outcome") == "failed":
                 return result
             return result

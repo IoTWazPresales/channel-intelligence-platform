@@ -171,6 +171,58 @@ def merge_shipment_mapping_memory(db: Session, *, source_id: int, field_mapping:
     db.add(src)
 
 
+def remembered_sheet_names(source: SourceDefinition | None) -> list[str]:
+    """Sheet names last confirmed for this source. Empty when nothing is stored."""
+    if source is None or not isinstance(source.column_mapping_memory, dict):
+        return []
+    raw = source.column_mapping_memory.get("selected_sheet_names")
+    if not isinstance(raw, list):
+        return []
+    return [str(name) for name in raw if isinstance(name, str) and str(name).strip()]
+
+
+def remember_selected_sheets(db: Session, *, source_id: int, sheet_names: list[str]) -> None:
+    """Store the operator's sheet choice on the source so the next file can skip the dialog."""
+    src = db.get(SourceDefinition, source_id)
+    if src is None:
+        return
+    root: dict[str, Any] = dict(src.column_mapping_memory or {})
+    root["selected_sheet_names"] = [str(name) for name in sheet_names]
+    root["schema_version"] = root.get("schema_version") or MEMORY_SCHEMA_VERSION
+    src.column_mapping_memory = root
+    db.add(src)
+
+
+def headers_match_saved_shipment_mapping(
+    headers: list[str],
+    source: SourceDefinition | None,
+    mapping: dict[str, str],
+) -> bool:
+    """True when every header already has the same saved target and the mapping can validate."""
+    memory = load_by_header_norm(source) if source else {}
+    if not memory:
+        return False
+    allowed = set(SHIPMENT_CANONICAL_TARGETS)
+    saw_saved = False
+    for col in headers:
+        if not isinstance(col, str) or not col.strip():
+            continue
+        nh = norm_header_key(col)
+        entry = memory.get(nh) if nh else None
+        mapped = mapping.get(col)
+        if isinstance(entry, dict):
+            target = str(entry.get("target") or "").strip()
+            if target not in allowed or mapped != target:
+                return False
+            saw_saved = True
+            continue
+        if mapped:
+            return False
+    if not saw_saved:
+        return False
+    return len(shipment_mapping_gate_errors(mapping)) == 0
+
+
 def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefinition | None) -> dict[str, str]:
     """Map file header -> canonical shipment field using saved source memory, template aliases, and heuristics."""
     template = _effective_mapping_template(source)
@@ -395,9 +447,17 @@ def infer_shipment_import_job_sync(db: Session, job_id: int) -> ImportJob:
     if names:
         meta = dict(job.staged_metadata or {})
         if not isinstance(meta.get("selected_sheets"), list):
+            remembered = remembered_sheet_names(job.source)
+            present = [name for name in names if name in set(remembered)]
+            if present:
+                chosen = present
+                confirmed = True
+            else:
+                chosen = default_selected_sheets(names)
+                confirmed = len(names) <= 1
             meta["available_sheets"] = names
-            meta["selected_sheets"] = default_selected_sheets(names)
-            meta["sheet_selection_confirmed"] = False
+            meta["selected_sheets"] = chosen
+            meta["sheet_selection_confirmed"] = confirmed
             job.staged_metadata = meta
     frames = _load_frames_for_job(job, pd.DataFrame(), data)
 
@@ -435,6 +495,9 @@ def infer_shipment_import_job_sync(db: Session, job_id: int) -> ImportJob:
     job.file_headers = headers
     job.field_mapping = mapping
     job.inferred_schema = inferred
+    staged = dict(job.staged_metadata or {})
+    staged["shipment_mapping_auto"] = headers_match_saved_shipment_mapping(headers, job.source, mapping)
+    job.staged_metadata = staged
     job.stage = "shipment_mapping_ready"
     job.status = "pending"
     job.error_summary = None

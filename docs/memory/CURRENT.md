@@ -1,6 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-10-29
+**Last updated:** 2026-10-30
+
+**Shipment import friction (30 October):** validate logs elapsed seconds per stage. A saved header mapping skips the mapping confirm, and remembered sheet names skip the sheet dialog (progress still shows while sheets are read). An approved customer or distributor alias is applied again on the next validate, including a special-category customer token, and a cleared special case is stored on the source. Bulk map uses the searchable customer and distributor pickers. cip_test copies of the 23 Oct and 27 Oct files: mapping auto and sheets confirmed, customer needs_review 133 to 0 (133 earlier decisions reused each), distributor needs_review 47 to 0 (47 earlier decisions reused each). 29 Sep stage times are on cip_test's small catalogue. E4 and E10 stay UNVERIFIED. No node, no migration, no main.
 
 **Open book on cip (29 October):** apply once as role `cip`, audit event 18, job 1339. Reclassified 21. Closed 1,031 (538 `closed_shipped`, 493 `closed_disappeared`). After: open 765/51,705; shipped 13,450/1,346,944; landed 1,318,693. Second dry run closes nothing. Proof `.eif/audit/OPEN_BOOK_20261028/cip_apply.txt`. Tenant override `open_book` lists complete report types (default Unship, Shipped, BOM not ready) and the filename YYYYMMDD rule. Other report types never close. Undated or older complete-book jobs show "This load did not close open orders" (flag, not a block). BOM not ready loads as `open_order`, skips a twin on Unship, and closes `closed_moved` or `closed_disappeared`. No migration. 27 Oct file not imported. E4 and E10 stay UNVERIFIED. No node, no main.
 

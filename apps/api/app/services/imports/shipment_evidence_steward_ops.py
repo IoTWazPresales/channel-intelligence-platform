@@ -834,6 +834,40 @@ def execute_manual_special_category_shipment_candidate(
     }
 
 
+def _remember_special_case_clear(db: Session, cand: ImportEntityMappingCandidate) -> None:
+    """Remember a steward clear by normalised token and by item code on the source."""
+    if cand.source_definition_id is None:
+        return
+    from app.models.ingestion import SourceDefinition
+
+    src = db.get(SourceDefinition, int(cand.source_definition_id))
+    if src is None:
+        return
+    norms = sorted({_norm_key(token) for token in _source_tokens_from_context(cand) if _norm_key(token)})
+    line_ids = _line_ids_from_context(cand)
+    item_codes: set[str] = set()
+    if line_ids:
+        for code in db.scalars(
+            select(ShipmentEvidenceLine.item_code).where(ShipmentEvidenceLine.id.in_(line_ids))
+        ).all():
+            if code and str(code).strip():
+                item_codes.add(str(code).strip())
+    root: dict[str, Any] = dict(src.column_mapping_memory or {})
+    token_key = (
+        "cleared_customer_tokens"
+        if cand.entity_type == SHIPMENT_CUSTOMER_ENTITY
+        else "cleared_distributor_tokens"
+    )
+    stored_tokens = {str(item) for item in (root.get(token_key) or []) if str(item).strip()}
+    stored_tokens.update(norms)
+    stored_items = {str(item) for item in (root.get("cleared_item_codes") or []) if str(item).strip()}
+    stored_items.update(item_codes)
+    root[token_key] = sorted(stored_tokens)
+    root["cleared_item_codes"] = sorted(stored_items)
+    src.column_mapping_memory = root
+    db.add(src)
+
+
 def execute_clear_special_category_shipment_candidate(
     db: Session,
     cand: ImportEntityMappingCandidate,
@@ -846,6 +880,7 @@ def execute_clear_special_category_shipment_candidate(
             "Clear special category is only for candidates in needs_review or ignored (manual special category)",
             status_code=400,
         )
+    _remember_special_case_clear(db, cand)
     ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
     if "special_category" not in ctx and not ctx.get("steward_manual_special_category"):
         raise ShipmentStewardOpError("No special category flag is set on this candidate", status_code=400)

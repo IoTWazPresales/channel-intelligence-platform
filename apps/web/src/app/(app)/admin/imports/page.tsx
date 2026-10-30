@@ -2156,6 +2156,8 @@ function AdminImportsPageContent() {
   });
 
   const [sheetDraft, setSheetDraft] = useState<string[] | null>(null);
+  const [sheetApplyStarted, setSheetApplyStarted] = useState<number | null>(null);
+  const [sheetApplyElapsed, setSheetApplyElapsed] = useState(0);
   useEffect(() => {
     if (!shipmentMappingState || shipmentMappingState.sheet_selection_confirmed) {
       setSheetDraft(null);
@@ -2163,6 +2165,14 @@ function AdminImportsPageContent() {
     }
     setSheetDraft(shipmentMappingState.selected_sheets ?? []);
   }, [shipmentMappingState?.id, shipmentMappingState?.sheet_selection_confirmed]);
+
+  useEffect(() => {
+    if (sheetApplyStarted == null) return;
+    const tick = () => setSheetApplyElapsed(Math.floor((Date.now() - sheetApplyStarted) / 1000));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [sheetApplyStarted]);
 
   const shipmentCanonSet = useMemo(
     () => new Set(shipmentMappingState?.canonical_targets ?? []),
@@ -3823,6 +3833,11 @@ function AdminImportsPageContent() {
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   Shipped and Unship start selected. Leave other tabs off unless you want them in this import.
                 </Typography>
+                {sheetApplyStarted != null ? (
+                  <Typography variant="body2" data-testid="shipment-sheet-progress">
+                    Reading the selected sheets… {sheetApplyElapsed}s
+                  </Typography>
+                ) : null}
                 <Stack>
                   {(shipmentMappingState?.available_sheets ?? []).map((name) => (
                     <FormControlLabel
@@ -3848,17 +3863,22 @@ function AdminImportsPageContent() {
               <DialogActions>
                 <Button
                   variant="contained"
-                  disabled={(sheetDraft ?? []).length === 0}
+                  disabled={(sheetDraft ?? []).length === 0 || sheetApplyStarted != null}
                   onClick={() => {
                     const jid = shipmentMappingJobId;
                     const sheets = sheetDraft ?? [];
-                    if (jid == null || sheets.length === 0) return;
-                    void apiPost(`/api/v1/imports/jobs/${jid}/shipment-sheets`, { sheets }).then(() => {
-                      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', jid] });
-                    });
+                    if (jid == null || sheets.length === 0 || sheetApplyStarted != null) return;
+                    setSheetApplyStarted(Date.now());
+                    setSheetApplyElapsed(0);
+                    void apiPost(`/api/v1/imports/jobs/${jid}/shipment-sheets`, { sheets })
+                      .then(() => {
+                        void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', jid] });
+                        void qc.invalidateQueries({ queryKey: ['import-job', jid] });
+                      })
+                      .finally(() => setSheetApplyStarted(null));
                   }}
                 >
-                  Use these sheets
+                  {sheetApplyStarted != null ? `Reading sheets… ${sheetApplyElapsed}s` : 'Use these sheets'}
                 </Button>
               </DialogActions>
             </Dialog>

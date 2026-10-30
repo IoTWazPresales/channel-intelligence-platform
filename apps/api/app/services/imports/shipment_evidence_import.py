@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import re
+import time
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -75,6 +77,8 @@ from app.services.imports.shipment_evidence_report_detect import (
 from app.services.imports.shipment_evidence_text_normalize import normalize_shipment_cell_value
 from app.storage.local import get_storage_backend
 from app.utils.json_safe import to_jsonable
+
+logger = logging.getLogger(__name__)
 
 # Excel 9999-12-31 serial; above this is not a representable calendar date in Excel date space.
 _EXCEL_MAX_DATE_SERIAL = 2958465
@@ -441,7 +445,46 @@ def resolve_distributor_for_evidence(
     return None, "unresolved", bill_to or ship_to
 
 
-def _rebuild_shipment_distributor_candidates(db: Session, job: ImportJob) -> None:
+def _reuse_earlier_distributor_alias_decisions(db: Session, import_job_id: int) -> int:
+    """Apply a distributor alias already stored by an earlier steward map."""
+    from app.services.imports.shipment_evidence_steward_ops import (
+        ShipmentStewardOpError,
+        _apply_map_shipment_distributor_without_commit,
+    )
+
+    rows = list(
+        db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == int(import_job_id),
+                ImportEntityMappingCandidate.entity_type == SHIPMENT_DISTRIBUTOR_ENTITY,
+                ImportEntityMappingCandidate.status == "needs_review",
+            )
+        ).all()
+    )
+    reused = 0
+    for cand in rows:
+        ctx = cand.context if isinstance(cand.context, dict) else {}
+        if (str(ctx.get("suggested_action") or "")).strip() != "map_distributor":
+            continue
+        if cand.match_reason != "approved_distributor_source_token_alias":
+            continue
+        if cand.suggested_entity_id is None:
+            continue
+        try:
+            _apply_map_shipment_distributor_without_commit(
+                db,
+                cand,
+                distributor_id=int(cand.suggested_entity_id),
+                raw_token=None,
+            )
+        except ShipmentStewardOpError:
+            continue
+        reused += 1
+    logger.info("%s earlier decisions reused", reused)
+    return reused
+
+
+def _rebuild_shipment_distributor_candidates(db: Session, job: ImportJob) -> int:
     """Replace ``shipment_distributor`` candidates for this job from unresolved evidence lines."""
     jid = int(job.id)
     sid = int(job.source_id) if job.source_id else None
@@ -513,6 +556,7 @@ def _rebuild_shipment_distributor_candidates(db: Session, job: ImportJob) -> Non
         db.add(cand)
     db.flush()
     enrich_shipment_distributor_candidates(db, import_job_id=jid, source_definition_id=sid)
+    return _reuse_earlier_distributor_alias_decisions(db, jid)
 
 
 def _shipment_customer_candidate_bucket_key(nr: CustomerTokenNamingResult) -> tuple[str, str | None]:
@@ -614,7 +658,51 @@ def _distributor_suggested_display_names_for_job(db: Session, import_job_id: int
     return frozenset(out)
 
 
-def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> None:
+def _reuse_earlier_customer_alias_decisions(db: Session, import_job_id: int) -> int:
+    """Apply approved customer aliases already stored by an earlier steward map.
+
+    Special-category rows are included: the alias is the earlier decision, so the
+    noise/internal-note guard does not block it. Returns how many candidates were reused.
+    """
+    from app.services.imports.shipment_evidence_steward_ops import (
+        ShipmentStewardOpError,
+        _apply_map_shipment_customer_without_commit,
+    )
+
+    rows = list(
+        db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == int(import_job_id),
+                ImportEntityMappingCandidate.entity_type == SHIPMENT_CUSTOMER_ENTITY,
+                ImportEntityMappingCandidate.status == "needs_review",
+            )
+        ).all()
+    )
+    reused = 0
+    for cand in rows:
+        ctx = cand.context if isinstance(cand.context, dict) else {}
+        if (str(ctx.get("suggested_action") or "")).strip() != "map_customer":
+            continue
+        if cand.match_reason != "approved_customer_source_token_alias":
+            continue
+        if cand.suggested_entity_id is None:
+            continue
+        try:
+            _apply_map_shipment_customer_without_commit(
+                db,
+                cand,
+                customer_id=int(cand.suggested_entity_id),
+                raw_token=None,
+                bypass_partner_text_guards=True,
+            )
+        except ShipmentStewardOpError:
+            continue
+        reused += 1
+    logger.info("%s earlier decisions reused", reused)
+    return reused
+
+
+def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> int:
     """Replace ``shipment_customer_token`` candidates from lines with a customer token that are not steward-resolved."""
     jid = int(job.id)
     sid = int(job.source_id) if job.source_id else None
@@ -642,7 +730,7 @@ def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> None:
 
     if not line_refs:
         db.flush()
-        return
+        return 0
 
     distinct_raws = sorted({r for _, r in line_refs})
     stat_prefixes, prefix_job_meta = detect_statistical_prefixes(distinct_raws)
@@ -653,6 +741,18 @@ def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> None:
         naming_by_raw[r] = suggest_customer_token_name(
             r, statistical_prefixes_longest_first=stat_prefixes, source_def=source_def
         )
+
+    cleared_tokens: set[str] = set()
+    if source_def is not None and isinstance(source_def.column_mapping_memory, dict):
+        raw_cleared = source_def.column_mapping_memory.get("cleared_customer_tokens")
+        if isinstance(raw_cleared, list):
+            cleared_tokens = {str(item) for item in raw_cleared if str(item).strip()}
+    if cleared_tokens:
+        from dataclasses import replace
+
+        for raw, nr in list(naming_by_raw.items()):
+            if _norm_key(raw) in cleared_tokens and nr.special_category:
+                naming_by_raw[raw] = replace(nr, special_category=None, needs_name_review=False)
 
     # Group by post-layer outcome: non-noise merges on normalised suggested_name so
     # ``grouped_candidate_normalized_key`` cannot collide across buckets.
@@ -767,6 +867,7 @@ def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> None:
         db.add(cand)
     db.flush()
     enrich_shipment_customer_token_candidates(db, import_job_id=jid, source_definition_id=sid)
+    return _reuse_earlier_customer_alias_decisions(db, jid)
 
 
 # Multi-row upsert batch size. ~41 columns/row keeps params well under Postgres' 65535 limit
@@ -1046,27 +1147,35 @@ def default_selected_sheets(sheet_names: list[str]) -> list[str]:
 
     A workbook with none of those names keeps every sheet, so a one-tab file is not dropped.
     """
+    started = time.perf_counter()
     preferred = [name for name in sheet_names if name.strip().lower() in _PREFERRED_SHEET_KEYS]
-    return preferred if preferred else list(sheet_names)
+    chosen = preferred if preferred else list(sheet_names)
+    _log_shipment_stage(0, "default_selected_sheets", started)
+    return chosen
 
 
 def workbook_sheet_names(file_name: str, raw_bytes: bytes) -> list[str]:
+    started = time.perf_counter()
     lower = (file_name or "").lower()
     if not lower.endswith((".xlsx", ".xlsm")):
+        _log_shipment_stage(0, "workbook_sheet_names", started)
         return []
     wb = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
     try:
-        return list(wb.sheetnames)
+        names = list(wb.sheetnames)
     finally:
         wb.close()
+    _log_shipment_stage(0, "workbook_sheet_names", started)
+    return names
 
 
 def selected_sheets_for_job(job: ImportJob) -> set[str] | None:
+    started = time.perf_counter()
     meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     raw = meta.get("selected_sheets")
-    if not isinstance(raw, list):
-        return None
-    return {str(name) for name in raw}
+    chosen = {str(name) for name in raw} if isinstance(raw, list) else None
+    _log_shipment_stage(int(job.id), "selected_sheets_for_job", started)
+    return chosen
 
 
 def _load_frames_for_job(job: ImportJob, _df_passed: pd.DataFrame, raw_bytes: bytes) -> list[tuple[str | None, pd.DataFrame, str, str]]:
@@ -1129,6 +1238,15 @@ def _src_to_canonical_rev(src_to_canon: dict[str, Any] | None) -> dict[str, str]
     return rev or None
 
 
+def _log_shipment_stage(job_id: int, stage: str, started: float) -> None:
+    logger.info(
+        "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
+        int(job_id),
+        stage,
+        time.perf_counter() - started,
+    )
+
+
 def process_shipment_evidence_import(
     db: Session,
     job: ImportJob,
@@ -1154,13 +1272,17 @@ def process_shipment_evidence_import(
 
     storage = get_storage_backend()
     raw_bytes = storage.read(raw_meta.storage_key)
+    stage_started = time.perf_counter()
     frames = _load_frames_for_job(job, df, raw_bytes)
+    _log_shipment_stage(int(job.id), "load_frames", stage_started)
 
+    stage_started = time.perf_counter()
     idx = _load_product_resolution_index(db)
     source_id = int(job.source_id) if job.source_id else None
     # Pre-load distributor master + approved aliases once so per-row resolution is in-memory
     # (replaces a full dim_distributor table scan per row — the dominant validate cost).
     res_cache = _build_distributor_resolution_cache(db, source_id)
+    _log_shipment_stage(int(job.id), "load_resolution_indexes", stage_started)
     ai_enabled = bool(get_settings().ai_assist_enabled)
 
     total_rows = 0
@@ -1206,6 +1328,9 @@ def process_shipment_evidence_import(
     book_report_date = report_date_for_job(job)
     unship_pairs = _unship_po_item_keys(frames, header_by_canonical)
 
+    product_resolve_s = 0.0
+    distributor_resolve_s = 0.0
+    stage_started = time.perf_counter()
     for sheet_name, frame, report_type, line_state in frames:
         if frame is None or len(frame) == 0:
             continue
@@ -1235,6 +1360,7 @@ def process_shipment_evidence_import(
                     erd_date=ex["erd_date"],
                     exwork_date=ex["exwork_date"],
                 )
+                t0 = time.perf_counter()
                 pid, pstatus, ptoken, pdetail = resolve_product_for_evidence(
                     idx,
                     item_code=ex["item_code"],
@@ -1243,6 +1369,8 @@ def process_shipment_evidence_import(
                     sales_model_name=ex["sales_model_name"],
                     evidence_date=evidence_date,
                 )
+                product_resolve_s += time.perf_counter() - t0
+                t0 = time.perf_counter()
                 did, dstatus, dtoken = resolve_distributor_for_evidence(
                     db,
                     source_id,
@@ -1250,6 +1378,7 @@ def process_shipment_evidence_import(
                     ship_to=ex["ship_to_raw"],
                     res_cache=res_cache,
                 )
+                distributor_resolve_s += time.perf_counter() - t0
 
                 if ai_enabled and pid is None and pstatus in ("no_match", "ambiguous", "inactive_only", "no_identifier"):
                     from app.services.imports.ai_resolver_wiring import (
@@ -1387,11 +1516,26 @@ def process_shipment_evidence_import(
                     on_progress("writing_shipment_lines", "Writing shipment evidence", global_row, total_rows)
 
     _flush_buffer()
+    _log_shipment_stage(int(job.id), "parse_and_stage_rows", stage_started)
+    logger.info(
+        "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
+        int(job.id),
+        "resolve_product",
+        product_resolve_s,
+    )
+    logger.info(
+        "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
+        int(job.id),
+        "resolve_distributor",
+        distributor_resolve_s,
+    )
     if on_progress is not None:
         on_progress("writing_shipment_lines", "Writing shipment evidence", global_row, total_rows)
 
     db.flush()
+    stage_started = time.perf_counter()
     _resolve_unresolved_shipment_lines_for_job(db, job, idx, source_id, res_cache=res_cache)
+    _log_shipment_stage(int(job.id), "resolve_unresolved_lines", stage_started)
 
     if unknown_reports == len(frames) and global_row == 0:
         blocking += 1
@@ -1411,12 +1555,20 @@ def process_shipment_evidence_import(
     db.flush()
     from app.services.imports.shipment_purchase_order_materialize import materialize_purchase_orders_for_shipment_job
 
+    stage_started = time.perf_counter()
     materialize_purchase_orders_for_shipment_job(db, int(job.id))
+    _log_shipment_stage(int(job.id), "materialize_purchase_orders", stage_started)
     from app.services.imports.shipment_evidence_observations import sync_job_observations_after_validate
 
+    stage_started = time.perf_counter()
     sync_job_observations_after_validate(db, job)
-    _rebuild_shipment_distributor_candidates(db, job)
-    _rebuild_shipment_customer_candidates(db, job)
+    _log_shipment_stage(int(job.id), "sync_observations", stage_started)
+    stage_started = time.perf_counter()
+    dist_reused = _rebuild_shipment_distributor_candidates(db, job)
+    _log_shipment_stage(int(job.id), "rebuild_distributor_candidates", stage_started)
+    stage_started = time.perf_counter()
+    earlier_reused = dist_reused + _rebuild_shipment_customer_candidates(db, job)
+    _log_shipment_stage(int(job.id), "rebuild_customer_candidates", stage_started)
 
     meta = dict(job.staged_metadata or {})
     if not str(meta.get("import_purpose") or "").strip():
@@ -1434,6 +1586,7 @@ def process_shipment_evidence_import(
         "lines": global_row,
         "blocking": blocking,
         "sheets": len(frames),
+        "earlier_decisions_reused": earlier_reused,
     }
     db.add(
         ImportRowResult(

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from collections import defaultdict
 from datetime import date
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import case, delete, func, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -327,6 +331,7 @@ def upsert_inbound_shipment_facts_for_job(
     """
     from app.models.ingestion import ImportJob
 
+    started = time.perf_counter()
     job = db.get(ImportJob, int(import_job_id))
     tid = (getattr(job, "tenant_id", None) or "default").strip() or "default" if job else "default"
     lines = list(
@@ -347,4 +352,10 @@ def upsert_inbound_shipment_facts_for_job(
         if on_progress is not None:
             on_progress(n, total)
     db.flush()
+    logger.info(
+        "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
+        int(import_job_id),
+        "upsert_inbound_shipment_facts",
+        time.perf_counter() - started,
+    )
     return n

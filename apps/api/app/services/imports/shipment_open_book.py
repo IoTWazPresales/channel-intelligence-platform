@@ -16,6 +16,7 @@ facts and closes nothing, so a late load of an older file cannot reopen the book
 from __future__ import annotations
 
 import logging
+import time
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -128,10 +129,17 @@ def write_shipment_facts_and_close_book(
 
     An older report does neither. The caller commits.
     """
+    started = time.perf_counter()
     if job_is_older_than_applied_book(db, job):
         logger.info(
             "shipment open book: job %s report date is older than the applied book; facts unchanged",
             job.id,
+        )
+        logger.info(
+            "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
+            int(job.id),
+            "write_shipment_facts_and_close_book",
+            time.perf_counter() - started,
         )
         return {"fact_rows": 0, "closed": 0, "skipped_reason": "older_report_date"}
 
@@ -139,6 +147,12 @@ def write_shipment_facts_and_close_book(
 
     fact_rows = upsert_inbound_shipment_facts_for_job(db, int(job.id), on_progress=on_progress)
     closed = close_open_book_for_job(db, job)
+    logger.info(
+        "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
+        int(job.id),
+        "write_shipment_facts_and_close_book",
+        time.perf_counter() - started,
+    )
     return {"fact_rows": fact_rows, "closed": len(closed), "skipped_reason": None}
 
 
