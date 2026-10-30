@@ -852,32 +852,74 @@ def _listing_live_fetch_enabled() -> bool:
 
 
 @celery_app.task(name="listing_capture.poll_listings")
-def listing_capture_poll_listings_task() -> dict:
-    """Beat task: gated no-op unless schedule enabled and listings exist.
+def listing_capture_poll_listings_task(run: dict | None = None) -> dict:
+    """Beat task: one small batch per invocation, then the next batch is queued.
 
-    Live HTTP fetch only runs when `CIP_LISTING_LIVE_FETCH` is truthy AND the
-    schedule gate (`CIP_LISTING_CAPTURE_SCHEDULE`) passes — otherwise this stays a
-    no-op with a skip reason (P5).
+    A full poll used to hold the solo worker for minutes. Each task now fetches
+    about five listings and enqueues the rest, so an import waiting on this
+    worker sits behind at most the batch already running. Back-off, pause,
+    stopped_reason and duration are summed into one run record, logged once
+    when the run finishes.
     """
+    import logging
+
     from app.db.session_sync import SessionLocal
-    from app.services.listing_capture.observation import default_http_get
-    from app.services.listing_capture.registry import poll_active_listings, scheduler_should_run
+    from app.services.listing_capture.observation import POLL_RUN_TIME_LIMIT_SECONDS, default_http_get
+    from app.services.listing_capture.registry import (
+        LISTING_POLL_BATCH_SIZE,
+        fresh_listing_poll_run,
+        listing_poll_run_record,
+        merge_listing_poll_batch,
+        poll_active_listings,
+        scheduler_should_run,
+    )
     from app.worker.celery_queues import dev_beat_disabled
 
-    if dev_beat_disabled():
+    log = logging.getLogger(__name__)
+    continuing = run is not None
+    if not continuing and dev_beat_disabled():
         return {"skipped": True, "reason": "dev_beat_disabled"}
 
     with SessionLocal() as session:
-        gate = scheduler_should_run(session)
-        if not gate["should_run"]:
-            return {"skipped": True, "reason": "schedule_disabled_or_empty", **gate}
+        gate: dict = {}
+        if not continuing:
+            gate = scheduler_should_run(session)
+            if not gate["should_run"]:
+                return {"skipped": True, "reason": "schedule_disabled_or_empty", **gate}
+            if not _listing_live_fetch_enabled():
+                return {"skipped": True, "reason": "live_fetch_not_enabled", **gate}
+            run = fresh_listing_poll_run()
 
-        if not _listing_live_fetch_enabled():
-            return {"skipped": True, "reason": "live_fetch_not_enabled", **gate}
+        assert run is not None
+        spent = float(run.get("duration_seconds") or 0)
+        remaining = POLL_RUN_TIME_LIMIT_SECONDS - spent
+        if remaining <= 0:
+            run = {**run, "stopped_reason": run.get("stopped_reason") or "time_limit"}
+            record = listing_poll_run_record(run)
+            log.info("listing capture poll: %s", record)
+            return {"skipped": False, **record, **gate} if gate else {"skipped": False, **record}
 
-        result = poll_active_listings(session, http_get=default_http_get)
+        batch = poll_active_listings(
+            session,
+            http_get=default_http_get,
+            limit=LISTING_POLL_BATCH_SIZE,
+            exclude_ids=list(run.get("visited_ids") or []),
+            time_limit_seconds=remaining,
+            log_result=False,
+        )
+        run = merge_listing_poll_batch(run, batch)
         session.commit()
-        return {"skipped": False, **result, **gate}
+
+        page_full = len(batch.get("considered_ids") or []) >= LISTING_POLL_BATCH_SIZE
+        if not run.get("stopped_reason") and page_full:
+            listing_capture_poll_listings_task.apply_async(kwargs={"run": run})
+            return {"continued": True, "polled": run["polled"], "duration_seconds": run["duration_seconds"]}
+
+        record = listing_poll_run_record(run)
+        log.info("listing capture poll: %s", record)
+        if gate:
+            return {"skipped": False, **record, **gate}
+        return {"skipped": False, **record}
 
 
 @celery_app.task(name="listing_capture.clear_expired_snapshots")

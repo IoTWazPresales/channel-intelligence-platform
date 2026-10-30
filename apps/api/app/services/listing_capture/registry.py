@@ -833,6 +833,8 @@ def poll_active_listings(
     clock=None,
     sleep=None,
     now: datetime | None = None,
+    exclude_ids: list[int] | None = None,
+    log_result: bool = True,
 ) -> dict[str, Any]:
     """Synchronous poll — used by API + Celery task.
 
@@ -883,6 +885,8 @@ def poll_active_listings(
         want = {m.strip().lower() for m in marketplaces if m and m.strip()}
         if want:
             stmt = stmt.where(CustomerListing.marketplace.in_(want))
+    if exclude_ids:
+        stmt = stmt.where(CustomerListing.id.notin_([int(i) for i in exclude_ids]))
     listings = _interleave_by_marketplace(list(session.scalars(stmt).all()))
     if limit is not None:
         listings = listings[: int(limit)]
@@ -897,11 +901,13 @@ def poll_active_listings(
     last_fetch_at: dict[str, float] = {}
     pause_checked: set[str] = set()
     had_pause_record: set[str] = set()
+    considered_ids: list[int] = []
 
     for listing in listings:
         if clock() - started >= limit_s:
             stopped_reason = "time_limit"
             break
+        considered_ids.append(int(listing.id))
         mkt = (listing.marketplace or "").strip().lower()
         if mkt not in pause_checked:
             pause_checked.add(mkt)
@@ -969,6 +975,66 @@ def poll_active_listings(
         "paused_sites": paused_sites,
         "stopped_reason": stopped_reason,
         "duration_seconds": round(clock() - started, 3),
+        "considered_ids": considered_ids,
     }
-    log.info("listing capture poll: %s", result)
+    if log_result:
+        log.info("listing capture poll: %s", {k: v for k, v in result.items() if k != "considered_ids"})
     return result
+
+
+# One Celery task handles about this many listings, then yields so an import
+# queued behind it can start. The next batch is a new task on the same run.
+LISTING_POLL_BATCH_SIZE = 5
+
+
+def fresh_listing_poll_run() -> dict[str, Any]:
+    return {
+        "polled": 0,
+        "failed": 0,
+        "listing_count": 0,
+        "skipped_backoff": 0,
+        "skipped_paused": {},
+        "paused_sites": {},
+        "stopped_reason": None,
+        "duration_seconds": 0.0,
+        "visited_ids": [],
+    }
+
+
+def merge_listing_poll_batch(run: dict[str, Any], batch: dict[str, Any]) -> dict[str, Any]:
+    """Add one batch onto the single run record. Duration and skip counts sum."""
+    skipped_paused = dict(run.get("skipped_paused") or {})
+    for mkt, count in (batch.get("skipped_paused") or {}).items():
+        skipped_paused[mkt] = int(skipped_paused.get(mkt, 0)) + int(count)
+    paused_sites = dict(run.get("paused_sites") or {})
+    for mkt, record in (batch.get("paused_sites") or {}).items():
+        paused_sites.setdefault(mkt, record)
+    visited = [int(i) for i in (run.get("visited_ids") or [])]
+    visited.extend(int(i) for i in (batch.get("considered_ids") or []))
+    stopped = batch.get("stopped_reason") or run.get("stopped_reason")
+    return {
+        "polled": int(run.get("polled") or 0) + int(batch.get("polled") or 0),
+        "failed": int(run.get("failed") or 0) + int(batch.get("failed") or 0),
+        "listing_count": int(run.get("listing_count") or 0) + int(batch.get("listing_count") or 0),
+        "skipped_backoff": int(run.get("skipped_backoff") or 0) + int(batch.get("skipped_backoff") or 0),
+        "skipped_paused": skipped_paused,
+        "paused_sites": paused_sites,
+        "stopped_reason": stopped,
+        "duration_seconds": round(
+            float(run.get("duration_seconds") or 0) + float(batch.get("duration_seconds") or 0),
+            3,
+        ),
+        "visited_ids": visited,
+    }
+
+
+def listing_poll_run_record(run: dict[str, Any]) -> dict[str, Any]:
+    """Backoff, pause, stopped_reason and duration for the whole run. No batch cursor."""
+    return {k: v for k, v in run.items() if k != "visited_ids"}
+
+
+def more_due_listings(session: Session, visited_ids: list[int]) -> bool:
+    stmt = select(CustomerListing.id).where(CustomerListing.status.in_(POLLED_LISTING_STATUSES)).limit(1)
+    if visited_ids:
+        stmt = stmt.where(CustomerListing.id.notin_([int(i) for i in visited_ids]))
+    return session.scalar(stmt) is not None
