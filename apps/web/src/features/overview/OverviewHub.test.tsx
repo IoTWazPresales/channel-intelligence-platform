@@ -106,7 +106,8 @@ describe('OverviewHub', () => {
     expect(screen.getByTestId('dashboard-zone')).toBeInTheDocument();
     expect(screen.getByTestId('attention-zone')).toBeInTheDocument();
     expect(screen.getByText(/Open Business dashboard/i)).toBeInTheDocument();
-    expect(screen.queryByText(/lab fixture/i)).not.toBeNull();
+    expect(screen.getByText(/No dashboard yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/lab fixture/i)).toBeNull();
     expect(screen.getByText('Cover breaches')).toBeInTheDocument();
     expect(screen.getByText('Imports applied')).toBeInTheDocument();
     expect(screen.getByTestId('overview-edit-dashboard')).toHaveAttribute('href', '/dashboards');

@@ -182,6 +182,9 @@ describe('WidgetEditorDialog', () => {
     expect(autoWidgetTitle('Support spend', ['customer'], null)).toBe('Support spend by customer');
     expect(autoWidgetTitle('Fill rate', ['period', 'bu'], null)).toBe('Fill rate by period and product line');
     expect(autoWidgetTitle('Channel stock', [], null)).toBe('Channel stock');
+    expect(autoWidgetTitle('Pipeline (inbound)', ['period'], 'week')).toBe('Pipeline (inbound) by week');
+    expect(autoWidgetTitle('Pipeline (inbound)', ['customer', 'product'], null)).toBe('Pipeline (inbound) by customer and product');
+    expect(autoWidgetTitle('Pipeline (inbound)', ['period'], null)).not.toMatch(/\) \(/);
   });
 
   it('offers week/month/quarter only — never day', async () => {

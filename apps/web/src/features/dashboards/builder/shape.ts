@@ -4,6 +4,8 @@
  * Entity names come from `{e}_name`; a missing id reads "Unassigned" and is not clickable.
  */
 
+import { displayPartyName } from '@/features/workbench-ui/displayName';
+
 import type { SelectDatum } from './clickFilters';
 import type { V2Column, V2FilterValue, V2Response, V2Row } from './types';
 
@@ -37,13 +39,13 @@ export function catOf(row: V2Row, col: V2Column): Cat {
     const raw = row[idField];
     const id = raw == null || raw === '' ? null : (raw as V2FilterValue);
     const name = row[nameField];
-    const label = typeof name === 'string' && name.trim() ? name : id == null ? 'Unassigned' : `Unnamed ${col.label.toLowerCase()}`;
+    const label = typeof name === 'string' && name.trim() ? displayPartyName(name) : id == null ? 'Unassigned' : `Unnamed ${col.label.toLowerCase()}`;
     return { key: `${col.id}:${id ?? 'null'}`, breakdown: col.id, value: id, label };
   }
   const raw = row[col.fields[0] ?? col.id];
   const text = raw == null || String(raw).trim() === '' ? null : String(raw);
   // An attribute's "Unassigned" matches NULL in a v2 filter (N-0115 F4), so it stays clickable.
-  return { key: `${col.id}:${text ?? 'Unassigned'}`, breakdown: col.id, value: text ?? 'Unassigned', label: text ?? 'Unassigned' };
+  return { key: `${col.id}:${text ?? 'Unassigned'}`, breakdown: col.id, value: text ?? 'Unassigned', label: text ? displayPartyName(text) : 'Unassigned' };
 }
 
 export function toSelect(c: Cat): SelectDatum {
@@ -120,7 +122,7 @@ export type SplitSeries = { key: string; label: string; cat: Cat | null; other?:
 export function periodByCategory(
   resp: V2Response | undefined,
   measureId: string,
-  maxSeries = 7,
+  maxSeries = 5,
   additive = true,
 ): { data: PeriodRow[]; series: SplitSeries[]; omittedSeries?: number } {
   const catCol = breakdownColumns(resp).find((c) => c.id !== 'period');

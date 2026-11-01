@@ -119,17 +119,20 @@ export function OverviewHub() {
       title="Business dashboard"
       subtitle={
         active
-          ? `${active.name} · ${widgets.length} widget${widgets.length === 1 ? '' : 's'} over governed metrics · live query, not lab fixtures`
-          : 'Editor lives on the Business dashboard leaf. Lab fixture widgets are not copied.'
+          ? `${active.name}${brief?.as_of ? ` · data as of ${brief.as_of}` : ''}`
+          : 'No dashboard yet. Open the editor to add widgets.'
       }
       actions={
         <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="caption" component="span" id="overview-columns-label">
+            Charts per row
+          </Typography>
           <ToggleButtonGroup
             size="small"
             exclusive
             value={columns}
             onChange={(_e, v: 1 | 2 | 3 | null) => v && setColumns(v)}
-            aria-label="Charts per row"
+            aria-labelledby="overview-columns-label"
             data-testid="overview-dashboard-columns"
           >
             {[1, 2, 3].map((n) => (
@@ -302,8 +305,9 @@ export function OverviewHub() {
             sx={{
               display: 'grid',
               gap: 2,
-              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 312px' },
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) minmax(240px, 312px)' },
               alignItems: 'start',
+              '& > *': { minWidth: 0, maxWidth: '100%' },
             }}
           >
             {dashboard}

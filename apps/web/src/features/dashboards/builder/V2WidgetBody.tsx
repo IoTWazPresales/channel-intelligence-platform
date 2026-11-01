@@ -12,7 +12,8 @@ import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { useMemo, type ReactNode } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { categoryPresentation } from '@/features/workbench-ui/ChartControls';
+import { ChartControls, categoryPresentation, useChartControls } from '@/features/workbench-ui/ChartControls';
+import { applyTopN, sortRows } from '@/features/workbench-ui/chartRows';
 import { HeadlineFigure } from '@/features/workbench-ui/HeadlineFigure';
 import {
   CategoryBars,
@@ -67,6 +68,8 @@ export type V2WidgetBodyProps = {
   onClearFilters?: () => void;
   testKey: string | number;
   chartHeight?: number;
+  /** Measured plot height from the card (box minus the controls around the plot); wins over chartHeight's reserve. */
+  fitHeight?: number;
 };
 
 const additiveClick = (e: ChartClickEvent) => Boolean(e && ('ctrlKey' in e || 'metaKey' in e) && ((e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey));
@@ -169,6 +172,49 @@ export function gridColumns(cols: TableCol[], rules: ColourRule[] | undefined): 
       ...(hasRule ? { cellRenderer: ToneCell, cellRendererParams: { rules, measureId: c.id, unit } } : {}),
     } as ColDef<V2Row>;
   });
+}
+
+function RankedTable({
+  rows,
+  colDefs,
+  measureField,
+  nameField,
+  topN,
+  onRowClicked,
+  testKey,
+}: {
+  rows: V2Row[];
+  colDefs: ColDef<V2Row>[];
+  measureField: string;
+  nameField: string | null;
+  topN: number | null | undefined;
+  onRowClicked?: (ev: { data?: V2Row; event?: Event | null }) => void;
+  testKey: string | number;
+}) {
+  const ctl = useChartControls(categoryPresentation(undefined, topN, ['m'], [], 10), true);
+  const ranked = useMemo(() => {
+    const sorted = sortRows(rows, ctl.state.sort, {
+      name: (r) => (nameField ? String(r[nameField] ?? '') : ''),
+      value: (r) => {
+        const v = r[measureField];
+        return typeof v === 'number' ? v : Number(v);
+      },
+    });
+    return applyTopN(sorted, ctl.state.topN);
+  }, [rows, ctl.state, measureField, nameField]);
+  return (
+    <Stack data-testid={`dashboard-widget-table-${testKey}`}>
+      <ChartControls value={ctl.state} onChange={ctl.setState} shown={ranked.shown.length} total={ranked.total} testId={`dashboard-table-controls-${testKey}`} />
+      <Box sx={{ height: Math.max(120, ranked.shown.length * 32 + 40) }}>
+        <EnterpriseDataGrid<V2Row>
+          rowData={ranked.shown}
+          columnDefs={colDefs}
+          height="100%"
+          gridOptions={onRowClicked ? { onRowClicked } : undefined}
+        />
+      </Box>
+    </Stack>
+  );
 }
 
 export function V2WidgetBody(props: V2WidgetBodyProps) {
@@ -275,7 +321,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
       <HeadlineFigure
         compact
         label={firstLabel}
-        value={formatChartValue(totalNum, unit, 'label')}
+        value={formatChartValue(totalNum, unit, 'full')}
         delta={
           kpi?.compare
             ? delta
@@ -292,38 +338,40 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
 
   if (visual === 'table') {
     const firstBd = breakdownColumns(result)[0];
+    const measureCol = tcols.find((c) => c.kind === 'measure');
+    const nameCol = tcols.find((c) => c.kind !== 'measure');
     return (
-      <Stack sx={{ minHeight: Math.max(160, (displayed?.rows ?? result.rows).length * 32 + 56) }} data-testid={`dashboard-widget-table-${testKey}`}>
-        <Box sx={{ height: Math.max(120, (displayed?.rows ?? result.rows).length * 32 + 40) }}>
-        <EnterpriseDataGrid<V2Row>
-          rowData={displayed?.rows ?? result.rows}
-          columnDefs={colDefs}
-          height="100%"
-          gridOptions={
+      <Stack sx={{ minHeight: 160 }}>
+        <RankedTable
+          rows={displayed?.rows ?? result.rows}
+          colDefs={colDefs}
+          measureField={measureCol?.field ?? measureIds[0] ?? 'value'}
+          nameField={nameCol?.field ?? null}
+          topN={def.display?.top_n}
+          testKey={testKey}
+          onRowClicked={
             onSelect && firstBd
-              ? {
-                  onRowClicked: (ev) => {
-                    if (!ev.data) return;
-                    select(catOf(ev.data, firstBd), ev.event as MouseEvent | undefined);
-                  },
+              ? (ev) => {
+                  if (!ev.data) return;
+                  select(catOf(ev.data, firstBd), ev.event as MouseEvent | undefined);
                 }
               : undefined
           }
         />
-        </Box>
         {comparisonNote ? <Typography variant="caption" data-testid="widget-comparison-note">{comparisonNote}</Typography> : null}
       </Stack>
     );
   }
 
-  const plotHeight = Math.max(140, height - 64);
+  const fit = props.fitHeight;
+  const plotHeight = fit ?? Math.max(140, height - 64);
   const valueTitle = first ? measureHeading(first) : axisTitle(firstLabel, unit);
   const hasPeriod = breakdowns.includes('period');
   const catIds = breakdowns.filter((b) => b !== 'period');
   const categoryTitle = catIds.map((b) => breakdownLabel(catalog, b)).join(' · ') || 'Category';
   const periodTitle = `Period (${def.query.period?.grain ?? 'bucket'})`;
   const frame = (child: ReactNode, note?: string | null) => (
-    <Box data-testid="dashboard-widget-chart" sx={{ minHeight: height, overflow: 'visible' }}>
+    <Box data-testid="dashboard-widget-chart" sx={{ minHeight: fit ? undefined : height, overflow: 'visible' }}>
       {child}
       {comparisonNote ? <Typography variant="caption" display="block" data-testid="widget-comparison-note">{comparisonNote}</Typography> : null}
       {note ? (
@@ -402,7 +450,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
         data={pts.filter((p) => (p.value ?? 0) > 0).map((p) => ({ label: p.label, value: p.value ?? 0, key: p.key, clickable: p.parts.every((c) => c.value != null) }))}
         unit={unit}
         variant={visual}
-        height={Math.max(140, height - 96)}
+        height={fit ?? Math.max(140, height - 96)}
         labelHeader={categoryTitle}
         valueHeader={valueTitle}
         summary={`${valueTitle}: share by ${categoryTitle}`}
@@ -461,7 +509,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
 
   // Over time split by one category: line, stacked area or stacked columns, a series per category.
   if (hasPeriod && catIds.length === 1 && measureIds.length === 1) {
-    const m = periodByCategory(result, measureIds[0], def.display?.top_n ?? 7, isAdditive(first));
+    const m = periodByCategory(result, measureIds[0], def.display?.top_n ?? 5, isAdditive(first));
     const kind = visual === 'stacked_bar' || visual === 'bar' ? 'bar' : visual === 'area' ? 'area' : 'line';
     return frame(
       <TrendChart

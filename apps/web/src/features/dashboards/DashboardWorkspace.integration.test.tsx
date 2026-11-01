@@ -336,7 +336,8 @@ describe('DashboardWorkspace orchestration', () => {
     expect(screen.getByTestId('builder-editor-save')).toBeEnabled();
   });
 
-  it('saves and reopens explicit widget filter exceptions and fixed dates through the real editor', async () => {
+  // Drives the full editor dialog; takes about 9 s alone and passes the 15 s default only on an idle machine.
+  it('saves and reopens explicit widget filter exceptions and fixed dates through the real editor', { timeout: 60_000 }, async () => {
     const {user} = await setup();
     await user.click(screen.getByRole('button', { name: 'Edit widget 11' }));
     await screen.findByTestId('builder-editor');

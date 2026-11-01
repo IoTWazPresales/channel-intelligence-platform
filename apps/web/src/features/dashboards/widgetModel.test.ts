@@ -62,17 +62,15 @@ describe('top N with Other', () => {
     expect(categoryPoints([{ customer_name: 'A', value: 2 }, { customer_name: 'A', value: 3 }])).toEqual([{ label: 'A', value: 5 }]);
   });
 
-  it('splits periods by category with an Other series', () => {
+  it('splits periods by the top categories and counts the rest', () => {
     const rows = ['A', 'B', 'C'].flatMap((c, i) => [
       { bucket_key: '2026-W01', customer_name: c, value: 10 - i },
       { bucket_key: '2026-W02', customer_name: c, value: 1 },
     ]);
     const m = periodByCategory(rows, 1);
-    expect(m.keys).toEqual([
-      { key: 's0', label: 'A' },
-      { key: 'other', label: 'Other (2)', other: true },
-    ]);
-    expect(m.data[0]).toEqual({ period: '2026-W01', s0: 10, other: 17 });
+    expect(m.keys).toEqual([{ key: 's0', label: 'A' }]);
+    expect(m.omitted).toBe(2);
+    expect(m.data[0]).toEqual({ period: '2026-W01', s0: 10 });
   });
 });
 

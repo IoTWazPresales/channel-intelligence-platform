@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { cloneElement, type ReactElement } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { builderCatalog as catalog } from '@/design-lab/fixtures/builder';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
@@ -36,6 +36,16 @@ const result: V2Response = {
 };
 
 describe('v2 widget rendering', () => {
+  // Reduced motion draws the final stroke at once; mid-animation recharts rewrites stroke-dasharray.
+  const realMatchMedia = window.matchMedia;
+  beforeAll(() => {
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'), media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+  });
+  afterAll(() => { window.matchMedia = realMatchMedia; });
+
   it.each(['line', 'area', 'bar'] as const)('renders an actual dashed previous series for %s with bucket dates in the accessible table', (visual) => {
     const d: DefinitionV2 = { v: 1, query: { measures: [measures[0]], breakdowns: ['period'], period: { grain: 'month' } }, display: { compare: true } };
     const columns: V2Response['columns'] = [

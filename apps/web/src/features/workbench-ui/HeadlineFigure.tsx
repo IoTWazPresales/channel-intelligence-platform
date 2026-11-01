@@ -100,6 +100,7 @@ export function HeadlineFigure({
       sx={{
         p: dense ? 1.25 : compact ? 1.5 : 2,
         height: '100%',
+        containerType: 'size',
         cursor: onClick ? 'pointer' : 'default',
         borderLeft: severity !== 'neutral' ? `3px solid ${sevColor}` : undefined,
         boxShadow: 'none',
@@ -125,7 +126,7 @@ export function HeadlineFigure({
           <Typography
             component="span"
             sx={{
-              fontSize: valueSize,
+              fontSize: compact ? 'clamp(22px, 22cqh, 64px)' : valueSize,
               lineHeight: 1.15,
               fontWeight: 600,
               fontVariantNumeric: 'tabular-nums',

@@ -10,6 +10,7 @@
  */
 
 import { formatNumber, unitWord, type MeasureUnit } from '@/features/workbench-ui/charts';
+import { displayPartyName } from '@/features/workbench-ui/displayName';
 
 import { chartUnit } from './catalog';
 import type { ColourRule, ColourTone, V2Column, V2Response, V2Row } from './types';
@@ -44,7 +45,7 @@ export function tableCols(resp: V2Response | undefined, unitOf?: (col: V2Column)
       out.push({ field: c.fields[0] ?? c.id, header: c.label, kind: 'attribute', id: c.id });
     }
   }
-  return out;
+  return out.filter((c) => c.header.trim().length > 0);
 }
 
 /** The cell value: names for entities ("Unassigned" without an id), numbers for measures. */
@@ -56,7 +57,8 @@ export function cellValue(row: V2Row, col: TableCol): string | number | null {
     return Number.isFinite(n) ? n : null;
   }
   if (v == null || String(v).trim() === '') return 'Unassigned';
-  return String(v);
+  const text = String(v);
+  return col.kind === 'period' ? text : displayPartyName(text);
 }
 
 /* ------------------------------------------------------------------------------------------------

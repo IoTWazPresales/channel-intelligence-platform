@@ -293,8 +293,8 @@ describe('long category names and layout', () => {
   });
 
   it('horizontalLabelWidth: at least 64 px, at most 45% of the chart', () => {
-    expect(horizontalLabelWidth(['ab'], 1280)).toBe(64);
-    expect(horizontalLabelWidth(['a'.repeat(20)], 1280)).toBe(140);
+    expect(horizontalLabelWidth(['ab'], 1280)).toBe(72);
+    expect(horizontalLabelWidth(['a'.repeat(20)], 1280)).toBe(168);
     expect(horizontalLabelWidth(['a'.repeat(100)], 390)).toBeLessThanOrEqual(0.45 * 390);
     expect(horizontalLabelWidth(['a'.repeat(100)], 390)).toBe(175);
     expect(horizontalLabelWidth(['a'.repeat(200)], 1280)).toBe(576);

@@ -18,6 +18,8 @@ type Props = {
   /** Metric name for the value axis ("Sell-out units"); the unit is added to it. */
   metricLabel?: string;
   height?: number;
+  /** Measured plot height; wins over the reserve taken from `height`. */
+  fitHeight?: number;
 };
 
 /**
@@ -26,14 +28,14 @@ type Props = {
  * shares are of the full total), a legend whenever there is more than one series. Charts over time
  * split by a category keep the seven-series colour cap with "Other" (`periodByCategory`).
  */
-export function WidgetChart({ visual, grains, series, rows, unit = 'number', metricLabel = 'Value', height = 240 }: Props) {
+export function WidgetChart({ visual, grains, series, rows, unit = 'number', metricLabel = 'Value', height = 240, fitHeight }: Props) {
   const hasPeriod = grains.includes('period');
   const categoryGrains = grains.filter((g) => g !== 'period');
   const hasCategory = categoryGrains.length > 0;
   const categoryTitle = categoryGrains.map(dimensionLabel).join(' · ') || 'Category';
   const valueTitle = axisTitle(metricLabel, unit);
   // Toolbar, legend and axis captions sit above and below the plot; the widget box scrolls rather than clips.
-  const plotHeight = Math.max(140, height - 64);
+  const plotHeight = fitHeight ?? Math.max(140, height - 64);
 
   if (!(rows?.length || series?.length)) {
     return (
@@ -43,9 +45,14 @@ export function WidgetChart({ visual, grains, series, rows, unit = 'number', met
     );
   }
 
-  const frame = (child: ReactNode) => (
-    <Box data-testid="dashboard-widget-chart" sx={{ minHeight: height, overflow: 'visible' }}>
+  const frame = (child: ReactNode, note?: string | null) => (
+    <Box data-testid="dashboard-widget-chart" sx={{ minHeight: fitHeight ? undefined : height, overflow: 'visible' }}>
       {child}
+      {note ? (
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+          {note}
+        </Typography>
+      ) : null}
     </Box>
   );
 
@@ -57,7 +64,7 @@ export function WidgetChart({ visual, grains, series, rows, unit = 'number', met
         data={pts}
         unit={unit}
         variant={visual}
-        height={Math.max(140, height - 96)}
+        height={fitHeight ?? Math.max(140, height - 96)}
         labelHeader={categoryTitle}
         valueHeader={valueTitle}
         summary={`${valueTitle}: share by ${categoryTitle}`}
@@ -110,8 +117,9 @@ export function WidgetChart({ visual, grains, series, rows, unit = 'number', met
         xAxisTitle="Period"
         yAxisTitle={valueTitle}
         stack={kind !== 'line'}
-        series={m.keys.map((k) => ({ key: k.key, label: k.label, kind, ...(k.other ? { tone: 'muted' as const } : {}) }))}
+        series={m.keys.map((k) => ({ key: k.key, label: k.label, kind }))}
       />,
+      m.omitted ? `${m.keys.length} series shown. ${m.omitted} not shown.` : null,
     );
   }
 

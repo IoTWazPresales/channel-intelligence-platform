@@ -36,6 +36,7 @@ export default function DesignLabChartsPage() {
   const setColorMode = useUiStore((s) => s.setColorMode);
   // The pie's top N held here to show "5 shown of 9" without a click.
   const [pieControls, setPieControls] = useState<ChartControlsState>({ topN: 5, sort: { by: 'value', dir: 'desc' } });
+  const [channel, setChannel] = useState<string | null>(null);
 
   return (
     <Stack spacing={2} sx={{ p: { xs: 2, md: 3 }, minWidth: 0 }} data-testid="design-lab-charts">
@@ -77,9 +78,23 @@ export default function DesignLabChartsPage() {
           <CategoryBars data={longCustomers} x="customer" y="value" unit="zar" xAxisTitle="Customer" yAxisTitle="Outstanding (R)" />
         </Panel>
 
-        <Panel title="2. Few short categories" subtitle="Six short labels stay vertical; no toolbar under six rows">
-          <CategoryBars data={fewShort} x="channel" y="count" height={220} unit="count" xAxisTitle="Channel" yAxisTitle="Open orders" />
-        </Panel>
+        <Box data-testid="chart-fixture-short">
+          <Panel
+            title="2. Few short categories"
+            subtitle={channel ? `Filtered to ${channel}` : 'Six short labels stay vertical; sort and top N are available'}
+          >
+            <CategoryBars
+              data={fewShort}
+              x="channel"
+              y="count"
+              height={220}
+              unit="count"
+              xAxisTitle="Channel"
+              yAxisTitle="Open orders"
+              onRowClick={(row) => setChannel(String(row.channel ?? ''))}
+            />
+          </Panel>
+        </Box>
         <Panel title="3. Vertical wrap case" subtitle="Seven labels of 15 to 24 characters, forced vertical: two-line wrap, ellipsis, full name on hover">
           <CategoryBars
             data={verticalWrap}
@@ -121,6 +136,7 @@ export default function DesignLabChartsPage() {
             yAxisTitle="Units, plan and shipped (units)"
           />
         </Panel>
+        <Box data-testid="chart-fixture-quarters">
         <Panel title="5b. Quarters against last year" subtitle="Time axis: stays vertical, no toolbar">
           <PairedBars
             data={pairedQuarters}
@@ -136,6 +152,7 @@ export default function DesignLabChartsPage() {
             yAxisTitle="Units sold (units)"
           />
         </Panel>
+        </Box>
 
         <Panel title="6. Pie, nine slices" subtitle="Top 5 of 9 shown; shares are of the full total; legend with full names, value and share">
           <ShareChart

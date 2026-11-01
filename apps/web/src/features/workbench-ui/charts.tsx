@@ -144,20 +144,29 @@ export function formatMeasure(
 
 export type ChartValueStyle = 'tick' | 'label' | 'full';
 
-/** Compact magnitude (no sign): full grouping under 10 000, then k (1 decimal under 100 k), M, bn. */
-function compactMagnitude(a: number): string {
-  if (a < 10_000) return formatNumber(a, { digits: a < 10 ? 2 : a < 100 ? 1 : 0 });
-  if (a < 1e6) {
-    const digits = a < 1e5 ? 1 : 0;
+/** One band for a whole axis, so 7 000 and 14 k are not mixed on the same scale. */
+function axisBand(maxAbs: number): number {
+  if (maxAbs >= 1e9) return 1e9;
+  if (maxAbs >= 1e6) return 1e6;
+  if (maxAbs >= 10_000) return 10_000;
+  return 0;
+}
+
+/** Compact magnitude (no sign): full grouping under 10 000, then k (1 decimal under 100 k), M, bn. `band` forces that scale for every tick. */
+function compactMagnitude(a: number, band = 0): string {
+  const scale = Math.max(a, band);
+  if (scale < 10_000) return formatNumber(a, { digits: a < 10 ? 2 : a < 100 ? 1 : 0 });
+  if (scale < 1e6) {
+    const digits = scale < 1e5 ? 1 : 0;
     const k = Number((a / 1e3).toFixed(digits));
     // 999 999 rounds to "1 000 k": say "1 M" instead.
-    if (k < 1000) return `${formatNumber(k, { digits })}${GROUP}k`;
+    if (k < 1000) return `${formatNumber(k, { digits, ...(band ? { minDigits: digits } : {}) })}${GROUP}k`;
   }
-  if (a < 1e9) {
+  if (scale < 1e9) {
     const m = Number((a / 1e6).toFixed(1));
-    if (m < 1000) return `${formatNumber(m, { digits: 1 })}${GROUP}M`;
+    if (m < 1000) return `${formatNumber(m, { digits: 1, ...(band >= 1e6 ? { minDigits: 1 } : {}) })}${GROUP}M`;
   }
-  return `${formatNumber(a / 1e9, { digits: 1 })}${GROUP}bn`;
+  return `${formatNumber(a / 1e9, { digits: 1, ...(band >= 1e9 ? { minDigits: 1 } : {}) })}${GROUP}bn`;
 }
 
 /**
@@ -166,7 +175,7 @@ function compactMagnitude(a: number): string {
  * ("R 1.2 M", "US$ 1 234 567"); the sign goes before the symbol ("-R 1.2 M"); percent takes ratios.
  * Formatting only: the value itself is never rounded upstream of the text.
  */
-export function formatChartValue(v: number | null | undefined, unit: MeasureUnit = 'number', style: ChartValueStyle = 'full'): string {
+export function formatChartValue(v: number | null | undefined, unit: MeasureUnit = 'number', style: ChartValueStyle = 'full', band = 0): string {
   if (v == null || !Number.isFinite(v)) return '—';
   const sign = v < 0 ? '-' : '';
   const a = Math.abs(v);
@@ -174,14 +183,14 @@ export function formatChartValue(v: number | null | undefined, unit: MeasureUnit
     case 'zar':
     case 'usd': {
       const symbol = unit === 'zar' ? 'R' : 'US$';
-      if (style !== 'full') return `${sign}${symbol}${GROUP}${compactMagnitude(a)}`;
+      if (style !== 'full') return `${sign}${symbol}${GROUP}${compactMagnitude(a, band)}`;
       const d = a < 100 ? 2 : 0;
       return `${sign}${symbol}${GROUP}${formatNumber(a, { digits: d, minDigits: d })}`;
     }
     case 'units':
-      return style === 'full' ? `${formatNumber(v, { digits: Number.isInteger(v) ? 0 : 1 })} units` : `${sign}${compactMagnitude(a)}`;
+      return style === 'full' ? `${formatNumber(v, { digits: Number.isInteger(v) ? 0 : 1 })} units` : `${sign}${compactMagnitude(a, band)}`;
     case 'count':
-      return style === 'full' ? formatNumber(v, { digits: Number.isInteger(v) ? 0 : 1 }) : `${sign}${compactMagnitude(a)}`;
+      return style === 'full' ? formatNumber(v, { digits: Number.isInteger(v) ? 0 : 1 }) : `${sign}${compactMagnitude(a, band)}`;
     case 'percent': {
       // Ticks drop the decimal unless the tick sits between whole points (a step under 1 pp).
       const p = v * 100;
@@ -202,7 +211,7 @@ export function formatChartValue(v: number | null | undefined, unit: MeasureUnit
     }
     case 'number':
     default:
-      return style === 'full' ? formatNumber(v, { digits: 2 }) : `${sign}${compactMagnitude(a)}`;
+      return style === 'full' ? formatNumber(v, { digits: 2 }) : `${sign}${compactMagnitude(a, band)}`;
   }
 }
 
@@ -237,10 +246,11 @@ export function thresholdState(
 type ValueFormatters = { tick: (v: number) => string; label: (v: number) => string; full: (v: number) => string };
 
 /** `unit` drives every text; an explicit `format` / `axisFormat` still overrides (back-compat). */
-function chartFormatters(unit?: MeasureUnit, format?: (v: number) => string, axisFormat?: (v: number) => string): ValueFormatters {
+function chartFormatters(unit?: MeasureUnit, format?: (v: number) => string, axisFormat?: (v: number) => string, axisMax = 0): ValueFormatters {
   const u = unit ?? 'number';
+  const band = axisBand(axisMax);
   return {
-    tick: axisFormat ?? format ?? ((v) => formatChartValue(v, u, 'tick')),
+    tick: axisFormat ?? format ?? ((v) => formatChartValue(v, u, 'tick', band)),
     label: format ?? ((v) => formatChartValue(v, u, 'label')),
     full: format ?? ((v) => formatChartValue(v, u, 'full')),
   };
@@ -315,10 +325,10 @@ export function wrapLabel(text: string, maxCharsPerLine: number, maxLines = 2): 
   return kept;
 }
 
-/** Label column for horizontal bars: wide enough for the longest name, at least 64 px, at most 45% of the chart. */
+/** Label column for horizontal bars: wide enough for capitals, at least 72 px, at most 45% of the chart. */
 export function horizontalLabelWidth(labels: string[], chartWidth: number): number {
   const longest = labels.reduce((m, l) => Math.max(m, l.length), 0);
-  return Math.floor(Math.max(64, Math.min(longest * CHAR_PX + 12, 0.45 * chartWidth)));
+  return Math.floor(Math.max(72, Math.min(longest * 7.4 + 20, 0.45 * chartWidth)));
 }
 
 /** Width of an element, kept current with a ResizeObserver (0 until measured). */
@@ -398,6 +408,19 @@ function bottomAxisLayout(labels: string[], plotWidth: number) {
   return { angled, maxChars, height };
 }
 
+/**
+ * Time (or other single-line) x axis: show every `step`-th label so none touch, and keep half a label
+ * of room at the right edge so the last one is never clipped. Recharts' own thinning estimates label
+ * width badly for dates ("2026-02-09 2026-02-16" ran together), so the step is computed from the text.
+ */
+export function timeAxisLayout(labels: string[], plotWidth: number) {
+  const longest = labels.reduce((m, l) => Math.max(m, l.length), 0);
+  const labelPx = longest * 6.4 + 18;
+  const fit = Math.max(1, Math.floor(Math.max(40, plotWidth) / labelPx));
+  const step = Math.max(1, Math.ceil(labels.length / fit));
+  return { interval: step - 1, rightPad: Math.min(48, Math.ceil(longest * 3.2)) };
+}
+
 /** Left label column for horizontal bars: width, characters per line, row height for wrapped labels. */
 function leftAxisLayout(labels: string[], chartWidth: number, labelWidth?: number, minRow = 26) {
   const width = labelWidth ?? horizontalLabelWidth(labels, chartWidth);
@@ -424,8 +447,8 @@ function useUntitledWarning(chart: string, xAxisTitle?: string, yAxisTitle?: str
 export type ChartTone = 'primary' | 'secondary' | 'muted' | 'success' | 'warning' | 'danger';
 
 /** Categorical slots in fixed order (validated light/dark pairs, moved from the dashboard widget chart). */
-const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
-const SERIES_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+const SERIES_LIGHT = ['#2a78d6', '#9a3412', '#1baf7a', '#92400e', '#e87ba4', '#14532d', '#6250d6', '#991b1b'];
+const SERIES_DARK = ['#3987e5', '#fdba74', '#199e70', '#fcd34d', '#d55181', '#86efac', '#9085e9', '#fca5a5'];
 
 function useChartTheme() {
   const theme = useTheme();
@@ -829,7 +852,8 @@ export function CategoryBars({
   const labels = shown.map(name);
   const isHorizontal =
     chooseCategoryLayout(labels, { timeAxis, force: horizontal ? 'horizontal' : layout === 'auto' ? undefined : layout }) === 'horizontal';
-  const fmt = chartFormatters(unit, format);
+  const axisMax = shown.reduce((m, r) => Math.max(m, Math.abs(toNumber(r[y]) ?? 0)), 0);
+  const fmt = chartFormatters(unit, format, undefined, axisMax);
   const titled = Boolean(xAxisTitle || yAxisTitle);
   const valueWidth = isMoney(unit) ? 68 : 56;
   const bottom = bottomAxisLayout(labels, Math.max(40, width - valueWidth - 12));
@@ -987,7 +1011,8 @@ export function PairedBars({
     : { shown: data, total: data.length };
   const labels = shown.map(name);
   const isHorizontal = chooseCategoryLayout(labels, { timeAxis, force: layout === 'auto' ? undefined : layout }) === 'horizontal';
-  const fmt = chartFormatters(unit, format);
+  const axisMax = shown.reduce((m, r) => Math.max(m, Math.abs(toNumber(r[a]) ?? 0), Math.abs(toNumber(r[b]) ?? 0)), 0);
+  const fmt = chartFormatters(unit, format, undefined, axisMax);
   const titled = Boolean(xAxisTitle || yAxisTitle);
   const valueWidth = isMoney(unit) ? 68 : 56;
   const bottom = bottomAxisLayout(labels, Math.max(40, width - valueWidth - 12));
@@ -1146,14 +1171,15 @@ export function TrendChart({
       )
     : { shown: data, total: data.length };
   const plotted = ranked.shown;
-  const fmt = chartFormatters(unit, format);
-  const seriesFmt = (s: (typeof series)[number]) => chartFormatters(s.unit ?? unit, format);
+  const maxOf = (keys: string[]) => plotted.reduce((m, r) => keys.reduce((n, key) => Math.max(n, Math.abs(toNumber(r[key]) ?? 0)), m), 0);
+  const fmt = chartFormatters(unit, format, undefined, maxOf(series.map((s) => s.key)));
+  const seriesFmt = (s: (typeof series)[number]) => chartFormatters(s.unit ?? unit, format, undefined, maxOf([s.key]));
   const hasRight = series.some((s) => s.axis === 'right');
   const leftSeries = series.filter((s) => s.axis !== 'right');
   const rightSeries = series.filter((s) => s.axis === 'right');
-  const leftFmt = chartFormatters(leftSeries[0]?.unit ?? unit, format);
+  const leftFmt = chartFormatters(leftSeries[0]?.unit ?? unit, format, undefined, maxOf(leftSeries.map((s) => s.key)));
   const rightUnit = rightSeries[0]?.unit ?? unit;
-  const rightFmt = chartFormatters(rightUnit, format);
+  const rightFmt = chartFormatters(rightUnit, format, undefined, maxOf(rightSeries.map((s) => s.key)));
   const axisDomain = (ss: typeof series): [(v: number) => number, (v: number) => number] | ['auto', 'auto'] =>
     ss.some((s) => s.kind === 'bar') ? [(v) => Math.min(0, v), (v) => Math.max(0, v)] : ['auto', 'auto'];
   const showLegend = legend ?? series.length > 1;
@@ -1166,6 +1192,10 @@ export function TrendChart({
   const categoryLabels = plotted.map(labelOf);
   const bottom = bottomAxisLayout(categoryLabels, Math.max(40, width - valueWidth - 12));
   const left = leftAxisLayout(categoryLabels, width);
+  const timeAxis = timeAxisLayout(
+    plotted.map((r) => (xTickFormat ? xTickFormat(r[x]) : String(r[x] ?? ''))),
+    width - valueWidth - (hasRight ? valueWidth : 0) - 24,
+  );
   const categoryHorizontal =
     categoryAxis && !hasRight && series.every((s) => s.kind === 'bar') && chooseCategoryLayout(categoryLabels) === 'horizontal';
   const plotHeight = categoryHorizontal ? Math.max(height ?? 0, 96, plotted.length * left.rowHeight + 36) : height;
@@ -1262,7 +1292,8 @@ export function TrendChart({
             <XAxis dataKey={x} tick={categoryTick({ orientation: 'bottom', maxChars: bottom.maxChars, angled: bottom.angled, fill: c.axis, fontSize: 10.5 })}
               height={bottom.height} interval={0} axisLine={false} tickLine={false} />
           ) : (
-            <XAxis dataKey={x} tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={xTickFormat} axisLine={false} tickLine={false} />
+            <XAxis dataKey={x} tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={xTickFormat} axisLine={false} tickLine={false}
+              interval={timeAxis.interval} padding={{ left: 4, right: timeAxis.rightPad }} />
           )}
           {categoryHorizontal ? (
             <YAxis
@@ -1501,8 +1532,8 @@ export function RankedBars({
     sortRows(valued, ctl.state.sort, { name: (d) => d.label, value: (d) => d.value }),
     ctl.state.topN,
   );
-  const fmt = chartFormatters(unit, format, axisFormat);
   const maxValue = Math.max(0, ...shown.map((d) => d.value ?? 0), threshold?.value ?? 0);
+  const fmt = chartFormatters(unit, format, axisFormat, maxValue);
   const axis = niceAxis(maxValue);
   const left = leftAxisLayout(
     shown.map((d) => d.label),

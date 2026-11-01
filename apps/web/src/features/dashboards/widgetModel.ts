@@ -10,6 +10,7 @@
 
 import { metricPresentation } from '@/features/reports/reportPresentation';
 import { formatMeasure, type MeasureUnit } from '@/features/workbench-ui/charts';
+import { displayPartyName } from '@/features/workbench-ui/displayName';
 
 import type { WidgetVisual } from './types';
 
@@ -29,7 +30,7 @@ const CATEGORY_GRAINS = new Set(['customer', 'distributor', 'product', 'bu', 'sa
 
 export const TOP_N = 15; // starting top N for ranked bars and columns; the viewer can change it
 export const PIE_SLICES = 6; // five named slices plus "Other" (topWithOther; no longer drawn on pies)
-export const SERIES_MAX = 7; // seven named series plus "Other"
+export const SERIES_MAX = 5; // named series on a time chart; the rest are counted, not folded into Other
 
 /** Which visuals make sense for a breakdown, best first. */
 export function visualsFor(grains: string[]): WidgetVisual[] {
@@ -75,12 +76,12 @@ export function categoryLabel(r: Row): string {
   const parts: string[] = [];
   for (const [nameKey, idKey, unnamed] of NAME_FIELDS) {
     const n = str(r[nameKey]);
-    if (n) parts.push(n);
+    if (n) parts.push(displayPartyName(n));
     else if (r[idKey] != null) parts.push(unnamed);
   }
   for (const k of ['sales_model', 'bu', 'product_line', 'channel', 'region', 'site_label', 'promo_type']) {
     const v = str(r[k]);
-    if (v) parts.push(v);
+    if (v) parts.push(displayPartyName(v));
   }
   return parts.join(' · ') || 'All';
 }
@@ -133,12 +134,13 @@ export function periodPoints(series: Row[] | null, rows: Row[] | null): Point[] 
 export type SeriesModel = {
   /** One object per period: { period, [seriesKey]: value }. */
   data: Array<Record<string, string | number>>;
-  /** Series in colour order; the last may be "Other". */
+  /** Series in colour order. The tail is not folded into an "Other" value. */
   keys: { key: string; label: string; other?: boolean }[];
+  omitted: number;
 };
 
 /** Period × one category: one series per category, biggest totals first, the tail folded into Other. */
-export function periodByCategory(rows: Row[] | null, maxSeries = SERIES_MAX): SeriesModel {
+export function periodByCategory(rows: Row[] | null, maxSeries = 5): SeriesModel {
   const totals = new Map<string, number>();
   const cells = new Map<string, Map<string, number>>();
   const periods: string[] = [];
@@ -153,22 +155,21 @@ export function periodByCategory(rows: Row[] | null, maxSeries = SERIES_MAX): Se
     totals.set(c, (totals.get(c) ?? 0) + num(r.value));
   }
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
-  const named = ranked.length > maxSeries + 1 ? ranked.slice(0, maxSeries) : ranked;
-  const hasOther = named.length < ranked.length;
+  const named = ranked.slice(0, maxSeries);
   const keys: SeriesModel["keys"] = named.map((label, i) => ({ key: `s${i}`, label }));
-  if (hasOther) keys.push({ key: 'other', label: `Other (${ranked.length - named.length})`, other: true });
   const index = new Map(named.map((c, i) => [c, `s${i}`]));
   periods.sort();
   const data = periods.map((p) => {
     const row: Record<string, string | number> = { period: p };
     for (const k of keys) row[k.key] = 0;
     for (const [c, v] of cells.get(p)!) {
-      const k = index.get(c) ?? 'other';
+      const k = index.get(c);
+      if (!k) continue;
       row[k] = (row[k] as number) + v;
     }
     return row;
   });
-  return { data, keys };
+  return { data, keys, omitted: Math.max(0, ranked.length - named.length) };
 }
 
 /** Unit of a metric, from the same table the Reports page uses (never guessed from the value's size). */
@@ -184,7 +185,7 @@ export function formatValue(v: unknown, unit: MeasureUnit): string {
 }
 
 /** Table columns: names instead of ids, ids hidden; value last. */
-export function tableColumns(rows: Row[] | null): { field: string; headerName: string }[] {
+export function tableColumns(rows: Row[] | null, measureHeader = 'Value'): { field: string; headerName: string }[] {
   const keys = new Set<string>();
   for (const r of rows ?? []) Object.keys(r).forEach((k) => keys.add(k));
   const hidden = new Set(['customer_id', 'distributor_id', 'product_id', 'bucket_start', 'bucket_end']);
@@ -198,7 +199,7 @@ export function tableColumns(rows: Row[] | null): { field: string; headerName: s
     bu: 'Business unit',
     product_line: 'Product line',
     promo_type: 'Promotion type',
-    value: 'Value',
+    value: measureHeader,
   };
   const order = ['bucket_key', 'customer_name', 'distributor_name', 'product_name', 'sales_model', 'bu', 'product_line', 'site_label', 'channel', 'region', 'promo_type'];
   const fields = [...keys].filter((k) => !hidden.has(k));
@@ -207,5 +208,7 @@ export function tableColumns(rows: Row[] | null): { field: string; headerName: s
     const ib = b === 'value' ? 999 : order.indexOf(b) === -1 ? 500 : order.indexOf(b);
     return ia - ib;
   });
-  return fields.map((f) => ({ field: f, headerName: header[f] ?? f.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase()) }));
+  return fields
+    .map((f) => ({ field: f, headerName: header[f] ?? f.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase()) }))
+    .filter((c) => c.headerName.trim().length > 0);
 }

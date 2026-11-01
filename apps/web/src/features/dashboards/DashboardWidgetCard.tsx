@@ -22,6 +22,7 @@ import { FigureAboutButton } from './FigureAboutButton';
 import { formatVintage } from './formatters';
 import type { DashboardWidget, QueryResult, SemanticMetric } from './types';
 import { WidgetBody } from './WidgetBody';
+import { useBoxHeight } from './useBoxHeight';
 import { tableColumns } from './widgetModel';
 
 type Props = {
@@ -100,6 +101,7 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const onLayoutKey = useDashboardLayoutKey();
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const boxHeight = useBoxHeight(bodyRef);
   const [full, setFull] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const q = useQuery({
@@ -124,7 +126,7 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
   const vintage = q.data ? formatVintage(q.data.data_vintage) : null;
   const rows = (q.data?.rows ?? q.data?.series ?? []) as Record<string, unknown>[];
 
-  const body = (height?: number) => (
+  const body = (height?: number, fit?: number) => (
     <WidgetBody
       metricKey={widget.metric_key}
       metricLabel={metric?.label && metric.label !== widget.metric_key ? metric.label : widget.title}
@@ -136,6 +138,7 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
       error={q.isError ? q.error : null}
       testKey={widget.id}
       chartHeight={height}
+      fitHeight={fit}
     />
   );
 
@@ -231,8 +234,8 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
         </Typography>
       ) : null}
       <Fade in appear timeout={reduceMotion ? 0 : 420} key={q.isLoading ? 'loading' : 'shown'}>
-        <Box ref={bodyRef} sx={{ flex: 1, px: 0.5, pb: 0.5, minHeight: 0 }}>
-          {body()}
+        <Box ref={bodyRef} sx={{ flex: 1, px: 0.5, pb: 0.5, minHeight: 0, overflowY: 'auto' }}>
+          {body(undefined, boxHeight)}
         </Box>
       </Fade>
       <Dialog fullScreen open={full} onClose={() => setFull(false)}>

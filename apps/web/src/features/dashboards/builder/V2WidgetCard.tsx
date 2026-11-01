@@ -33,6 +33,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { slotForSeries } from '../chartSlots';
 import { FigureAboutButton } from '../FigureAboutButton';
 import type { DashboardWidget } from '../types';
+import { useBoxHeight } from '../useBoxHeight';
 import { useV2Query } from './BuilderData';
 import { breakdownLabel, definitionMeasures, modelOf } from './catalog';
 import { autoGrain, compareWindow } from './dates';
@@ -143,6 +144,7 @@ export function V2WidgetCard({
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const onLayoutKey = useDashboardLayoutKey();
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const boxHeight = useBoxHeight(bodyRef);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const closeFullRef = useRef<HTMLButtonElement | null>(null);
   const [full, setFull] = useState(false);
@@ -242,7 +244,7 @@ export function V2WidgetCard({
     },
   ];
 
-  const body = (height?: number): ReactNode => {
+  const body = (height?: number, fit?: number): ReactNode => {
     if (plan.status === 'blocked') {
       return (
         <Alert severity="info" variant="outlined" data-testid={`dashboard-widget-blocked-${widget.id}`}>
@@ -262,19 +264,25 @@ export function V2WidgetCard({
         kpi={isKpi ? { compare: main.isPlaceholderData || compareQ.isPlaceholderData ? undefined : compareQ.data, compareLabel: ctx.compareLabel, sparkline: main.isPlaceholderData || sparkQ.isPlaceholderData ? undefined : sparkQ.data } : undefined}
         comparison={seriesCompare && compareReq && plan.status === 'ready' ? { result: main.isPlaceholderData || compareQ.isPlaceholderData ? undefined : compareQ.data, window: plan.window, previousWindow: comparisonWindow,
           label: ctx.compareLabel ?? 'previous period', loading: compareQ.isFetching, stale: main.isPlaceholderData || compareQ.isPlaceholderData, error: compareQ.isError ? compareQ.error : undefined } : undefined}
-        caption={plan.caption}
+        caption={plan.caption || filterCaption}
         onSelect={ctx.onSelect}
         selectedKeys={ctx.selectedKeys}
         emptyContext={def.dashboard ? `under ${filterCaption}` : ctx.emptyContext}
         onClearFilters={ctx.hasActiveFilters && !def.dashboard ? ctx.onClearFilters : undefined}
         testKey={widget.id}
         chartHeight={height}
+        fitHeight={fit}
       />
     );
   };
 
   const footer = (
     <Stack direction="row" spacing={1} sx={{ px: 1.5, pb: 0.75, minHeight: 18 }} alignItems="center">
+      {filterCaption ? (
+        <Typography variant="caption" color="text.secondary" noWrap title={filterCaption} data-testid={`dashboard-widget-range-${widget.id}`} sx={{ minWidth: 0 }}>
+          {filterCaption}
+        </Typography>
+      ) : null}
       {data?.ok && data.truncated ? (
         <Typography variant="caption" color="text.secondary" data-testid={`dashboard-widget-truncated-${widget.id}`}>
           First {data.rows.length.toLocaleString('en-US')} rows
@@ -332,8 +340,8 @@ export function V2WidgetCard({
       </Stack>
       <NotFilteredLine items={plan.notFiltered} testId={`dashboard-widget-not-filtered-${widget.id}`} />
       <Fade in appear timeout={reduceMotion ? 0 : 420} key={main.isLoading && !data ? 'loading' : 'shown'}>
-        <Box ref={bodyRef} sx={{ flex: 1, px: 0.5, pb: 0, minHeight: 0 }}>
-          {body()}
+        <Box ref={bodyRef} sx={{ flex: 1, px: 0.5, pb: 0, minHeight: 0, overflowY: 'auto' }}>
+          {body(undefined, boxHeight)}
         </Box>
       </Fade>
       {footer}
