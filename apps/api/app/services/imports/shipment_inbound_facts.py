@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.facts import FactInboundShipment
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.models.shipment_water import WATER_FIELDS
 from app.services.imports.shipment_apply_failure import ShipmentApplyRowError
 from app.services.imports.shipment_evidence_line_identity import fact_upsert_key_for_evidence_values
 from app.utils.json_safe import to_jsonable
@@ -85,6 +86,8 @@ _UPSERT_REFRESH_COLUMNS: tuple[str, ...] = (
     "reference",
     "status",
     "tenant_id",
+    # On the water (20261101_0049): copied from the evidence line, refreshed with it.
+    *WATER_FIELDS,
 )
 
 _UPSERT_CHUNK_SIZE = 500
@@ -167,6 +170,7 @@ def _row_values_from_evidence(line: ShipmentEvidenceLine, *, tenant_id: str = "d
         "reference": line.order_no,
         "status": _derive_inbound_status(line),
         "tenant_id": (tenant_id or "default").strip() or "default",
+        **{name: getattr(line, name, None) for name in WATER_FIELDS},
     }
     base["fact_upsert_key"] = fact_upsert_key_for_evidence_values(base)
     return base

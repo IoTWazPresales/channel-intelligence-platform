@@ -1,0 +1,170 @@
+On the water clone proof on cip_otw (2026-11-01 12:45 UTC)
+reset: cip_otw taken back to cip's head (20261023_0048) before the proof
+
+== 1. Migration 20261101_0049
+  before: alembic INFO  [alembic.runtime.migration] Will assume transactional DDL.
+  rows: evidence lines 110,834, observations 112,232, facts 15,788
+  PASS  after upgrade: new columns exist, every table's row count is unchanged except the new port_condition
+  PASS  after upgrade: every shipment row is byte-identical on its existing columns
+  PASS  after upgrade: the new columns are all empty
+  PASS  after downgrade: columns and port_condition gone, counts and fingerprints as before
+  PASS  after the second upgrade: as after the first
+
+  port_condition is append-only for the app role (a transaction that is rolled back)
+  PASS  insert works, update and delete do nothing or are refused - UPDATE refused (InsufficientPrivilege); DELETE refused (InsufficientPrivilege)
+
+== 2. Models against the migrated clone (the three shipment tables)
+    fact_inbound_shipment	COLUMN fact_inbound_shipment.fact_upsert_key: nullable database=False models=True
+  PASS  only the deliberate difference remains - 1 difference(s)
+
+== 3. Backfill guards
+  dry run: current_database() = cip_otw; role cip; transaction_read_only = on; dry run, nothing is changed
+  PASS  dry run is read-only and changes nothing
+  PASS  --apply without --expect-db is refused
+  PASS  --apply with the wrong database name is refused
+  PASS  an apply forced to fail after the write rolls everything back
+
+== 4. Backfill apply
+  current_database() = cip_otw; role cip; transaction_read_only = off; APPLY
+  
+  shipment_evidence_line: 110,834 rows; 110,834 to fill
+    job 32 (ACZA Shipped Unshipped 20260526.xlsx): 9,307 rows, 9,307 filled: deliver_port 9,307, forwarder_code 9,307, on_board_date 8,492, origin_hub 9,292, port_ata_date 8,257, port_eta_date 8,492, ship_way 9,307, shipping_method 9,307
+    job 34 (ACZA Shipped Unshipped 20260602.xlsx): 9,317 rows, 9,317 filled: deliver_port 9,317, forwarder_code 9,317, on_board_date 8,526, origin_hub 9,301, port_ata_date 8,384, port_eta_date 8,526, ship_way 9,317, shipping_method 9,317
+    job 40 (ACZA Shipped Unshipped 20260602.xlsx): 9,317 rows, 9,317 filled: deliver_port 9,317, forwarder_code 9,317, on_board_date 8,526, origin_hub 9,301, port_ata_date 8,384, port_eta_date 8,526, ship_way 9,317, shipping_method 9,317
+    job 147 (Copy of ACZA Shipped Unshipped 20231110.xlsx): 5,322 rows, 5,322 filled: deliver_port 5,322, forwarder_code 5,322, on_board_date 5,216, origin_hub 5,295, port_ata_date 5,212, port_eta_date 5,216, ship_way 5,322, shipping_method 5,322
+    job 153 (ACZA Shipped Unshipped 20260623.xlsx): 9,503 rows, 9,503 filled: deliver_port 9,503, forwarder_code 9,503, on_board_date 8,640, origin_hub 9,487, port_ata_date 8,622, port_eta_date 8,640, ship_way 9,503, shipping_method 9,503
+    job 154 (shipped 2020-2023.xlsx): 7,215 rows, 7,215 filled: deliver_port 7,215, forwarder_code 7,215, on_board_date 7,031, origin_hub 7,181, port_ata_date 7,024, port_eta_date 7,031, ship_way 7,215, shipping_method 7,215
+    job 601 (ACZA Shipped Unshipped 20260721.xlsx): 7,291 rows, 7,291 filled: deliver_port 7,291, forwarder_code 7,291, on_board_date 6,238, origin_hub 7,279, port_ata_date 6,145, port_eta_date 6,238, ship_way 7,291, shipping_method 7,291
+    job 605 (ACZA Shipped Unshipped 20260728.xlsx): 7,328 rows, 7,328 filled: deliver_port 7,328, forwarder_code 7,328, on_board_date 6,271, origin_hub 7,316, port_ata_date 6,161, port_eta_date 6,271, ship_way 7,328, shipping_method 7,328
+    job 1159 (ACZA Shipped Unshipped 20260818_P2.xlsx): 7,369 rows, 7,369 filled: deliver_port 7,369, forwarder_code 7,369, on_board_date 6,443, origin_hub 7,357, port_ata_date 6,240, port_eta_date 6,443, ship_way 7,369, shipping_method 7,369
+    job 1326 (ACZA Shipped Unshipped 20260901.xlsx): 7,561 rows, 7,561 filled: deliver_port 7,561, forwarder_code 7,561, on_board_date 6,521, origin_hub 7,537, port_ata_date 6,283, port_eta_date 6,521, ship_way 7,561, shipping_method 7,561
+    job 1339 (ACZA Shipped Unshipped 20260911.xlsx): 7,638 rows, 7,638 filled: deliver_port 7,638, forwarder_code 7,638, on_board_date 6,583, origin_hub 7,611, port_ata_date 6,385, port_eta_date 6,583, ship_way 7,638, shipping_method 7,638
+    job 1695 (ACZA Shipped Unshipped 20260929.xlsx): 7,768 rows, 7,768 filled: deliver_port 7,768, forwarder_code 7,768, on_board_date 6,807, origin_hub 7,740, port_ata_date 6,559, port_eta_date 6,807, ship_way 7,768, shipping_method 7,768
+    job 1696 (ACZA Shipped Unshipped 20261023 (1).xlsx): 7,931 rows, 7,931 filled: deliver_port 7,931, forwarder_code 7,931, on_board_date 6,870, origin_hub 7,903, port_ata_date 6,731, port_eta_date 6,870, ship_way 7,931, shipping_method 7,931
+    job 1697 (ACZA Shipped Unshipped 20261027.xlsx): 7,967 rows, 7,967 filled: deliver_port 7,965, forwarder_code 7,965, on_board_date 6,935, origin_hub 7,937, port_ata_date 6,801, port_eta_date 6,935, ship_way 7,967, shipping_method 7,965
+    shipment_evidence_line per field to fill: deliver_port 110,832, forwarder_code 110,832, on_board_date 99,099, origin_hub 110,537, port_ata_date 97,188, port_eta_date 99,099, ship_way 110,834, shipping_method 110,832
+  
+  shipment_evidence_observation: 112,232 rows; 112,232 to fill
+    job 32 (ACZA Shipped Unshipped 20260526.xlsx): 9,307 rows, 9,307 filled: deliver_port 9,307, forwarder_code 9,307, on_board_date 8,492, origin_hub 9,292, port_ata_date 8,257, port_eta_date 8,492, ship_way 9,307, shipping_method 9,307
+    job 34 (ACZA Shipped Unshipped 20260602.xlsx): 9,317 rows, 9,317 filled: deliver_port 9,317, forwarder_code 9,317, on_board_date 8,526, origin_hub 9,301, port_ata_date 8,384, port_eta_date 8,526, ship_way 9,317, shipping_method 9,317
+    job 40 (ACZA Shipped Unshipped 20260602.xlsx): 9,317 rows, 9,317 filled: deliver_port 9,317, forwarder_code 9,317, on_board_date 8,526, origin_hub 9,301, port_ata_date 8,384, port_eta_date 8,526, ship_way 9,317, shipping_method 9,317
+    job 147 (Copy of ACZA Shipped Unshipped 20231110.xlsx): 5,322 rows, 5,322 filled: deliver_port 5,322, forwarder_code 5,322, on_board_date 5,216, origin_hub 5,295, port_ata_date 5,212, port_eta_date 5,216, ship_way 5,322, shipping_method 5,322
+    job 153 (ACZA Shipped Unshipped 20260623.xlsx): 9,503 rows, 9,503 filled: deliver_port 9,503, forwarder_code 9,503, on_board_date 8,640, origin_hub 9,487, port_ata_date 8,622, port_eta_date 8,640, ship_way 9,503, shipping_method 9,503
+    job 154 (shipped 2020-2023.xlsx): 7,215 rows, 7,215 filled: deliver_port 7,215, forwarder_code 7,215, on_board_date 7,031, origin_hub 7,181, port_ata_date 7,024, port_eta_date 7,031, ship_way 7,215, shipping_method 7,215
+    job 601 (ACZA Shipped Unshipped 20260721.xlsx): 7,291 rows, 7,291 filled: deliver_port 7,291, forwarder_code 7,291, on_board_date 6,238, origin_hub 7,279, port_ata_date 6,145, port_eta_date 6,238, ship_way 7,291, shipping_method 7,291
+    job 605 (ACZA Shipped Unshipped 20260728.xlsx): 7,328 rows, 7,328 filled: deliver_port 7,328, forwarder_code 7,328, on_board_date 6,271, origin_hub 7,316, port_ata_date 6,161, port_eta_date 6,271, ship_way 7,328, shipping_method 7,328
+    job 1159 (ACZA Shipped Unshipped 20260818_P2.xlsx): 7,369 rows, 7,369 filled: deliver_port 7,369, forwarder_code 7,369, on_board_date 6,443, origin_hub 7,357, port_ata_date 6,240, port_eta_date 6,443, ship_way 7,369, shipping_method 7,369
+    job 1326 (ACZA Shipped Unshipped 20260901.xlsx): 7,561 rows, 7,561 filled: deliver_port 7,561, forwarder_code 7,561, on_board_date 6,521, origin_hub 7,537, port_ata_date 6,283, port_eta_date 6,521, ship_way 7,561, shipping_method 7,561
+    job 1339 (ACZA Shipped Unshipped 20260911.xlsx): 8,669 rows, 8,669 filled: deliver_port 8,669, forwarder_code 8,669, on_board_date 6,585, origin_hub 8,623, port_ata_date 6,385, port_eta_date 6,585, ship_way 8,669, shipping_method 8,669
+    job 1695 (ACZA Shipped Unshipped 20260929.xlsx): 8,006 rows, 8,006 filled: deliver_port 8,006, forwarder_code 8,006, on_board_date 6,807, origin_hub 7,978, port_ata_date 6,559, port_eta_date 6,807, ship_way 8,006, shipping_method 8,006
+    job 1696 (ACZA Shipped Unshipped 20261023 (1).xlsx): 8,021 rows, 8,021 filled: deliver_port 8,021, forwarder_code 8,021, on_board_date 6,908, origin_hub 7,993, port_ata_date 6,731, port_eta_date 6,908, ship_way 8,021, shipping_method 8,021
+    job 1697 (ACZA Shipped Unshipped 20261027.xlsx): 8,006 rows, 8,006 filled: deliver_port 8,004, forwarder_code 8,004, on_board_date 6,935, origin_hub 7,976, port_ata_date 6,801, port_eta_date 6,935, ship_way 8,006, shipping_method 8,004
+    shipment_evidence_observation per field to fill: deliver_port 112,230, forwarder_code 112,230, on_board_date 99,139, origin_hub 111,916, port_ata_date 97,188, port_eta_date 99,139, ship_way 112,232, shipping_method 112,230
+  
+  fact_inbound_shipment: 15,788 rows; 15,785 to fill
+    job None ((no job)): 41 rows, 38 filled: deliver_port 38, forwarder_code 38, origin_hub 38, ship_way 38, shipping_method 38
+    job 32 (ACZA Shipped Unshipped 20260526.xlsx): 48 rows, 48 filled: deliver_port 48, forwarder_code 48, origin_hub 48, ship_way 48, shipping_method 48
+    job 40 (ACZA Shipped Unshipped 20260602.xlsx): 130 rows, 130 filled: deliver_port 130, forwarder_code 130, origin_hub 130, ship_way 130, shipping_method 130
+    job 153 (ACZA Shipped Unshipped 20260623.xlsx): 536 rows, 536 filled: deliver_port 536, forwarder_code 536, on_board_date 369, origin_hub 536, port_ata_date 369, port_eta_date 369, ship_way 536, shipping_method 536
+    job 154 (shipped 2020-2023.xlsx): 6,633 rows, 6,633 filled: deliver_port 6,633, forwarder_code 6,633, on_board_date 6,463, origin_hub 6,599, port_ata_date 6,456, port_eta_date 6,463, ship_way 6,633, shipping_method 6,633
+    job 601 (ACZA Shipped Unshipped 20260721.xlsx): 89 rows, 89 filled: deliver_port 89, forwarder_code 89, on_board_date 27, origin_hub 83, port_ata_date 3, port_eta_date 27, ship_way 89, shipping_method 89
+    job 605 (ACZA Shipped Unshipped 20260728.xlsx): 314 rows, 314 filled: deliver_port 314, forwarder_code 314, origin_hub 313, ship_way 314, shipping_method 314
+    job 1159 (ACZA Shipped Unshipped 20260818_P2.xlsx): 121 rows, 121 filled: deliver_port 121, forwarder_code 121, on_board_date 11, origin_hub 121, port_eta_date 11, ship_way 121, shipping_method 121
+    job 1326 (ACZA Shipped Unshipped 20260901.xlsx): 178 rows, 178 filled: deliver_port 178, forwarder_code 178, on_board_date 11, origin_hub 166, port_eta_date 11, ship_way 178, shipping_method 178
+    job 1339 (ACZA Shipped Unshipped 20260911.xlsx): 238 rows, 238 filled: deliver_port 238, forwarder_code 238, origin_hub 238, ship_way 238, shipping_method 238
+    job 1695 (ACZA Shipped Unshipped 20260929.xlsx): 93 rows, 93 filled: deliver_port 93, forwarder_code 93, on_board_date 41, origin_hub 93, port_eta_date 41, ship_way 93, shipping_method 93
+    job 1696 (ACZA Shipped Unshipped 20261023 (1).xlsx): 39 rows, 39 filled: deliver_port 39, forwarder_code 39, origin_hub 39, ship_way 39, shipping_method 39
+    job 1697 (ACZA Shipped Unshipped 20261027.xlsx): 7,328 rows, 7,328 filled: deliver_port 7,326, forwarder_code 7,326, on_board_date 6,327, origin_hub 7,300, port_ata_date 6,193, port_eta_date 6,327, ship_way 7,328, shipping_method 7,326
+    fact_inbound_shipment per field to fill: deliver_port 15,783, forwarder_code 15,783, on_board_date 13,249, origin_hub 15,704, port_ata_date 13,021, port_eta_date 13,249, ship_way 15,785, shipping_method 15,783
+    shipment_evidence_line: counts after the write equal the plan
+    shipment_evidence_observation: counts after the write equal the plan
+    fact_inbound_shipment: counts after the write equal the plan
+  committed
+  PASS  apply committed
+
+  per table, per field (filled by the apply):
+    shipment_evidence_line: on_board_date 99,099, port_eta_date 99,099, port_ata_date 97,188, shipping_method 110,832, forwarder_code 110,832, origin_hub 110,537, ship_way 110,834, deliver_port 110,832
+    shipment_evidence_observation: on_board_date 99,139, port_eta_date 99,139, port_ata_date 97,188, shipping_method 112,230, forwarder_code 112,230, origin_hub 111,916, ship_way 112,232, deliver_port 112,230
+    fact_inbound_shipment: on_board_date 13,249, port_eta_date 13,249, port_ata_date 13,021, shipping_method 15,783, forwarder_code 15,783, origin_hub 15,704, ship_way 15,785, deliver_port 15,783
+  PASS  filled counts per field equal the plan's
+  PASS  per-job, per-field counts equal an independent SQL recount
+  PASS  every stored value equals the SQL reading of raw_source_row
+  PASS  every other column of every shipment row is byte-identical (including source_row_hash)
+  PASS  no table gained or lost a row
+  PASS  one audit event holds the counts
+
+  forwarder and origin hub read from each distinct Shipping Method (facts):
+      6035  'COSCOckg-WWP-Truck/Sea--'         forwarder='COSCO' hub='ckg'
+      1607  'COSCOckg-凌凱-Truck/Sea--'          forwarder='COSCO' hub='ckg'
+      1188  '凌凱ckg-Air--'                      forwarder='凌凱' hub='ckg'
+      1177  'KGILckg-WWP-Truck/Air--'          forwarder='KGIL' hub='ckg'
+       994  'COSCOszx-WWP-Sea--'               forwarder='COSCO' hub='szx'
+       914  'WWPc-Sea--'                       forwarder='WWP' hub='c'
+       694  'KGILckg-WWP-Truck/Sea--'          forwarder='KGIL' hub='ckg'
+       531  '凌凱y-Sea--'                        forwarder='凌凱' hub='y'
+       357  'WWPckg-Air--'                     forwarder='WWP' hub='ckg'
+       331  'WWPc-Air--'                       forwarder='WWP' hub='c'
+       279  'KGILckg-凌凱-Truck/Sea--'           forwarder='KGIL' hub='ckg'
+       238  'PFEDEXHKc-GS-Express--'           forwarder='PFEDEXHK' hub='c'
+       184  'PREMIEREnl-Sea--'                 forwarder='PREMIERE' hub='nl'
+       141  'WWPy-Sea--'                       forwarder='WWP' hub='y'
+       127  '凌凱c-Sea--'                        forwarder='凌凱' hub='c'
+       110  'PDHLc-GS-Express--'               forwarder='PDHL' hub='c'
+       110  '凌凱c-Air--'                        forwarder='凌凱' hub='c'
+       101  'COSCOszx-凌凱-Sea--'                forwarder='COSCO' hub='szx'
+        98  'KGILsha-WWP-Sea--'                forwarder='KGIL' hub='sha'
+        95  'KGILckg-凌凱-Truck/Air--'           forwarder='KGIL' hub='ckg'
+        79  'KGILckg-廣盈-Truck/Sea--'           forwarder='KGIL' hub='ckg'
+        49  'COSCOckg-WWP-Truck + Sea/Air--'   forwarder='COSCO' hub='ckg'
+        44  'PDHL-GS-Express--'                forwarder='PDHL' hub=None
+        43  'WWPae-Sea--'                      forwarder='WWP' hub='ae'
+        29  'COSCOckg-凌凱-Truck + Sea/Air--'    forwarder='COSCO' hub='ckg'
+        24  'PREMIEREnl-Air--'                 forwarder='PREMIERE' hub='nl'
+        22  'COSCOckg-麥蘭-Truck/Sea--'          forwarder='COSCO' hub='ckg'
+        22  '凌凱h-Air--'                        forwarder='凌凱' hub='h'
+        15  '凌凱-Sea--'                         forwarder='凌凱' hub=None
+        14  '凌凱h-Sea--'                        forwarder='凌凱' hub='h'
+        13  'COSCOckg-ASIAG-Truck/Sea--'       forwarder='COSCO' hub='ckg'
+        13  'PDHLh-GS-Express--'               forwarder='PDHL' hub='h'
+        12  'WWP-Air--'                        forwarder='WWP' hub=None
+        11  'WWPh-Sea--'                       forwarder='WWP' hub='h'
+        10  'COSCOszx-WWP-Sea/Air--'           forwarder='COSCO' hub='szx'
+         8  'PFEDEXHKh-GS-Express--'           forwarder='PFEDEXHK' hub='h'
+         7  'CLIENT-Sea--'                     forwarder='CLIENT' hub=None
+         7  '廣盈c-Sea--'                        forwarder='廣盈' hub='c'
+         6  'KGILckg-WEIDA-Truck/Sea--'        forwarder='KGIL' hub='ckg'
+         6  'WWPae-Air--'                      forwarder='WWP' hub='ae'
+         6  'COSCOckg-鴻霖-Truck--'              forwarder='COSCO' hub='ckg'
+         5  'KGILsha-凌凱-Sea--'                 forwarder='KGIL' hub='sha'
+         4  'CCLh-Air--'                       forwarder='CCL' hub='h'
+         3  'KGILckg-DLINK-Truck/Air--'        forwarder='KGIL' hub='ckg'
+         3  'KGILckg-ULL-Truck/Air--'          forwarder='KGIL' hub='ckg'
+         2  '鴻霖y-Truck--'                      forwarder='鴻霖' hub='y'
+         2  'WEIDAh-Sea--'                     forwarder='WEIDA' hub='h'
+         2  'WWPh-Air--'                       forwarder='WWP' hub='h'
+         2  'COSCOckg-DKS-Truck/Sea--'         forwarder='COSCO' hub='ckg'
+         1  '凌凱y-Sea/Air--'                    forwarder='凌凱' hub='y'
+         1  'PTNTnl-TS-Express--'              forwarder='PTNT' hub='nl'
+         1  'KGILckg-環球-Truck/Air--'           forwarder='KGIL' hub='ckg'
+         1  'CLIENT-Express--'                 forwarder='CLIENT' hub=None
+         1  'KAYSae-Air--'                     forwarder='KAYS' hub='ae'
+         1  'KGILsha-WEIDA-Sea--'              forwarder='KGIL' hub='sha'
+         1  'KGILckg-LOXSON-Truck/Air--'       forwarder='KGIL' hub='ckg'
+         1  'PREMIEREae-Sea--'                 forwarder='PREMIERE' hub='ae'
+         1  'COSCOckg-UNIC-Truck/Sea--'        forwarder='COSCO' hub='ckg'
+    ship_way 'TRUCK/SEA': 69,439 evidence lines
+    ship_way 'SEA': 19,600 evidence lines
+    ship_way 'TRUCK/AIR': 11,551 evidence lines
+    ship_way 'AIR': 7,184 evidence lines
+    ship_way 'EXPRESS': 2,674 evidence lines
+    ship_way 'TRUCK + SEA/AIR': 276 evidence lines
+    ship_way 'SEA/AIR': 62 evidence lines
+    ship_way 'TRUCK': 48 evidence lines
+
+== 5. Idempotence and the round trip with data
+  PASS  a second dry run plans nothing
+  PASS  a second apply changes nothing
+  PASS  downgrade with the data present leaves every other column and row as it was
+  PASS  upgrade and apply again: the same counts
+
+RESULT: ALL PASS

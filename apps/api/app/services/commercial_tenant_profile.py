@@ -164,6 +164,9 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "vat_rate_pct",
     "sales_value_vat_basis",
     "open_book",
+    # On the water: reads forwarder and origin hub out of a shipment's Shipping Method (named groups
+    # forwarder and, optionally, hub). Empty means the default in services/imports/shipment_voyage.py.
+    "shipping_method_pattern",
 )
 
 # N-0111: every customer and distributor reports Monday-Sunday weeks (Warren 2026-10-16).
@@ -795,6 +798,15 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
             if normalized_book is not None:
                 out[key] = normalized_book
             continue
+        if key == "shipping_method_pattern":
+            from app.services.imports.shipment_voyage import compile_shipping_method_pattern
+
+            try:
+                compile_shipping_method_pattern(str(value))
+            except ValueError:
+                continue  # an unusable stored pattern reads as the default (FLAG != BLOCK)
+            out[key] = str(value).strip()
+            continue
         text = str(value).strip()
         if text:
             out[key] = text
@@ -844,6 +856,14 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
             if raw is None or raw == "" or raw == {}:
                 continue
             clean[key] = _normalize_open_book(raw, strict=True)
+            continue
+        if key == "shipping_method_pattern":
+            if raw is None or str(raw).strip() == "":
+                continue
+            from app.services.imports.shipment_voyage import compile_shipping_method_pattern
+
+            compile_shipping_method_pattern(str(raw))  # ValueError (400) when it is not a usable pattern
+            clean[key] = str(raw).strip()
             continue
         if key == "vat_rate_pct":
             if raw is None or str(raw).strip() == "":

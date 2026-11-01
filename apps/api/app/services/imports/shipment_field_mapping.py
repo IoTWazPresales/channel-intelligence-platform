@@ -60,6 +60,20 @@ SHIPMENT_CANONICAL_TARGETS: tuple[str, ...] = (
     "customer_dealer_token",
     "shipway",
     "ret_aut_quote_no",
+    # On the water (20261101_0049): voyage fields. Aliases for the ACZA headers live in the heuristics below
+    # and in the inbound_shipments template, not in the import code.
+    "on_board_date",
+    "port_eta_date",
+    "port_ata_date",
+    "shipping_method",
+    "forwarder_code",
+    "origin_hub",
+    "ship_way",
+    "deliver_port",
+    "vessel_name",
+    "voyage_no",
+    "bill_of_lading_no",
+    "container_no",
 )
 
 # Longer helper text for mapping UI (aligned with DSI column-mapping hints where concepts match).
@@ -91,7 +105,31 @@ SHIPMENT_FIELD_TARGET_DESCRIPTIONS: dict[str, str] = {
         "Customer Required Arrival Date from the workbook CRAD column (commercial planning anchor; "
         "distinct from logistics POD/ship-confirm dates)."
     ),
-    "shipway": "Shipway text from the workbook. Kept on the raw source row; there is no separate column.",
+    "shipway": (
+        "Older name for Ship way: Shipway text from the workbook, kept on the raw source row. "
+        "New mappings use Ship way, which has its own column; both fill it."
+    ),
+    "on_board_date": "Date the cargo went on board the vessel (ACZA: On-Board Date). Not the ship confirm date.",
+    "port_eta_date": (
+        "Vessel's estimated arrival at the discharge port (ACZA: ETA Date(Est Port Arrival)). "
+        "Not the delivery estimate: Est POD date is a different field."
+    ),
+    "port_ata_date": "Vessel's actual arrival at the discharge port (ACZA: ATA Date(Actual Port Arrival)).",
+    "shipping_method": (
+        "Forwarder and origin hub as printed, e.g. COSCOckg-WWP-Truck-Sea (ACZA: Shipping Method). "
+        "Forwarder code and origin hub are read from it unless mapped separately."
+    ),
+    "forwarder_code": "Forwarder as its own column. Leave unmapped to read it from Shipping method.",
+    "origin_hub": "Origin hub as its own column. Leave unmapped to read it from Shipping method.",
+    "ship_way": "Sea, air or express (ACZA: Ship Way). Only sea shipments are drawn on the On the water map.",
+    "deliver_port": "Discharge port as a UN LOCODE (ACZA: Deliver Port), for example ZADUR.",
+    "vessel_name": "Vessel name, when a forwarder supplies it. Empty in the ACZA files.",
+    "voyage_no": "Voyage number, when a forwarder supplies it. Empty in the ACZA files.",
+    "bill_of_lading_no": "Bill of lading number, when a forwarder supplies it. Empty in the ACZA files.",
+    "container_no": (
+        "ISO 6346 container number, when a forwarder supplies it. "
+        "ACZA's Container Number column is a 5-digit internal number and is not this field."
+    ),
     "ret_aut_quote_no": (
         "RET/AUT/QUOTE number. This is the line identity on a BOM-not-ready row when SO# is blank."
     ),
@@ -360,7 +398,30 @@ def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefin
         elif key == "crad":
             mapping[col] = "crad_date"
         elif key in ("shipway", "ship way"):
-            mapping[col] = "shipway"
+            mapping[col] = "ship_way"
+        elif key in ("on-board date", "on board date", "onboard date"):
+            mapping[col] = "on_board_date"
+        elif key in ("eta date(est port arrival)", "eta date (est port arrival)", "port eta", "port eta date"):
+            mapping[col] = "port_eta_date"
+        elif key in ("ata date(actual port arrival)", "ata date (actual port arrival)", "port ata", "port ata date"):
+            mapping[col] = "port_ata_date"
+        elif key == "shipping method":
+            mapping[col] = "shipping_method"
+        elif key in ("deliver port", "delivery port", "port of discharge"):
+            mapping[col] = "deliver_port"
+        elif key in ("forwarder", "forwarder code"):
+            mapping[col] = "forwarder_code"
+        elif key == "origin hub":
+            mapping[col] = "origin_hub"
+        elif key in ("vessel", "vessel name"):
+            mapping[col] = "vessel_name"
+        elif key in ("voyage", "voyage no", "voyage no.", "voyage number"):
+            mapping[col] = "voyage_no"
+        elif key in ("bl no", "b/l", "b/l no", "b/l no.", "bill of lading", "bill of lading no", "bill of lading number"):
+            mapping[col] = "bill_of_lading_no"
+        # ACZA's "Container Number" is a 5-digit internal number, so it is not matched here.
+        elif key in ("container no", "container no.", "iso container no", "iso container number"):
+            mapping[col] = "container_no"
         elif is_ret_aut_quote_header(col):
             mapping[col] = "ret_aut_quote_no"
     return mapping

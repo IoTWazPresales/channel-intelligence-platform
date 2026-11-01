@@ -133,3 +133,22 @@ def test_stock_gap_highlight_units_default_save_and_reject() -> None:
         profile.save_tenant_profile_overrides("acme", {"stock_gap_highlight_units": "0"})
     with pytest.raises(ValueError, match="stock_gap_highlight_units"):
         profile.save_tenant_profile_overrides("acme", {"stock_gap_highlight_units": "ten"})
+
+
+def test_shipping_method_pattern_roundtrip_and_refusal() -> None:
+    from app.services.imports.shipment_voyage import split_shipping_method, tenant_shipping_method_pattern
+
+    # No override: the default pattern reads the forwarder and hub.
+    assert split_shipping_method("COSCOckg-WWP--", tenant_shipping_method_pattern("acme")) == ("COSCO", "ckg")
+    saved = profile.save_tenant_profile_overrides("acme", {"shipping_method_pattern": r"^(?P<forwarder>[A-Z]+)(?P<hub>[a-z]{2})"})
+    assert saved["shipping_method_pattern"].startswith("^(?P<forwarder>")
+    assert split_shipping_method("COSCOckg-WWP--", tenant_shipping_method_pattern("acme")) == ("COSCO", "ck")
+    with pytest.raises(ValueError, match="forwarder"):
+        profile.save_tenant_profile_overrides("acme", {"shipping_method_pattern": r"^(?P<hub>[a-z]+)"})
+    with pytest.raises(ValueError, match="valid pattern"):
+        profile.save_tenant_profile_overrides("acme", {"shipping_method_pattern": "("})
+    # A refused save keeps the stored pattern; clearing it brings the default back.
+    assert profile.load_tenant_profile_overrides("acme")["shipping_method_pattern"].startswith("^(?P<forwarder>")
+    profile.save_tenant_profile_overrides("acme", {"shipping_method_pattern": ""})
+    assert "shipping_method_pattern" not in profile.load_tenant_profile_overrides("acme")
+    assert split_shipping_method("COSCOckg-WWP--", tenant_shipping_method_pattern("acme")) == ("COSCO", "ckg")

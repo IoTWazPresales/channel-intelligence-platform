@@ -4,20 +4,29 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
+from app.models.shipment_water import ShipmentWaterColumns
 
 
-class ShipmentEvidenceObservation(Base, TimestampMixin):
+class ShipmentEvidenceObservation(ShipmentWaterColumns, Base, TimestampMixin):
     """One immutable observation of a shipment line at validate time."""
 
     __tablename__ = "shipment_evidence_observation"
     __table_args__ = (
         Index("ix_shipment_ev_obs_import_job", "import_job_id"),
         Index("ix_shipment_ev_obs_line_identity", "line_identity_key"),
+        # Newest observation per line identity as an ordered index-only scan (20261009_0026 / 0027).
+        Index(
+            "ix_shipment_ev_obs_identity_latest",
+            "line_identity_key",
+            text("valid_from DESC NULLS LAST"),
+            text("id DESC"),
+            postgresql_include=["product_id", "superseded_by_id"],
+        ),
         Index("ix_shipment_ev_obs_valid_from", "valid_from"),
         Index("ix_shipment_ev_obs_product_status", "product_resolution_status"),
         UniqueConstraint(
@@ -29,9 +38,8 @@ class ShipmentEvidenceObservation(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     line_identity_key: Mapped[str] = mapped_column(String(256), nullable=False)
-    import_job_id: Mapped[int] = mapped_column(
-        ForeignKey("import_job.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    # Indexed by ix_shipment_ev_obs_import_job above (a second index=True here made a twin).
+    import_job_id: Mapped[int] = mapped_column(ForeignKey("import_job.id", ondelete="CASCADE"), nullable=False)
     source_key: Mapped[str] = mapped_column(String(256), nullable=False)
     source_row_hash: Mapped[str] = mapped_column(String(40), nullable=False)
     evidence_line_id: Mapped[int | None] = mapped_column(

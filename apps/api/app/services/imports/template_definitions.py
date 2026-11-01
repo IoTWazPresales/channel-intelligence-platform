@@ -701,7 +701,32 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 "required": False,
             },
             "crad_date": {"aliases": ["CRAD", "crad"], "required": False},
-            "shipway": {"aliases": ["Shipway", "Ship Way"], "required": False},
+            "shipway": {"aliases": [], "required": False},
+            # On the water (20261101_0049). "Container Number" is ACZA's 5-digit internal number: not container_no.
+            "on_board_date": {"aliases": ["On-Board Date", "On Board Date", "Onboard Date"], "required": False},
+            "port_eta_date": {
+                "aliases": ["ETA Date(Est Port Arrival)", "ETA Date (Est Port Arrival)", "Port ETA", "Port ETA Date"],
+                "required": False,
+            },
+            "port_ata_date": {
+                "aliases": ["ATA Date(Actual Port Arrival)", "ATA Date (Actual Port Arrival)", "Port ATA", "Port ATA Date"],
+                "required": False,
+            },
+            "shipping_method": {"aliases": ["Shipping Method"], "required": False},
+            "forwarder_code": {"aliases": ["Forwarder", "Forwarder Code"], "required": False},
+            "origin_hub": {"aliases": ["Origin Hub"], "required": False},
+            "ship_way": {"aliases": ["Ship Way", "Shipway"], "required": False},
+            "deliver_port": {"aliases": ["Deliver Port", "Delivery Port", "Port of Discharge"], "required": False},
+            "vessel_name": {"aliases": ["Vessel", "Vessel Name"], "required": False},
+            "voyage_no": {"aliases": ["Voyage", "Voyage No", "Voyage No.", "Voyage Number"], "required": False},
+            "bill_of_lading_no": {
+                "aliases": ["B/L", "B/L No", "B/L No.", "BL No", "Bill of Lading", "Bill of Lading No", "Bill of Lading Number"],
+                "required": False,
+            },
+            "container_no": {
+                "aliases": ["Container No", "Container No.", "ISO Container No", "ISO Container Number"],
+                "required": False,
+            },
             "ret_aut_quote_no": {
                 "aliases": [
                     "RET/AUT/QUOTE",

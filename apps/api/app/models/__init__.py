@@ -115,6 +115,7 @@ from app.models.cpor import (
 )
 from app.models.cpor_approval import CporCaseApprovalLink
 from app.models.fx_rate import FxDailyRate
+from app.models.shipment_water import PortCondition
 from app.models.cpor_historical import (
     CporHistoricalMappingProfile,
     ImportCporHistoricalStagingLine,
@@ -235,6 +236,7 @@ __all__ = [
     "CporClaimEvidenceLine",
     "CporCaseApprovalLink",
     "FxDailyRate",
+    "PortCondition",
     "CporHistoricalMappingProfile",
     "ImportCporHistoricalStagingLine",
     "ImportCporHistoricalTokenSurrogate",

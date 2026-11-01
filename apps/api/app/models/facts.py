@@ -1,10 +1,11 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
+from app.models.shipment_water import ShipmentWaterColumns
 
 
 class FactSalesSellout(Base, TimestampMixin):
@@ -123,20 +124,28 @@ class FactInventoryReconciliation(Base, TimestampMixin):
     )
 
 
-class FactInboundShipment(Base, TimestampMixin):
+class FactInboundShipment(ShipmentWaterColumns, Base, TimestampMixin):
     """Inbound shipment / order truth layer, fed from ``ShipmentEvidenceLine`` on apply."""
 
     __tablename__ = "fact_inbound_shipment"
-    __table_args__ = (Index("ix_fact_inbound_shipment_import_job_id", "import_job_id"),)
+    __table_args__ = (
+        Index("ix_fact_inbound_shipment_import_job_id", "import_job_id"),
+        # One fact per shipped identity (20260630_0061). NULL keys do not collide: see ``fact_upsert_key``.
+        UniqueConstraint("fact_upsert_key", name="uq_fact_inbound_shipment_fact_upsert_key"),
+        # As-of weeks-of-cover reads: delivered/open lines per distributor and product by POD date.
+        Index("ix_fact_inbound_shipment_woc_asof", "distributor_id", "product_id", "pod_date", "line_state"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True)
-    source_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    # cip has this NOT NULL (20260630_0060); the model stays nullable because tests and seed_demo build rows
+    # without a key. See .eif/audit/ON_THE_WATER_20261029/schema_drift.txt.
     fact_upsert_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
     shipment_evidence_line_id: Mapped[int | None] = mapped_column(
-        ForeignKey("shipment_evidence_line.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("shipment_evidence_line.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     source_sheet: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -178,17 +187,19 @@ class FactInboundShipment(Base, TimestampMixin):
     est_pod_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     pod_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True, index=True)
     product_resolution_status: Mapped[str] = mapped_column(String(64), nullable=False)
     product_resolution_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     product_resolution_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True)
+    distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True, index=True)
     distributor_resolution_status: Mapped[str] = mapped_column(String(64), nullable=False)
     distributor_resolution_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     customer_dealer_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     customer_resolution_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     resolved_customer_id: Mapped[int | None] = mapped_column(

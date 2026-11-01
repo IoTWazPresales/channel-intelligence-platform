@@ -15,6 +15,7 @@ from app.services.imports.shipment_evidence_read import shipment_evidence_read_r
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
+from app.models.shipment_water import WATER_FIELDS
 from app.services.imports.shipment_evidence_line_identity import (
     observation_payload_hash,
     stable_line_identity_key_from_mapping,
@@ -67,6 +68,9 @@ _LINE_TO_OBSERVATION_COLS = (
     "customer_dealer_token",
     "customer_id",
     "customer_resolution_status",
+    # On the water (20261101_0049). Not in the observation hash (_OBSERVATION_HASH_COLS), so hashes
+    # of observations written before the columns existed are unchanged.
+    *WATER_FIELDS,
 )
 
 
@@ -92,7 +96,8 @@ def _line_to_observation_values(
     valid_from: datetime,
     observed_at: datetime,
 ) -> dict[str, Any]:
-    base = {col: getattr(line, col) for col in _LINE_TO_OBSERVATION_COLS}
+    # A stub line without the voyage attributes reads as empty there (the columns are new and nullable).
+    base = {col: getattr(line, col, None) if col in WATER_FIELDS else getattr(line, col) for col in _LINE_TO_OBSERVATION_COLS}
     base["import_job_id"] = int(line.import_job_id)
     base["evidence_line_id"] = int(line.id)
     base["line_identity_key"] = stable_line_identity_key_from_mapping(base)

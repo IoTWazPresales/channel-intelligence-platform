@@ -30,6 +30,7 @@ from app.core.config import get_settings
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.models.shipment_water import WATER_DATE_FIELDS, WATER_FIELDS
 from app.services.imports.distributor_sales_inventory import (
     DSIResolutionCache,
     ProductResolutionIndex,
@@ -168,8 +169,16 @@ def _tabular_cell_scalar(v: Any) -> Any:
     return v
 
 
-def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None = None) -> dict[str, Any]:
-    """Extract canonical shipment fields. When ``header_by_canonical`` is set (canonical -> file header), use it first."""
+def _extract_common(
+    row: pd.Series,
+    header_by_canonical: dict[str, str] | None = None,
+    voyage_pattern: Any = None,
+) -> dict[str, Any]:
+    """Extract canonical shipment fields. When ``header_by_canonical`` is set (canonical -> file header), use it first.
+
+    ``voyage_pattern`` is the tenant's Shipping Method pattern (compiled once per job by the caller); None reads
+    the default. The voyage fields come only through the mapping (``by_canon``): their header aliases live in the
+    mapping layer, not here."""
 
     def by_canon(canon: str) -> Any:
         if header_by_canonical:
@@ -286,6 +295,15 @@ def _extract_common(row: pd.Series, header_by_canonical: dict[str, str] | None =
     if not extracted["order_no"] and extracted["ret_aut_quote_no"]:
         # SO# is usually blank on BOM not ready. The RET/AUT/QUOTE number is the line identity.
         extracted["order_no"] = extracted["ret_aut_quote_no"]
+    from app.services.imports.shipment_voyage import voyage_fields
+
+    extracted.update(
+        voyage_fields(
+            {**{name: by_canon(name) for name in WATER_FIELDS}, "shipway": extracted["shipway"]},
+            parse_date=_parse_date,
+            pattern=voyage_pattern,
+        )
+    )
     return extracted
 
 
@@ -883,6 +901,7 @@ _SHIPMENT_LINE_DATE_COLS = (
     "est_pod_date",
     "pod_date",
     "crad_date",
+    *WATER_DATE_FIELDS,
 )
 
 
@@ -932,6 +951,7 @@ def _shipment_line_conflict_set(ex: Any) -> dict[str, Any]:
         "pod_date": ex.pod_date,
         "crad_date": ex.crad_date,
         "customer_dealer_token": ex.customer_dealer_token,
+        **{name: getattr(ex, name) for name in WATER_FIELDS},
         "updated_at": func.now(),
     }
 
@@ -1327,6 +1347,9 @@ def process_shipment_evidence_import(
 
     book_report_date = report_date_for_job(job)
     unship_pairs = _unship_po_item_keys(frames, header_by_canonical)
+    from app.services.imports.shipment_voyage import tenant_shipping_method_pattern
+
+    voyage_pattern = tenant_shipping_method_pattern(str(getattr(job, "tenant_id", None) or "default"))
 
     product_resolve_s = 0.0
     distributor_resolve_s = 0.0
@@ -1343,7 +1366,7 @@ def process_shipment_evidence_import(
             try:
                 series = row if isinstance(row, pd.Series) else pd.Series(row, index=frame.columns)
                 raw_payload = _row_dict(series)
-                ex = _extract_common(series, header_by_canonical)
+                ex = _extract_common(series, header_by_canonical, voyage_pattern)
                 if report_type == REPORT_ACZA_BOM and _po_item_key(ex.get("customer_po"), ex.get("item_code")) in unship_pairs:
                     # The Unship sheet of this report already carries the line. Count it once.
                     continue
@@ -1472,6 +1495,7 @@ def process_shipment_evidence_import(
                     "pod_date": ex["pod_date"],
                     "crad_date": ex["crad_date"],
                     "customer_dealer_token": ex["customer_dealer_token"],
+                    **{name: ex[name] for name in WATER_FIELDS},
                     "customer_resolution_status": None,
                     "customer_id": None,
                     "resolved_customer_id": None,

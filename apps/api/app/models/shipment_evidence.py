@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, Index, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, Index, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
+from app.models.shipment_water import ShipmentWaterColumns
 
 
-class ShipmentEvidenceLine(Base, TimestampMixin):
+class ShipmentEvidenceLine(ShipmentWaterColumns, Base, TimestampMixin):
     """One logical shipment or order line from an OEM / logistics extract.
 
     ``line_state`` distinguishes executed shipments vs open-order / pipeline rows.
@@ -23,6 +24,12 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     __tablename__ = "shipment_evidence_line"
     __table_args__ = (
         Index("ix_shipment_evidence_line_import_job", "import_job_id"),
+        # The active corpus: lines no later load has superseded (the readers filter on this).
+        Index(
+            "ix_shipment_evidence_line_active_corpus",
+            "import_job_id",
+            postgresql_where=text("corpus_superseded_at IS NULL"),
+        ),
         Index("ix_shipment_evidence_line_line_state", "line_state"),
         Index("ix_shipment_evidence_line_report_type", "report_type"),
         Index("ix_shipment_evidence_line_product_status", "product_resolution_status"),
@@ -34,9 +41,8 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    import_job_id: Mapped[int] = mapped_column(
-        ForeignKey("import_job.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    # Indexed by ix_shipment_evidence_line_import_job above (a second index=True here made a twin).
+    import_job_id: Mapped[int] = mapped_column(ForeignKey("import_job.id", ondelete="CASCADE"), nullable=False)
     source_sheet: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source_row_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -79,17 +85,19 @@ class ShipmentEvidenceLine(Base, TimestampMixin):
     est_pod_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     pod_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True, index=True)
     product_resolution_status: Mapped[str] = mapped_column(String(64), nullable=False)
     product_resolution_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     product_resolution_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True)
+    distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True, index=True)
     distributor_resolution_status: Mapped[str] = mapped_column(String(64), nullable=False)
     distributor_resolution_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     customer_dealer_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dim_customer.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     customer_resolution_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     resolved_customer_id: Mapped[int | None] = mapped_column(

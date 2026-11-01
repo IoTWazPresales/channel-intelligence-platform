@@ -1,0 +1,262 @@
+Schema drift: models (SQLAlchemy) against the live catalogue, whole database. Step 7, ON_THE_WATER_20261029.
+
+Fixed in the models and migration 20261101_0049, on the three shipment tables only:
+  - uq_fact_inbound_shipment_fact_upsert_key declared in app/models/facts.py; added to cip_test (cip already has it).
+  - ix_fact_inbound_shipment_{source_key,customer_id,distributor_id,product_id,shipment_evidence_line_id,woc_asof},
+    ix_shipment_evidence_line_{active_corpus,customer_id,distributor_id,product_id},
+    ix_shipment_ev_obs_identity_latest: declared in the models; created on cip_test where missing (cip has them).
+  - The twin ix_shipment_evidence_line_import_job_id and ix_shipment_evidence_observation_import_job_id (models declared
+    both index=True and an explicit index on import_job_id): removed from the models and dropped on cip_test (cip never had them).
+
+Left unchanged, on the three shipment tables:
+  - fact_inbound_shipment.fact_upsert_key: NOT NULL on cip (20260630_0060), nullable in the model and on cip_test.
+    Reason: seed_demo.py and five test modules (customer_stock_gap, customer_stock_gap_cause, e10_calendar_values,
+    grid_fields, sell_through_overview_db) build FactInboundShipment rows without a key; NOT NULL on cip_test would break
+    them. The unique constraint tolerates NULLs. Decision for Warren: fix those writers, then declare it NOT NULL.
+
+Everything below is every other difference, listed and not touched. Section 1 is a pg_dump clone of cip with
+20261101_0049 applied (so it equals cip after the migration); section 2 is cip_test after the migration.
+Columns and tables "in models, not in database" / "in database, not in models" are as the comparator reports them
+(alembic compare_metadata, compare_type on, server defaults not compared).
+
+================================================================ 1. clone of cip + 20261101_0049 (cip_otw)
+schema drift: database=cip_otw alembic_version=20261101_0049 (read-only; models vs live catalogue)
+196 difference(s)
+
+attribute_definition	INDEX ix_attribute_definition_catalog_id (catalog_id): in database, not in models
+budget_health	INDEX ix_budget_health_owner_id (owner_id): in database, not in models
+budget_justification_summary	INDEX ix_budget_justification_summary_budget_request_id (budget_request_id): in database, not in models
+budget_ledger_entry	INDEX ix_budget_ledger_entry_case (case_id): in database, not in models
+budget_ledger_entry	INDEX ix_budget_ledger_entry_line_quarter (product_line, landed_quarter): in database, not in models
+buy_recommendation	INDEX ix_buy_recommendation_buy_plan_id (buy_plan_id): in database, not in models
+buy_recommendation	INDEX ix_buy_recommendation_product_id (product_id): in database, not in models
+catalog_product	INDEX ix_catalog_product_canonical_product_id (canonical_product_id): in database, not in models
+catalog_product	INDEX ix_catalog_product_catalog_id (catalog_id): in database, not in models
+catalog_product	INDEX ix_catalog_product_last_import_job_id (last_import_job_id): in database, not in models
+channel_source_token_alias	INDEX ix_channel_source_token_alias_channel_id (channel_id): in database, not in models
+channel_source_token_alias	INDEX ix_channel_source_token_alias_created_from_import_job_id (created_from_import_job_id): in database, not in models
+channel_source_token_alias	INDEX ix_channel_source_token_alias_source_definition_id (source_definition_id): in database, not in models
+commercial_lineup_line	INDEX ix_commercial_lineup_line_dist_attr_status (distributor_attribution_status): in database, not in models
+commercial_lineup_line	INDEX ix_commercial_lineup_line_distributor_attribution_status (distributor_attribution_status): in models, not in database
+commercial_plan_line	INDEX ix_commercial_plan_line_commercial_plan_id (commercial_plan_id): in database, not in models
+commercial_plan_line	INDEX ix_commercial_plan_line_customer_id (customer_id): in database, not in models
+commercial_plan_line	INDEX ix_commercial_plan_line_distributor_id (distributor_id): in database, not in models
+commercial_plan_line	INDEX ix_commercial_plan_line_product_id (product_id): in database, not in models
+competitive_positioning	INDEX ix_competitive_positioning_competitor_product_id (competitor_product_id): in database, not in models
+competitive_positioning	INDEX ix_competitive_positioning_product_id (product_id): in database, not in models
+cpor_case	INDEX ix_cpor_case_intelligence_exclude (intelligence_exclude): in database, not in models
+cpor_case	INDEX ix_cpor_case_status (status): in database, not in models
+cpor_case_approval_link	COLUMN cpor_case_approval_link.id: default differs
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_case (case_id): in database, not in models
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_case_code (external_case_code): in database, not in models
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_case_id (case_id): in models, not in database
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_credit_note_id (credit_note_id): in models, not in database
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_customer_id (customer_id): in models, not in database
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_distributor_id (distributor_id): in models, not in database
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_external_case_code (external_case_code): in models, not in database
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_import_job_id (import_job_id): in models, not in database
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_tenant (tenant_id): in database, not in models
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_tenant_id (tenant_id): in models, not in database
+customer_article_alias	INDEX ix_customer_article_alias_customer_article_status (customer_id, article_no_normalized, status): in database, not in models
+customer_location	INDEX ix_customer_location_region_id (region_id): in database, not in models
+customer_source_token_alias	INDEX ix_csta_import_entity_mapping_candidate_id (import_entity_mapping_candidate_id): in database, not in models
+customer_source_token_alias	INDEX ix_customer_source_token_alias_created_from_import_job_id (created_from_import_job_id): in database, not in models
+customer_source_token_alias	INDEX ix_customer_source_token_alias_customer_id (customer_id): in database, not in models
+customer_source_token_alias	INDEX ix_customer_source_token_alias_distributor_id (distributor_id): in database, not in models
+customer_source_token_alias	INDEX ix_customer_source_token_alias_source_definition_id (source_definition_id): in database, not in models
+customer_source_token_alias	INDEX uq_cust_src_token_alias_approved_scope (normalized_token, COALESCE(source_definition_id, '-1'::integer), COALESCE(distributor_id, '-1'::integer)) UNIQUE: in database, not in models
+customer_stock_position	INDEX ix_customer_stock_position_customer_end (tenant_id, customer_id, period_end_date): in database, not in models
+customer_stock_position	UNIQUECONSTRAINT uq_customer_stock_position_period (tenant_id, customer_id, product_id, period_grain, period_start_date): in database, not in models
+dashboard	INDEX ix_dashboard_visibility (visibility): in database, not in models
+dim_competitor_product	INDEX ix_dim_competitor_product_brand_id (brand_id): in database, not in models
+dim_customer	INDEX ix_dim_customer_channel_id (channel_id): in database, not in models
+dim_customer	INDEX ix_dim_customer_merged_into_customer_id (merged_into_customer_id): in database, not in models
+dim_customer	INDEX ix_dim_customer_preferred_distributor_id (preferred_distributor_id): in database, not in models
+dim_customer	INDEX ix_dim_customer_region_id (region_id): in database, not in models
+dim_promotion	TABLE dim_promotion: in models, not in database
+distributor_source_token_alias	INDEX ix_distributor_source_token_alias_created_from_import_job_id (created_from_import_job_id): in database, not in models
+distributor_source_token_alias	INDEX ix_distributor_source_token_alias_distributor_id (distributor_id): in database, not in models
+distributor_source_token_alias	INDEX ix_distributor_source_token_alias_source_definition_id (source_definition_id): in database, not in models
+distributor_source_token_alias	INDEX uq_dist_src_token_alias_approved_scope (normalized_token, COALESCE(source_definition_id, '-1'::integer)) UNIQUE: in database, not in models
+entity_mapping_queue	INDEX ix_entity_mapping_queue_job_id (job_id): in database, not in models
+exception_inbox_item	INDEX ix_exception_inbox_item_product_id (product_id): in database, not in models
+fact_activation	INDEX ix_fact_activation_channel_id (channel_id): in database, not in models
+fact_activation	INDEX ix_fact_activation_product_id (product_id): in database, not in models
+fact_budget_actual	INDEX ix_fact_budget_actual_owner_id (owner_id): in database, not in models
+fact_budget_allocation	INDEX ix_fact_budget_allocation_owner_id (owner_id): in database, not in models
+fact_budget_commitment	INDEX ix_fact_budget_commitment_owner_id (owner_id): in database, not in models
+fact_budget_request	INDEX ix_fact_budget_request_linked_customer_id (linked_customer_id): in database, not in models
+fact_budget_request	INDEX ix_fact_budget_request_linked_product_id (linked_product_id): in database, not in models
+fact_budget_request	INDEX ix_fact_budget_request_linked_promotion_id (linked_promotion_id): in database, not in models
+fact_budget_request	INDEX ix_fact_budget_request_linked_roadmap_id (linked_roadmap_id): in database, not in models
+fact_budget_request	INDEX ix_fact_budget_request_owner_id (owner_id): in database, not in models
+fact_buy_plan	INDEX ix_fact_buy_plan_distributor_id (distributor_id): in database, not in models
+fact_buy_plan	INDEX ix_fact_buy_plan_product_id (product_id): in database, not in models
+fact_competitor_mapping	INDEX ix_fact_competitor_mapping_competitor_product_id (competitor_product_id): in database, not in models
+fact_competitor_mapping	INDEX ix_fact_competitor_mapping_product_id (product_id): in database, not in models
+fact_competitor_price	INDEX ix_fact_competitor_price_competitor_product_id (competitor_product_id): in database, not in models
+fact_competitor_price	INDEX ix_fact_competitor_price_source_job_id (source_job_id): in database, not in models
+fact_customer_sellthrough	INDEX ix_fact_customer_sellthrough_customer_id (customer_id): in database, not in models
+fact_customer_sellthrough	INDEX ix_fact_customer_sellthrough_customer_location_id (customer_location_id): in database, not in models
+fact_customer_sellthrough	INDEX ix_fact_customer_sellthrough_customer_site_period (customer_id, site_label, period_start_date): in database, not in models
+fact_customer_sellthrough	INDEX ix_fact_customer_sellthrough_product_id (product_id): in database, not in models
+fact_customer_sellthrough_superseded	INDEX ix_fact_cst_superseded_by_job (superseded_by_import_job_id): in database, not in models
+fact_customer_sellthrough_superseded	INDEX ix_fact_cst_superseded_customer (tenant_id, customer_id): in database, not in models
+fact_customer_sellthrough_superseded	TABLE fact_customer_sellthrough_superseded: in database, not in models
+fact_customer_velocity	INDEX ix_fact_customer_velocity_customer_id (customer_id): in database, not in models
+fact_customer_velocity	INDEX ix_fact_customer_velocity_import_job_id (import_job_id): in database, not in models
+fact_customer_velocity	INDEX ix_fact_customer_velocity_product_id (product_id): in database, not in models
+fact_demand_forecast	COLUMN fact_demand_forecast.created_at: nullable database=True models=False
+fact_demand_forecast	COLUMN fact_demand_forecast.updated_at: nullable database=True models=False
+fact_demand_forecast	INDEX ix_fact_demand_forecast_tenant_id (tenant_id): in database, not in models
+fact_distributor_line_superseded	INDEX ix_fact_dsi_superseded_by_job (superseded_by_import_job_id): in database, not in models
+fact_distributor_line_superseded	INDEX ix_fact_dsi_superseded_prev_line (previous_staging_line_id): in database, not in models
+fact_distributor_line_superseded	INDEX uq_fact_distributor_line_superseded_pair (fact_table, source_key, COALESCE(previous_staging_line_id, 0), superseded_by_staging_line_id) UNIQUE: in database, not in models
+fact_distributor_line_superseded	TABLE fact_distributor_line_superseded: in database, not in models
+fact_dsi_forecast	INDEX ix_fact_dsi_forecast_distributor_id (distributor_id): in database, not in models
+fact_dsi_forecast	INDEX ix_fact_dsi_forecast_import_job_id (import_job_id): in database, not in models
+fact_dsi_forecast	INDEX ix_fact_dsi_forecast_product_id (product_id): in database, not in models
+fact_forecast	INDEX ix_fact_forecast_customer_id (customer_id): in database, not in models
+fact_forecast	INDEX ix_fact_forecast_product_id (product_id): in database, not in models
+fact_inbound_shipment	COLUMN fact_inbound_shipment.fact_upsert_key: nullable database=False models=True
+fact_inventory_customer	INDEX ix_fact_inventory_customer_customer_id (customer_id): in database, not in models
+fact_inventory_customer	INDEX ix_fact_inventory_customer_product_id (product_id): in database, not in models
+fact_inventory_distributor	INDEX ix_fact_inventory_distributor_distributor_id (distributor_id): in database, not in models
+fact_inventory_distributor	INDEX ix_fact_inventory_distributor_product_id (product_id): in database, not in models
+fact_inventory_distributor	INDEX ix_fact_inventory_distributor_woc_asof (tenant_id, distributor_id, product_id, as_of_date): in database, not in models
+fact_inventory_reconciliation	INDEX ix_fact_inventory_reconciliation_customer_id (customer_id): in database, not in models
+fact_inventory_reconciliation	INDEX ix_fact_inventory_reconciliation_distributor_id (distributor_id): in database, not in models
+fact_inventory_reconciliation	INDEX ix_fact_inventory_reconciliation_import_job_id (import_job_id): in database, not in models
+fact_inventory_reconciliation	INDEX ix_fact_inventory_reconciliation_product_id (product_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_channel_id (channel_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_customer_id (customer_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_link_budget_request_id (link_budget_request_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_link_buy_plan_id (link_buy_plan_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_link_pricing_id (link_pricing_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_link_promotion_id (link_promotion_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_link_roadmap_id (link_roadmap_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_predecessor_product_id (predecessor_product_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_product_id (product_id): in database, not in models
+fact_lineup_plan_item	INDEX ix_fact_lineup_plan_item_successor_product_id (successor_product_id): in database, not in models
+fact_pricing	INDEX ix_fact_pricing_channel_id (channel_id): in database, not in models
+fact_pricing	INDEX ix_fact_pricing_customer_id (customer_id): in database, not in models
+fact_pricing	INDEX ix_fact_pricing_product_id (product_id): in database, not in models
+fact_product_roadmap	INDEX ix_fact_product_roadmap_product_id (product_id): in database, not in models
+fact_product_roadmap	INDEX ix_fact_product_roadmap_replacement_candidate_id (replacement_candidate_id): in database, not in models
+fact_promotion_performance	TABLE fact_promotion_performance: in models, not in database
+fact_promotion_plan	TABLE fact_promotion_plan: in models, not in database
+fact_returns	INDEX ix_fact_returns_customer_id (customer_id): in database, not in models
+fact_returns	INDEX ix_fact_returns_distributor_id (distributor_id): in database, not in models
+fact_returns	INDEX ix_fact_returns_product_id (product_id): in database, not in models
+fact_returns	INDEX ix_fact_returns_staging_line_id (staging_line_id): in database, not in models
+fact_sales_sellin	INDEX ix_fact_sales_sellin_distributor_id (distributor_id): in database, not in models
+fact_sales_sellin	INDEX ix_fact_sales_sellin_product_id (product_id): in database, not in models
+fact_sales_sellout	INDEX ix_fact_sales_sellout_channel_id (channel_id): in database, not in models
+fact_sales_sellout	INDEX ix_fact_sales_sellout_customer_id (customer_id): in database, not in models
+fact_sales_sellout	INDEX ix_fact_sales_sellout_distributor_id (distributor_id): in database, not in models
+fact_sales_sellout	INDEX ix_fact_sales_sellout_product_id (product_id): in database, not in models
+fact_sales_sellout	INDEX ix_fact_sales_sellout_staging_line_id (staging_line_id): in database, not in models
+fact_sales_sellout	INDEX ix_fact_sales_sellout_woc_asof (distributor_id, product_id, transaction_date): in database, not in models
+fact_support	INDEX ix_fact_support_product_id (product_id): in database, not in models
+forecast_summary	INDEX ix_forecast_summary_product_id (product_id): in database, not in models
+import_cpor_historical_staging_line	INDEX ix_import_cpor_historical_staging_case (case_code): in database, not in models
+import_cpor_historical_staging_line	INDEX ix_import_cpor_historical_staging_job (import_job_id): in database, not in models
+import_cpor_historical_staging_line	INDEX ix_import_cpor_historical_staging_line_case_code (case_code): in models, not in database
+import_cpor_historical_staging_line	INDEX ix_import_cpor_historical_staging_line_import_job_id (import_job_id): in models, not in database
+import_cpor_historical_token_surrogate	INDEX ix_import_cpor_historical_token_surrogate_import_job_id (import_job_id): in models, not in database
+import_cpor_historical_token_surrogate	INDEX ix_import_cpor_historical_token_surrogate_job (import_job_id): in database, not in models
+import_cpor_payment_staging_line	INDEX ix_import_cpor_payment_staging_case_code (external_case_code): in database, not in models
+import_cpor_payment_staging_line	INDEX ix_import_cpor_payment_staging_job (import_job_id): in database, not in models
+import_cpor_payment_staging_line	INDEX ix_import_cpor_payment_staging_line_credit_note_id (credit_note_id): in models, not in database
+import_cpor_payment_staging_line	INDEX ix_import_cpor_payment_staging_line_external_case_code (external_case_code): in models, not in database
+import_cpor_payment_staging_line	INDEX ix_import_cpor_payment_staging_line_import_job_id (import_job_id): in models, not in database
+import_cpor_payment_staging_line	INDEX ix_import_cpor_payment_staging_line_linked_case_id (linked_case_id): in models, not in database
+import_customer_sellthrough_staging_line	INDEX ix_cst_staging_job (import_job_id): in database, not in models
+import_customer_sellthrough_staging_line	INDEX ix_cst_staging_job_status (import_job_id, resolution_status): in database, not in models
+import_customer_sellthrough_staging_line	INDEX ix_import_cst_staging_line_fact_sellthrough_row_id (fact_sellthrough_row_id): in database, not in models
+import_customer_sellthrough_staging_line	INDEX ix_import_cst_staging_line_resolved_customer_id (resolved_customer_id): in database, not in models
+import_customer_sellthrough_staging_line	INDEX ix_import_cst_staging_line_resolved_location_id (resolved_location_id): in database, not in models
+import_customer_sellthrough_staging_line	INDEX ix_import_customer_sellthrough_staging_line_import_job_id (import_job_id): in models, not in database
+import_customer_sellthrough_staging_line	INDEX ix_import_customer_sellthrough_staging_line_resolved_product_id (resolved_product_id): in database, not in models
+import_distributor_si_staging_line	INDEX ix_import_distributor_si_staging_line_resolved_customer_id (resolved_customer_id): in database, not in models
+import_distributor_si_staging_line	INDEX ix_import_distributor_si_staging_line_resolved_distributor_id (resolved_distributor_id): in database, not in models
+import_distributor_si_staging_line	INDEX ix_import_distributor_si_staging_line_resolved_product_id (resolved_product_id): in database, not in models
+import_entity_mapping_candidate	INDEX ix_import_entity_mapping_candidate_source_definition_id (source_definition_id): in database, not in models
+import_job	INDEX ix_import_job_source_id (source_id): in database, not in models
+import_row_result	INDEX ix_import_row_result_job_id (job_id): in database, not in models
+lineup_gap_analysis	INDEX ix_lineup_gap_analysis_roadmap_id (roadmap_id): in database, not in models
+lineup_plan_item_event	INDEX ix_lineup_plan_item_event_lineup_item_id (lineup_item_id): in database, not in models
+platform_audit_event	INDEX ix_platform_audit_event_actor_user_id (actor_user_id): in models, not in database
+platform_audit_event	INDEX ix_platform_audit_event_area (area): in models, not in database
+platform_audit_event	INDEX ix_platform_audit_event_created_at (created_at): in models, not in database
+platform_audit_event	INDEX ix_platform_audit_event_tenant_created (tenant_id, created_at): in database, not in models
+platform_audit_event	INDEX ix_platform_audit_event_tenant_id (tenant_id): in models, not in database
+pricing_recommendation	TABLE pricing_recommendation: in models, not in database
+product_alias	INDEX ix_product_alias_product_id (product_id): in database, not in models
+product_attribute_value	INDEX ix_product_attribute_value_attribute_definition_id (attribute_definition_id): in database, not in models
+product_attribute_value	INDEX ix_product_attribute_value_catalog_product_id (catalog_product_id): in database, not in models
+product_catalog	INDEX ix_product_catalog_business_unit_id (business_unit_id): in database, not in models
+promo_plan_export	TABLE promo_plan_export: in models, not in database
+promo_plan_export_event	TABLE promo_plan_export_event: in models, not in database
+promo_readiness	TABLE promo_readiness: in models, not in database
+raw_file_metadata	INDEX ix_raw_file_metadata_job_id (job_id): in database, not in models
+region_source_token_alias	INDEX ix_region_source_token_alias_created_from_import_job_id (created_from_import_job_id): in database, not in models
+region_source_token_alias	INDEX ix_region_source_token_alias_region_id (region_id): in database, not in models
+region_source_token_alias	INDEX ix_region_source_token_alias_source_definition_id (source_definition_id): in database, not in models
+report_schedule	INDEX ix_report_schedule_enabled (enabled): in database, not in models
+roadmap_recommendation	INDEX ix_roadmap_recommendation_roadmap_id (roadmap_id): in database, not in models
+saved_report	INDEX ix_saved_report_visibility (visibility): in database, not in models
+shipment_evidence_current	TABLE shipment_evidence_current: in models, not in database
+source_definition	INDEX ix_source_definition_import_template_id (import_template_id): in database, not in models
+source_definition	INDEX ix_source_definition_product_catalog_id (product_catalog_id): in database, not in models
+steward_audit_event	INDEX ix_steward_audit_event_created_at (created_at): in database, not in models
+stock_health	INDEX ix_stock_health_customer_id (customer_id): in database, not in models
+stock_health	INDEX ix_stock_health_product_id (product_id): in database, not in models
+stock_risk	INDEX ix_stock_risk_customer_id (customer_id): in database, not in models
+stock_risk	INDEX ix_stock_risk_product_id (product_id): in database, not in models
+user_product_line_access	INDEX ix_user_product_line_access_user_id (user_id): in models, not in database
+weeks_of_cover_observation	INDEX ix_woc_observation_current (tenant_id, distributor_id, product_id, cover_as_of_date): in database, not in models
+weeks_of_cover_observation	INDEX ix_woc_observation_current (tenant_id, distributor_id, product_id, cover_as_of_date): in models, not in database
+weeks_of_stock	INDEX ix_weeks_of_stock_customer_id (customer_id): in database, not in models
+weeks_of_stock	INDEX ix_weeks_of_stock_product_id (product_id): in database, not in models
+
+================================================================ 2. cip_test + 20261101_0049
+schema drift: database=cip_test alembic_version=20261101_0049 (read-only; models vs live catalogue)
+36 difference(s)
+
+budget_ledger_entry	INDEX ix_budget_ledger_entry_case (case_id): in database, not in models
+budget_ledger_entry	INDEX ix_budget_ledger_entry_line_quarter (product_line, landed_quarter): in database, not in models
+cpor_case	INDEX ix_cpor_case_intelligence_exclude (intelligence_exclude): in database, not in models
+cpor_case_approval_link	COLUMN cpor_case_approval_link.id: default differs
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_case (case_id): in database, not in models
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_case_code (external_case_code): in database, not in models
+cpor_payment_evidence	INDEX ix_cpor_payment_evidence_tenant (tenant_id): in database, not in models
+customer_article_alias	INDEX ix_customer_article_alias_customer_article_status (customer_id, article_no_normalized, status): in database, not in models
+customer_stock_position	INDEX ix_customer_stock_position_customer_end (tenant_id, customer_id, period_end_date): in database, not in models
+customer_stock_position	UNIQUECONSTRAINT uq_customer_stock_position_period (tenant_id, customer_id, product_id, period_grain, period_start_date): in database, not in models
+dim_promotion	TABLE dim_promotion: in models, not in database
+fact_customer_sellthrough_superseded	INDEX ix_fact_cst_superseded_by_job (superseded_by_import_job_id): in database, not in models
+fact_customer_sellthrough_superseded	INDEX ix_fact_cst_superseded_customer (tenant_id, customer_id): in database, not in models
+fact_customer_sellthrough_superseded	TABLE fact_customer_sellthrough_superseded: in database, not in models
+fact_demand_forecast	INDEX ix_fact_demand_forecast_tenant_id (tenant_id): in database, not in models
+fact_distributor_line_superseded	INDEX ix_fact_dsi_superseded_by_job (superseded_by_import_job_id): in database, not in models
+fact_distributor_line_superseded	INDEX ix_fact_dsi_superseded_prev_line (previous_staging_line_id): in database, not in models
+fact_distributor_line_superseded	INDEX uq_fact_distributor_line_superseded_pair (fact_table, source_key, COALESCE(previous_staging_line_id, 0), superseded_by_staging_line_id) UNIQUE: in database, not in models
+fact_distributor_line_superseded	TABLE fact_distributor_line_superseded: in database, not in models
+fact_inventory_distributor	INDEX ix_fact_inventory_distributor_woc_asof (tenant_id, distributor_id, product_id, as_of_date): in database, not in models
+fact_promotion_performance	TABLE fact_promotion_performance: in models, not in database
+fact_promotion_plan	TABLE fact_promotion_plan: in models, not in database
+fact_sales_sellout	INDEX ix_fact_sales_sellout_woc_asof (distributor_id, product_id, transaction_date): in database, not in models
+import_cpor_payment_staging_line	INDEX ix_import_cpor_payment_staging_case_code (external_case_code): in database, not in models
+import_cpor_payment_staging_line	INDEX ix_import_cpor_payment_staging_job (import_job_id): in database, not in models
+platform_audit_event	INDEX ix_platform_audit_event_actor_user_id (actor_user_id): in models, not in database
+platform_audit_event	INDEX ix_platform_audit_event_area (area): in models, not in database
+platform_audit_event	INDEX ix_platform_audit_event_created_at (created_at): in models, not in database
+platform_audit_event	INDEX ix_platform_audit_event_tenant_created (tenant_id, created_at): in database, not in models
+platform_audit_event	INDEX ix_platform_audit_event_tenant_id (tenant_id): in models, not in database
+pricing_recommendation	TABLE pricing_recommendation: in models, not in database
+promo_plan_export	TABLE promo_plan_export: in models, not in database
+promo_plan_export_event	TABLE promo_plan_export_event: in models, not in database
+promo_readiness	TABLE promo_readiness: in models, not in database
+shipment_evidence_current	TABLE shipment_evidence_current: in models, not in database
+user_product_line_access	INDEX ix_user_product_line_access_user_id (user_id): in models, not in database

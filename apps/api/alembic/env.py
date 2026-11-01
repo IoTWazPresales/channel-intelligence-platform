@@ -22,6 +22,7 @@ from app.models import (  # noqa: F401
     CporCaseLine,
     CporClaimEvidenceLine,
     FxDailyRate,
+    PortCondition,
     CustomerListing,
     DimBudgetOwner,
     DimChannel,
