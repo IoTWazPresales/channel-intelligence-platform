@@ -6,7 +6,11 @@ import { expect, test, type Page } from '@playwright/test';
 // Renders the real "Polish board" dashboard per origin x width x theme with reduced motion, waits for the
 // series to draw, saves a PNG and layout metrics (chart fill, x tick collisions and clipping).
 const out = path.resolve(__dirname, '../../../.eif/audit/DASHBOARD_POLISH_20261029');
-const origins: Array<[string, string]> = [['after', 'http://127.0.0.1:3106'], ...(process.env.CIP_POLISH_BEFORE_DIR ? [['before', 'http://127.0.0.1:3107'] as [string, string]] : [])];
+const only = process.env.CIP_POLISH_ONLY;
+const origins: Array<[string, string]> = [
+  ...(only === 'before' ? [] : [['after', 'http://127.0.0.1:3106'] as [string, string]]),
+  ...(process.env.CIP_POLISH_BEFORE_DIR && only !== 'after' ? [['before', 'http://127.0.0.1:3107'] as [string, string]] : []),
+];
 const sizes: Array<[number, number]> = [[1920, 1080], [1280, 800], [390, 844]];
 
 async function metrics(page: Page) {
@@ -85,14 +89,62 @@ test('render the polish board', async ({ page, browser }) => {
           await cards.nth(i).scrollIntoViewIfNeeded();
           await p.waitForTimeout(300);
           await cards.nth(i).screenshot({ path: path.join(out, 'renders', `${name}-w${i}.png`) });
+          // A body that scrolls hides its bottom axis: shoot it scrolled to the end too, then put it back.
+          const scrollBody = (to: 'end' | 'start') => cards.nth(i).evaluate((card, where) => {
+            let moved = false;
+            for (const el of card.querySelectorAll<HTMLElement>('*')) {
+              if (el.scrollHeight > el.clientHeight + 1 && ['auto', 'scroll'].includes(getComputedStyle(el).overflowY)) {
+                el.scrollTop = where === 'end' ? el.scrollHeight : 0;
+                moved = true;
+              }
+            }
+            return moved;
+          }, to);
+          if (await scrollBody('end')) {
+            await p.waitForTimeout(300);
+            await cards.nth(i).screenshot({ path: path.join(out, 'renders', `${name}-w${i}-end.png`) });
+            await scrollBody('start');
+          }
         }
         all[name] = { background: bg, pageErrors: errors, horizontalOverflow: await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), widgets: await metrics(p) };
         // The Business dashboard leaf (brief) carries the page subtitle and the charts-per-row control.
+        const briefCalls: string[] = [];
+        const noteCall = (r: { status(): number; url(): string }) => {
+          const u = new URL(r.url());
+          if (u.pathname.startsWith('/api/')) briefCalls.push(`${r.status()} ${u.pathname}`);
+        };
+        p.on('response', noteCall);
         await p.goto('/brief', { timeout: 240_000 });
         await expect(p.getByTestId('overview-dashboard-columns')).toBeVisible({ timeout: 120_000 });
-        await p.waitForTimeout(4000);
+        // The six widgets load one query at a time behind the harness lock: wait for them, not for a fixed delay.
+        // Not fatal: the layout checks below stand without them, and the record says whether they loaded.
+        let widgetsLoaded = true;
+        try {
+          await expect(p.locator('[data-engine="v2"]')).toHaveCount(6, { timeout: 90_000 });
+          await expect(p.locator('[data-testid="widget-skeleton"]')).toHaveCount(0, { timeout: 60_000 });
+        } catch {
+          widgetsLoaded = false;
+        }
+        p.off('response', noteCall);
+        await p.waitForTimeout(1500);
         await p.screenshot({ path: path.join(out, 'renders', `${name}-brief.png`), fullPage: true });
+        // The app scrolls inside its shell, so the page shot stops at the viewport: shoot the dashboard zone on its own.
+        const zone = p.getByTestId('dashboard-zone');
+        let zoneShot = true;
+        try {
+          await zone.scrollIntoViewIfNeeded({ timeout: 30_000 });
+          await p.waitForTimeout(300);
+          await zone.screenshot({ path: path.join(out, 'renders', `${name}-brief-zone.png`), timeout: 30_000 });
+        } catch {
+          zoneShot = false; // an element that never settles is itself a finding: recorded below
+        }
         all[`${name}-brief`] = {
+          widgetsLoaded,
+          zoneShot,
+          zoneHeight: await p.getByTestId('dashboard-zone').evaluate((z) => Math.round(z.getBoundingClientRect().height)).catch(() => null),
+          apiCalls: briefCalls.slice(-40),
+          subtitle: await p.getByTestId('dashboard-zone').evaluate((z) => z.closest('section, div[class*="Paper"], div')?.parentElement?.innerText.slice(0, 160) ?? ''),
+          gridText: (await p.getByTestId('dashboard-widget-grid').innerText().catch(() => '')).slice(0, 400),
           horizontalOverflow: await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1),
           panelClipped: await p.evaluate(() => [...document.querySelectorAll('main *')].filter((e) => {
             const r = e.getBoundingClientRect();

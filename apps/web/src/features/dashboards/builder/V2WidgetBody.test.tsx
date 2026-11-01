@@ -6,7 +6,8 @@ import { builderCatalog as catalog } from '@/design-lab/fixtures/builder';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import type { DefinitionV2, V2Response } from './types';
-import { V2WidgetBody } from './V2WidgetBody';
+import { gridColumns, V2WidgetBody } from './V2WidgetBody';
+import type { TableCol } from './table';
 
 vi.mock('recharts', async (original) => ({
   ...await original<typeof import('recharts')>(),
@@ -121,5 +122,46 @@ describe('v2 widget rendering', () => {
     view.rerender(<V2WidgetBody {...props} result={{ ...result, rows: [] }} onClearFilters={clear} />);
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     expect(clear).toHaveBeenCalledOnce();
+  });
+});
+
+describe('gridColumns', () => {
+  const cols: TableCol[] = [
+    { field: 'customer_name', header: 'Customer', kind: 'entity', id: 'customer' },
+    { field: 'm', header: 'Sell-out units (units)', kind: 'measure', id: 'dsi_sellout.units', unit: 'units' },
+  ];
+
+  it('right-aligns numbers under their header and leaves no lone filter button in the header', () => {
+    const [name, measure] = gridColumns(cols, undefined);
+    expect(name.suppressHeaderFilterButton).toBe(true);
+    expect(measure.suppressHeaderFilterButton).toBe(true);
+    expect(measure.cellStyle).toMatchObject({ justifyContent: 'flex-end' });
+    expect(name.cellStyle).toBeUndefined();
+  });
+});
+
+describe('series limit on a chart split by category over time', () => {
+  const d: DefinitionV2 = { v: 1, query: { measures: [measures[0]], breakdowns: ['period', 'customer'], period: { grain: 'week' } } };
+  const columns: V2Response['columns'] = [
+    { id: 'period', kind: 'breakdown', label: 'Period', fields: ['bucket_key', 'bucket_start', 'bucket_end'] },
+    { id: 'customer', kind: 'breakdown', label: 'Customer', fields: ['customer_id', 'customer_name'] },
+    { id: measures[0], kind: 'measure', label: 'Support USD', fields: [measures[0]], unit: 'usd' },
+  ];
+  const names = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf'];
+  const rows = names.flatMap((n, i) =>
+    ['2026-W01', '2026-W02'].map((k) => ({
+      bucket_key: k, bucket_start: '2026-01-05', bucket_end: '2026-01-11', customer_id: i + 1, customer_name: n, [measures[0]]: (names.length - i) * 100,
+    })),
+  );
+  const r: V2Response = { ...result, columns, rows };
+
+  it('starts at the top 5, says which series are left out, and shows more on request', () => {
+    renderWithProviders(<V2WidgetBody def={d} visual="line" catalog={catalog} result={r} loading={false} error={null} testKey="series" />);
+    expect(screen.getByTestId('dashboard-series-omitted-series')).toHaveTextContent('5 categories shown; 2 not shown');
+    expect(screen.getByRole('button', { name: 'Show top 5' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('combobox', { name: 'Sort' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(screen.queryByTestId('dashboard-series-omitted-series')).toBeNull();
+    expect(screen.getAllByText('Golf').length).toBeGreaterThan(0);
   });
 });

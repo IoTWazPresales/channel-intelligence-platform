@@ -36,7 +36,8 @@ WIDGETS = [
     ('Units by customer table', 'table', _q('dsi_sellout.units', ['customer']), (0, 20, 6, 10)),
     ('Units by customer and product', 'bar', _q('dsi_sellout.units', ['customer', 'product']), (6, 20, 6, 10)),
 ]
-ALLOWED = ('/api/v1/auth/', '/api/v1/dashboards', '/api/v1/query/', '/api/v1/semantics/', '/api/v1/reports/', '/api/v1/saved-reports')
+# /api/v1/brief/signals is read-only (brief_signals.build_brief_payload writes nothing); the Overview page needs it for "data as of".
+ALLOWED = ('/api/v1/auth/', '/api/v1/dashboards', '/api/v1/query/', '/api/v1/semantics/', '/api/v1/reports/', '/api/v1/saved-reports', '/api/v1/brief/signals')
 
 
 @pytest.mark.anyio

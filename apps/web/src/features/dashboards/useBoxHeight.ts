@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 const MIN_PLOT = 120;
+// A box whose own height follows its content would make the plot taller every measure. No widget needs more.
+const MAX_PLOT = 900;
 
 /**
  * Plot height that makes a chart fill its widget, so a chart can use the box instead of a fixed plot.
@@ -47,7 +49,7 @@ export function useBoxHeight(ref: RefObject<HTMLElement | null>): number | undef
       }
       const own = getComputedStyle(el);
       extras += (parseFloat(own.paddingTop) || 0) + (parseFloat(own.paddingBottom) || 0);
-      const next = Math.max(MIN_PLOT, Math.floor(box - extras - 2));
+      const next = Math.min(MAX_PLOT, Math.max(MIN_PLOT, Math.floor(box - extras - 2)));
       setHeight((prev) => (prev === next ? prev : next));
     };
     const schedule = () => {

@@ -66,6 +66,8 @@ export function ChartControls({
   total,
   timeAxis = false,
   showTopN = true,
+  showSort = true,
+  topNLabel = 'Rows shown',
   caption: captionOverride,
   testId = 'chart-controls',
 }: {
@@ -77,6 +79,10 @@ export function ChartControls({
   timeAxis?: boolean;
   /** Top-N toggles. Off when every choice would show the same rows; sort stays. */
   showTopN?: boolean;
+  /** Sort menu. Off where the order is fixed (series are always ranked by their total). */
+  showSort?: boolean;
+  /** Accessible name of the top-N toggles ("Series shown" on a multi-series chart). */
+  topNLabel?: string;
   /** Replaces the default "Top 10 of 37" (the pie adds that shares are of the full total). */
   caption?: string | null;
   testId?: string;
@@ -92,7 +98,7 @@ export function ChartControls({
             exclusive
             value={TOP_N_OPTIONS.includes(value.topN) ? value.topN : null}
             onChange={(_e, n: TopN | null) => n != null && onChange({ ...value, topN: n })}
-            aria-label="Rows shown"
+            aria-label={topNLabel}
           >
             {TOP_N_OPTIONS.map((n) => (
               <ToggleButton key={String(n)} value={n} sx={{ px: 1, py: 0.25, minWidth: 36 }} aria-label={n === 'all' ? 'Show all' : `Show top ${n}`}>
@@ -102,19 +108,21 @@ export function ChartControls({
           </ToggleButtonGroup>
         </Box>
       ) : null}
-      <Select
-        size="small"
-        value={current}
-        onChange={(e) => onChange({ ...value, sort: SORT_OF[e.target.value as SortKey] })}
-        inputProps={{ 'aria-label': 'Sort' }}
-        SelectDisplayProps={{ 'aria-label': 'Sort' } as React.HTMLAttributes<HTMLDivElement>}
-        sx={{ fontSize: 13, '& .MuiSelect-select': { py: 0.5 } }}
-      >
-        <MenuItem value="value-desc">Highest first</MenuItem>
-        <MenuItem value="value-asc">Lowest first</MenuItem>
-        <MenuItem value="name-asc">Name A–Z</MenuItem>
-        <MenuItem value="period">{timeAxis ? 'Period' : 'As listed'}</MenuItem>
-      </Select>
+      {showSort ? (
+        <Select
+          size="small"
+          value={current}
+          onChange={(e) => onChange({ ...value, sort: SORT_OF[e.target.value as SortKey] })}
+          inputProps={{ 'aria-label': 'Sort' }}
+          SelectDisplayProps={{ 'aria-label': 'Sort' } as React.HTMLAttributes<HTMLDivElement>}
+          sx={{ fontSize: 13, '& .MuiSelect-select': { py: 0.5 } }}
+        >
+          <MenuItem value="value-desc">Highest first</MenuItem>
+          <MenuItem value="value-asc">Lowest first</MenuItem>
+          <MenuItem value="name-asc">Name A–Z</MenuItem>
+          <MenuItem value="period">{timeAxis ? 'Period' : 'As listed'}</MenuItem>
+        </Select>
+      ) : null}
       {caption ? (
         <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }} data-testid={`${testId}-caption`}>
           {caption}

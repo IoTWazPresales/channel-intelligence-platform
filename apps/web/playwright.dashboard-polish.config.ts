@@ -18,7 +18,11 @@ const env = (dist: string) => ({
 });
 
 // "after" = this working tree on :3106. "before" = a HEAD worktree's apps/web on :3107 (optional).
+// CIP_POLISH_ONLY=after|before starts just that one dev server, so passes run one server and one browser at a time.
 const before = process.env.CIP_POLISH_BEFORE_DIR;
+const only = process.env.CIP_POLISH_ONLY;
+const runAfter = only !== 'before';
+const runBefore = Boolean(before) && only !== 'after';
 
 export default defineConfig({
   ...base,
@@ -27,14 +31,16 @@ export default defineConfig({
   reporter: [['list']],
   use: { ...base.use, trace: 'off', screenshot: 'off', video: 'off' },
   webServer: [
-    {
-      command: 'node node_modules/next/dist/bin/next dev --port 3106 --hostname 127.0.0.1',
-      url: 'http://127.0.0.1:3106/design-lab/builder',
-      reuseExistingServer: false,
-      timeout: 300_000,
-      env: env('.tmp/polish-after'),
-    },
-    ...(before
+    ...(runAfter
+      ? [{
+          command: 'node node_modules/next/dist/bin/next dev --port 3106 --hostname 127.0.0.1',
+          url: 'http://127.0.0.1:3106/design-lab/builder',
+          reuseExistingServer: false,
+          timeout: 300_000,
+          env: env('.tmp/polish-after'),
+        }]
+      : []),
+    ...(runBefore
       ? [{
           command: 'node node_modules/next/dist/bin/next dev --port 3107 --hostname 127.0.0.1',
           cwd: before,

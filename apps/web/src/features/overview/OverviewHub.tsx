@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import type { BriefSignal } from '@/features/brief/BriefSignalRow';
+import { fetchCatalogV2 } from '@/features/dashboards/builder/api';
 import { DashboardWidgetCard } from '@/features/dashboards/DashboardWidgetCard';
 import type { CatalogResponse, Dashboard } from '@/features/dashboards/types';
 import { StartWorkPanel } from '@/features/overview/StartWorkPanel';
@@ -62,6 +63,12 @@ function signalSeverity(s: BriefSignal): 'danger' | 'warning' | 'info' | 'neutra
   return 'neutral';
 }
 
+/** Pixel height of a dashboard grid cell `rows` tall (rowHeight 36, gap 8), kept to a readable range. */
+export function overviewCardHeight(rows: number | undefined): number {
+  const r = typeof rows === 'number' && rows > 0 ? rows : 8;
+  return Math.min(520, Math.max(220, r * 36 + (r - 1) * 8));
+}
+
 export function OverviewHub() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -93,6 +100,13 @@ export function OverviewHub() {
     queryFn: ({ signal }) => apiGet<CatalogResponse>('/api/v1/semantics/catalog', { signal }),
     staleTime: 60_000,
   });
+  // A v2 widget stays a skeleton until the card is given the v2 catalog (undefined = loading, null = none).
+  const catalogV2Q = useQuery({
+    queryKey: ['semantics-v2-catalog'],
+    queryFn: ({ signal }) => fetchCatalogV2(signal),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
   const reportsQ = useQuery({
     queryKey: ['saved-reports'],
     queryFn: ({ signal }) => apiGet<{ items: SavedReportItem[]; count: number }>('/api/v1/saved-reports', { signal }),
@@ -119,7 +133,7 @@ export function OverviewHub() {
       title="Business dashboard"
       subtitle={
         active
-          ? `${active.name}${brief?.as_of ? ` · data as of ${brief.as_of}` : ''}`
+          ? `${active.name}${brief?.as_of ? ` · data as of ${brief.as_of.slice(0, 10)}` : ''}`
           : 'No dashboard yet. Open the editor to add widgets.'
       }
       actions={
@@ -174,14 +188,19 @@ export function OverviewHub() {
             }}
           >
             {widgets.map((w) => (
+              // A definite height, as the dashboards grid gives (rows of 36 px with 8 px gaps): a chart fits the box it
+              // is in, so a box that grows with its chart would grow for ever.
+              <Box key={w.id} sx={{ height: overviewCardHeight(w.layout_json?.h), minWidth: 0 }}>
               <DashboardWidgetCard
-                key={w.id}
                 widget={w}
                 metric={metrics.find((m) => m.key === w.metric_key)}
+                catalog={catalogV2Q.isLoading ? undefined : catalogV2Q.isError ? null : catalogV2Q.data ?? null}
+                dashboardName={active?.name}
                 onEdit={() => router.push('/dashboards')}
                 onDelete={() => router.push('/dashboards')}
                 onPromote={() => router.push('/dashboards')}
               />
+              </Box>
             ))}
           </Box>
         )}

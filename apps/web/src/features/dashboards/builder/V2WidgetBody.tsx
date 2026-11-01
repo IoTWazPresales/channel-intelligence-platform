@@ -9,11 +9,11 @@
 import { Alert, Box, Button, Skeleton, Stack, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ChartControls, categoryPresentation, useChartControls } from '@/features/workbench-ui/ChartControls';
-import { applyTopN, sortRows } from '@/features/workbench-ui/chartRows';
+import { applyTopN, sortRows, type TopN } from '@/features/workbench-ui/chartRows';
 import { HeadlineFigure } from '@/features/workbench-ui/HeadlineFigure';
 import {
   CategoryBars,
@@ -153,11 +153,17 @@ function ToneCell(props: ICellRendererParams & { rules?: ColourRule[]; measureId
   );
 }
 
-/** AG Grid columns for a v2 answer: names only, units in headers, tone cells for colour rules. */
+/**
+ * AG Grid columns for a v2 answer: names only, units in headers, tone cells for colour rules.
+ * A widget table has no per-column filter (the top-N control and the header sort are its controls), so the
+ * filter button is hidden: it sat alone beside a right-aligned label and read as a blank header column.
+ * Numbers are right-aligned under their right-aligned header; the shared grid's flex cells ignore
+ * AG's own right-aligned class, so the alignment is set on the column.
+ */
 export function gridColumns(cols: TableCol[], rules: ColourRule[] | undefined): ColDef<V2Row>[] {
   return cols.map((c) => {
     if (c.kind !== 'measure') {
-      return { field: c.field, headerName: c.header, flex: 1, minWidth: 120, valueGetter: (p) => (p.data ? cellValue(p.data, c) : null) };
+      return { field: c.field, headerName: c.header, flex: 1, minWidth: 120, suppressHeaderFilterButton: true, valueGetter: (p) => (p.data ? cellValue(p.data, c) : null) };
     }
     const unit = c.unit ?? 'number';
     const hasRule = (rules ?? []).some((r) => r.measure === c.id);
@@ -167,6 +173,8 @@ export function gridColumns(cols: TableCol[], rules: ColourRule[] | undefined): 
       type: 'numericColumn',
       flex: 0.7,
       minWidth: 110,
+      suppressHeaderFilterButton: true,
+      cellStyle: { justifyContent: 'flex-end', fontVariantNumeric: 'tabular-nums' },
       valueGetter: (p) => (p.data ? cellValue(p.data, c) : null),
       valueFormatter: (p) => formatChartValue(typeof p.value === 'number' ? p.value : null, unit, 'full'),
       ...(hasRule ? { cellRenderer: ToneCell, cellRendererParams: { rules, measureId: c.id, unit } } : {}),
@@ -214,6 +222,77 @@ function RankedTable({
         />
       </Box>
     </Stack>
+  );
+}
+
+/**
+ * One series per category over time. The series limit is the widget's own control (top 5, 10, 15, 25 or all),
+ * starting at the saved top N or 5. It is not a filter: the series left out are stated, never folded into an
+ * invented "Other".
+ */
+function PeriodSeriesChart({
+  result,
+  measureId,
+  initialTopN,
+  additive,
+  kind,
+  height,
+  unit,
+  xAxisTitle,
+  yAxisTitle,
+  selectedKeys,
+  onSelect,
+  testKey,
+}: {
+  result: V2Response;
+  measureId: string;
+  initialTopN: number;
+  additive: boolean;
+  kind: 'bar' | 'line' | 'area';
+  height: number;
+  unit: MeasureUnit;
+  xAxisTitle: string;
+  yAxisTitle: string;
+  selectedKeys?: string[];
+  onSelect?: (cat: Cat | null | undefined, e: ChartClickEvent) => void;
+  testKey: string | number;
+}) {
+  const [topN, setTopN] = useState<TopN>(initialTopN);
+  const m = periodByCategory(result, measureId, topN === 'all' ? Number.POSITIVE_INFINITY : topN, additive);
+  const total = m.series.length + (m.omittedSeries ?? 0);
+  return (
+    <>
+      {total > 1 ? (
+        <ChartControls
+          value={{ topN, sort: { by: 'value', dir: 'desc' } }}
+          onChange={(next) => setTopN(next.topN)}
+          shown={m.series.length}
+          total={total}
+          showSort={false}
+          topNLabel="Series shown"
+          testId={`dashboard-series-controls-${testKey}`}
+        />
+      ) : null}
+      <TrendChart
+        data={m.data}
+        x="period"
+        height={height}
+        unit={unit}
+        xAxisTitle={xAxisTitle}
+        yAxisTitle={yAxisTitle}
+        stack={kind !== 'line'}
+        series={m.series.map((s) => ({ key: s.key, label: s.label, kind, clickable: Boolean(s.cat && s.cat.value != null), ...(s.other ? { tone: 'muted' as const } : {}) }))}
+        selectedSeries={m.series.filter((s) => s.cat && selectedKeys?.includes(s.cat.key)).map((s) => s.key)}
+        onSeriesClick={onSelect ? (key, e) => onSelect(m.series.find((s) => s.key === key)?.cat, e) : undefined}
+        onPointClick={onSelect ? (row, _i, e) => onSelect(periodCat(row), e) : undefined}
+        datumActions={onSelect ? 'period' : undefined}
+      />
+      {m.omittedSeries ? (
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }} data-testid={`dashboard-series-omitted-${testKey}`}>
+          {m.series.length} categories shown; {m.omittedSeries} not shown. Show more with the buttons above.
+        </Typography>
+      ) : null}
+    </>
   );
 }
 
@@ -509,24 +588,23 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
 
   // Over time split by one category: line, stacked area or stacked columns, a series per category.
   if (hasPeriod && catIds.length === 1 && measureIds.length === 1) {
-    const m = periodByCategory(result, measureIds[0], def.display?.top_n ?? 5, isAdditive(first));
     const kind = visual === 'stacked_bar' || visual === 'bar' ? 'bar' : visual === 'area' ? 'area' : 'line';
     return frame(
-      <TrendChart
-        data={m.data}
-        x="period"
+      <PeriodSeriesChart
+        key={`${measureIds[0]}-${def.display?.top_n ?? ''}`}
+        result={result}
+        measureId={measureIds[0]}
+        initialTopN={def.display?.top_n ?? 5}
+        additive={isAdditive(first)}
+        kind={kind}
         height={plotHeight}
         unit={unit}
         xAxisTitle={periodTitle}
         yAxisTitle={valueTitle}
-        stack={kind !== 'line'}
-        series={m.series.map((s) => ({ key: s.key, label: s.label, kind, clickable: Boolean(s.cat && s.cat.value != null), ...(s.other ? { tone: 'muted' as const } : {}) }))}
-        selectedSeries={m.series.filter((s) => s.cat && selectedKeys?.includes(s.cat.key)).map((s) => s.key)}
-        onSeriesClick={onSelect ? (key, e) => select(m.series.find((s) => s.key === key)?.cat, e) : undefined}
-        onPointClick={onSelect ? (row, _i, e) => select(periodCat(row), e) : undefined}
-        datumActions={onSelect ? 'period' : undefined}
+        selectedKeys={selectedKeys}
+        onSelect={onSelect ? select : undefined}
+        testKey={testKey}
       />,
-      m.omittedSeries ? `${m.series.length} categories shown; ${m.omittedSeries} not shown. Narrow the filters to see the others.` : null,
     );
   }
 

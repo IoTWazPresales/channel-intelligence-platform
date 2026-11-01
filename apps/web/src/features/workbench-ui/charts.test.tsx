@@ -24,6 +24,7 @@ import {
   sparklinePoints,
   thresholdState,
   unitWord,
+  valueAxisRightPad,
   wrapLabel,
   type MeasureUnit,
 } from './charts';
@@ -569,5 +570,48 @@ describe('number integrity: formatting changes, numbers do not', () => {
       }
       unmount();
     }
+  });
+});
+
+describe('valueAxisRightPad', () => {
+  const tick = (v: number) => formatChartValue(v, 'number', 'tick');
+
+  it('keeps the default margin for a short last tick and grows it for a wide one, within a cap', () => {
+    expect(valueAxisRightPad(0, tick)).toBeGreaterThanOrEqual(12);
+    const narrow = valueAxisRightPad(900, tick);
+    const wide = valueAxisRightPad(1_234_567, (v) => `${Math.round(v).toLocaleString('en-US')} units`);
+    expect(wide).toBeGreaterThan(narrow);
+    expect(wide).toBeLessThanOrEqual(48);
+  });
+
+  it('CategoryBars reserves it on a horizontal number axis so the last tick is not cut off', () => {
+    const data = [
+      { name: 'Alpha dealer', value: 7650 },
+      { name: 'Beta dealer', value: 3100 },
+    ];
+    const { container } = renderWithProviders(
+      <CategoryBars data={data} x="name" y="value" unit="number" horizontal xAxisTitle="Units" yAxisTitle="Customer" />,
+    );
+    const wrapper = container.querySelector('.recharts-wrapper');
+    expect(wrapper).not.toBeNull();
+    const plot = container.querySelector('.recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid line');
+    expect(plot).not.toBeNull();
+    const gridRight = Math.max(
+      ...Array.from(container.querySelectorAll('.recharts-cartesian-grid-horizontal line')).map((l) => Number(l.getAttribute('x2'))),
+    );
+    expect(800 - gridRight).toBeGreaterThanOrEqual(valueAxisRightPad(7650, tick));
+  });
+
+  it('one number format per axis: a 100 k to 1 M axis has no mixed "0.0 k" and "100 k" ticks', () => {
+    const data = [
+      { name: 'Alpha dealer', value: 200_000 },
+      { name: 'Beta dealer', value: 60_000 },
+    ];
+    const { container } = renderWithProviders(
+      <CategoryBars data={data} x="name" y="value" unit="number" horizontal xAxisTitle="Units" yAxisTitle="Customer" />,
+    );
+    const ticks = Array.from(container.querySelectorAll('.recharts-xAxis .recharts-cartesian-axis-tick-value')).map((t) => (t.textContent ?? '').trim());
+    expect(ticks.length).toBeGreaterThan(2);
+    for (const t of ticks) expect(t).toMatch(/^\d+\s?k$|^0$/);
   });
 });

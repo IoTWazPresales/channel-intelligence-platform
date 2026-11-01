@@ -1,0 +1,782 @@
+{
+  "before-1920-dark": {
+    "background": "rgb(20, 22, 26)",
+    "pageErrors": [],
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "title": "Units (KPI)",
+        "cardHeight": 168,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by week",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 200,
+        "xTicks": 11,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "DETAILS:20:static:Filter by periodFi"
+        ]
+      },
+      {
+        "title": "Units by customer",
+        "cardHeight": 432,
+        "chartHeight": 416,
+        "fill": 0.96,
+        "chartBottomGap": -77,
+        "xTicks": 5,
+        "xTickCollisions": 0,
+        "xTickClipped": 1,
+        "overflowY": true,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Customer",
+          "DIV:16:static:Sell-out units",
+          "DIV:1:absolute:Sell-out units by ",
+          "DIV:29:static:5101525AllHighest ",
+          "DETAILS:20:static:Filter by category"
+        ]
+      },
+      {
+        "title": "Units by week and customer",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 124,
+        "xTicks": 8,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "UL:68:static:AMAZON COMMERCIAL ",
+          "DETAILS:20:static:Filter by periodFi",
+          "SPAN:20:static:7 categories shown"
+        ]
+      },
+      {
+        "title": "Units by customer table",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by customer and product",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      }
+    ]
+  },
+  "before-1920-dark-brief": {
+    "widgetsLoaded": false,
+    "apiCalls": [
+      "404 /api/v1/imports/background-tasks",
+      "200 /api/v1/auth/me",
+      "200 /api/v1/brief/signals",
+      "200 /api/v1/dashboards",
+      "200 /api/v1/semantics/catalog",
+      "200 /api/v1/saved-reports",
+      "200 /api/v1/brief/signals",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/imports/background-tasks",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/admin/logs/errors"
+    ],
+    "subtitle": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "gridText": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "horizontalOverflow": false,
+    "panelClipped": 0,
+    "widgets": []
+  },
+  "before-1920-light": {
+    "background": "rgb(243, 245, 247)",
+    "pageErrors": [],
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "title": "Units (KPI)",
+        "cardHeight": 168,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by week",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 200,
+        "xTicks": 11,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "DETAILS:20:static:Filter by periodFi"
+        ]
+      },
+      {
+        "title": "Units by customer",
+        "cardHeight": 432,
+        "chartHeight": 416,
+        "fill": 0.96,
+        "chartBottomGap": -77,
+        "xTicks": 5,
+        "xTickCollisions": 0,
+        "xTickClipped": 1,
+        "overflowY": true,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Customer",
+          "DIV:16:static:Sell-out units",
+          "DIV:1:absolute:Sell-out units by ",
+          "DIV:29:static:5101525AllHighest ",
+          "DETAILS:20:static:Filter by category"
+        ]
+      },
+      {
+        "title": "Units by week and customer",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 124,
+        "xTicks": 8,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "UL:68:static:AMAZON COMMERCIAL ",
+          "DETAILS:20:static:Filter by periodFi",
+          "SPAN:20:static:7 categories shown"
+        ]
+      },
+      {
+        "title": "Units by customer table",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by customer and product",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      }
+    ]
+  },
+  "before-1920-light-brief": {
+    "widgetsLoaded": false,
+    "apiCalls": [
+      "200 /api/v1/auth/me",
+      "404 /api/v1/imports/background-tasks",
+      "200 /api/v1/brief/signals",
+      "200 /api/v1/dashboards",
+      "200 /api/v1/semantics/catalog",
+      "200 /api/v1/saved-reports",
+      "200 /api/v1/brief/signals",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/imports/background-tasks",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/admin/logs/errors"
+    ],
+    "subtitle": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "gridText": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "horizontalOverflow": false,
+    "panelClipped": 0,
+    "widgets": []
+  },
+  "before-1280-dark": {
+    "background": "rgb(20, 22, 26)",
+    "pageErrors": [],
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "title": "Units (KPI)",
+        "cardHeight": 168,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by week",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 200,
+        "xTicks": 8,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "DETAILS:20:static:Filter by periodFi"
+        ]
+      },
+      {
+        "title": "Units by customer",
+        "cardHeight": 432,
+        "chartHeight": 416,
+        "fill": 0.96,
+        "chartBottomGap": -77,
+        "xTicks": 5,
+        "xTickCollisions": 0,
+        "xTickClipped": 1,
+        "overflowY": true,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Customer",
+          "DIV:16:static:Sell-out units",
+          "DIV:1:absolute:Sell-out units by ",
+          "DIV:29:static:5101525AllHighest ",
+          "DETAILS:20:static:Filter by category"
+        ]
+      },
+      {
+        "title": "Units by week and customer",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 124,
+        "xTicks": 8,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "UL:68:static:AMAZON COMMERCIAL ",
+          "DETAILS:20:static:Filter by periodFi",
+          "SPAN:20:static:7 categories shown"
+        ]
+      },
+      {
+        "title": "Units by customer table",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by customer and product",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      }
+    ]
+  },
+  "before-1280-dark-brief": {
+    "widgetsLoaded": false,
+    "apiCalls": [
+      "404 /api/v1/imports/background-tasks",
+      "200 /api/v1/auth/me",
+      "200 /api/v1/brief/signals",
+      "200 /api/v1/dashboards",
+      "200 /api/v1/semantics/catalog",
+      "200 /api/v1/saved-reports",
+      "200 /api/v1/brief/signals",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/imports/background-tasks",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/admin/logs/errors"
+    ],
+    "subtitle": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "gridText": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "horizontalOverflow": false,
+    "panelClipped": 0,
+    "widgets": []
+  },
+  "before-1280-light": {
+    "background": "rgb(243, 245, 247)",
+    "pageErrors": [],
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "title": "Units (KPI)",
+        "cardHeight": 168,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by week",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 200,
+        "xTicks": 8,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "DETAILS:20:static:Filter by periodFi"
+        ]
+      },
+      {
+        "title": "Units by customer",
+        "cardHeight": 432,
+        "chartHeight": 416,
+        "fill": 0.96,
+        "chartBottomGap": -77,
+        "xTicks": 5,
+        "xTickCollisions": 0,
+        "xTickClipped": 1,
+        "overflowY": true,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Customer",
+          "DIV:16:static:Sell-out units",
+          "DIV:1:absolute:Sell-out units by ",
+          "DIV:29:static:5101525AllHighest ",
+          "DETAILS:20:static:Filter by category"
+        ]
+      },
+      {
+        "title": "Units by week and customer",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 124,
+        "xTicks": 8,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "UL:68:static:AMAZON COMMERCIAL ",
+          "DETAILS:20:static:Filter by periodFi",
+          "SPAN:20:static:7 categories shown"
+        ]
+      },
+      {
+        "title": "Units by customer table",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by customer and product",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      }
+    ]
+  },
+  "before-1280-light-brief": {
+    "widgetsLoaded": false,
+    "apiCalls": [
+      "404 /api/v1/imports/background-tasks",
+      "200 /api/v1/auth/me",
+      "200 /api/v1/brief/signals",
+      "200 /api/v1/dashboards",
+      "200 /api/v1/semantics/catalog",
+      "200 /api/v1/saved-reports",
+      "200 /api/v1/brief/signals",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/imports/background-tasks",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/admin/logs/errors"
+    ],
+    "subtitle": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "gridText": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "horizontalOverflow": false,
+    "panelClipped": 0,
+    "widgets": []
+  },
+  "before-390-dark": {
+    "background": "rgb(20, 22, 26)",
+    "pageErrors": [],
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "title": "Units (KPI)",
+        "cardHeight": 168,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by week",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 200,
+        "xTicks": 4,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "DETAILS:20:static:Filter by periodFi"
+        ]
+      },
+      {
+        "title": "Units by customer",
+        "cardHeight": 432,
+        "chartHeight": 416,
+        "fill": 0.96,
+        "chartBottomGap": -105,
+        "xTicks": 5,
+        "xTickCollisions": 0,
+        "xTickClipped": 1,
+        "overflowY": true,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Customer",
+          "DIV:16:static:Sell-out units",
+          "DIV:1:absolute:Sell-out units by ",
+          "DIV:57:static:5101525AllHighest ",
+          "DETAILS:20:static:Filter by category"
+        ]
+      },
+      {
+        "title": "Units by week and customer",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 56,
+        "xTicks": 4,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "UL:135:static:AMAZON COMMERCIAL ",
+          "DETAILS:20:static:Filter by periodFi",
+          "SPAN:40:static:7 categories shown"
+        ]
+      },
+      {
+        "title": "Units by customer table",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by customer and product",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      }
+    ]
+  },
+  "before-390-dark-brief": {
+    "widgetsLoaded": false,
+    "apiCalls": [
+      "404 /api/v1/imports/background-tasks",
+      "200 /api/v1/auth/me",
+      "200 /api/v1/brief/signals",
+      "200 /api/v1/dashboards",
+      "200 /api/v1/saved-reports",
+      "200 /api/v1/semantics/catalog",
+      "200 /api/v1/brief/signals",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/imports/background-tasks",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/admin/logs/errors"
+    ],
+    "subtitle": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "gridText": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "horizontalOverflow": false,
+    "panelClipped": 0,
+    "widgets": []
+  },
+  "before-390-light": {
+    "background": "rgb(243, 245, 247)",
+    "pageErrors": [],
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "title": "Units (KPI)",
+        "cardHeight": 168,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by week",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 200,
+        "xTicks": 4,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": false,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "DETAILS:20:static:Filter by periodFi"
+        ]
+      },
+      {
+        "title": "Units by customer",
+        "cardHeight": 432,
+        "chartHeight": 416,
+        "fill": 0.96,
+        "chartBottomGap": -105,
+        "xTicks": 5,
+        "xTickCollisions": 0,
+        "xTickClipped": 1,
+        "overflowY": true,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Customer",
+          "DIV:16:static:Sell-out units",
+          "DIV:1:absolute:Sell-out units by ",
+          "DIV:57:static:5101525AllHighest ",
+          "DETAILS:20:static:Filter by category"
+        ]
+      },
+      {
+        "title": "Units by week and customer",
+        "cardHeight": 432,
+        "chartHeight": 176,
+        "fill": 0.41,
+        "chartBottomGap": 56,
+        "xTicks": 4,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": 365,
+        "dbg": null,
+        "around": [
+          "DIV:16:static:Sell-out units",
+          "DIV:16:static:Period (week)",
+          "DIV:1:absolute:Sell-out units by ",
+          "UL:135:static:AMAZON COMMERCIAL ",
+          "DETAILS:20:static:Filter by periodFi",
+          "SPAN:40:static:7 categories shown"
+        ]
+      },
+      {
+        "title": "Units by customer table",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      },
+      {
+        "title": "Units by customer and product",
+        "cardHeight": 432,
+        "chartHeight": null,
+        "fill": null,
+        "chartBottomGap": null,
+        "xTicks": 0,
+        "xTickCollisions": 0,
+        "xTickClipped": 0,
+        "overflowY": true,
+        "boxClient": null,
+        "dbg": null,
+        "around": []
+      }
+    ]
+  },
+  "before-390-light-brief": {
+    "widgetsLoaded": false,
+    "apiCalls": [
+      "404 /api/v1/imports/background-tasks",
+      "200 /api/v1/auth/me",
+      "200 /api/v1/brief/signals",
+      "200 /api/v1/dashboards",
+      "200 /api/v1/semantics/catalog",
+      "200 /api/v1/saved-reports",
+      "200 /api/v1/brief/signals",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/imports/background-tasks",
+      "404 /api/v1/admin/logs/errors",
+      "404 /api/v1/admin/logs/errors"
+    ],
+    "subtitle": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "gridText": "Units (KPI)\nUnits by week\nUnits by customer\nUnits by week and customer\nUnits by customer table\nUnits by customer and product",
+    "horizontalOverflow": false,
+    "panelClipped": 0,
+    "widgets": []
+  }
+}

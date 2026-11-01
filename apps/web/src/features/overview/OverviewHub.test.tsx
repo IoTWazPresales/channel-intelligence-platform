@@ -2,12 +2,12 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OverviewHub } from './OverviewHub';
+import { OverviewHub, overviewCardHeight } from './OverviewHub';
 
 const theme = createTheme();
 
 const queryByKey = vi.hoisted(() => ({
-  brief: { isLoading: false, isError: false, data: null as null | { signals: unknown[]; signal_count?: number } },
+  brief: { isLoading: false, isError: false, data: null as null | { signals: unknown[]; signal_count?: number; as_of?: string } },
   dashboards: { isLoading: false, isError: false, data: null as null | { items: unknown[] } },
   catalog: { isLoading: false, isError: false, data: { metrics: [] as unknown[] } },
   reports: { isLoading: false, isError: false, data: null as null | { items: unknown[]; count: number } },
@@ -25,7 +25,11 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/features/dashboards/DashboardWidgetCard', () => ({
-  DashboardWidgetCard: ({ widget }: { widget: { title: string } }) => <div>{widget.title}</div>,
+  DashboardWidgetCard: ({ widget, catalog }: { widget: { title: string }; catalog?: unknown }) => (
+    <div data-testid="widget-card" data-catalog={catalog === undefined ? 'loading' : catalog === null ? 'none' : 'ready'}>
+      {widget.title}
+    </div>
+  ),
 }));
 
 vi.mock('@/features/overview/StartWorkPanel', () => ({
@@ -159,5 +163,26 @@ describe('OverviewHub', () => {
     fireEvent.click(screen.getByRole('button', { name: '3 per row' }));
     expect(window.localStorage.getItem('cip.overview.dashboard.columns.v1')).toBe('3');
     expect(screen.getByRole('button', { name: '3 per row' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows the dashboard name and the date the data is as of, not the raw timestamp', () => {
+    queryByKey.brief = { ...queryByKey.brief, data: { signals: [], as_of: '2026-11-01T12:03:19.558548+00:00' } };
+    queryByKey.dashboards = { isLoading: false, isError: false, data: { items: [{ id: 1, name: 'Board', widgets: [] }] } };
+    renderHub();
+    expect(screen.getByText('Board · data as of 2026-11-01')).toBeInTheDocument();
+  });
+
+  it('gives every dashboard card a definite height from its grid rows, within a readable range', () => {
+    expect(overviewCardHeight(10)).toBe(10 * 36 + 9 * 8);
+    expect(overviewCardHeight(undefined)).toBe(8 * 36 + 7 * 8);
+    expect(overviewCardHeight(1)).toBe(220);
+    expect(overviewCardHeight(60)).toBe(520);
+  });
+
+  it('hands each widget card the v2 catalog state, so a v2 widget is not a skeleton for ever', () => {
+    queryByKey.dashboards = { isLoading: false, isError: false, data: { items: [{ id: 1, name: 'Board', widgets: [{ id: 7, title: 'Units', metric_key: 'm' }] }] } };
+    renderHub();
+    // The query mock answers an unknown key with data null: that is "no v2 catalog", not "loading".
+    expect(screen.getByTestId('widget-card')).toHaveAttribute('data-catalog', 'none');
   });
 });

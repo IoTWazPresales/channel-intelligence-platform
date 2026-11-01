@@ -144,10 +144,11 @@ export function formatMeasure(
 
 export type ChartValueStyle = 'tick' | 'label' | 'full';
 
-/** One band for a whole axis, so 7 000 and 14 k are not mixed on the same scale. */
+/** One band for a whole axis, so 7 000 and 14 k are not mixed on the same scale. The 100 k band also keeps one precision ("50 k", "100 k", not "50.0 k", "100 k"). */
 function axisBand(maxAbs: number): number {
   if (maxAbs >= 1e9) return 1e9;
   if (maxAbs >= 1e6) return 1e6;
+  if (maxAbs >= 100_000) return 100_000;
   if (maxAbs >= 10_000) return 10_000;
   return 0;
 }
@@ -254,6 +255,16 @@ function chartFormatters(unit?: MeasureUnit, format?: (v: number) => string, axi
     label: format ?? ((v) => formatChartValue(v, u, 'label')),
     full: format ?? ((v) => formatChartValue(v, u, 'full')),
   };
+}
+
+/**
+ * Right margin for a horizontal number axis. Recharts centres the last tick on the plot edge, so a label
+ * wider than the default margin is cut off ("7 65"); reserve half its estimated width, as timeAxisLayout
+ * does for dates. The axis rounds its top tick up, so size from the largest value plus one character.
+ */
+export function valueAxisRightPad(axisMax: number, tick: (v: number) => string) {
+  const chars = tick(axisMax).length + 1;
+  return Math.min(48, Math.max(12, Math.ceil(chars * 3.2) + 4));
 }
 
 function toNumber(v: unknown): number | null {
@@ -907,7 +918,7 @@ export function CategoryBars({
         <BarChart
           data={shown}
           layout={isHorizontal ? 'vertical' : 'horizontal'}
-          margin={{ top: 8, right: 12, left: isHorizontal ? 8 : titled ? 0 : -12, bottom: 0 }}
+          margin={{ top: 8, right: isHorizontal ? valueAxisRightPad(axisMax, fmt.tick) : 12, left: isHorizontal ? 8 : titled ? 0 : -12, bottom: 0 }}
         >
           <CartesianGrid stroke={c.grid} vertical={isHorizontal} horizontal={!isHorizontal} strokeDasharray="2 4" />
           {/* Recharts does not traverse Fragments — axes must be direct children. */}
@@ -1055,7 +1066,7 @@ export function PairedBars({
         <BarChart
           data={shown}
           layout={isHorizontal ? 'vertical' : 'horizontal'}
-          margin={{ top: 8, right: 12, left: isHorizontal ? 8 : titled ? 0 : -12, bottom: 0 }}
+          margin={{ top: 8, right: isHorizontal ? valueAxisRightPad(axisMax, fmt.tick) : 12, left: isHorizontal ? 8 : titled ? 0 : -12, bottom: 0 }}
         >
           <CartesianGrid stroke={c.grid} vertical={isHorizontal} horizontal={!isHorizontal} strokeDasharray="2 4" />
           {isHorizontal ? (
@@ -1273,7 +1284,7 @@ export function TrendChart({
         <ComposedChart
           data={categoryAxis ? plotted : data}
           {...(categoryHorizontal ? { layout: 'vertical' as const } : {})}
-          margin={{ top: lastPointLabel ? 18 : 8, right: 12, left: titled ? 0 : -12, bottom: 0 }}
+          margin={{ top: lastPointLabel ? 18 : 8, right: categoryHorizontal ? valueAxisRightPad(maxOf(series.map((s) => s.key)), fmt.tick) : 12, left: titled ? 0 : -12, bottom: 0 }}
           style={onPointClick ? { cursor: 'pointer' } : undefined}
           onClick={
             onPointClick
