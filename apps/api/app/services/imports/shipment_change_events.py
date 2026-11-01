@@ -37,6 +37,11 @@ _DATE_SLIP_FIELDS: tuple[tuple[str, str], ...] = (
     ("schedule_ship_date", "schedule_ship"),
     ("promise_date", "promise"),
     ("exwork_date", "exwork"),
+    # On the water (BACKLOG-218): the vessel's port ETA and the on-board date. Only a date that moves to
+    # another date is a slip: a blank that becomes a date (the first report that carries one) is not,
+    # because _days_delta is None when either side is empty.
+    ("port_eta_date", "port_eta"),
+    ("on_board_date", "on_board"),
 )
 
 QTY_EPS = 1e-6

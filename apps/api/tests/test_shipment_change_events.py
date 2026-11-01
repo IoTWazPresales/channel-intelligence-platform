@@ -225,3 +225,36 @@ class _FakeResult:
 
     def all(self):
         return self._items
+
+
+def _water_pair(prior: dict, curr: dict):
+    from app.services.imports.shipment_change_events import _diff_consecutive_pair
+
+    t0 = datetime(2026, 9, 29, tzinfo=timezone.utc)
+    t1 = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    a = _obs(id=1, key="k", job_id=1, line_state="open_order", valid_from=t0)
+    b = _obs(id=2, key="k", job_id=2, line_state="open_order", valid_from=t1)
+    for name, value in prior.items():
+        setattr(a, name, value)
+    for name, value in curr.items():
+        setattr(b, name, value)
+    return [e for e in _diff_consecutive_pair(a, b) if e.event_type == "date_slip"]
+
+
+def test_port_eta_moving_to_another_date_is_a_slip():
+    (event,) = _water_pair({"port_eta_date": date(2026, 10, 10)}, {"port_eta_date": date(2026, 10, 24)})
+    assert event.details["date_field"] == "port_eta"
+    assert event.details["days_moved"] == 14
+    assert event.details["prior_date"] == "2026-10-10" and event.details["current_date"] == "2026-10-24"
+
+
+def test_on_board_date_moving_is_a_slip_and_can_move_earlier():
+    (event,) = _water_pair({"on_board_date": date(2026, 9, 10)}, {"on_board_date": date(2026, 9, 8)})
+    assert (event.details["date_field"], event.details["days_moved"]) == ("on_board", -2)
+
+
+def test_a_blank_that_becomes_a_date_is_not_a_slip_nor_is_a_date_that_goes_blank_or_stays():
+    assert _water_pair({"port_eta_date": None}, {"port_eta_date": date(2026, 10, 24)}) == []
+    assert _water_pair({"port_eta_date": date(2026, 10, 24)}, {"port_eta_date": None}) == []
+    assert _water_pair({"port_eta_date": date(2026, 10, 24)}, {"port_eta_date": date(2026, 10, 24)}) == []
+    assert _water_pair({}, {}) == []

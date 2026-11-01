@@ -1,0 +1,678 @@
+{
+  "database": "cip",
+  "per_table_per_field": {
+    "fact_inbound_shipment": {
+      "deliver_port": 15783,
+      "forwarder_code": 15783,
+      "on_board_date": 13249,
+      "origin_hub": 15704,
+      "port_ata_date": 13021,
+      "port_eta_date": 13249,
+      "ship_way": 15785,
+      "shipping_method": 15783
+    },
+    "shipment_evidence_line": {
+      "deliver_port": 110832,
+      "forwarder_code": 110832,
+      "on_board_date": 99099,
+      "origin_hub": 110537,
+      "port_ata_date": 97188,
+      "port_eta_date": 99099,
+      "ship_way": 110834,
+      "shipping_method": 110832
+    },
+    "shipment_evidence_observation": {
+      "deliver_port": 112230,
+      "forwarder_code": 112230,
+      "on_board_date": 99139,
+      "origin_hub": 111916,
+      "port_ata_date": 97188,
+      "port_eta_date": 99139,
+      "ship_way": 112232,
+      "shipping_method": 112230
+    }
+  },
+  "per_table_per_job": {
+    "fact_inbound_shipment": {
+      "1159": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260818_P2.xlsx",
+        "filled": {
+          "deliver_port": 121,
+          "forwarder_code": 121,
+          "on_board_date": 11,
+          "origin_hub": 121,
+          "port_eta_date": 11,
+          "ship_way": 121,
+          "shipping_method": 121
+        },
+        "rows": 121,
+        "rows_filled": 121
+      },
+      "1326": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260901.xlsx",
+        "filled": {
+          "deliver_port": 178,
+          "forwarder_code": 178,
+          "on_board_date": 11,
+          "origin_hub": 166,
+          "port_eta_date": 11,
+          "ship_way": 178,
+          "shipping_method": 178
+        },
+        "rows": 178,
+        "rows_filled": 178
+      },
+      "1339": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260911.xlsx",
+        "filled": {
+          "deliver_port": 238,
+          "forwarder_code": 238,
+          "origin_hub": 238,
+          "ship_way": 238,
+          "shipping_method": 238
+        },
+        "rows": 238,
+        "rows_filled": 238
+      },
+      "153": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260623.xlsx",
+        "filled": {
+          "deliver_port": 536,
+          "forwarder_code": 536,
+          "on_board_date": 369,
+          "origin_hub": 536,
+          "port_ata_date": 369,
+          "port_eta_date": 369,
+          "ship_way": 536,
+          "shipping_method": 536
+        },
+        "rows": 536,
+        "rows_filled": 536
+      },
+      "154": {
+        "already_set_and_different": {},
+        "file": "shipped 2020-2023.xlsx",
+        "filled": {
+          "deliver_port": 6633,
+          "forwarder_code": 6633,
+          "on_board_date": 6463,
+          "origin_hub": 6599,
+          "port_ata_date": 6456,
+          "port_eta_date": 6463,
+          "ship_way": 6633,
+          "shipping_method": 6633
+        },
+        "rows": 6633,
+        "rows_filled": 6633
+      },
+      "1695": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260929.xlsx",
+        "filled": {
+          "deliver_port": 93,
+          "forwarder_code": 93,
+          "on_board_date": 41,
+          "origin_hub": 93,
+          "port_eta_date": 41,
+          "ship_way": 93,
+          "shipping_method": 93
+        },
+        "rows": 93,
+        "rows_filled": 93
+      },
+      "1696": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20261023 (1).xlsx",
+        "filled": {
+          "deliver_port": 39,
+          "forwarder_code": 39,
+          "origin_hub": 39,
+          "ship_way": 39,
+          "shipping_method": 39
+        },
+        "rows": 39,
+        "rows_filled": 39
+      },
+      "1697": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20261027.xlsx",
+        "filled": {
+          "deliver_port": 7326,
+          "forwarder_code": 7326,
+          "on_board_date": 6327,
+          "origin_hub": 7300,
+          "port_ata_date": 6193,
+          "port_eta_date": 6327,
+          "ship_way": 7328,
+          "shipping_method": 7326
+        },
+        "rows": 7328,
+        "rows_filled": 7328
+      },
+      "32": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260526.xlsx",
+        "filled": {
+          "deliver_port": 48,
+          "forwarder_code": 48,
+          "origin_hub": 48,
+          "ship_way": 48,
+          "shipping_method": 48
+        },
+        "rows": 48,
+        "rows_filled": 48
+      },
+      "40": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260602.xlsx",
+        "filled": {
+          "deliver_port": 130,
+          "forwarder_code": 130,
+          "origin_hub": 130,
+          "ship_way": 130,
+          "shipping_method": 130
+        },
+        "rows": 130,
+        "rows_filled": 130
+      },
+      "601": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260721.xlsx",
+        "filled": {
+          "deliver_port": 89,
+          "forwarder_code": 89,
+          "on_board_date": 27,
+          "origin_hub": 83,
+          "port_ata_date": 3,
+          "port_eta_date": 27,
+          "ship_way": 89,
+          "shipping_method": 89
+        },
+        "rows": 89,
+        "rows_filled": 89
+      },
+      "605": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260728.xlsx",
+        "filled": {
+          "deliver_port": 314,
+          "forwarder_code": 314,
+          "origin_hub": 313,
+          "ship_way": 314,
+          "shipping_method": 314
+        },
+        "rows": 314,
+        "rows_filled": 314
+      },
+      "None": {
+        "already_set_and_different": {},
+        "file": "(no job)",
+        "filled": {
+          "deliver_port": 38,
+          "forwarder_code": 38,
+          "origin_hub": 38,
+          "ship_way": 38,
+          "shipping_method": 38
+        },
+        "rows": 41,
+        "rows_filled": 38
+      }
+    },
+    "shipment_evidence_line": {
+      "1159": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260818_P2.xlsx",
+        "filled": {
+          "deliver_port": 7369,
+          "forwarder_code": 7369,
+          "on_board_date": 6443,
+          "origin_hub": 7357,
+          "port_ata_date": 6240,
+          "port_eta_date": 6443,
+          "ship_way": 7369,
+          "shipping_method": 7369
+        },
+        "rows": 7369,
+        "rows_filled": 7369
+      },
+      "1326": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260901.xlsx",
+        "filled": {
+          "deliver_port": 7561,
+          "forwarder_code": 7561,
+          "on_board_date": 6521,
+          "origin_hub": 7537,
+          "port_ata_date": 6283,
+          "port_eta_date": 6521,
+          "ship_way": 7561,
+          "shipping_method": 7561
+        },
+        "rows": 7561,
+        "rows_filled": 7561
+      },
+      "1339": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260911.xlsx",
+        "filled": {
+          "deliver_port": 7638,
+          "forwarder_code": 7638,
+          "on_board_date": 6583,
+          "origin_hub": 7611,
+          "port_ata_date": 6385,
+          "port_eta_date": 6583,
+          "ship_way": 7638,
+          "shipping_method": 7638
+        },
+        "rows": 7638,
+        "rows_filled": 7638
+      },
+      "147": {
+        "already_set_and_different": {},
+        "file": "Copy of ACZA Shipped Unshipped 20231110.xlsx",
+        "filled": {
+          "deliver_port": 5322,
+          "forwarder_code": 5322,
+          "on_board_date": 5216,
+          "origin_hub": 5295,
+          "port_ata_date": 5212,
+          "port_eta_date": 5216,
+          "ship_way": 5322,
+          "shipping_method": 5322
+        },
+        "rows": 5322,
+        "rows_filled": 5322
+      },
+      "153": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260623.xlsx",
+        "filled": {
+          "deliver_port": 9503,
+          "forwarder_code": 9503,
+          "on_board_date": 8640,
+          "origin_hub": 9487,
+          "port_ata_date": 8622,
+          "port_eta_date": 8640,
+          "ship_way": 9503,
+          "shipping_method": 9503
+        },
+        "rows": 9503,
+        "rows_filled": 9503
+      },
+      "154": {
+        "already_set_and_different": {},
+        "file": "shipped 2020-2023.xlsx",
+        "filled": {
+          "deliver_port": 7215,
+          "forwarder_code": 7215,
+          "on_board_date": 7031,
+          "origin_hub": 7181,
+          "port_ata_date": 7024,
+          "port_eta_date": 7031,
+          "ship_way": 7215,
+          "shipping_method": 7215
+        },
+        "rows": 7215,
+        "rows_filled": 7215
+      },
+      "1695": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260929.xlsx",
+        "filled": {
+          "deliver_port": 7768,
+          "forwarder_code": 7768,
+          "on_board_date": 6807,
+          "origin_hub": 7740,
+          "port_ata_date": 6559,
+          "port_eta_date": 6807,
+          "ship_way": 7768,
+          "shipping_method": 7768
+        },
+        "rows": 7768,
+        "rows_filled": 7768
+      },
+      "1696": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20261023 (1).xlsx",
+        "filled": {
+          "deliver_port": 7931,
+          "forwarder_code": 7931,
+          "on_board_date": 6870,
+          "origin_hub": 7903,
+          "port_ata_date": 6731,
+          "port_eta_date": 6870,
+          "ship_way": 7931,
+          "shipping_method": 7931
+        },
+        "rows": 7931,
+        "rows_filled": 7931
+      },
+      "1697": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20261027.xlsx",
+        "filled": {
+          "deliver_port": 7965,
+          "forwarder_code": 7965,
+          "on_board_date": 6935,
+          "origin_hub": 7937,
+          "port_ata_date": 6801,
+          "port_eta_date": 6935,
+          "ship_way": 7967,
+          "shipping_method": 7965
+        },
+        "rows": 7967,
+        "rows_filled": 7967
+      },
+      "32": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260526.xlsx",
+        "filled": {
+          "deliver_port": 9307,
+          "forwarder_code": 9307,
+          "on_board_date": 8492,
+          "origin_hub": 9292,
+          "port_ata_date": 8257,
+          "port_eta_date": 8492,
+          "ship_way": 9307,
+          "shipping_method": 9307
+        },
+        "rows": 9307,
+        "rows_filled": 9307
+      },
+      "34": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260602.xlsx",
+        "filled": {
+          "deliver_port": 9317,
+          "forwarder_code": 9317,
+          "on_board_date": 8526,
+          "origin_hub": 9301,
+          "port_ata_date": 8384,
+          "port_eta_date": 8526,
+          "ship_way": 9317,
+          "shipping_method": 9317
+        },
+        "rows": 9317,
+        "rows_filled": 9317
+      },
+      "40": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260602.xlsx",
+        "filled": {
+          "deliver_port": 9317,
+          "forwarder_code": 9317,
+          "on_board_date": 8526,
+          "origin_hub": 9301,
+          "port_ata_date": 8384,
+          "port_eta_date": 8526,
+          "ship_way": 9317,
+          "shipping_method": 9317
+        },
+        "rows": 9317,
+        "rows_filled": 9317
+      },
+      "601": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260721.xlsx",
+        "filled": {
+          "deliver_port": 7291,
+          "forwarder_code": 7291,
+          "on_board_date": 6238,
+          "origin_hub": 7279,
+          "port_ata_date": 6145,
+          "port_eta_date": 6238,
+          "ship_way": 7291,
+          "shipping_method": 7291
+        },
+        "rows": 7291,
+        "rows_filled": 7291
+      },
+      "605": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260728.xlsx",
+        "filled": {
+          "deliver_port": 7328,
+          "forwarder_code": 7328,
+          "on_board_date": 6271,
+          "origin_hub": 7316,
+          "port_ata_date": 6161,
+          "port_eta_date": 6271,
+          "ship_way": 7328,
+          "shipping_method": 7328
+        },
+        "rows": 7328,
+        "rows_filled": 7328
+      }
+    },
+    "shipment_evidence_observation": {
+      "1159": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260818_P2.xlsx",
+        "filled": {
+          "deliver_port": 7369,
+          "forwarder_code": 7369,
+          "on_board_date": 6443,
+          "origin_hub": 7357,
+          "port_ata_date": 6240,
+          "port_eta_date": 6443,
+          "ship_way": 7369,
+          "shipping_method": 7369
+        },
+        "rows": 7369,
+        "rows_filled": 7369
+      },
+      "1326": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260901.xlsx",
+        "filled": {
+          "deliver_port": 7561,
+          "forwarder_code": 7561,
+          "on_board_date": 6521,
+          "origin_hub": 7537,
+          "port_ata_date": 6283,
+          "port_eta_date": 6521,
+          "ship_way": 7561,
+          "shipping_method": 7561
+        },
+        "rows": 7561,
+        "rows_filled": 7561
+      },
+      "1339": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260911.xlsx",
+        "filled": {
+          "deliver_port": 8669,
+          "forwarder_code": 8669,
+          "on_board_date": 6585,
+          "origin_hub": 8623,
+          "port_ata_date": 6385,
+          "port_eta_date": 6585,
+          "ship_way": 8669,
+          "shipping_method": 8669
+        },
+        "rows": 8669,
+        "rows_filled": 8669
+      },
+      "147": {
+        "already_set_and_different": {},
+        "file": "Copy of ACZA Shipped Unshipped 20231110.xlsx",
+        "filled": {
+          "deliver_port": 5322,
+          "forwarder_code": 5322,
+          "on_board_date": 5216,
+          "origin_hub": 5295,
+          "port_ata_date": 5212,
+          "port_eta_date": 5216,
+          "ship_way": 5322,
+          "shipping_method": 5322
+        },
+        "rows": 5322,
+        "rows_filled": 5322
+      },
+      "153": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260623.xlsx",
+        "filled": {
+          "deliver_port": 9503,
+          "forwarder_code": 9503,
+          "on_board_date": 8640,
+          "origin_hub": 9487,
+          "port_ata_date": 8622,
+          "port_eta_date": 8640,
+          "ship_way": 9503,
+          "shipping_method": 9503
+        },
+        "rows": 9503,
+        "rows_filled": 9503
+      },
+      "154": {
+        "already_set_and_different": {},
+        "file": "shipped 2020-2023.xlsx",
+        "filled": {
+          "deliver_port": 7215,
+          "forwarder_code": 7215,
+          "on_board_date": 7031,
+          "origin_hub": 7181,
+          "port_ata_date": 7024,
+          "port_eta_date": 7031,
+          "ship_way": 7215,
+          "shipping_method": 7215
+        },
+        "rows": 7215,
+        "rows_filled": 7215
+      },
+      "1695": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260929.xlsx",
+        "filled": {
+          "deliver_port": 8006,
+          "forwarder_code": 8006,
+          "on_board_date": 6807,
+          "origin_hub": 7978,
+          "port_ata_date": 6559,
+          "port_eta_date": 6807,
+          "ship_way": 8006,
+          "shipping_method": 8006
+        },
+        "rows": 8006,
+        "rows_filled": 8006
+      },
+      "1696": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20261023 (1).xlsx",
+        "filled": {
+          "deliver_port": 8021,
+          "forwarder_code": 8021,
+          "on_board_date": 6908,
+          "origin_hub": 7993,
+          "port_ata_date": 6731,
+          "port_eta_date": 6908,
+          "ship_way": 8021,
+          "shipping_method": 8021
+        },
+        "rows": 8021,
+        "rows_filled": 8021
+      },
+      "1697": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20261027.xlsx",
+        "filled": {
+          "deliver_port": 8004,
+          "forwarder_code": 8004,
+          "on_board_date": 6935,
+          "origin_hub": 7976,
+          "port_ata_date": 6801,
+          "port_eta_date": 6935,
+          "ship_way": 8006,
+          "shipping_method": 8004
+        },
+        "rows": 8006,
+        "rows_filled": 8006
+      },
+      "32": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260526.xlsx",
+        "filled": {
+          "deliver_port": 9307,
+          "forwarder_code": 9307,
+          "on_board_date": 8492,
+          "origin_hub": 9292,
+          "port_ata_date": 8257,
+          "port_eta_date": 8492,
+          "ship_way": 9307,
+          "shipping_method": 9307
+        },
+        "rows": 9307,
+        "rows_filled": 9307
+      },
+      "34": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260602.xlsx",
+        "filled": {
+          "deliver_port": 9317,
+          "forwarder_code": 9317,
+          "on_board_date": 8526,
+          "origin_hub": 9301,
+          "port_ata_date": 8384,
+          "port_eta_date": 8526,
+          "ship_way": 9317,
+          "shipping_method": 9317
+        },
+        "rows": 9317,
+        "rows_filled": 9317
+      },
+      "40": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260602.xlsx",
+        "filled": {
+          "deliver_port": 9317,
+          "forwarder_code": 9317,
+          "on_board_date": 8526,
+          "origin_hub": 9301,
+          "port_ata_date": 8384,
+          "port_eta_date": 8526,
+          "ship_way": 9317,
+          "shipping_method": 9317
+        },
+        "rows": 9317,
+        "rows_filled": 9317
+      },
+      "601": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260721.xlsx",
+        "filled": {
+          "deliver_port": 7291,
+          "forwarder_code": 7291,
+          "on_board_date": 6238,
+          "origin_hub": 7279,
+          "port_ata_date": 6145,
+          "port_eta_date": 6238,
+          "ship_way": 7291,
+          "shipping_method": 7291
+        },
+        "rows": 7291,
+        "rows_filled": 7291
+      },
+      "605": {
+        "already_set_and_different": {},
+        "file": "ACZA Shipped Unshipped 20260728.xlsx",
+        "filled": {
+          "deliver_port": 7328,
+          "forwarder_code": 7328,
+          "on_board_date": 6271,
+          "origin_hub": 7316,
+          "port_ata_date": 6161,
+          "port_eta_date": 6271,
+          "ship_way": 7328,
+          "shipping_method": 7328
+        },
+        "rows": 7328,
+        "rows_filled": 7328
+      }
+    }
+  }
+}

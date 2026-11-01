@@ -1,0 +1,73 @@
+app role sync URL      : postgresql://cip:***@localhost:5432/cip
+app role async URL     : postgresql+asyncpg://cip:***@localhost:5432/cip
+owner (migration) URL  : postgresql://postgres:***@localhost:5432/cip
+current_database()     : cip | role cip
+alembic_version        : 20261023_0048
+import jobs not in a final status (archived excluded):
+jobs running or queued   : 0
+other active sessions on cip: 0
+== step 2: migration as the table owner on cip 2026-11-01 17:40:35
+target: DATABASE_URL_SYNC=postgresql://cip:***@localhost:5432/cip  MIGRATE=postgresql+psycopg://postgres:***@localhost:5432/cip
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+20261023_0048
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261023_0048 -> 20261101_0049, On the water: voyage columns on the three shipment tables, manual port conditions, shipment index drift.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+20261101_0049 (head)
+
+== step 3: backfill dry run on cip 2026-11-01 17:40:58
+target: DATABASE_URL_SYNC=postgresql://cip:***@localhost:5432/cip (app role)
+exit=0
+current_database() = cip; role cip; transaction_read_only = on; dry run, nothing is changed
+
+shipment_evidence_line: 110,834 rows; 110,834 to fill
+  job 32 (ACZA Shipped Unshipped 20260526.xlsx): 9,307 rows, 9,307 filled: deliver_port 9,307, forwarder_code 9,307, on_board_date 8,492, origin_hub 9,292, port_ata_date 8,257, port_eta_date 8,492, ship_way 9,307, shipping_method 9,307
+  job 34 (ACZA Shipped Unshipped 20260602.xlsx): 9,317 rows, 9,317 filled: deliver_port 9,317, forwarder_code 9,317, on_board_date 8,526, origin_hub 9,301, port_ata_date 8,384, port_eta_date 8,526, ship_way 9,317, shipping_method 9,317
+  job 40 (ACZA Shipped Unshipped 20260602.xlsx): 9,317 rows, 9,317 filled: deliver_port 9,317, forwarder_code 9,317, on_board_date 8,526, origin_hub 9,301, port_ata_date 8,384, port_eta_date 8,526, ship_way 9,317, shipping_method 9,317
+  job 147 (Copy of ACZA Shipped Unshipped 20231110.xlsx): 5,322 rows, 5,322 filled: deliver_port 5,322, forwarder_code 5,322, on_board_date 5,216, origin_hub 5,295comparison with backfill_clone_proof.txt (same jobs, counts): IDENTICAL: all 44 job and per-field lines on cip equal the clone proof
+
+== step 4: backfill --apply --expect-db cip 2026-11-01 17:50:12
+target: DATABASE_URL_SYNC=postgresql://cip:***@localhost:5432/cip (app role)
+exit=0
+current_database() = cip; role cip; transaction_read_only = off; APPLY
+
+shipment_evidence_line: 110,834 rows; 110,834 to fill
+  shipment_evidence_line per field to fill: deliver_port 110,832, forwarder_code 110,832, on_board_date 99,099, origin_hub 110,537, port_ata_date 97,188, port_eta_date 99,099, ship_way 110,834, shipping_method 110,832
+
+shipment_evidence_observation: 112,232 rows; 112,232 to fill
+  shipment_evidence_observation per field to fill: deliver_port 112,230, forwarder_code 112,230, on_board_date 99,139, origin_hub 111,916, port_ata_date 97,188, port_eta_date 99,139, ship_way 112,232, shipping_method 112,230
+
+fact_inbound_shipment: 15,788 rows; 15,785 to fill
+  fact_inbound_shipment per field to fill: deliver_port 15,783, forwarder_code 15,783, on_board_date 13,249, origin_hub 15,704, port_ata_date 13,021, port_eta_date 13,249, ship_way 15,785, shipping_method 15,783
+  shipment_evidence_line: counts after the write equal the plan
+  shipment_evidence_observation: counts after the write equal the plan
+  fact_inbound_shipment: counts after the write equal the plan
+committed
+
+== step 4b: audit event and second dry run 2026-11-01 17:58:51
+current_database(): cip
+audit event: (22, 'admin', 'shipment_water_backfill', '20261101_0049', 'scripts/ops/backfill_shipment_water_fields.py', datetime.datetime(2026, 11, 1, 17, 50, 17, 608329, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))
+alembic_version: 20261101_0049
+shipment_evidence_line container_no filled: 0 | port_eta_date filled: 99099
+shipment_evidence_observation container_no filled: 0 | port_eta_date filled: 99139
+fact_inbound_shipment container_no filled: 0 | port_eta_date filled: 13249
+current_database() = cip; role cip; transaction_read_only = on; dry run, nothing is changed
+shipment_evidence_line: 110,834 rows; 0 to fill
+  shipment_evidence_line per field to fill: none
+shipment_evidence_observation: 112,232 rows; 0 to fill
+  shipment_evidence_observation per field to fill: none
+fact_inbound_shipment: 15,788 rows; 0 to fill
+  fact_inbound_shipment per field to fill: none
+
+== step 5: web rebuilt, services restarted, health 2026-11-01 18:11:43
+queue check before restart: redis llen celery = 0, no keys; no import job running or queued (DB); redis and a celery worker+beat were running under the supervisor (WSL), so my first note of 'no worker/redis' was wrong
+supervisor pid file was stale (19880; live supervisor 5104); set to 5104 so cip-supervisor-stop.ps1 could find it
+web: stopped, built (apps/web/.next BUILD_ID OG7LI-MKZ6UXikR-ZupKM), then scripts/cip-supervisor-stop.ps1 -Component worker|api|web -Restart
+GET :8001/health/ready -> {"status":"ready","database":"cip","ok":true}
+GET :3000/login -> 200
+celery ping -> celery@RF2300014-NB3 pong
+clone cip_otw NOT removed: the policy guard refused the database removal (ACTION_DESTRUCTIVE_DATA, not granted). It is still in Postgres.
+
+== summary
+cip at 20261101_0049; backfill applied (audit event 22); second dry run fills nothing; counts equal backfill_clone_proof.txt (44 of 44 lines).
