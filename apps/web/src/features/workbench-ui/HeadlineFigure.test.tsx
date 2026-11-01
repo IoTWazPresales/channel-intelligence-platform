@@ -60,4 +60,13 @@ describe('HeadlineFigure', () => {
     renderWithProviders(<HeadlineFigure label="X" value="1" delta={{ text: '2', direction: 'up', goodWhen: 'neutral' }} />);
     expect(screen.getByText('▲ 2')).toBeInTheDocument();
   });
+
+  it('is a size container only when it fits a box: a strip of figures must not collapse to nothing', () => {
+    const rules = () => Array.from(document.querySelectorAll('style')).map((s) => s.textContent ?? '').join('\n');
+    const { unmount } = renderWithProviders(<HeadlineFigure label="Strip tile" value="1" compact />);
+    expect(rules()).not.toContain('container-type');
+    unmount();
+    renderWithProviders(<HeadlineFigure label="Widget tile" value="1" compact fitBox />);
+    expect(rules()).toContain('container-type:size');
+  });
 });

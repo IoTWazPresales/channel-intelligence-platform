@@ -1,0 +1,24 @@
+status 200
+as_of 2026-11-01 | report 2026-10-27 age 5 stale False | reports {'count': 12, 'earlier': 11, 'since': '2026-07-21'}
+tile at_sea {"units": 13516.0, "lines": 162, "vessels": 14, "amount": [{"currency": "USD", "amount": 8258373.8}], "air_units": 738.0, "overdue_vessels": 9}
+tile arrived {"units": 3417.0, "lines": 59, "by_port": [{"name": "City Deep", "units": 3013.0}, {"name": "Port Louis", "units": 404.0}]}
+tile booked {"units": 0.0, "lines": 0}
+tile eta_moved {"vessels_moved": 7, "vessels": 14, "min_days": 7, "max_days": 46, "since": "2026-07-21"}
+vessels 14
+  COSCO | Chongqing → Durban → City Deep | ETA 2026-08-14 slip 0 overdue True | units 1875.0 lines 24 | assumed False | at 33.54 86.18
+  COSCO | Chongqing → Durban → City Deep | ETA 2026-08-28 slip 0 overdue True | units 360.0 lines 4 | assumed False | at 33.54 86.18
+  COSCO | Chongqing → Durban → City Deep | ETA 2026-09-11 slip 0 overdue True | units 348.0 lines 6 | assumed False | at 33.54 86.18
+  WWP | China → Durban → City Deep | ETA 2026-09-14 slip 0 overdue True | units 30.0 lines 1 | assumed False | at 33.54 86.18
+  WWP | China → Durban → City Deep | ETA 2026-09-22 slip 0 overdue True | units 36.0 lines 1 | assumed False | at 33.54 86.18
+  COSCO | Chongqing → Durban → City Deep | ETA 2026-10-25 slip 0 overdue True | units 324.0 lines 3 | assumed False | at 33.54 86.18
+  PREMIERE | Rotterdam → Durban → City Deep | ETA 2026-10-27 slip 29 overdue True | units 3170.0 lines 10 | assumed False | at 33.54 86.18
+  PREMIERE | Rotterdam → Durban → City Deep | ETA 2026-10-29 slip 11 overdue True | units 40.0 lines 1 | assumed False | at 33.54 86.18
+  KGIL + WWP | China / Shanghai → Durban → City Deep | ETA 2026-10-30 slip 46 overdue True | units 687.0 lines 13 | assumed False | at 33.54 86.18
+  COSCO | Chongqing / Shenzhen → Durban → City Deep | ETA 2026-11-05 slip 0 overdue False | units 2670.0 lines 29 | assumed False | at 39.55 82.47
+  COSCO | Chongqing → Durban → City Deep | ETA 2026-11-07 slip 13 overdue False | units 621.0 lines 13 | assumed False | at 54.24 63.56
+  KGIL + WWP | China / Chongqing → Durban → City Deep | ETA 2026-11-18 slip 7 overdue False | units 2462.0 lines 38 | assumed False | at 68.74 51.81
+needs_look {'lines': 6, 'units': 336.0, 'since': '2026-07-21', 'on_board_moved': {'from': '2026-10-11', 'to': '2026-10-18'}}
+ports [('MUPLU', 404.0, False), ('ZAJNB', 3013.0, False)]
+vessel filter -> 200 rows 24 of expected 24
+needs_look filter -> 200 rows 6
+attention row 6 shipped-sheet lines still open

@@ -399,6 +399,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
     return (
       <HeadlineFigure
         compact
+        fitBox
         label={firstLabel}
         value={formatChartValue(totalNum, unit, 'full')}
         delta={

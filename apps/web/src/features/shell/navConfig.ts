@@ -332,6 +332,7 @@ export const navGroups: NavGroup[] = [
       { label: 'Users & roles', href: '/admin/users/list', roles: ADMIN_ONLY, what: 'admin · steward · planner · viewer.' },
       { label: 'Operations', href: '/admin/ops', roles: ADMIN_STEWARD, what: 'Background jobs, retries, activity feed, monitoring.' },
       { label: 'SQL viewer', href: '/admin/sql-viewer', roles: ADMIN_ONLY, what: 'Look up stored records. Every query is recorded.' },
+      { label: 'Port conditions', href: '/admin/port-conditions', roles: ADMIN_ONLY, what: 'Enter how late a port is running. Shows on the On the water map; rows are kept.' },
       { label: 'Audit log', href: '/admin/audit-log', roles: ADMIN_ONLY, what: 'Admin, user, settings and case-state actions. Steward decisions stay on Steward audit.' },
       { label: 'Settings', href: '/settings', roles: ADMIN_ONLY, what: 'Tenant, semantic catalog overlay, mailer.' },
     ],

@@ -84,7 +84,10 @@ def test_run_shipment_apply_sync_orchestration(monkeypatch) -> None:
     monkeypatch.setattr(apply_mod, "persist_pipeline_worker_started_at", lambda s, j: None)
     monkeypatch.setattr(apply_mod, "persist_clear_background_task_metadata", lambda s, j: None)
     monkeypatch.setattr(apply_mod, "apply_high_confidence_shipment_mapping_candidates", lambda job_id: 2)
-    monkeypatch.setattr(apply_mod, "upsert_inbound_shipment_facts_for_job", lambda db, job_id, on_progress=None: 1200)
+    monkeypatch.setattr(
+        apply_mod, "write_shipment_facts_and_close_book",
+        lambda db, job, on_progress=None: {"fact_rows": 1200, "closed": 0, "skipped_reason": None},
+    )
 
     phases: list[str] = []
     out = apply_mod.run_shipment_apply_sync(

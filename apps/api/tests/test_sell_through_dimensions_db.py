@@ -80,7 +80,9 @@ def test_filters_resolve_and_apply(session: Session):
         session, TENANT, {"spec:RAM": ["16GB", "32GB"], "prod:business_unit": ["NB"], "cust:key_account": ["Yes"], "site": ["North"]}
     )
     assert prods == {p16.id, p32.id} and p8.id not in prods
-    assert custs == {c1.id}
+    # The shared test database holds other committed key accounts: the filter must include ours and exclude the
+    # non-key account; the units below (only our tenant's facts) prove nothing else leaks in.
+    assert c1.id in custs and _c2.id not in custs
     assert sites == ["North"]
     f = OverviewFilters(
         date_from=date(2026, 10, 5), date_to=date(2026, 10, 11), tenant_id=TENANT,

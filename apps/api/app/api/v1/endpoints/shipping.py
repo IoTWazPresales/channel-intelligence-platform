@@ -69,6 +69,9 @@ DATE_FIELD_MAP: dict[str, InstrumentedAttribute[Any]] = {
     "exwork_date": FactInboundShipment.exwork_date,
     "erd_date": FactInboundShipment.erd_date,
     "est_pod_date": FactInboundShipment.est_pod_date,
+    "on_board_date": FactInboundShipment.on_board_date,
+    "port_eta_date": FactInboundShipment.port_eta_date,
+    "port_ata_date": FactInboundShipment.port_ata_date,
     "created_at": FactInboundShipment.created_at,
     "updated_at": FactInboundShipment.updated_at,
 }
@@ -167,6 +170,12 @@ def _apply_fact_where_clause(
     tenant_id = (kwargs.get("tenant_id") or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
 
     stmt = stmt.where(FactInboundShipment.tenant_id == tenant_id)
+    vessel_key = (kwargs.get("vessel") or "").strip()
+    if vessel_key:
+        from app.services.commercial_tenant_profile import on_the_water_overrides
+        from app.services.shipping.on_the_water import config_from_overrides, vessel_clause
+
+        stmt = stmt.where(vessel_clause(vessel_key, config_from_overrides(on_the_water_overrides(tenant_id))))
     # D-0057 + D-0065: skip an open line its strict shipped twins cover; a partly shipped one stays.
     stmt = stmt.where(keep_counted_line(FactInboundShipment))
     stmt = stmt.where(exclude_closed_inbound(FactInboundShipment))
@@ -320,6 +329,7 @@ def _build_shipping_fact_filters(
     product_family: str | None = None,
     product_model: str | None = None,
     cohort: str | None = None,
+    vessel: str | None = None,
     tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Shared filter kwargs for ``/lines`` and ``/commercial-summary`` (must stay aligned)."""
@@ -349,6 +359,7 @@ def _build_shipping_fact_filters(
         "product_family": product_family,
         "product_model": product_model,
         "cohort": normalize_cohort(cohort),
+        "vessel": (vessel or "").strip() or None,
         "tenant_id": (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID,
     }
 
@@ -387,6 +398,8 @@ def _shipping_filters_active(filt: dict[str, Any]) -> bool:
         if (filt.get(key) or "").strip():
             return True
     if filt.get("cohort"):
+        return True
+    if filt.get("vessel"):
         return True
     return False
 
@@ -511,11 +524,16 @@ async def _lineup_matching_fact_ids(db: AsyncSession, filt: dict[str, Any], *ext
 
 
 def _cohort_clause(filt: dict[str, Any], *, today: date, week_start: date, week_end: date) -> Any | None:
+    from app.services.commercial_tenant_profile import on_the_water_overrides
+    from app.services.shipping.on_the_water import config_from_overrides
+
+    cfg = config_from_overrides(on_the_water_overrides(str(filt.get("tenant_id") or DEFAULT_TENANT_ID)))
     return predicate_for_cohort(
         filt.get("cohort"),
         today=today,
         week_start=week_start,
         week_end=week_end,
+        needs_look_days=cfg.needs_look_days,
     )
 
 
@@ -680,6 +698,16 @@ def _fact_to_dict(
         "est_pod_date": _fmt_date(row.est_pod_date),
         "pod_date": _fmt_date(row.pod_date),
         "eta_date": _fmt_date(row.eta_date),
+        "on_board_date": _fmt_date(row.on_board_date),
+        "port_eta_date": _fmt_date(row.port_eta_date),
+        "port_ata_date": _fmt_date(row.port_ata_date),
+        "shipping_method": row.shipping_method,
+        "forwarder_code": row.forwarder_code,
+        "origin_hub": row.origin_hub,
+        "ship_way": row.ship_way,
+        "deliver_port": row.deliver_port,
+        "vessel_name": row.vessel_name,
+        "voyage_no": row.voyage_no,
         "reference": row.reference,
         "product_id": row.product_id,
         "product_sku": product_sku,
@@ -836,6 +864,7 @@ async def shipping_commercial_summary(
     lifecycle_bucket: str | None = None,
     slip_direction: str | None = None,
     cohort: str | None = None,
+    vessel: str | None = None,
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """KPI payloads for inbound commercial dashboard cards (same filter contract as ``/lines``).
@@ -865,6 +894,7 @@ async def shipping_commercial_summary(
         product_family=product_family,
         product_model=product_model,
         cohort=cohort,
+        vessel=vessel,
         tenant_id=tenant_id_from_user(user),
     )
     _attach_lineup_filter_keys(
@@ -1109,6 +1139,7 @@ async def shipping_eta_shifts(
     lifecycle_bucket: str | None = None,
     slip_direction: str | None = None,
     cohort: str | None = None,
+    vessel: str | None = None,
     include_line_columns: bool = Query(False),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
@@ -1136,6 +1167,7 @@ async def shipping_eta_shifts(
         product_family=product_family,
         product_model=product_model,
         cohort=cohort,
+        vessel=vessel,
         tenant_id=tenant_id_from_user(user),
     )
     _attach_lineup_filter_keys(
@@ -1225,6 +1257,7 @@ async def shipping_newly_landed(
     lifecycle_bucket: str | None = None,
     slip_direction: str | None = None,
     cohort: str | None = None,
+    vessel: str | None = None,
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """SH-04: POD date set on this report's observation and null on the prior one.
@@ -1254,6 +1287,7 @@ async def shipping_newly_landed(
         product_family=product_family,
         product_model=product_model,
         cohort=cohort,
+        vessel=vessel,
         tenant_id=tenant_id_from_user(user),
     )
     _attach_lineup_filter_keys(
@@ -1432,6 +1466,7 @@ async def shipping_evidence_lines(
     lifecycle_bucket: str | None = None,
     slip_direction: str | None = None,
     cohort: str | None = None,
+    vessel: str | None = None,
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     df = str(date_field or "eta_date").strip()
@@ -1461,6 +1496,7 @@ async def shipping_evidence_lines(
         product_family=product_family,
         product_model=product_model,
         cohort=cohort,
+        vessel=vessel,
         tenant_id=tenant_id_from_user(user),
     )
     _attach_lineup_filter_keys(

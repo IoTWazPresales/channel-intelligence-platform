@@ -123,6 +123,7 @@ from app.api.v1.endpoints import (
     shipment_evidence,
     shipping,
     shipping_mailer,
+    shipping_water,
     sql_viewer,
     steward_audit,
     stock_leaves,
@@ -166,6 +167,7 @@ api_router.include_router(sell_through.router, prefix="/sell-through", tags=["se
 api_router.include_router(listing_capture.router, prefix="/listing-capture", tags=["listing-capture"])
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
 api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])
+api_router.include_router(shipping_water.router, prefix="/shipping", tags=["shipping"])
 api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"])
 api_router.include_router(supply.router, prefix="/supply", tags=["supply"])
 api_router.include_router(stock_leaves.router, prefix="/stock", tags=["stock"])

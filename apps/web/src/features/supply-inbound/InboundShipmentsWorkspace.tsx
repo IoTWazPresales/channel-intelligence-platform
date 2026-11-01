@@ -177,6 +177,8 @@ export function InboundShipmentsWorkspace() {
   const [smartPreset, setSmartPreset] = useState<SmartPresetId | null>(null);
   const [deliveryLens, setDeliveryLens] = useState<DeliveryLensId | null>(null);
   const [cohort, setCohort] = useState<ShippingFilterParams['cohort']>('');
+  // On the water: the vessel whose lines the grid shows (opaque key from the API); '' = all.
+  const [vesselKey, setVesselKey] = useState('');
   const [skip, setSkip] = useState(0);
   const [limit, setLimit] = useState<number>(50);
 
@@ -221,6 +223,7 @@ export function InboundShipmentsWorkspace() {
   }, [limit, persistReady]);
 
   const clearSmartPreset = useCallback(() => {
+    setVesselKey('');
     setSmartPreset(null);
     setDeliveryLens(null);
     setCohort('');
@@ -334,6 +337,43 @@ export function InboundShipmentsWorkspace() {
     gridSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [resetPagination]);
 
+  /** A click on a vessel (or on it again) filters the grid to its lines, the way a tile does. */
+  const selectVessel = useCallback(
+    (key: string | null) => {
+      setVesselKey(key ?? '');
+      if (key) {
+        setSmartPreset(null);
+        setDeliveryLens(null);
+        setCohort('');
+        setLineState('');
+        setCargoStatus('');
+        setDateField('eta_date');
+        setDateFrom('');
+        setDateTo('');
+        setPodDateFilter('');
+        gridSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      resetPagination();
+    },
+    [resetPagination]
+  );
+
+  /** "Open the lines" on Needs a look: Shipped-sheet lines still open past the tenant's days. */
+  const openNeedsLook = useCallback(() => {
+    setVesselKey('');
+    setSmartPreset(null);
+    setDeliveryLens(null);
+    setCohort('needs_look');
+    setLineState('');
+    setCargoStatus('');
+    setDateField('eta_date');
+    setDateFrom('');
+    setDateTo('');
+    setPodDateFilter('');
+    resetPagination();
+    gridSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [resetPagination]);
+
   const toggleSmartPreset = (id: SmartPresetId) => {
     if (smartPreset === id) {
       clearSmartPreset();
@@ -377,6 +417,8 @@ export function InboundShipmentsWorkspace() {
     if (pq) setPlanQuarter(pq);
     const pbu = sp.get('plan_business_unit');
     if (pbu) setPlanBusinessUnit(pbu);
+    // Attention's "Open the lines" (needs a look) lands here with the cohort already set.
+    if (sp.get('cohort') === 'needs_look') setCohort('needs_look');
     const cid = sp.get('customer_id');
     if (cid && /^\d+$/.test(cid)) {
       const id = Number(cid);
@@ -407,6 +449,7 @@ export function InboundShipmentsWorkspace() {
       lifecycleBucket,
       slipDirection,
       cohort,
+      vessel: vesselKey,
     }),
     [
       lineState,
@@ -429,6 +472,7 @@ export function InboundShipmentsWorkspace() {
       lifecycleBucket,
       slipDirection,
       cohort,
+      vesselKey,
     ]
   );
 
@@ -590,6 +634,9 @@ export function InboundShipmentsWorkspace() {
         filterParams={filterParams}
         onApplySmartPreset={applySmartPreset}
         onFilterScheduledPipeline={filterScheduledPipeline}
+        selectedVesselKey={vesselKey || null}
+        onSelectVessel={selectVessel}
+        onOpenNeedsLook={openNeedsLook}
       />
 
       {planQuarter && lineupAttribution !== 'unattributed' ? (
@@ -681,7 +728,7 @@ export function InboundShipmentsWorkspace() {
               onToggle: () => toggleSmartPreset('outstanding'),
             },
           ]}
-          clearAvailable={Boolean(smartPreset || deliveryLens || cohort)}
+          clearAvailable={Boolean(smartPreset || deliveryLens || cohort || vesselKey)}
           onClear={clearSmartPreset}
           filters={
             <>
@@ -930,7 +977,7 @@ export function InboundShipmentsWorkspace() {
         />
       </Box>
 
-      <Paper ref={gridSectionRef} variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+      <Paper ref={gridSectionRef} variant="outlined" sx={{ p: 1.5, mb: 2 }} data-testid="shipments-grid-section">
         <TablePagination
           component="div"
           count={total}

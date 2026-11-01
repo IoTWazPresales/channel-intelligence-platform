@@ -19,6 +19,7 @@ COHORT_CURRENT_INCOMING = "current_incoming"
 COHORT_OVERDUE = "overdue"
 COHORT_ARRIVING_WEEK = "arriving_week"
 COHORT_LANDED_WEEK = "landed_week"
+COHORT_NEEDS_LOOK = "needs_look"
 
 VALID_COHORTS = frozenset(
     {
@@ -26,6 +27,7 @@ VALID_COHORTS = frozenset(
         COHORT_OVERDUE,
         COHORT_ARRIVING_WEEK,
         COHORT_LANDED_WEEK,
+        COHORT_NEEDS_LOOK,
     }
 )
 
@@ -40,6 +42,7 @@ COHORT_DEFINITIONS: dict[str, str] = {
     ),
     COHORT_ARRIVING_WEEK: "scheduled · not landed · ETA in current ISO week",
     COHORT_LANDED_WEEK: "received · POD date in current ISO week",
+    COHORT_NEEDS_LOOK: "open line from a Shipped sheet, no ship confirm date, ex-works date older than the tenant's days",
 }
 
 
@@ -112,12 +115,27 @@ def predicate_landed_week(week_start: date, week_end: date) -> ColumnElement[boo
     )
 
 
+def predicate_needs_look(today: date, days: int = 7) -> ColumnElement[bool]:
+    """Shipped-sheet lines that stayed open: no ship confirm date and an ex-works date older than ``days``."""
+    from app.services.imports.shipment_evidence_report_detect import REPORT_ACZA_SHIPPED
+
+    return and_(
+        FactInboundShipment.line_state == "open_order",
+        FactInboundShipment.report_type == REPORT_ACZA_SHIPPED,
+        FactInboundShipment.ship_confirm_date.is_(None),
+        FactInboundShipment.pod_date.is_(None),
+        FactInboundShipment.exwork_date.is_not(None),
+        FactInboundShipment.exwork_date < today - timedelta(days=days),
+    )
+
+
 def predicate_for_cohort(
     cohort: str | None,
     *,
     today: date,
     week_start: date,
     week_end: date,
+    needs_look_days: int = 7,
 ) -> ColumnElement[bool] | None:
     if not cohort:
         return None
@@ -130,6 +148,8 @@ def predicate_for_cohort(
         return predicate_arriving_week(week_start, week_end)
     if key == COHORT_LANDED_WEEK:
         return predicate_landed_week(week_start, week_end)
+    if key == COHORT_NEEDS_LOOK:
+        return predicate_needs_look(today, needs_look_days)
     return None
 
 

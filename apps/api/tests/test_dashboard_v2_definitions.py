@@ -145,7 +145,8 @@ def test_definition_valid_model_and_governed_with_v1_mirror() -> None:
         ({"query": {"measures": ["dsi_sellout.units"], "period": {"grain": "week", "from": "2026-01-01"}}}, "never stores period.from"),
         ({"query": {"measures": ["dsi_sellout.units"]}, "extra": 1}, "Unknown key in definition_v2"),
         ({"v": 2, "query": {"measures": ["dsi_sellout.units"]}}, "definition_v2.v must be 1"),
-        ({"query": {"measures": ["dsi_sellout.units"], "breakdowns": ["period"], "period": {"grain": "day"}}}, "Lowest calendar grain is week"),
+        # E8 allowed a day grain on a day-floored fact (sell-out); a week-floored one still refuses it.
+        ({"query": {"measures": ["cst_sellthrough.units"], "breakdowns": ["period"], "period": {"grain": "day"}}}, "Lowest calendar grain is week"),
         ({"query": {"measures": ["cst_sellthrough.reported_soh"], "breakdowns": ["period"]}}, "never added up across dates"),
         ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"top_n": 0}}, "top_n"),
         ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"compare": "false"}}, "compare is true or false"),

@@ -61,7 +61,8 @@ def test_catalog_v2_shape() -> None:
     assert units["kind"] == "base" and units["unit"] == "units" and units["additivity"] == "additive"
     assert units["legacy_key"] == "sellout_units" and units["model"] == "dsi_sellout"
     assert "region" in units["breakdowns"] and "site_label" not in units["breakdowns"]
-    assert units["period_grains"] == ["week", "month", "quarter", "year"]
+    # E8: sell-out is day-floored, so it offers the day grain too.
+    assert units["period_grains"] == ["day", "week", "month", "quarter", "year"]
     assert by_id["cst_sellthrough.reported_soh"]["additivity"] == "semi_additive"
     assert "period" not in by_id["cst_sellthrough.reported_soh"]["breakdowns"]
     assert by_id["cpor.delivery_rate"]["kind"] == "calculated" and by_id["cpor.delivery_rate"]["calc"] == "ratio"

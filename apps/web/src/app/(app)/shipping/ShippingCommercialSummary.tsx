@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import { apiGet } from '@/lib/api';
 import { CategoryBars } from '@/features/workbench-ui/charts';
+import { OnTheWater } from '@/features/supply-inbound/onTheWater/OnTheWater';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 
 import {
@@ -97,10 +98,17 @@ export function ShippingCommercialSummary({
   filterParams,
   onApplySmartPreset,
   onFilterScheduledPipeline,
+  selectedVesselKey,
+  onSelectVessel,
+  onOpenNeedsLook,
 }: {
   filterParams: ShippingFilterParams;
   onApplySmartPreset?: (id: SmartPresetId) => void;
   onFilterScheduledPipeline?: () => void;
+  /** On the water: the vessel the grid is filtered to, a click on a vessel, and the "needs a look" link. */
+  selectedVesselKey?: string | null;
+  onSelectVessel?: (key: string | null) => void;
+  onOpenNeedsLook?: () => void;
 }) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const summaryUrl = buildShippingCommercialSummaryUrl(filterParams);
@@ -169,6 +177,29 @@ export function ShippingCommercialSummary({
     ? ` · ${commercial.overdue.stale_promise_line_count.toLocaleString()} stale excluded`
     : '';
 
+  const byDistributorChart = arrivingData.length ? (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+        Arriving this week by distributor
+      </Typography>
+      <CategoryBars
+        data={arrivingData}
+        x="name"
+        y="count"
+        horizontal
+        height={112}
+        // quantity ?? count mixes units and line counts, so the value title carries no unit yet (N-0114 F13).
+        unit="count"
+        xAxisTitle="Distributor"
+        yAxisTitle="Arriving this week"
+      />
+    </Box>
+  ) : (
+    <Typography variant="body2" color="text.secondary">
+      Nothing arrives this week in this view.
+    </Typography>
+  );
+
   return (
     <Box sx={{ mb: 2 }}>
       <HeadlineStrip>
@@ -219,24 +250,13 @@ export function ShippingCommercialSummary({
           severity={net === 'slipped' ? 'bad' : net === 'improved' ? 'good' : 'neutral'}
         />
       </HeadlineStrip>
-      {arrivingData.length ? (
-        <Box sx={{ mt: 1.5 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            Arriving this week by distributor
-          </Typography>
-          <CategoryBars
-            data={arrivingData}
-            x="name"
-            y="count"
-            horizontal
-            height={112}
-            // quantity ?? count mixes units and line counts, so the value title carries no unit yet (N-0114 F13).
-            unit="count"
-            xAxisTitle="Distributor"
-            yAxisTitle="Arriving this week"
-          />
-        </Box>
-      ) : null}
+      <OnTheWater
+        filterParams={filterParams}
+        selectedKey={selectedVesselKey}
+        onSelectVessel={onSelectVessel ?? (() => undefined)}
+        onOpenNeedsLook={onOpenNeedsLook ?? (() => undefined)}
+        byDistributor={byDistributorChart}
+      />
       <Button
         size="small"
         variant="text"

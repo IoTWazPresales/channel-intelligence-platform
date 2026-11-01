@@ -314,6 +314,27 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
     }
 
 
+async def _needs_look_summary(db: AsyncSession, user: dict | None) -> dict[str, Any]:
+    """Open lines from a Shipped sheet with no ship confirm date and an old ex-works date (BACKLOG-219)."""
+    from app.core.tenant_scope import tenant_id_from_user
+    from app.models.facts import FactInboundShipment as F
+    from app.services.commercial_tenant_profile import on_the_water_overrides, reporting_today
+    from app.services.imports.shipment_open_book import exclude_closed_inbound
+    from app.services.shipping.on_the_water import config_from_overrides
+    from app.services.shipping_commercial_kpis import predicate_needs_look
+
+    tenant = tenant_id_from_user(user)
+    days = config_from_overrides(on_the_water_overrides(tenant)).needs_look_days
+    row = (
+        await db.execute(
+            select(func.count(), func.coalesce(func.sum(F.quantity), 0)).where(
+                F.tenant_id == tenant, predicate_needs_look(reporting_today(tenant), days), exclude_closed_inbound(F)
+            )
+        )
+    ).one()
+    return {"lines": int(row[0] or 0), "units": float(row[1] or 0), "days": days}
+
+
 async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     failed_open = int(
@@ -338,6 +359,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
 
     inbound_open = int(await db.scalar(inbound_not_received_count_stmt(user)) or 0)
     cst_late, cst_missing = await _cst_late_missing_counts(db)
+    needs_look = await _needs_look_summary(db, user)
 
     signals: list[dict[str, Any]] = []
     rank = 1
@@ -454,6 +476,23 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 action_label="Open Supply · Shipments",
                 action_href="/supply/shipments",
                 figures={"open_shipments": inbound_open, "pipeline_fill_pct": None},
+            )
+        )
+        rank += 1
+
+    if needs_look["lines"] > 0:
+        n_lines, n_units = needs_look["lines"], int(round(needs_look["units"]))
+        signals.append(
+            _signal_row(
+                id="shipment_needs_look",
+                rank=rank,
+                title=f"{n_lines} shipped-sheet {'line' if n_lines == 1 else 'lines'} still open",
+                detail=f"On the Shipped sheet with no ship confirm date, ex-works over {needs_look['days']} days ago",
+                meta=f"{n_units:,} units",
+                meta_hot=True,
+                action_label="Open the lines",
+                action_href="/supply/shipments?cohort=needs_look",
+                figures={"lines": n_lines, "units": n_units, "days": needs_look["days"]},
             )
         )
         rank += 1

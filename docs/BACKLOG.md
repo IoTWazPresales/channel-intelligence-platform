@@ -3391,7 +3391,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-10-28 |
+| **Status / parked** | **Done** · 2026-11-01. `on_board_date` and `port_eta_date` are in `_DATE_SLIP_FIELDS`; a blank that becomes a date is not a slip, only a date moving to another date is (On the water). Existing observations were backfilled on cip on 2026-11-01, so older reports now show their moves. |
 | **Effort** | Small, once the date fields to watch are named. |
 | **Source** | `apps/api/app/services/imports/shipment_change_events.py` `_DATE_SLIP_FIELDS`. Warren, 2026-10-28: 9 ACZA lines whose on-board date moved from 11 Oct to 18 Oct produced no event. |
 | **Idea** | A line's on-board date or ETA can move between ACZA reports and the history does not say so. `date_slip` watches est POD, CRAD, ERD, schedule ship, promise and ex-work only. |
@@ -3406,7 +3406,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-10-28 |
+| **Status / parked** | **Done** · 2026-11-01. Attention row `shipment_needs_look` (open Shipped-sheet lines, no ship confirm date, ex-works older than the tenant's `needs_look_days`, default 7) and a "Needs a look" card on On the water; both open the grid with `cohort=needs_look`. |
 | **Effort** | Small. A threshold and one Attention row. |
 | **Source** | Warren, 2026-10-28. Example: 9 lines, 731 units (Pepkor 523), on the Shipped sheet with no ship-confirm date since 29 Sep. |
 | **Idea** | A Shipped-sheet row with no ship-confirm date is an open order (`line_state_for_shipped_sheet`). Nothing raises it once it has sat there past a threshold. |

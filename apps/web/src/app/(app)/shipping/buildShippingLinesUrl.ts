@@ -19,7 +19,9 @@ export type ShippingFilterParams = {
   lifecycleBucket: '' | 'shipped' | 'pipeline' | 'landed';
   slipDirection: '' | 'slipped_in' | 'slipped_out';
   /** Smart-preset / card-click cohort — same predicates as commercial KPI contract. */
-  cohort: '' | 'current_incoming' | 'overdue' | 'arriving_week' | 'landed_week';
+  cohort: '' | 'current_incoming' | 'overdue' | 'arriving_week' | 'landed_week' | 'needs_look';
+  /** One vessel's lines (the key from the On the water payload). The map itself ignores it. */
+  vessel?: string;
 };
 
 export type ShippingLinesQueryParams = ShippingFilterParams & {
@@ -51,6 +53,18 @@ export function appendShippingFilterParams(params: URLSearchParams, p: ShippingF
   if (p.lifecycleBucket) params.set('lifecycle_bucket', p.lifecycleBucket);
   if (p.slipDirection) params.set('slip_direction', p.slipDirection);
   if (p.cohort) params.set('cohort', p.cohort);
+  if (p.vessel) params.set('vessel', p.vessel);
+}
+
+/**
+ * On the water map and tiles: the page scope, minus the two selections that pick lines out of it (a clicked vessel and
+ * the "needs a look" cohort), so clicking a vessel filters the grid and leaves the map showing every vessel.
+ */
+export function buildOnTheWaterUrl(p: ShippingFilterParams): string {
+  const params = new URLSearchParams();
+  appendShippingFilterParams(params, { ...p, vessel: '', cohort: p.cohort === 'needs_look' ? '' : p.cohort });
+  const qs = params.toString();
+  return qs ? `/api/v1/shipping/on-the-water?${qs}` : '/api/v1/shipping/on-the-water';
 }
 
 export function buildShippingLineupQuarterSummaryUrl(

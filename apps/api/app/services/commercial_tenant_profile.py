@@ -167,6 +167,8 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     # On the water: reads forwarder and origin hub out of a shipment's Shipping Method (named groups
     # forwarder and, optionally, hub). Empty means the default in services/imports/shipment_voyage.py.
     "shipping_method_pattern",
+    # On the water: {"hub_lane": {"ckg": "asia_durban"}, "stale_report_days": 7, "needs_look_days": 7}.
+    "on_the_water",
 )
 
 # N-0111: every customer and distributor reports Monday-Sunday weeks (Warren 2026-10-16).
@@ -758,6 +760,46 @@ def open_book_report_date_rule(tenant_id: str = "default") -> str:
     return rule
 
 
+def _normalize_on_the_water(value: object, *, strict: bool) -> dict[str, Any] | None:
+    """Validate the On the water override. Loose load drops what is unusable; strict save refuses it."""
+    from app.services.shipping.on_the_water import SEA_LANES
+
+    if not isinstance(value, dict):
+        if strict:
+            raise ValueError("on_the_water: an object is required")
+        return None
+    out: dict[str, Any] = {}
+    hub = value.get("hub_lane")
+    if hub is not None:
+        if not isinstance(hub, dict):
+            if strict:
+                raise ValueError("on_the_water: hub_lane must map a hub code to a sea lane")
+        else:
+            clean_hub: dict[str, str] = {}
+            for code, lane in hub.items():
+                if not isinstance(code, str) or not code.strip() or lane not in SEA_LANES:
+                    if strict:
+                        raise ValueError(f"on_the_water: hub {code!r} must map to one of {list(SEA_LANES)}")
+                    continue
+                clean_hub[code.strip().lower()] = lane
+            if clean_hub:
+                out["hub_lane"] = clean_hub
+    for key in ("stale_report_days", "needs_look_days"):
+        if key not in value or value[key] in (None, ""):
+            continue
+        raw = value[key]
+        if isinstance(raw, bool) or not isinstance(raw, int) or not (0 < raw <= 365):
+            if strict:
+                raise ValueError(f"on_the_water: {key} must be a whole number of days from 1 to 365")
+            continue
+        out[key] = raw
+    return out or None
+
+
+def on_the_water_overrides(tenant_id: str = "default") -> dict[str, Any]:
+    return load_tenant_profile_overrides(tenant_id).get("on_the_water") or {}
+
+
 def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
     """Read persisted overrides for ``tenant_id``. Missing/unreadable file → ``{}`` (FLAG != BLOCK)."""
     path = _tenant_profile_override_path(tenant_id)
@@ -797,6 +839,11 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
             normalized_book = _normalize_open_book(value, strict=False)
             if normalized_book is not None:
                 out[key] = normalized_book
+            continue
+        if key == "on_the_water":
+            normalized_water = _normalize_on_the_water(value, strict=False)
+            if normalized_water:
+                out[key] = normalized_water
             continue
         if key == "shipping_method_pattern":
             from app.services.imports.shipment_voyage import compile_shipping_method_pattern
@@ -856,6 +903,11 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
             if raw is None or raw == "" or raw == {}:
                 continue
             clean[key] = _normalize_open_book(raw, strict=True)
+            continue
+        if key == "on_the_water":
+            if raw is None or raw == "" or raw == {}:
+                continue
+            clean[key] = _normalize_on_the_water(raw, strict=True)
             continue
         if key == "shipping_method_pattern":
             if raw is None or str(raw).strip() == "":

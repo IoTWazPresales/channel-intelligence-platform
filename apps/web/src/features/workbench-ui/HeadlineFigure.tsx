@@ -29,6 +29,7 @@ export function HeadlineFigure({
   severity = 'neutral',
   onClick,
   compact = false,
+  fitBox = false,
   dense = false,
   target,
   sparkline,
@@ -52,6 +53,11 @@ export function HeadlineFigure({
   severity?: Severity;
   onClick?: () => void;
   compact?: boolean;
+  /**
+   * Size the figure to the box it sits in (a dashboard widget): the number follows the box height. Only for a
+   * parent with a definite height: a size container ignores its content, so in an auto-height strip it collapses.
+   */
+  fitBox?: boolean;
   dense?: boolean;
   /** Plain target line beside the delta, e.g. "target ≥ 4 weeks". */
   target?: string;
@@ -100,7 +106,7 @@ export function HeadlineFigure({
       sx={{
         p: dense ? 1.25 : compact ? 1.5 : 2,
         height: '100%',
-        containerType: 'size',
+        containerType: fitBox ? 'size' : undefined,
         cursor: onClick ? 'pointer' : 'default',
         borderLeft: severity !== 'neutral' ? `3px solid ${sevColor}` : undefined,
         boxShadow: 'none',
@@ -126,7 +132,7 @@ export function HeadlineFigure({
           <Typography
             component="span"
             sx={{
-              fontSize: compact ? 'clamp(22px, 22cqh, 64px)' : valueSize,
+              fontSize: fitBox ? 'clamp(22px, 22cqh, 64px)' : valueSize,
               lineHeight: 1.15,
               fontWeight: 600,
               fontVariantNumeric: 'tabular-nums',

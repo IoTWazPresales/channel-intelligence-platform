@@ -1,0 +1,212 @@
+{
+  "1920-dark": {
+    "pageErrors": [
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "layout": {
+      "map": {
+        "w": 1241,
+        "h": 802
+      },
+      "markers": 5,
+      "smallestMarker": 44,
+      "labels": 4,
+      "labelOverlaps": 0,
+      "labelsOutsideMap": 0,
+      "pulseAnimation": "none",
+      "horizontalOverflow": false,
+      "tiles": [
+        "At sea10,589 unitsUS$1.01M · 8 vessels · 89 lines+120 units by air",
+        "Arrived, not yet delivered5,512 unitsCity Deep 5,108 · Port Louis 404",
+        "Booked, not on board yet851 units34 lines with a future on-board date",
+        "ETA moved since 3 Oct6 of 8 vesselsLater by 5 to 14 days · from report history"
+      ]
+    },
+    "hoverCard": "COSCOETA 10 Nov · 2,450 u · US$233kDistributorsMustek 720 · DCC 621 · Rectron 621 · Pepkor 477 · Pinnacle 11Top products · unitsP1503CVAY 708 · M1502XA 612 · X1504VAP 612 · P1403CVAY 468+17 more models · click to see every line",
+    "focusCard": true,
+    "vesselFilter": {
+      "status": 200,
+      "total": 21,
+      "rows": 21
+    },
+    "vesselsAfterSelect": 5,
+    "needsLookRows": 9
+  },
+  "1920-light": {
+    "pageErrors": [
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "layout": {
+      "map": {
+        "w": 1241,
+        "h": 802
+      },
+      "markers": 5,
+      "smallestMarker": 44,
+      "labels": 4,
+      "labelOverlaps": 0,
+      "labelsOutsideMap": 0,
+      "pulseAnimation": "none",
+      "horizontalOverflow": false,
+      "tiles": [
+        "At sea10,589 unitsUS$1.01M · 8 vessels · 89 lines+120 units by air",
+        "Arrived, not yet delivered5,512 unitsCity Deep 5,108 · Port Louis 404",
+        "Booked, not on board yet851 units34 lines with a future on-board date",
+        "ETA moved since 3 Oct6 of 8 vesselsLater by 5 to 14 days · from report history"
+      ]
+    },
+    "hoverCard": "COSCOETA 10 Nov · 2,450 u · US$233kDistributorsMustek 720 · DCC 621 · Rectron 621 · Pepkor 477 · Pinnacle 11Top products · unitsP1503CVAY 708 · M1502XA 612 · X1504VAP 612 · P1403CVAY 468+17 more models · click to see every line",
+    "focusCard": true,
+    "vesselFilter": {
+      "status": 200,
+      "total": 21,
+      "rows": 21
+    },
+    "vesselsAfterSelect": 5,
+    "needsLookRows": 9
+  },
+  "1280-dark": {
+    "pageErrors": [
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "layout": {
+      "map": {
+        "w": 602,
+        "h": 389
+      },
+      "markers": 5,
+      "smallestMarker": 44,
+      "labels": 3,
+      "labelOverlaps": 0,
+      "labelsOutsideMap": 0,
+      "pulseAnimation": "none",
+      "horizontalOverflow": false,
+      "tiles": [
+        "At sea10,589 unitsUS$1.01M · 8 vessels · 89 lines+120 units by air",
+        "Arrived, not yet delivered5,512 unitsCity Deep 5,108 · Port Louis 404",
+        "Booked, not on board yet851 units34 lines with a future on-board date",
+        "ETA moved since 3 Oct6 of 8 vesselsLater by 5 to 14 days · from report history"
+      ]
+    },
+    "hoverCard": "COSCOETA 10 Nov · 2,450 u · US$233kDistributorsMustek 720 · DCC 621 · Rectron 621 · Pepkor 477 · Pinnacle 11Top products · unitsP1503CVAY 708 · M1502XA 612 · X1504VAP 612 · P1403CVAY 468+17 more models · click to see every line",
+    "focusCard": true,
+    "vesselFilter": {
+      "status": 200,
+      "total": 21,
+      "rows": 21
+    },
+    "vesselsAfterSelect": 5,
+    "needsLookRows": 9
+  },
+  "1280-light": {
+    "pageErrors": [
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "layout": {
+      "map": {
+        "w": 602,
+        "h": 389
+      },
+      "markers": 5,
+      "smallestMarker": 44,
+      "labels": 3,
+      "labelOverlaps": 0,
+      "labelsOutsideMap": 0,
+      "pulseAnimation": "none",
+      "horizontalOverflow": false,
+      "tiles": [
+        "At sea10,589 unitsUS$1.01M · 8 vessels · 89 lines+120 units by air",
+        "Arrived, not yet delivered5,512 unitsCity Deep 5,108 · Port Louis 404",
+        "Booked, not on board yet851 units34 lines with a future on-board date",
+        "ETA moved since 3 Oct6 of 8 vesselsLater by 5 to 14 days · from report history"
+      ]
+    },
+    "hoverCard": "COSCOETA 10 Nov · 2,450 u · US$233kDistributorsMustek 720 · DCC 621 · Rectron 621 · Pepkor 477 · Pinnacle 11Top products · unitsP1503CVAY 708 · M1502XA 612 · X1504VAP 612 · P1403CVAY 468+17 more models · click to see every line",
+    "focusCard": true,
+    "vesselFilter": {
+      "status": 200,
+      "total": 21,
+      "rows": 21
+    },
+    "vesselsAfterSelect": 5,
+    "needsLookRows": 9
+  },
+  "390-dark": {
+    "pageErrors": [
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "layout": {
+      "map": {
+        "w": 336,
+        "h": 217
+      },
+      "markers": 5,
+      "smallestMarker": 44,
+      "labels": 1,
+      "labelOverlaps": 0,
+      "labelsOutsideMap": 0,
+      "pulseAnimation": "none",
+      "horizontalOverflow": false,
+      "tiles": [
+        "At sea10,589 unitsUS$1.01M · 8 vessels · 89 lines+120 units by air",
+        "Arrived, not yet delivered5,512 unitsCity Deep 5,108 · Port Louis 404",
+        "Booked, not on board yet851 units34 lines with a future on-board date",
+        "ETA moved since 3 Oct6 of 8 vesselsLater by 5 to 14 days · from report history"
+      ]
+    },
+    "hoverCard": "COSCOETA 10 Nov · 2,450 u · US$233kDistributorsMustek 720 · DCC 621 · Rectron 621 · Pepkor 477 · Pinnacle 11Top products · unitsP1503CVAY 708 · M1502XA 612 · X1504VAP 612 · P1403CVAY 468+17 more models · click to see every line",
+    "focusCard": true,
+    "vesselFilter": {
+      "status": 200,
+      "total": 21,
+      "rows": 21
+    },
+    "vesselsAfterSelect": 5,
+    "needsLookRows": 9
+  },
+  "390-light": {
+    "pageErrors": [
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "layout": {
+      "map": {
+        "w": 336,
+        "h": 217
+      },
+      "markers": 5,
+      "smallestMarker": 44,
+      "labels": 1,
+      "labelOverlaps": 0,
+      "labelsOutsideMap": 0,
+      "pulseAnimation": "none",
+      "horizontalOverflow": false,
+      "tiles": [
+        "At sea10,589 unitsUS$1.01M · 8 vessels · 89 lines+120 units by air",
+        "Arrived, not yet delivered5,512 unitsCity Deep 5,108 · Port Louis 404",
+        "Booked, not on board yet851 units34 lines with a future on-board date",
+        "ETA moved since 3 Oct6 of 8 vesselsLater by 5 to 14 days · from report history"
+      ]
+    },
+    "hoverCard": "COSCOETA 10 Nov · 2,450 u · US$233kDistributorsMustek 720 · DCC 621 · Rectron 621 · Pepkor 477 · Pinnacle 11Top products · unitsP1503CVAY 708 · M1502XA 612 · X1504VAP 612 · P1403CVAY 468+17 more models · click to see every line",
+    "focusCard": true,
+    "vesselFilter": {
+      "status": 200,
+      "total": 21,
+      "rows": 21
+    },
+    "vesselsAfterSelect": 5,
+    "needsLookRows": 9
+  }
+}

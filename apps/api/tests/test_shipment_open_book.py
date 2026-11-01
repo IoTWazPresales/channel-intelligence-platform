@@ -57,9 +57,12 @@ def db():
     try:
         current = session.execute(text("SELECT current_database()")).scalar()
         assert current != "cip"
-        if session.get(Tenant, "default") is None:
-            session.add(Tenant(id="default", name="Default"))
-            session.flush()
+        # Each test gets its own tenant: the open book closes lines within a tenant, and the shared test database
+        # holds committed ACZA reports (later than these tests' dates) under "default".
+        tenant = f"ob-{uuid.uuid4().hex[:12]}"
+        session.add(Tenant(id=tenant, name="Open book test"))
+        session.flush()
+        session.info["tenant"] = tenant
         yield session
     finally:
         session.rollback()
@@ -120,7 +123,7 @@ def _job(db, file_name: str, *, status: str = "completed") -> ImportJob:
     db.add(source)
     db.flush()
     job = ImportJob(
-        tenant_id="default",
+        tenant_id=db.info["tenant"],
         source_id=int(source.id),
         template_slug="inbound_shipments",
         status=status,
@@ -185,7 +188,7 @@ def _fact(
     est_pod_date: date | None = None,
 ) -> FactInboundShipment:
     row = FactInboundShipment(
-        tenant_id="default",
+        tenant_id=db.info["tenant"],
         import_job_id=int(job.id),
         source_key=source_key,
         fact_upsert_key=source_key,
