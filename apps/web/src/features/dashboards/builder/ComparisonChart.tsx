@@ -23,10 +23,14 @@ export function ComparisonChart({ response, def, measures, catalog, visual, labe
   };
   const all = [...new Map(response.rows.map((r) => { const c = category(r); return [c.key, c]; })).values()];
   const categories = period && cols.length ? all.slice(0, 7) : all;
+  // Over categories (no period) with one measure, the legend says what the two kinds of bar are, not one pair per category: the x axis
+  // already names the categories. Current bars share one colour so the previous bars (muted, dashed) read against them.
+  const collapse = !period && measures.length === 1;
   const series = categories.flatMap((cat, ci) => measures.flatMap((m, mi) => [false, true].map((prior) => ({
     key: `${prior ? 'p' : 'c'}${ci}m${mi}`, label: `${cat.label ? `${cat.label} · ` : ''}${m.label}${prior ? `, ${label}` : ''}`,
     kind: visual === 'bar' ? 'bar' as const : visual === 'area' ? 'area' as const : 'line' as const,
-    unit: measureUnit(m), ...(prior ? { tone: 'muted' as const, dash: '5 4' } : {}),
+    unit: measureUnit(m), ...(prior ? { tone: 'muted' as const, dash: '5 4' } : collapse ? { tone: 'primary' as const } : {}),
+    ...(collapse ? { legendKey: prior ? 'previous' : 'current', legendLabel: `${m.label}${prior ? `, ${label}` : ''}` } : {}),
     cat: cat.cat, clickable: Boolean(cat.cat?.value != null && onSelect),
   }))));
   const points = new Map<string, V2Row>();
@@ -38,6 +42,8 @@ export function ComparisonChart({ response, def, measures, catalog, visual, labe
       __cat: period ? { key: `period:${row.bucket_key}`, breakdown: 'period', value: String(row.bucket_key), label: String(row.bucket_key), window: { from: String(row.bucket_start), to: String(row.bucket_end) } } : cat.cat,
       ...Object.fromEntries(series.map((s) => [s.key, null])) };
     measures.forEach((m, mi) => { point[`c${ci}m${mi}`] = row[m.id]; point[`p${ci}m${mi}`] = row[previousField(mi)]; });
+    // Each category owns its own series, so the first series is empty on every other row: rank rows by their own current figure.
+    point.__rank = row[measures[0]?.id ?? ''];
     if (row.__previous_period) point.__previous_period = row.__previous_period;
     points.set(x, point);
   }
@@ -49,6 +55,7 @@ export function ComparisonChart({ response, def, measures, catalog, visual, labe
     <TrendChart data={data} x="x" series={series} height={height} unit={measureUnit(measures[0])}
       xTickFormat={(tick) => String(points.get(String(tick))?.__label ?? tick)} xAxisTitle={xTitle} yAxisTitle={measures.map(measureHeading).join(' / ')}
       categoryAxis={!period}
+      rankKey={period ? undefined : '__rank'}
       initialControls={presentation}
       datumActions={onSelect ? (period ? 'period' : 'category') : undefined}
       summary={period ? undefined : 'Current and previous figures; missing values are not zero'}

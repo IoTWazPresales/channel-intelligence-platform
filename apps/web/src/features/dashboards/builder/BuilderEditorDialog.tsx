@@ -48,6 +48,7 @@ import { breakdownLabel, isPickableGoverned, lowerFirst, measureOf, modelOf } fr
 import { BUILDER_VISUALS, effectiveVisualV2, fitsAll, visualsForV2 } from './fit';
 import { FilterValuePicker } from './FilterBar';
 import { requestFor, validFixedWindow, withWindow } from './requestFor';
+import { TopNSelect } from './TopNSelect';
 import { compareWindow } from './dates';
 import { NO_FILTERS, type DashboardRunContext } from './runContext';
 import { MAX_RULES } from './table';
@@ -741,21 +742,7 @@ export function BuilderEditorDialog({
           ) : null}
 
           {(visual === 'hbar' || visual === 'bar') && first ? (
-            <FormControl size="small" fullWidth>
-              <InputLabel id="builder-topn-label">Start with top</InputLabel>
-              <Select
-                labelId="builder-topn-label"
-                label="Start with top"
-                value={display.top_n ?? 15}
-                onChange={(e) => setDisplay((d) => ({ ...d, top_n: Number(e.target.value) }))}
-              >
-                {[5, 10, 15, 25, 50].map((n) => (
-                  <MenuItem key={n} value={n}>
-                    {n}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TopNSelect visual={visual} value={display.top_n} onChange={(n) => setDisplay((d) => ({ ...d, top_n: n }))} />
           ) : null}
 
           {visual === 'table' && first ? (

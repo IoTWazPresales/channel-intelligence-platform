@@ -5,9 +5,12 @@ import { expect, test, type Page } from '@playwright/test';
 // Run through the rolled-back cip_test pytest harness (apps/api/tests/test_on_the_water_render.py).
 // Renders the real Shipments page per width x theme with reduced motion, exercises the interactions the SPEC lists
 // (hover, keyboard focus, click to filter the grid, needs a look, the Map / By distributor toggle), saves PNGs and metrics.
-const out = path.resolve(__dirname, '../../../.eif/audit/ON_THE_WATER_20261029/renders');
+// CIP_RENDER_OUT (repo-relative) and CIP_RENDER_SIZES ("1280x800,390x844") let a review write its own folder and widths.
+const out = path.resolve(__dirname, '../../..', process.env.CIP_RENDER_OUT ?? '.eif/audit/ON_THE_WATER_20261029/renders');
 const origin = 'http://127.0.0.1:3106';
-const sizes: Array<[number, number]> = [[1920, 1080], [1280, 800], [390, 844]];
+const sizes: Array<[number, number]> = process.env.CIP_RENDER_SIZES
+  ? process.env.CIP_RENDER_SIZES.split(',').map((s) => s.split('x').map(Number) as [number, number])
+  : [[1920, 1080], [1280, 800], [390, 844]];
 
 async function layoutMetrics(page: Page) {
   return page.evaluate(() => {
@@ -23,6 +26,20 @@ async function layoutMetrics(page: Page) {
         if (a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top) overlaps++;
       }
     const outside = m ? labels.filter((l) => l.left < m.left - 1 || l.right > m.right + 1 || l.top < m.top - 1 || l.bottom > m.bottom + 1).length : 0;
+    const hit = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    // A vessel label or the Durban note over a port name, and the Durban note over the map caption (GOV-008 batch 3).
+    const portNames = [...document.querySelectorAll('[data-testid^="otw-port-name-"]')].map((n) => rect(n));
+    const labelsOverPortNames = labels.filter((l) => portNames.some((n) => hit(l, n))).length;
+    const portPairs = [...document.querySelectorAll('[data-testid="otw-label"]')].flatMap((l) =>
+      [...document.querySelectorAll('[data-testid^="otw-port-name-"]')]
+        .filter((n) => hit(rect(l), rect(n)))
+        .map((n) => ({ label: (l.textContent ?? '').slice(0, 40), port: n.getAttribute('data-testid'), l: [rect(l).left, rect(l).top, rect(l).right, rect(l).bottom].map(Math.round), n: [rect(n).left, rect(n).top, rect(n).right, rect(n).bottom].map(Math.round) })),
+    );
+    const note = document.querySelector('[data-testid="otw-durban-note"]');
+    const caption = document.querySelector('[data-testid="otw-caption"]');
+    const noteOverCaption = note && caption ? hit(rect(note), rect(caption)) : false;
+    const noteOverPortNames = note ? portNames.filter((n) => hit(rect(note), n)).length : 0;
+    const noteOverLabels = note ? labels.filter((l) => hit(rect(note), l)).length : 0;
     const markers = [...document.querySelectorAll('[data-testid="otw-vessel"]')].map((b) => rect(b));
     const pulse = document.querySelector('[data-testid="otw-pulse"]');
     return {
@@ -31,6 +48,11 @@ async function layoutMetrics(page: Page) {
       smallestMarker: markers.length ? Math.round(Math.min(...markers.map((r) => Math.min(r.width, r.height)))) : null,
       labels: labels.length,
       labelOverlaps: overlaps,
+      labelsOverPortNames,
+      portPairs,
+      noteOverCaption,
+      noteOverPortNames,
+      noteOverLabels,
       labelsOutsideMap: outside,
       pulseAnimation: pulse ? getComputedStyle(pulse).animationName : null,
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildOnTheWaterUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
 
 import { badgeText, daysText, fmtDay, fmtDayYear, fmtMoney, historyText, nameUnits, slipShort } from './format';
-import { clusterChip, clusterVessels, etaRange, placeLabels, portsInUse } from './layout';
+import { clusterChip, clusterVessels, etaRange, labelWidthPx, placeLabels, portsInUse } from './layout';
 import type { Vessel } from './types';
 
 function vessel(over: Partial<Vessel> = {}): Vessel {
@@ -163,5 +163,24 @@ describe('page scope into the map', () => {
     expect(buildOnTheWaterUrl({ ...base, customerId: 3, purchaseOrderId: 9, productFamily: 'P', currencyCode: 'USD', planQuarter: '26Q4' })).toBe(
       '/api/v1/shipping/on-the-water?distributor_id=7&customer_id=3&purchase_order_id=9&product_family=P&currency_code=USD&plan_quarter=26Q4',
     );
+  });
+});
+
+describe('label width (GOV-008 batch 3)', () => {
+  it('is as wide as the label draws: the render of "4 vessels at or near Durban" was 201 px, the old reserved box 160 px', () => {
+    expect(labelWidthPx('4 vessels at or near Durban', '3,494 u · ETA at port 31 Oct–5 Nov')).toBeGreaterThanOrEqual(201);
+    expect(labelWidthPx('WWP · 25 u', '2 days overdue')).toBeLessThan(labelWidthPx('4 vessels at or near Durban', '3,494 u · ETA at port 31 Oct–5 Nov'));
+  });
+
+  it("placeLabels uses each anchor's own size, so a wide label is moved clear of a box a narrow one would fit beside", () => {
+    const avoid = [{ id: 'p:CITY DEEP', x: 50, y: 40, w: 15, h: 3 }];
+    const gap = { x: 2, y: 2 };
+    const anchor = { id: 'c:durban', x: 30, y: 45, priority: 1 };
+    const narrowBox = placeLabels([{ ...anchor, size: { w: 12, h: 6 } }], { w: 12, h: 6 }, avoid, gap)[0];
+    const wideBox = placeLabels([{ ...anchor, size: { w: 30, h: 6 } }], { w: 12, h: 6 }, avoid, gap)[0];
+    expect(narrowBox.w).toBe(12);
+    expect(wideBox.w).toBe(30); // the box it was given, not the common size
+    const hits = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    expect(hits(wideBox, avoid[0])).toBe(false);
   });
 });

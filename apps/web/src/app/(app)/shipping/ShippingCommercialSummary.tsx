@@ -3,7 +3,7 @@
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Box, Button, Collapse, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { apiGet } from '@/lib/api';
 import { CategoryBars } from '@/features/workbench-ui/charts';
@@ -13,6 +13,7 @@ import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineF
 import {
   buildShippingCommercialSummaryUrl,
   buildShippingEtaShiftsUrl,
+  tileFilterParams,
   type ShippingFilterParams,
 } from './buildShippingLinesUrl';
 import type { SmartPresetId } from './shippingSmartPresets';
@@ -111,8 +112,12 @@ export function ShippingCommercialSummary({
   onOpenNeedsLook?: () => void;
 }) {
   const [aboutOpen, setAboutOpen] = useState(false);
-  const summaryUrl = buildShippingCommercialSummaryUrl(filterParams);
-  const etaShiftsUrl = buildShippingEtaShiftsUrl(filterParams, 8);
+  // A vessel click must not change the tile query (see tileFilterParams): only the grid refreshes.
+  const tileParamsRef = useRef<ShippingFilterParams | null>(null);
+  const tileParams = tileFilterParams(tileParamsRef.current, filterParams, Boolean(selectedVesselKey));
+  tileParamsRef.current = tileParams;
+  const summaryUrl = buildShippingCommercialSummaryUrl(tileParams);
+  const etaShiftsUrl = buildShippingEtaShiftsUrl(tileParams, 8);
 
   const { data: commercial, isLoading: cLoading, isError } = useQuery({
     queryKey: ['shipping-commercial-summary', summaryUrl],

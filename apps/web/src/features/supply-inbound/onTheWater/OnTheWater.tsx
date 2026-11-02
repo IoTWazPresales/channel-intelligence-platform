@@ -12,7 +12,7 @@ import { tokensFor } from '@/theme/cipTokens';
 
 import { BASEMAP_DOTS, BASEMAP_SIZE } from './basemapDots';
 import { badgeText, daysText, fmtDay, fmtDayYear, fmtMoney, fmtUnits, historyText, nameUnits, slipShort } from './format';
-import { clusterChip, clusterVessels, placeLabels, portsInUse, type Cluster } from './layout';
+import { clusterChip, clusterVessels, labelWidthPx, placeLabels, portNameBox, portsInUse, type Cluster } from './layout';
 import type { OnTheWaterData, PortRow, Vessel } from './types';
 
 type View = 'map' | 'distributor';
@@ -143,13 +143,27 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
   const hoverCluster = clusters.find((c) => c.vessels.some((v) => v.id === hoverId)) ?? null;
   const hoverVessel = hoverCluster?.vessels.find((v) => v.id === hoverId) ?? null;
   const durban = data.map.ports.find((p) => p.id === 'DURBAN');
-  const labelTargets = [
-    ...clusters.filter((c) => c.vessels.length > 1).map((c) => ({ id: `c:${c.id}`, x: c.x, y: c.y, priority: c.vessels.some((v) => v.id === panel?.id) ? 0 : 1 })),
-    ...clusters.filter((c) => c.vessels.length === 1).map((c) => ({ id: c.vessels[0].id, x: c.x, y: c.y, priority: c.vessels[0].id === panel?.id ? 0 : 2 })),
-  ];
   const pctX = (px: number) => (px / mapPx.w) * 100;
   const pctY = (px: number) => (px / mapPx.h) * 100;
   const narrow = mapPx.w < 560;
+  // The two lines a label draws. Its width is worked out from them, so the box the placement keeps clear is the box that is drawn.
+  const labelText = (c: Cluster) => {
+    if (c.vessels.length > 1) return clusterChip(c, data.map.ports);
+    const v = c.vessels[0];
+    return {
+      title: `${v.forwarder} · ${fmtUnits(v.units)} u`,
+      sub: `${v.overdue ? daysText(v) : `ETA at port ${fmtDay(v.eta)}`}${v.slip_days ? ` · moved +${v.slip_days}d` : v.overdue ? '' : ' · on time'}`,
+    };
+  };
+  // A phone-width map labels the selected vessel only and keeps its fixed box (the label wraps its text there).
+  const labelSize = (c: Cluster) => {
+    const text = labelText(c);
+    return { w: pctX(narrow ? 128 : labelWidthPx(text.title, text.sub)), h: pctY(42) };
+  };
+  const labelTargets = [
+    ...clusters.filter((c) => c.vessels.length > 1).map((c) => ({ id: `c:${c.id}`, x: c.x, y: c.y, priority: c.vessels.some((v) => v.id === panel?.id) ? 0 : 1, size: labelSize(c) })),
+    ...clusters.filter((c) => c.vessels.length === 1).map((c) => ({ id: c.vessels[0].id, x: c.x, y: c.y, priority: c.vessels[0].id === panel?.id ? 0 : 2, size: labelSize(c) })),
+  ];
   const compactPorts = mapPx.w < 600;
   const namedPorts = compactPorts ? portsInUse(data.vessels, data.map.ports) : null;
   const portNamed = (id: string) => namedPorts === null || namedPorts.has(id) || tappedPort === id;
@@ -157,12 +171,7 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
   const avoid = [
     ...data.map.ports
       .filter((p) => portNamed(p.id))
-      .map((p) => {
-        const w = pctX(p.label.length * 7.6 + 12);
-        const side = p.label_side ?? (p.x > 82 ? 'left' : 'right');
-        if (side === 'above') return { id: `p:${p.id}`, x: p.x - w / 2, y: p.y - pctY(26), w, h: pctY(18) };
-        return { id: `p:${p.id}`, x: side === 'left' ? p.x - pctX(6) - w : p.x + pctX(6), y: p.y - pctY(9), w, h: pctY(18) };
-      }),
+      .map((p) => portNameBox(p, pctX, pctY)),
     ...clusters.map((c) => ({ id: `m:${c.id}`, x: c.x - pctX(14), y: c.y - pctY(14), w: pctX(28), h: pctY(28) })),
     // The Durban note sits on the map (not under it) except on a phone-width map.
     ...(durban && !narrow
@@ -175,23 +184,22 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
   const durbanRow = data.port_rows.find((r) => r.code === 'ZADUR');
 
 
-  const MapNotes = () => (
-    <>
-      {durban ? (
-        <Box
-          sx={{
-            ...(narrow ? { display: 'inline-block' } : { position: 'absolute', left: `${Math.min(durban.x + 5.4, 62)}%`, top: `${Math.min(durban.y + 4.3, 94)}%` }),
-            px: 1.25, py: 0.75, borderRadius: 1, bgcolor: alpha(t.bg.default, 0.88), border: `1px solid ${alpha(amber, 0.55)}`, fontSize: 11, color: amber, whiteSpace: 'nowrap',
-          }}
-          data-testid="otw-durban-note"
-        >
-          Durban · {conditionText(durbanRow)}
-        </Box>
-      ) : null}
-      <Typography variant="caption" sx={{ ...(narrow ? { display: 'block' } : { position: 'absolute', left: 12, bottom: 8 }), color: t.text.muted, fontSize: 11 }}>
-        As of {fmtDayYear(data.as_of)} · position = share of on-board → ETA elapsed, along the usual lane
-      </Typography>
-    </>
+  const DurbanNote = () =>
+    durban ? (
+      <Box
+        sx={{
+          ...(narrow ? { display: 'inline-block' } : { position: 'absolute', left: `${Math.min(durban.x + 5.4, 62)}%`, top: `${Math.min(durban.y + 4.3, 94)}%` }),
+          px: 1.25, py: 0.75, borderRadius: 1, bgcolor: alpha(t.bg.default, 0.88), border: `1px solid ${alpha(amber, 0.55)}`, fontSize: 11, color: amber, whiteSpace: 'nowrap',
+        }}
+        data-testid="otw-durban-note"
+      >
+        Durban · {conditionText(durbanRow)}
+      </Box>
+    ) : null;
+  const MapCaption = () => (
+    <Typography variant="caption" data-testid="otw-caption" sx={{ display: 'block', color: t.text.muted, fontSize: 11 }}>
+      As of {fmtDayYear(data.as_of)} · position = share of on-board → ETA elapsed, along the usual lane
+    </Typography>
   );
 
   return (
@@ -348,7 +356,7 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                   const multi = c.vessels.length > 1;
                   const box = labelOf.get(multi ? `c:${c.id}` : c.vessels[0].id);
                   if (!box) return null;
-                  const chip = multi ? clusterChip(c, data.map.ports) : null;
+                  const text = labelText(c);
                   const v = c.vessels[0];
                   return (
                     <Box
@@ -359,22 +367,23 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                         bgcolor: alpha(t.bg.default, 0.86), border: `1px solid ${multi ? alpha(amber, 0.55) : v.id === panel?.id ? alpha(t.accent.primary, 0.7) : t.border.subtle}`,
                       }}
                     >
-                      <Box sx={{ fontSize: 12, fontWeight: 700 }}>{chip ? chip.title : `${v.forwarder} · ${fmtUnits(v.units)} u`}</Box>
-                      <Box sx={{ fontSize: 11, color: t.text.secondary, fontVariantNumeric: 'tabular-nums' }}>
-                        {chip ? chip.sub : `${v.overdue ? daysText(v) : `ETA at port ${fmtDay(v.eta)}`}${v.slip_days ? ` · moved +${v.slip_days}d` : v.overdue ? '' : ' · on time'}`}
-                      </Box>
+                      <Box sx={{ fontSize: 12, fontWeight: 700 }}>{text.title}</Box>
+                      <Box sx={{ fontSize: 11, color: t.text.secondary, fontVariantNumeric: 'tabular-nums' }}>{text.sub}</Box>
                     </Box>
                   );
                 })}
 
                 {hoverVessel ? <HoverCard vessel={hoverVessel} cluster={hoverCluster} t={t} /> : null}
 
-                {!narrow ? <MapNotes /> : null}
+                {!narrow ? <DurbanNote /> : null}
                 {noVessels ? (
                   <Typography sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: t.text.secondary }}>No vessels at sea in this view.</Typography>
                 ) : null}
               </Box>
-              {narrow ? <Box sx={{ px: 0.5, display: 'flex', flexDirection: 'column', gap: 0.75, alignItems: 'flex-start' }}><MapNotes /></Box> : null}
+              <Box sx={{ px: 0.5, pt: narrow ? 0 : 0.75, display: 'flex', flexDirection: 'column', gap: 0.75, alignItems: 'flex-start' }}>
+                {narrow ? <DurbanNote /> : null}
+                <MapCaption />
+              </Box>
             </Box>
 
             <Box sx={{ flex: '1 1 360px', minWidth: 'min(360px, 100%)', display: 'flex', flexDirection: 'column', gap: 1.5 }}>

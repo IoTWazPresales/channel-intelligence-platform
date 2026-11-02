@@ -37,6 +37,7 @@ import { kpiDelta } from './dates';
 import { effectiveVisualV2 } from './fit';
 import { dualSeries, grainRows, measureHeading, pivotRows, scatterRows } from './advancedShape';
 import { PivotTable } from './PivotTable';
+import { defaultTopN } from './TopNSelect';
 import { breakdownColumns, categoryPoints, catOf, periodByCategory, periodRows, type Cat } from './shape';
 import { cellValue, matchRule, ruleText, tableCols, type TableCol } from './table';
 import type { CatalogV2, ColourRule, DefinitionV2, V2Response, V2Row } from './types';
@@ -188,6 +189,9 @@ function RankedTable({
   measureField,
   nameField,
   topN,
+  sort,
+  measureIds,
+  breakdownIds,
   onRowClicked,
   testKey,
 }: {
@@ -196,10 +200,14 @@ function RankedTable({
   measureField: string;
   nameField: string | null;
   topN: number | null | undefined;
+  /** The saved query sort: a saved name sort or a saved lowest-first starts the table that way, as it does a chart. */
+  sort?: { by: string; dir: 'asc' | 'desc' } | null;
+  measureIds: string[];
+  breakdownIds: string[];
   onRowClicked?: (ev: { data?: V2Row; event?: Event | null }) => void;
   testKey: string | number;
 }) {
-  const ctl = useChartControls(categoryPresentation(undefined, topN, ['m'], [], 10), true);
+  const ctl = useChartControls(categoryPresentation(sort, topN, measureIds, breakdownIds, 10), true);
   const ranked = useMemo(() => {
     const sorted = sortRows(rows, ctl.state.sort, {
       name: (r) => (nameField ? String(r[nameField] ?? '') : ''),
@@ -420,14 +428,20 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
     const firstBd = breakdownColumns(result)[0];
     const measureCol = tcols.find((c) => c.kind === 'measure');
     const nameCol = tcols.find((c) => c.kind !== 'measure');
+    // A saved sort by a measure ranks by that measure's column, not always the first one.
+    const sortMeasure = def.query.sort && measureIds.includes(def.query.sort.by) ? tcols.find((c) => c.id === def.query.sort!.by) : undefined;
     return (
       <Stack sx={{ minHeight: 160 }}>
         <RankedTable
+          key={`${def.display?.top_n ?? ''}-${def.query.sort?.by ?? ''}-${def.query.sort?.dir ?? ''}`}
           rows={displayed?.rows ?? result.rows}
           colDefs={colDefs}
-          measureField={measureCol?.field ?? measureIds[0] ?? 'value'}
+          measureField={sortMeasure?.field ?? measureCol?.field ?? measureIds[0] ?? 'value'}
           nameField={nameCol?.field ?? null}
           topN={def.display?.top_n}
+          sort={def.query.sort}
+          measureIds={measureIds}
+          breakdownIds={breakdowns.filter((b) => b !== 'period')}
           testKey={testKey}
           onRowClicked={
             onSelect && firstBd
@@ -503,13 +517,17 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
     const series = dualSeries(measures, def.display);
     const left = measures.find((m) => series.find((s) => s.key === m.id)?.axis === 'left')!;
     const right = measures.find((m) => series.find((s) => s.key === m.id)?.axis === 'right')!;
+    const dualCategory = breakdowns[0] !== 'period';
+    const dualPresentation = categoryPresentation(def.query.sort, def.display?.top_n, measureIds, catIds, 10);
     return frame(<>
-      <TrendChart data={rows} x="__key" series={series}
+      <TrendChart key={`${dualPresentation.topN}-${dualPresentation.sort.by}-${dualPresentation.sort.dir ?? ''}`}
+        data={rows} x="__key" series={series}
+        categoryAxis={dualCategory} initialControls={dualCategory ? dualPresentation : undefined}
+        unit={measureUnit(left)}
         xTickFormat={(key) => rows.find((r) => r.__key === String(key))?.__label ?? String(key ?? '')}
         xAxisTitle={breakdownLabel(catalog, breakdowns[0])}
         yAxisTitle={measureHeading(left)} yRightAxisTitle={measureHeading(right)} height={plotHeight} yScale="fit"
-        table={{ caption: 'Values by category', columns: [breakdownLabel(catalog, breakdowns[0]), ...measures.map(measureHeading)],
-          rows: rows.map((r) => [r.__label, ...measures.map((m) => formatChartValue(typeof r[m.id] === 'number' ? r[m.id] as number : null, measureUnit(m)))]) }}
+        // The chart's own data table lists the categories it plots (with the units), so it follows the top N.
         onPointClick={onSelect ? (r, _i, e) => select(r.__cat as Cat, e) : undefined} />
       {keyboard(rows.map((r) => ({ key: r.__key, label: r.__label, cat: r.__cat })))}
     </>);
@@ -550,7 +568,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
           if (p && p.parts.every((c) => c.value != null)) selectParts(p.parts, e);
         }
       : undefined;
-    const presentation = categoryPresentation(def.query.sort, def.display?.top_n, measureIds, catIds, visual === 'hbar' ? 15 : 10);
+    const presentation = categoryPresentation(def.query.sort, def.display?.top_n, measureIds, catIds, defaultTopN(visual));
     const note = unassignedEntity && onSelect ? 'Unassigned is not filterable: it has no id.' : null;
     if (visual === 'hbar') {
       return frame(

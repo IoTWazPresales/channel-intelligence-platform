@@ -44,11 +44,12 @@ export function categoryPresentation(
   return { topN: top, sort: rowSort };
 }
 
-type SortKey = 'value-desc' | 'value-asc' | 'name-asc' | 'period';
+type SortKey = 'value-desc' | 'value-asc' | 'name-asc' | 'name-desc' | 'period';
 
-function sortKey(s: RowSort): SortKey {
+/** The menu item that matches the sort in force: a saved Z–A shows "Name Z–A", never "Name A–Z". */
+export function sortKey(s: RowSort): SortKey {
   if (s.by === 'period') return 'period';
-  if (s.by === 'name') return 'name-asc';
+  if (s.by === 'name') return s.dir === 'desc' ? 'name-desc' : 'name-asc';
   return s.dir === 'asc' ? 'value-asc' : 'value-desc';
 }
 
@@ -56,8 +57,19 @@ const SORT_OF: Record<SortKey, RowSort> = {
   'value-desc': { by: 'value', dir: 'desc' },
   'value-asc': { by: 'value', dir: 'asc' },
   'name-asc': { by: 'name', dir: 'asc' },
+  'name-desc': { by: 'name', dir: 'desc' },
   period: { by: 'period' },
 };
+
+/**
+ * The top-N buttons: the standard 5/10/15/25/All, plus the saved value when it is none of them (the editor offers 50).
+ * The saved choice always shows as the pressed button, so a chart never starts with nothing pressed.
+ */
+export function topNOptions(current: TopN): TopN[] {
+  if (typeof current !== 'number' || !Number.isFinite(current) || current <= 0 || TOP_N_OPTIONS.includes(current)) return [...TOP_N_OPTIONS];
+  const numbers = TOP_N_OPTIONS.filter((n): n is number => typeof n === 'number');
+  return [...[...numbers, current].sort((a, b) => a - b), 'all'];
+}
 
 export function ChartControls({
   value,
@@ -96,11 +108,11 @@ export function ChartControls({
           <ToggleButtonGroup
             size="small"
             exclusive
-            value={TOP_N_OPTIONS.includes(value.topN) ? value.topN : null}
+            value={topNOptions(value.topN).includes(value.topN) ? value.topN : null}
             onChange={(_e, n: TopN | null) => n != null && onChange({ ...value, topN: n })}
             aria-label={topNLabel}
           >
-            {TOP_N_OPTIONS.map((n) => (
+            {topNOptions(value.topN).map((n) => (
               <ToggleButton key={String(n)} value={n} sx={{ px: 1, py: 0.25, minWidth: 36 }} aria-label={n === 'all' ? 'Show all' : `Show top ${n}`}>
                 {n === 'all' ? 'All' : n}
               </ToggleButton>
@@ -120,6 +132,7 @@ export function ChartControls({
           <MenuItem value="value-desc">Highest first</MenuItem>
           <MenuItem value="value-asc">Lowest first</MenuItem>
           <MenuItem value="name-asc">Name A–Z</MenuItem>
+          <MenuItem value="name-desc">Name Z–A</MenuItem>
           <MenuItem value="period">{timeAxis ? 'Period' : 'As listed'}</MenuItem>
         </Select>
       ) : null}

@@ -366,10 +366,18 @@ type TickProps = { x?: number | string; y?: number | string; payload?: { value?:
  * Category tick: up to two wrapped lines (vertical bars) or a wrapped label column (horizontal
  * bars); one angled line when the band is too narrow. Every tick carries the full name in <title>.
  */
-function categoryTick(opts: { orientation: 'bottom' | 'left'; maxChars: number; angled?: boolean; fill: string; fontSize?: number }) {
+function categoryTick(opts: {
+  orientation: 'bottom' | 'left';
+  maxChars: number;
+  angled?: boolean;
+  fill: string;
+  fontSize?: number;
+  /** Turns the axis value (a category key) into the name drawn. Without it the value itself is drawn. */
+  format?: (value: unknown) => string;
+}) {
   const fontSize = opts.fontSize ?? 11;
   return function CategoryTick(props: TickProps) {
-    const full = String(props.payload?.value ?? '');
+    const full = opts.format ? opts.format(props.payload?.value) : String(props.payload?.value ?? '');
     const x = Number(props.x);
     const y = Number(props.y);
     if (opts.angled) {
@@ -1110,7 +1118,7 @@ export function PairedBars({
 export function TrendChart({
   data,
   x,
-  series,
+  series: allSeries,
   height,
   format,
   unit,
@@ -1131,10 +1139,23 @@ export function TrendChart({
   categoryAxis = false,
   initialControls,
   datumActions,
+  rankKey,
 }: {
   data: Row[];
   x: string;
-  series: { key: string; label: string; kind: 'line' | 'area' | 'bar'; tone?: ChartTone; clickable?: boolean; axis?: 'left' | 'right'; unit?: MeasureUnit; dash?: string }[];
+  series: {
+    key: string;
+    label: string;
+    kind: 'line' | 'area' | 'bar';
+    tone?: ChartTone;
+    clickable?: boolean;
+    axis?: 'left' | 'right';
+    unit?: MeasureUnit;
+    dash?: string;
+    /** Series with the same key share ONE legend entry (a comparison draws one series per category, but means "current" and "previous"). */
+    legendKey?: string;
+    legendLabel?: string;
+  }[];
   height?: number;
   format?: (v: number) => string;
   unit?: MeasureUnit;
@@ -1167,6 +1188,11 @@ export function TrendChart({
   initialControls?: ChartControlsState;
   /** Keyboard list for the same points a click would filter. */
   datumActions?: 'category' | 'period';
+  /**
+   * Category charts rank rows by this field (the row's own figure). Without it rows rank by the first series, which is only
+   * right when every row has a value for that series; a chart with one series per category sets it.
+   */
+  rankKey?: string;
 }) {
   const c = useChartTheme();
   const motion = useChartMotion();
@@ -1177,11 +1203,16 @@ export function TrendChart({
   const ctl = useChartControls(initialControls ?? { topN: 10, sort: { by: 'value', dir: 'desc' } }, categoryAxis ? true : false);
   const ranked = categoryAxis
     ? applyTopN(
-        sortRows(data, ctl.state.sort, { name: labelOf, value: (r) => toNumber(series[0] ? r[series[0].key] : null) }),
+        sortRows(data, ctl.state.sort, { name: labelOf, value: (r) => toNumber(rankKey ? r[rankKey] : allSeries[0] ? r[allSeries[0].key] : null) }),
         ctl.state.topN,
       )
     : { shown: data, total: data.length };
   const plotted = ranked.shown;
+  // A series whose figures all sit in rows the top N left out is not drawn, so it is not listed: 10 bars, 10 legend entries
+  // (a series with no figure anywhere stays listed: it says the measure was asked for and is empty).
+  const series = categoryAxis
+    ? allSeries.filter((s) => plotted.some((r) => r[s.key] != null) || !data.some((r) => r[s.key] != null))
+    : allSeries;
   const maxOf = (keys: string[]) => plotted.reduce((m, r) => keys.reduce((n, key) => Math.max(n, Math.abs(toNumber(r[key]) ?? 0)), m), 0);
   const fmt = chartFormatters(unit, format, undefined, maxOf(series.map((s) => s.key)));
   const seriesFmt = (s: (typeof series)[number]) => chartFormatters(s.unit ?? unit, format, undefined, maxOf([s.key]));
@@ -1196,6 +1227,10 @@ export function TrendChart({
   const showLegend = legend ?? series.length > 1;
   const colorOf = (s: (typeof series)[number], i: number) =>
     s.tone ? toneColor(c, s.tone) : series.length > 1 ? c.series[i % c.series.length] : c.primary;
+  // One legend entry per legendKey (the first series with it); series without a key keep their own entry.
+  const legendEntries = series
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }, n, all) => !s.legendKey || all.findIndex((o) => o.s.legendKey === s.legendKey) === n);
   const labelled = lastPointLabel ? series.find((s) => s.kind !== 'bar')?.key : undefined;
   const lastIndex = plotted.length - 1;
   const titled = Boolean(xAxisTitle || yAxisTitle);
@@ -1251,8 +1286,13 @@ export function TrendChart({
       legend={
         showLegend ? (
           <ChartLegend
-            items={series.map((s, i) => ({ label: hasRight ? `${s.label} (${s.axis ?? 'left'} axis)` : s.label, color: colorOf(s, i), clickable: s.clickable, selected: selectedSeries?.includes(s.key) }))}
-            onItemClick={onSeriesClick ? (i, e) => onSeriesClick(series[i].key, e) : undefined}
+            items={legendEntries.map(({ s, i }) => ({
+              label: s.legendKey ? (s.legendLabel ?? s.label) : hasRight ? `${s.label} (${s.axis ?? 'left'} axis)` : s.label,
+              color: colorOf(s, i),
+              clickable: s.clickable && !s.legendKey,
+              selected: selectedSeries?.includes(s.key),
+            }))}
+            onItemClick={onSeriesClick ? (i, e) => onSeriesClick(legendEntries[i].s.key, e) : undefined}
           />
         ) : null
       }
@@ -1300,7 +1340,7 @@ export function TrendChart({
           {categoryHorizontal ? (
             <XAxis type="number" tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={fmt.tick} axisLine={false} tickLine={false} />
           ) : categoryAxis ? (
-            <XAxis dataKey={x} tick={categoryTick({ orientation: 'bottom', maxChars: bottom.maxChars, angled: bottom.angled, fill: c.axis, fontSize: 10.5 })}
+            <XAxis dataKey={x} tick={categoryTick({ orientation: 'bottom', maxChars: bottom.maxChars, angled: bottom.angled, fill: c.axis, fontSize: 10.5, format: xTickFormat })}
               height={bottom.height} interval={0} axisLine={false} tickLine={false} />
           ) : (
             <XAxis dataKey={x} tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={xTickFormat} axisLine={false} tickLine={false}
@@ -1310,7 +1350,7 @@ export function TrendChart({
             <YAxis
               type="category"
               dataKey={x}
-              tick={categoryTick({ orientation: 'left', maxChars: left.maxChars, fill: c.axis })}
+              tick={categoryTick({ orientation: 'left', maxChars: left.maxChars, fill: c.axis, format: xTickFormat })}
               axisLine={false}
               tickLine={false}
               width={left.width}

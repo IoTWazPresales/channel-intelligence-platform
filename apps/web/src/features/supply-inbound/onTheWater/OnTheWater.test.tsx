@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
+import { placeLabels, portNameBox } from './layout';
 import { OnTheWater } from './OnTheWater';
 import type { OnTheWaterData, Vessel } from './types';
 
@@ -227,6 +228,39 @@ describe('OnTheWater', () => {
     await screen.findByTestId('otw-map');
     expect(screen.queryByTestId('otw-needs-look')).toBeNull();
     expect(screen.queryByTestId('otw-pulse')).toBeNull();
+  });
+
+  it('keeps the map caption out of the map, so the Durban note cannot sit over it (GOV-008 minor)', async () => {
+    setup(payload());
+    const map = await screen.findByTestId('otw-map');
+    expect(within(map).getByTestId('otw-durban-note')).toBeInTheDocument(); // the note stays on the map
+    const caption = screen.getByTestId('otw-caption');
+    expect(caption).toHaveTextContent('position = share of on-board');
+    expect(map.contains(caption)).toBe(false); // before: an absolute child of the map, at the bottom left
+    expect(getComputedStyle(caption).position).not.toBe('absolute');
+  });
+
+  it('a vessel label is kept clear of a port name, measured at the width the name really draws', () => {
+    // CITY DEEP (9 capitals) at 11 px / 600 weight / .04em draws about 85 px, starting 12 px beside its dot. The old box was
+    // 7.6 px a letter plus 12: 7 px short, so a label could start under the end of the name (the 1280 px render showed it).
+    const mapW = 1000;
+    const mapH = 646;
+    const pctX = (px: number) => (px / mapW) * 100;
+    const pctY = (px: number) => (px / mapH) * 100;
+    const port = { id: 'CITY DEEP', label: 'CITY DEEP', x: 48, y: 87 };
+    const box = portNameBox(port, pctX, pctY);
+    const drawnEnd = port.x + pctX(12) + pctX(85);
+    expect(box.x + box.w).toBeGreaterThanOrEqual(drawnEnd); // the avoid box reaches the end of the drawn name
+    // A label that would start under the end of the name is refused a place there.
+    const anchor = { id: 'c:durban', x: port.x - 1.6 + pctX(100), y: port.y, priority: 1 };
+    const size = { w: pctX(160), h: pctY(42) };
+    for (const b of placeLabels([anchor], size, [box], { x: pctX(16), y: pctY(10) })) {
+      const clear = b.x >= box.x + box.w || b.x + b.w <= box.x || b.y >= box.y + box.h || b.y + b.h <= box.y;
+      expect(clear).toBe(true);
+    }
+    // The side the config names still decides where the box is.
+    expect(portNameBox({ ...port, label_side: 'left' }, pctX, pctY).x).toBeLessThan(port.x);
+    expect(portNameBox({ ...port, label_side: 'above' }, pctX, pctY).y).toBeLessThan(port.y - pctY(20));
   });
 
   it('puts a port name on the side the map config says, else to the right (and to the left near the right edge)', async () => {

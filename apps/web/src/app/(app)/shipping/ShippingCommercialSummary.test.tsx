@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
+import { apiGet } from '@/lib/api';
+
+import type { ShippingFilterParams } from './buildShippingLinesUrl';
 import { ShippingCommercialSummary, type CommercialSummary } from './ShippingCommercialSummary';
 
 vi.mock('@/lib/api', () => ({
@@ -67,5 +70,35 @@ describe('ShippingCommercialSummary', () => {
     await waitFor(() => expect(about).toHaveAttribute('aria-expanded', 'true'));
     expect(screen.getByText(/proof-of-delivery/)).toBeTruthy();
     expect(screen.queryByText(/SECRET-KEY/)).toBeNull();
+  });
+});
+
+describe('ShippingCommercialSummary: a vessel click refreshes only the grid', () => {
+  const base: ShippingFilterParams = {
+    lineState: '', cargoStatus: '', distributorId: null, customerId: null, purchaseOrderId: null, search: '', dateField: 'eta_date', dateFrom: '',
+    dateTo: '', productFamily: '', productModel: '', currencyCode: '', operatingUnit: '', podDateFilter: '', planQuarter: '', planBusinessUnit: '',
+    lineupAttribution: '', lifecycleBucket: '', slipDirection: '', cohort: '',
+  };
+  const tileCalls = () => vi.mocked(apiGet).mock.calls.filter(([url]) => /commercial-summary|eta-shifts/.test(String(url))).length;
+
+  it('makes no new tile or ETA-shift request when a vessel is picked while a cohort and a distributor filter are active', async () => {
+    vi.mocked(apiGet).mockClear();
+    const active: ShippingFilterParams = { ...base, distributorId: 7, cohort: 'overdue', lineState: 'shipped' };
+    // What selectVessel leaves behind: the vessel set, the line-picking filters cleared, the distributor untouched.
+    const picked: ShippingFilterParams = { ...active, vessel: 'i:2026-09-19|2026-11-05|ZAJNB|asia_durban', cohort: '', lineState: '' };
+    const client = new QueryClient();
+    const tree = (p: ShippingFilterParams, vessel: string | null) => (
+      <QueryClientProvider client={client}>
+        <ShippingCommercialSummary filterParams={p} selectedVesselKey={vessel} />
+      </QueryClientProvider>
+    );
+    const view = renderWithProviders(tree(active, null));
+    expect(await screen.findByText(/Improved earlier 1/)).toBeTruthy();
+    const before = tileCalls();
+    expect(before).toBe(2); // the summary and the ETA shifts, once each
+    view.rerender(tree(picked, picked.vessel ?? null));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(tileCalls()).toBe(before); // before the fix: 4, the tiles asked again
+    expect(screen.getByText(/Improved earlier 1/)).toBeTruthy(); // and they still show their figures
   });
 });

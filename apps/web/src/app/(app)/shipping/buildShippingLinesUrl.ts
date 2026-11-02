@@ -99,6 +99,27 @@ function withoutGridSelection(p: ShippingFilterParams): ShippingFilterParams {
   return { ...p, vessel: '', cohort: p.cohort === 'needs_look' ? '' : p.cohort };
 }
 
+/** What a vessel click resets on the page so the grid shows that vessel's lines (InboundShipmentsWorkspace.selectVessel). */
+const PICKED_BY_A_VESSEL_CLICK = ['lineState', 'cargoStatus', 'dateField', 'dateFrom', 'dateTo', 'podDateFilter', 'cohort'] as const;
+
+/**
+ * The query the tiles use. A vessel click clears the card cohort, line state, status, dates and POD filter so the grid shows that
+ * vessel's lines; if the tiles followed those, a click with another filter active would change the tile query and refetch them
+ * (GOV-008 minor). While a vessel is selected the tiles keep the parameters they had, unless something else changed (a
+ * distributor, a customer, a product, a plan...): then they follow. With no vessel selected they follow everything, as before.
+ */
+export function tileFilterParams(
+  previous: ShippingFilterParams | null,
+  next: ShippingFilterParams,
+  vesselSelected: boolean,
+): ShippingFilterParams {
+  const own = withoutGridSelection(next);
+  if (!vesselSelected || !previous) return own;
+  const picked = new Set<string>(PICKED_BY_A_VESSEL_CLICK);
+  const unchanged = (Object.keys(own) as (keyof ShippingFilterParams)[]).every((k) => picked.has(k) || own[k] === previous[k]);
+  return unchanged ? previous : own;
+}
+
 export function buildShippingCommercialSummaryUrl(p: ShippingFilterParams): string {
   const params = new URLSearchParams();
   appendShippingFilterParams(params, withoutGridSelection(p));

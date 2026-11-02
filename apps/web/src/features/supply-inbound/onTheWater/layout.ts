@@ -78,7 +78,35 @@ export function etaRange(first: string | undefined, last: string | undefined): s
 }
 
 export type LabelBox = { id: string; x: number; y: number; w: number; h: number };
-type Anchor = { id: string; x: number; y: number; priority: number };
+/** `size` (percent of the map) overrides the common size for this anchor: a label is as wide as its text. */
+type Anchor = { id: string; x: number; y: number; priority: number; size?: { w: number; h: number } };
+
+/**
+ * The width in px a vessel label draws: its title (12 px bold) or its second line (11 px), whichever is longer, plus padding and
+ * border. The label is `nowrap`, so it is as wide as its text whatever box the placement reserved: "4 vessels at or near Durban" with
+ * "3,494 u · ETA at port 31 Oct–5 Nov" draws about 201 px, and a fixed 160 px box let it cover the end of "CITY DEEP".
+ */
+export function labelWidthPx(title: string, sub: string): number {
+  return Math.ceil(Math.max(title.length * 7.2, sub.length * 5.6) + 24);
+}
+
+/** What a port name draws at 11 px / 600 weight / .04em letter-spacing, per capital letter, in px (measured in the render). */
+export const PORT_NAME_PX_PER_LETTER = 8.4;
+
+/**
+ * The box a port's name occupies, as a percentage of the map, for `placeLabels` to keep clear. The name starts 12 px beside its
+ * dot (GOV-008 batch 3: the box was 7.6 px a letter and 7 px short, so a vessel label could sit over the end of "CITY DEEP").
+ */
+export function portNameBox(
+  p: { id: string; label: string; x: number; y: number; label_side?: 'left' | 'right' | 'above' },
+  pctX: (px: number) => number,
+  pctY: (px: number) => number,
+): LabelBox {
+  const w = pctX(p.label.length * PORT_NAME_PX_PER_LETTER + 16);
+  const side = p.label_side ?? (p.x > 82 ? 'left' : 'right');
+  if (side === 'above') return { id: `p:${p.id}`, x: p.x - w / 2, y: p.y - pctY(26), w, h: pctY(18) };
+  return { id: `p:${p.id}`, x: side === 'left' ? p.x - pctX(6) - w : p.x + pctX(6), y: p.y - pctY(9), w, h: pctY(18) };
+}
 
 function overlaps(a: LabelBox, b: LabelBox): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -98,14 +126,15 @@ export function placeLabels(
 ): LabelBox[] {
   const placed: LabelBox[] = [];
   for (const a of [...anchors].sort((p, q) => p.priority - q.priority)) {
+    const own = a.size ?? size;
     const corners: Array<[number, number]> = [
-      [a.x + gap.x, a.y - gap.y - size.h], // right, above
-      [a.x - gap.x - size.w, a.y - gap.y - size.h], // left, above
+      [a.x + gap.x, a.y - gap.y - own.h], // right, above
+      [a.x - gap.x - own.w, a.y - gap.y - own.h], // left, above
       [a.x + gap.x, a.y + gap.y], // right, below
-      [a.x - gap.x - size.w, a.y + gap.y], // left, below
+      [a.x - gap.x - own.w, a.y + gap.y], // left, below
     ];
     for (const [x, y] of corners) {
-      const box: LabelBox = { id: a.id, x, y, w: size.w, h: size.h };
+      const box: LabelBox = { id: a.id, x, y, w: own.w, h: own.h };
       const inside = box.x >= 0 && box.y >= 0 && box.x + box.w <= 100 && box.y + box.h <= 100;
       if (inside && !placed.some((p) => overlaps(p, box)) && !avoid.some((p) => overlaps(p, box))) {
         placed.push(box);
