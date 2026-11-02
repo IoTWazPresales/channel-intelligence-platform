@@ -19,7 +19,10 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_water import WATER_FIELDS
 from app.services.imports.shipment_apply_failure import ShipmentApplyRowError
 from app.services.imports.shipment_evidence_line_identity import fact_upsert_key_for_evidence_values
-from app.services.imports.shipment_shipped_fact_identity_twin_merge import retire_po_less_twins_written_by_job
+from app.services.imports.shipment_shipped_fact_identity_twin_merge import (
+    retire_orphaned_open_rows,
+    retire_po_less_twins_written_by_job,
+)
 from app.utils.json_safe import to_jsonable
 
 
@@ -367,6 +370,9 @@ def upsert_inbound_shipment_facts_for_job(
         if on_progress is not None:
             on_progress(n, total)
     db.flush()
+    orphans = retire_orphaned_open_rows(db, int(import_job_id))
+    if orphans["superseded"] or orphans["disappeared"]:
+        logger.info("shipment_stage job_id=%s orphaned_open_rows_retired=%s", int(import_job_id), orphans)
     twins = retire_po_less_twins_written_by_job(db, int(import_job_id))
     if twins["retired"] or twins["quantity_differs"]:
         logger.info(

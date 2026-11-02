@@ -1,0 +1,47 @@
+workbook Shipped sheet, no ship confirm date: 12 lines, 1,316 units
+   order 151126091006582 line 1.1 item 90NX08N1-M03CC0 qty 125 exwork 2026-10-26 POD None bill-to MUSTEK-ZA-TB | ship-to MUSTEK-ZA-TB-01
+   order 151126081010672 line 1.1 item 90NX09J2-M00RW0 qty 21 exwork 2026-09-29 POD None bill-to MUSTEK-ZA-BB | ship-to MUSTEK-ZA-BB-01
+   order 151126061011427 line 1.1 item 90NX0AL1-M004B0 qty 355 exwork 2026-09-29 POD None bill-to PEPKOR-ZA-BB | ship-to PEPKOR-ZA-BB-01
+   order 151126071000262 line 1.1 item 90NX0AL1-M004B0 qty 20 exwork 2026-09-29 POD None bill-to PEPKOR-ZA-BB | ship-to PEPKOR-ZA-BB-01
+   order 151126071000263 line 1.1 item 90NX0AL1-M004B0 qty 20 exwork 2026-09-29 POD None bill-to PEPKOR-ZA-BB | ship-to PEPKOR-ZA-BB-01
+   order 151126071008977 line 1.1 item 90NX0AL1-M004B0 qty 128 exwork 2026-09-29 POD None bill-to PEPKOR-ZA-BB | ship-to PEPKOR-ZA-BB-01
+   order 151126081014465 line 1.1 item 90NX0861-M01X30 qty 36 exwork 2026-09-29 POD None bill-to MUSTEK-ZA-BB | ship-to MUSTEK-ZA-BB-01
+   order 151126081013514 line 1.1 item 90NX0AM2-M00640 qty 120 exwork 2026-09-29 POD None bill-to DCC-ZA-BB | ship-to DCC-ZA-BB
+   order 151126081013513 line 1.1 item 90NX09J2-M00RW0 qty 10 exwork 2026-09-29 POD None bill-to DCC-ZA-BB | ship-to DCC-ZA-BB
+   order 151126081010739 line 1.1 item 90NX09J2-M00FP0 qty 21 exwork 2026-09-29 POD None bill-to RECTRON-ZA-BB | ship-to RECTRON-ZA-BB
+   order 151126091007566 line 1.1 item 90NX08F1-M01520 qty 300 exwork 2026-10-26 POD None bill-to MUSTEK-ZA-TB | ship-to MUSTEK-ZA-TB-01
+   order 151126101003140 line 1.1 item 90NX0AM2-M00N10 qty 160 exwork 2026-10-26 POD None bill-to DCC-ZA-BB | ship-to DCC-ZA-BB
+db/user/ro: ('cip', 'cip', 'on')
+
+the card's rule on cip (open_order, report type shipped, no ship confirm, no POD, exwork before 2026-10-26): 15 lines, 1,067 units
+  by distributor: {'Mustek': 114, 'Pepkor': 651, 'DCC': 260, 'Rectron': 42}
+  by (job, sheet): {(1697, 'Shipped'): 15}
+   fact 148768 job 1697 sheet Shipped state open_order order 151126081010672 line 1.1 item 90NX09J2-M00RW0 qty 21 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260345763|90NX09 | in workbook list: True | dist Mustek | updated 2026-10-29
+   fact 148777 job 1697 sheet Shipped state open_order order 151126071008977 line 1.1 item 90NX0AL1-M004B0 qty 128 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260365958|90NX0A | in workbook list: True | dist Pepkor | updated 2026-10-29
+   fact 148780 job 1697 sheet Shipped state open_order order 151126081014465 line 1.1 item 90NX0861-M01X30 qty 36 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260369718|90NX08 | in workbook list: True | dist Mustek | updated 2026-10-29
+   fact 148785 job 1697 sheet Shipped state open_order order 151126081013514 line 1.1 item 90NX0AM2-M00640 qty 120 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260369724|90NX0A | in workbook list: True | dist DCC | updated 2026-10-29
+   fact 148786 job 1697 sheet Shipped state open_order order 151126081013513 line 1.1 item 90NX09J2-M00RW0 qty 10 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260369725|90NX09 | in workbook list: True | dist DCC | updated 2026-10-29
+   fact 148801 job 1697 sheet Shipped state open_order order 151126081010739 line 1.1 item 90NX09J2-M00FP0 qty 21 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260380237|90NX09 | in workbook list: True | dist Rectron | updated 2026-10-29
+   fact 170755 job 1697 sheet Shipped state open_order order 151126081010672 line 1.1 item 90NX09J2-M00RW0 qty 21 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260345763|90NX09 | in workbook list: True | dist Mustek | updated 2026-11-02
+   fact 170756 job 1697 sheet Shipped state open_order order 151126061011427 line 1.1 item 90NX0AL1-M004B0 qty 355 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260365958|90NX0A | in workbook list: True | dist Pepkor | updated 2026-11-02
+   fact 170757 job 1697 sheet Shipped state open_order order 151126071000262 line 1.1 item 90NX0AL1-M004B0 qty 20 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260365958|90NX0A | in workbook list: True | dist Pepkor | updated 2026-11-02
+   fact 170758 job 1697 sheet Shipped state open_order order 151126071000263 line 1.1 item 90NX0AL1-M004B0 qty 20 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260365958|90NX0A | in workbook list: True | dist Pepkor | updated 2026-11-02
+   fact 170759 job 1697 sheet Shipped state open_order order 151126071008977 line 1.1 item 90NX0AL1-M004B0 qty 128 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260365958|90NX0A | in workbook list: True | dist Pepkor | updated 2026-11-02
+   fact 170760 job 1697 sheet Shipped state open_order order 151126081014465 line 1.1 item 90NX0861-M01X30 qty 36 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260369718|90NX08 | in workbook list: True | dist Mustek | updated 2026-11-02
+   fact 170761 job 1697 sheet Shipped state open_order order 151126081013514 line 1.1 item 90NX0AM2-M00640 qty 120 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260369724|90NX0A | in workbook list: True | dist DCC | updated 2026-11-02
+   fact 170813 job 1697 sheet Shipped state open_order order 151126081013513 line 1.1 item 90NX09J2-M00RW0 qty 10 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260369725|90NX09 | in workbook list: True | dist DCC | updated 2026-11-02
+   fact 170814 job 1697 sheet Shipped state open_order order 151126081010739 line 1.1 item 90NX09J2-M00FP0 qty 21 exwork 2026-09-29 key acza_workbook_shipped:shipped|15260380237|90NX09 | in workbook list: True | dist Rectron | updated 2026-11-02
+
+the workbook's 12 lines as facts on cip:
+   order 151126091006582 item 90NX08N1-M03CC0: fact 170754 job 1697 open_order/acza_workbook_shipped/Shipped qty 125 exw 2026-10-26 sc None; fact 141780 job 1696 closed_disappeared/acza_workbook_unship/Unship qty 125 exw None sc None; fact 157127 job 1697 open_order/acza_workbook_shipped/Shipped qty 125 exw 2026-10-26 sc None
+   order 151126081010672 item 90NX09J2-M00RW0: fact 170755 job 1697 open_order/acza_workbook_shipped/Shipped qty 21 exw 2026-09-29 sc None; fact 127394 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 21 exw None sc None; fact 148768 job 1697 open_order/acza_workbook_shipped/Shipped qty 21 exw 2026-09-29 sc None
+   order 151126061011427 item 90NX0AL1-M004B0: fact 170756 job 1697 open_order/acza_workbook_shipped/Shipped qty 355 exw 2026-09-29 sc None; fact 100885 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 355 exw None sc None
+   order 151126071000262 item 90NX0AL1-M004B0: fact 170757 job 1697 open_order/acza_workbook_shipped/Shipped qty 20 exw 2026-09-29 sc None; fact 100897 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 20 exw None sc None
+   order 151126071000263 item 90NX0AL1-M004B0: fact 170758 job 1697 open_order/acza_workbook_shipped/Shipped qty 20 exw 2026-09-29 sc None; fact 100898 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 20 exw None sc None
+   order 151126071008977 item 90NX0AL1-M004B0: fact 170759 job 1697 open_order/acza_workbook_shipped/Shipped qty 128 exw 2026-09-29 sc None; fact 107375 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 128 exw None sc None; fact 148777 job 1697 open_order/acza_workbook_shipped/Shipped qty 128 exw 2026-09-29 sc None
+   order 151126081014465 item 90NX0861-M01X30: fact 170760 job 1697 open_order/acza_workbook_shipped/Shipped qty 36 exw 2026-09-29 sc None; fact 128287 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 36 exw None sc None; fact 148780 job 1697 open_order/acza_workbook_shipped/Shipped qty 36 exw 2026-09-29 sc None
+   order 151126081013514 item 90NX0AM2-M00640: fact 170761 job 1697 open_order/acza_workbook_shipped/Shipped qty 120 exw 2026-09-29 sc None; fact 128206 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 120 exw None sc None; fact 148785 job 1697 open_order/acza_workbook_shipped/Shipped qty 120 exw 2026-09-29 sc None
+   order 151126081013513 item 90NX09J2-M00RW0: fact 170813 job 1697 open_order/acza_workbook_shipped/Shipped qty 10 exw 2026-09-29 sc None; fact 128216 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 10 exw None sc None; fact 148786 job 1697 open_order/acza_workbook_shipped/Shipped qty 10 exw 2026-09-29 sc None
+   order 151126081010739 item 90NX09J2-M00FP0: fact 170814 job 1697 open_order/acza_workbook_shipped/Shipped qty 21 exw 2026-09-29 sc None; fact 128167 job 1339 closed_disappeared/acza_workbook_unship/Unship qty 21 exw None sc None; fact 148801 job 1697 open_order/acza_workbook_shipped/Shipped qty 21 exw 2026-09-29 sc None
+   order 151126091007566 item 90NX08F1-M01520: fact 170815 job 1697 open_order/acza_workbook_shipped/Shipped qty 300 exw 2026-10-26 sc None; fact 141695 job 1696 closed_disappeared/acza_workbook_unship/Unship qty 300 exw None sc None; fact 163464 job 1697 open_order/acza_workbook_shipped/Shipped qty 300 exw 2026-10-26 sc None
+   order 151126101003140 item 90NX0AM2-M00N10: fact 170816 job 1697 open_order/acza_workbook_shipped/Shipped qty 160 exw 2026-10-26 sc None; fact 148962 job 1696 closed_disappeared/acza_workbook_unship/Unship qty 160 exw None sc None; fact 163465 job 1697 open_order/acza_workbook_shipped/Shipped qty 160 exw 2026-10-26 sc None

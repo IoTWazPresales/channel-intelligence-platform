@@ -1,0 +1,82 @@
+[DRY-RUN] merge_shipped_fact_identity_twins --retire-orphan-open-rows
+{
+  "database": "cip",
+  "job": 1697,
+  "orphaned_open_rows": 9,
+  "units": 921.0,
+  "with_replacement": 9,
+  "rows": [
+    {
+      "fact": 148768,
+      "order_no": "151126081010672",
+      "order_line": "1.1",
+      "item": "90NX09J2-M00RW0",
+      "quantity": 21.0,
+      "replaced_by": 170755
+    },
+    {
+      "fact": 148777,
+      "order_no": "151126071008977",
+      "order_line": "1.1",
+      "item": "90NX0AL1-M004B0",
+      "quantity": 128.0,
+      "replaced_by": 170759
+    },
+    {
+      "fact": 148780,
+      "order_no": "151126081014465",
+      "order_line": "1.1",
+      "item": "90NX0861-M01X30",
+      "quantity": 36.0,
+      "replaced_by": 170760
+    },
+    {
+      "fact": 148785,
+      "order_no": "151126081013514",
+      "order_line": "1.1",
+      "item": "90NX0AM2-M00640",
+      "quantity": 120.0,
+      "replaced_by": 170761
+    },
+    {
+      "fact": 148786,
+      "order_no": "151126081013513",
+      "order_line": "1.1",
+      "item": "90NX09J2-M00RW0",
+      "quantity": 10.0,
+      "replaced_by": 170813
+    },
+    {
+      "fact": 148801,
+      "order_no": "151126081010739",
+      "order_line": "1.1",
+      "item": "90NX09J2-M00FP0",
+      "quantity": 21.0,
+      "replaced_by": 170814
+    },
+    {
+      "fact": 157127,
+      "order_no": "151126091006582",
+      "order_line": "1.1",
+      "item": "90NX08N1-M03CC0",
+      "quantity": 125.0,
+      "replaced_by": 170754
+    },
+    {
+      "fact": 163464,
+      "order_no": "151126091007566",
+      "order_line": "1.1",
+      "item": "90NX08F1-M01520",
+      "quantity": 300.0,
+      "replaced_by": 170815
+    },
+    {
+      "fact": 163465,
+      "order_no": "151126101003140",
+      "order_line": "1.1",
+      "item": "90NX0AM2-M00N10",
+      "quantity": 160.0,
+      "replaced_by": 170816
+    }
+  ]
+}

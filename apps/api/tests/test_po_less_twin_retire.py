@@ -171,3 +171,56 @@ def test_evidence_sum_rule_retires_a_partial_old_fact_only_when_asked_and_only_w
     db.refresh(old_bad)
     assert old_ok.line_state == LINE_SUPERSEDED and old_ok.superseded_by_fact_id == twin_ok.id
     assert old_bad.line_state == "shipped"
+
+
+def test_orphaned_open_rows_of_a_re_read_job_are_retired_and_the_needs_a_look_rule_counts_each_line_once(world):
+    """A re-read job leaves its old-key open facts behind (no evidence line, same job): they were counted beside the new ones."""
+    from datetime import date
+
+    from app.models.shipment_evidence import ShipmentEvidenceLine
+    from app.services.imports.shipment_shipped_fact_identity_twin_merge import plan_orphaned_open_rows, retire_orphaned_open_rows
+    from app.services.shipping_commercial_kpis import predicate_needs_look
+
+    db, (old_job, new_job), fact, tenant = world
+    n = 0
+
+    def open_fact(*, with_line: bool, order: str, qty: float = 20.0):
+        nonlocal n
+        n += 1
+        line_id = None
+        if with_line:
+            line = ShipmentEvidenceLine(
+                import_job_id=int(new_job.id), source_sheet="Shipped", source_row_number=n, report_type="acza_workbook_shipped", line_state="open_order",
+                source_key=f"ol-{n}", raw_source_row={}, order_no=order, order_line="1.1", item_code="I1", quantity=qty,
+                product_resolution_status="unresolved", distributor_resolution_status="unresolved",
+            )
+            db.add(line)
+            db.flush()
+            line_id = int(line.id)
+        f = FactInboundShipment(
+            tenant_id=tenant, import_job_id=int(new_job.id), source_key=f"of-{n}", fact_upsert_key=f"of-key-{n}", shipment_evidence_line_id=line_id,
+            source_row_number=n, report_type="acza_workbook_shipped", line_state="open_order", raw_source_row={}, order_no=order, order_line="1.1",
+            item_code="I1", quantity=qty, exwork_date=date(2026, 9, 29), product_resolution_status="unresolved", distributor_resolution_status="unresolved",
+        )
+        db.add(f)
+        db.flush()
+        return f
+
+    old_a = open_fact(with_line=False, order="SO-A")
+    new_a = open_fact(with_line=True, order="SO-A")
+    old_b = open_fact(with_line=False, order="SO-B")  # nothing carries SO-B any more
+    keep_c = open_fact(with_line=True, order="SO-C")
+
+    def card():
+        return db.scalars(select(FactInboundShipment.id).where(FactInboundShipment.tenant_id == tenant, predicate_needs_look(date(2026, 11, 2), 7))).all()
+
+    assert sorted(card()) == sorted([old_a.id, new_a.id, old_b.id, keep_c.id])  # before: the re-keyed line is counted twice
+    plan = [r for r in plan_orphaned_open_rows(db, int(new_job.id)) if r["id"] in (old_a.id, old_b.id)]
+    assert {r["id"]: r["replaced_by"] for r in plan} == {old_a.id: new_a.id, old_b.id: None}
+    assert retire_orphaned_open_rows(db, int(new_job.id), plan) == {"superseded": 1, "disappeared": 1}
+    db.refresh(old_a)
+    db.refresh(old_b)
+    assert old_a.line_state == LINE_SUPERSEDED and old_a.superseded_by_fact_id == new_a.id and old_a.superseded_by_key == new_a.fact_upsert_key
+    assert old_b.line_state == "closed_disappeared"
+    assert sorted(card()) == sorted([new_a.id, keep_c.id])  # after: each line once
+    assert not [r for r in plan_orphaned_open_rows(db, int(new_job.id)) if r["id"] in (old_a.id, old_b.id)]

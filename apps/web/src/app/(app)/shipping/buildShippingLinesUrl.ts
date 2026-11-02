@@ -57,12 +57,27 @@ export function appendShippingFilterParams(params: URLSearchParams, p: ShippingF
 }
 
 /**
- * On the water map and tiles: the page scope, minus the two selections that pick lines out of it (a clicked vessel and
- * the "needs a look" cohort), so clicking a vessel filters the grid and leaves the map showing every vessel.
+ * On the water map and tiles: only who the page is about (distributor, customer, purchase order, product, currency, plan).
+ * Everything that picks lines out of that for the grid (line state, status, dates, search, POD, lifecycle, slip, a smart preset or
+ * card cohort, a clicked vessel) is left out, so clicking a vessel, a list row or "Open the lines" changes the grid and the map
+ * keeps its query and does not refetch.
  */
 export function buildOnTheWaterUrl(p: ShippingFilterParams): string {
   const params = new URLSearchParams();
-  appendShippingFilterParams(params, { ...p, vessel: '', cohort: p.cohort === 'needs_look' ? '' : p.cohort });
+  appendShippingFilterParams(params, {
+    ...p,
+    lineState: '',
+    cargoStatus: '',
+    search: '',
+    dateField: '',
+    dateFrom: '',
+    dateTo: '',
+    podDateFilter: '',
+    lifecycleBucket: '',
+    slipDirection: '',
+    cohort: '',
+    vessel: '',
+  });
   const qs = params.toString();
   return qs ? `/api/v1/shipping/on-the-water?${qs}` : '/api/v1/shipping/on-the-water';
 }
@@ -79,9 +94,14 @@ export function buildShippingLineupQuarterSummaryUrl(
   return `/api/v1/shipping/lineup-quarter-summary?${params.toString()}`;
 }
 
+/** A clicked vessel and the needs-a-look cohort pick lines for the grid only: the tiles keep their own query and do not refetch. */
+function withoutGridSelection(p: ShippingFilterParams): ShippingFilterParams {
+  return { ...p, vessel: '', cohort: p.cohort === 'needs_look' ? '' : p.cohort };
+}
+
 export function buildShippingCommercialSummaryUrl(p: ShippingFilterParams): string {
   const params = new URLSearchParams();
-  appendShippingFilterParams(params, p);
+  appendShippingFilterParams(params, withoutGridSelection(p));
   const qs = params.toString();
   return qs ? `/api/v1/shipping/commercial-summary?${qs}` : '/api/v1/shipping/commercial-summary';
 }
@@ -89,7 +109,7 @@ export function buildShippingCommercialSummaryUrl(p: ShippingFilterParams): stri
 export function buildShippingEtaShiftsUrl(p: ShippingFilterParams, sampleLimit: number): string {
   const params = new URLSearchParams();
   params.set('sample_limit', String(sampleLimit));
-  appendShippingFilterParams(params, p);
+  appendShippingFilterParams(params, withoutGridSelection(p));
   return `/api/v1/shipping/eta-shifts?${params.toString()}`;
 }
 

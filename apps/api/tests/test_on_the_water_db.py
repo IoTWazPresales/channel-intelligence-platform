@@ -134,7 +134,8 @@ async def water(monkeypatch):
             await add(state="open_order", qty=12, on_board="2026-11-02", eta="2026-12-10", history=False)
             # Needs a look: open from a Shipped sheet, no ship confirm date, ex-works 27 days old; and one that is not old enough.
             nl1 = await add(state="open_order", qty=9, on_board=None, exwork="2026-10-01", history=True, eta=None, first_eta=None, dist=dist_b)
-            await add(state="open_order", qty=4, on_board=None, exwork="2026-10-25", history=False)
+            # "Not old enough" is counted from the real day too (the grid's cohort does not take an as-of), so it follows the clock.
+            await add(state="open_order", qty=4, on_board=None, exwork=(date.today() - timedelta(days=3)).isoformat(), history=False)
             await seed.commit()
             ids = {"v1": sorted([int(v1a.id), int(v1b.id)]), "v2": [int(v2.id)], "v3": [int(v3.id)], "needs_look": [int(nl1.id)]}
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:

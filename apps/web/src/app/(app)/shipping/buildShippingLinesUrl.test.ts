@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildShippingCommercialSummaryUrl,
+  buildShippingEtaShiftsUrl,
   buildShippingLinesUrl,
 } from './buildShippingLinesUrl';
 
@@ -90,5 +91,13 @@ describe('buildShippingLinesUrl', () => {
     expect(url).toContain('cohort=overdue');
     expect(url).not.toContain('skip=');
     expect(url).not.toContain('limit=');
+  });
+
+  it('leaves a clicked vessel and the needs-a-look cohort out of the tiles and the ETA shifts, so only the grid refreshes', () => {
+    const picked = { ...emptyFilters, vessel: 'i:2026-09-19|2026-11-05|ZAJNB|asia_durban', cohort: 'needs_look' as const };
+    expect(buildShippingCommercialSummaryUrl(picked)).toBe(buildShippingCommercialSummaryUrl(emptyFilters));
+    expect(buildShippingEtaShiftsUrl(picked, 5)).toBe(buildShippingEtaShiftsUrl(emptyFilters, 5));
+    expect(buildShippingLinesUrl({ ...picked, skip: 0, limit: 50, includeRawRow: false })).toContain('vessel=');
+    expect(buildShippingLinesUrl({ ...picked, skip: 0, limit: 50, includeRawRow: false })).toContain('cohort=needs_look');
   });
 });

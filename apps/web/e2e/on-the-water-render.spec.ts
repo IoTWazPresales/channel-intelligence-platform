@@ -122,11 +122,11 @@ test('render On the water on the Shipments page', async ({ browser }) => {
 
       // The second view.
       await section.scrollIntoViewIfNeeded();
-      await p.getByRole('button', { name: 'By distributor' }).click();
+      await p.getByTestId('on-the-water').getByRole('button', { name: 'By distributor', exact: true }).click();
       await expect(p.getByTestId('otw-map')).toHaveCount(0);
       await p.waitForTimeout(250);
       await p.screenshot({ path: path.join(out, `${name}-7-by-distributor.png`) });
-      await p.getByRole('button', { name: 'Map' }).click();
+      await p.getByTestId('on-the-water').getByRole('button', { name: 'Map', exact: true }).click();
       await expect(p.getByTestId('otw-map')).toBeVisible();
 
       all[name] = record;

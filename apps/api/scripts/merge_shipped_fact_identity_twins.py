@@ -147,6 +147,50 @@ def run_retire_po_less(*, apply: bool, expect_db: str | None, accept_evidence_su
     return out
 
 
+def run_retire_orphans(*, job: int, apply: bool, expect_db: str | None) -> dict:
+    """Open facts of one job that lost their evidence line when the job was read again under new source keys.
+
+    Dry run (default) is a read-only transaction and lists them. ``--apply`` needs ``--expect-db`` equal to ``current_database()``;
+    each becomes ``closed_superseded`` (pointing at the fact that now carries the same order line) or ``closed_disappeared``.
+    """
+    from app.services.imports.shipment_shipped_fact_identity_twin_merge import plan_orphaned_open_rows, retire_orphaned_open_rows
+
+    out: dict = {}
+    with SessionLocal() as db:
+        dbname = str(db.scalar(text("SELECT current_database()")))
+        out["database"] = dbname
+        if apply and expect_db != dbname:
+            raise SystemExit(f"refused: --apply needs --expect-db {dbname!r} (got {expect_db!r})")
+        if not apply:
+            db.execute(text("SET TRANSACTION READ ONLY"))
+        plan = plan_orphaned_open_rows(db, job)
+        out["job"] = job
+        out["orphaned_open_rows"] = len(plan)
+        out["units"] = float(sum(float(r["quantity"] or 0) for r in plan))
+        out["with_replacement"] = sum(1 for r in plan if r["replaced_by"] is not None)
+        out["rows"] = [
+            {"fact": r["id"], "order_no": r["order_no"], "order_line": r["order_line"], "item": r["item_code"], "quantity": float(r["quantity"] or 0),
+             "replaced_by": r["replaced_by"]} for r in plan
+        ]
+        if not apply:
+            db.rollback()
+            return out
+        done = retire_orphaned_open_rows(db, job, plan)
+        if done["superseded"] + done["disappeared"] != len(plan):
+            db.rollback()
+            raise SystemExit(f"ROLLED BACK: retired {done}, the plan said {len(plan)}")
+        from app.services.platform_audit import record_platform_audit_sync
+
+        record_platform_audit_sync(
+            db, None, area="admin", action="shipped_fact_orphan_open_retire", target_type="import_job", target_id=str(job),
+            actor_label="scripts/merge_shipped_fact_identity_twins.py --retire-orphan-open-rows",
+            detail={**done, "fact_ids": [r["id"] for r in plan]},
+        )
+        db.commit()
+        out["retired"] = done
+    return out
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--confirm", action="store_true", help="Execute key regen + collapses")
@@ -157,7 +201,15 @@ def main() -> int:
     p.add_argument("--expect-db", default=None, help="with --apply: must equal current_database()")
     p.add_argument("--accept-evidence-sum", action="store_true",
                    help="with --retire-po-less: also retire a twin whose single PO-key fact equals the sum of its job's evidence lines")
+    p.add_argument("--retire-orphan-open-rows", action="store_true", help="retire open facts of --job that lost their evidence line (dry run; --apply --expect-db)")
+    p.add_argument("--job", type=int, default=None, help="with --retire-orphan-open-rows: the import job")
     args = p.parse_args()
+    if args.retire_orphan_open_rows:
+        if args.job is None:
+            raise SystemExit("--retire-orphan-open-rows needs --job")
+        print(f"[{'APPLY' if args.apply else 'DRY-RUN'}] merge_shipped_fact_identity_twins --retire-orphan-open-rows")
+        print(json.dumps(run_retire_orphans(job=args.job, apply=args.apply, expect_db=args.expect_db), indent=2, default=str))
+        return 0
     if args.retire_po_less:
         print(f"[{'APPLY' if args.apply else 'DRY-RUN'}] merge_shipped_fact_identity_twins --retire-po-less")
         print(json.dumps(run_retire_po_less(apply=args.apply, expect_db=args.expect_db, accept_evidence_sum=args.accept_evidence_sum), indent=2, default=str))

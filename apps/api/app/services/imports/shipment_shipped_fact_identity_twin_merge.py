@@ -595,6 +595,54 @@ def refresh_superseded_pointers(db: Session) -> int:
     return int(r.rowcount or 0)
 
 
+# An open order of the Shipped sheet has a fact key made from its source key. When a job is read again and a line's source key
+# changes (the order now sits in the key of a line that is not invoiced yet), the old line is purged, its fact keeps the old key
+# and loses its evidence line (``ON DELETE SET NULL``), and the job's own open-book close skips it: it is the same job, not an
+# earlier one. It would be counted twice (the "needs a look" card showed 15 lines for 9). It is retired, pointing at the fact that
+# now carries the same order line, or closed as disappeared when nothing does.
+_ORPHAN_OPEN_SQL = """
+SELECT o.id, o.order_no, o.order_line, o.item_code, o.quantity, o.source_key,
+       r.id AS replaced_by, r.fact_upsert_key AS replaced_by_key
+FROM fact_inbound_shipment o
+LEFT JOIN LATERAL (
+  SELECT n.id, n.fact_upsert_key FROM fact_inbound_shipment n
+  WHERE n.tenant_id = o.tenant_id AND n.import_job_id = o.import_job_id AND n.id <> o.id AND n.shipment_evidence_line_id IS NOT NULL
+    AND lower(n.line_state) = 'open_order' AND n.report_type = o.report_type AND n.order_no IS NOT DISTINCT FROM o.order_no
+    AND n.order_line IS NOT DISTINCT FROM o.order_line AND n.item_code IS NOT DISTINCT FROM o.item_code
+  ORDER BY n.id LIMIT 1
+) r ON true
+WHERE o.import_job_id = :job AND o.shipment_evidence_line_id IS NULL AND lower(o.line_state) = 'open_order'
+ORDER BY o.id
+"""
+
+
+def plan_orphaned_open_rows(db: Session, import_job_id: int) -> list[dict[str, Any]]:
+    """Open facts of this job that no evidence line carries any more (read only)."""
+    return [dict(r) for r in db.execute(text(_ORPHAN_OPEN_SQL), {"job": int(import_job_id)}).mappings().all()]
+
+
+def retire_orphaned_open_rows(db: Session, import_job_id: int, plan: list[dict[str, Any]] | None = None) -> dict[str, int]:
+    """Soft-retire the orphaned open facts of a job: superseded by the fact of the same order line, else closed as disappeared."""
+    plan = plan_orphaned_open_rows(db, import_job_id) if plan is None else plan
+    superseded = disappeared = 0
+    for r in plan:
+        if r["replaced_by"] is not None:
+            res = db.execute(
+                text("UPDATE fact_inbound_shipment SET line_state = :st, superseded_by_fact_id = :k, superseded_by_key = :kk, updated_at = now() "
+                     "WHERE id = :id AND shipment_evidence_line_id IS NULL AND lower(line_state) = 'open_order'"),
+                {"st": LINE_SUPERSEDED, "k": r["replaced_by"], "kk": r["replaced_by_key"], "id": r["id"]},
+            )
+            superseded += int(res.rowcount or 0)
+        else:
+            res = db.execute(
+                text("UPDATE fact_inbound_shipment SET line_state = 'closed_disappeared', updated_at = now() "
+                     "WHERE id = :id AND shipment_evidence_line_id IS NULL AND lower(line_state) = 'open_order'"),
+                {"id": r["id"]},
+            )
+            disappeared += int(res.rowcount or 0)
+    return {"superseded": superseded, "disappeared": disappeared}
+
+
 def retire_po_less_twins_written_by_job(db: Session, import_job_id: int) -> dict[str, Any]:
     """Load-time rule: the job just wrote PO-key facts; retire the PO-less twins they replace."""
     plan = plan_po_less_shipped_twins(db, written_by_job=int(import_job_id))

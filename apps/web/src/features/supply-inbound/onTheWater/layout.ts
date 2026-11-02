@@ -64,7 +64,7 @@ export function clusterChip(c: Cluster, ports: Array<{ label: string; x: number;
   const last = etas[etas.length - 1];
   return {
     title: `${c.vessels.length} vessels at or near ${nearestPort(c, ports)}`,
-    sub: `${fmtUnits(c.vessels.reduce((s, v) => s + v.units, 0))} u · ETA ${etaRange(first, last)}`,
+    sub: `${fmtUnits(c.vessels.reduce((s, v) => s + v.units, 0))} u · ETA at port ${etaRange(first, last)}`,
   };
 }
 

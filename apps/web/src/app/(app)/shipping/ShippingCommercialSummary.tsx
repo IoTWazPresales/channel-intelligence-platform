@@ -127,7 +127,7 @@ export function ShippingCommercialSummary({
   if (cLoading) {
     return (
       <HeadlineStrip>
-        {['Pipeline value (current incoming)', 'Arriving this week', 'Delivered this week', 'Overdue shipments', 'ETA shifts vs prior job'].map(
+        {['Pipeline value (current incoming)', 'Arriving this week · est. delivery', 'Delivered this week', 'Overdue shipments', 'ETA shifts vs prior job'].map(
           (label) => (
             <HeadlineFigure key={label} label={label} value="" state="loading" />
           ),
@@ -180,7 +180,7 @@ export function ShippingCommercialSummary({
   const byDistributorChart = arrivingData.length ? (
     <Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-        Arriving this week by distributor
+        Arriving this week (est. delivery) by distributor
       </Typography>
       <CategoryBars
         data={arrivingData}
@@ -191,7 +191,7 @@ export function ShippingCommercialSummary({
         // quantity ?? count mixes units and line counts, so the value title carries no unit yet (N-0114 F13).
         unit="count"
         xAxisTitle="Distributor"
-        yAxisTitle="Arriving this week"
+        yAxisTitle="Arriving this week (est. delivery)"
       />
     </Box>
   ) : (
@@ -217,10 +217,10 @@ export function ShippingCommercialSummary({
         />
         <HeadlineFigure
           testId={onApplySmartPreset ? 'shipping-kpi-arriving-this-week' : undefined}
-          label="Arriving this week"
+          label="Arriving this week · est. delivery"
           value={formatQty(arrivingQty)}
           unit="units"
-          caption={`${arrivingLines.toLocaleString()} lines · ${commercial.week_start} to ${commercial.week_end}${clickNote}`}
+          caption={`${arrivingLines.toLocaleString()} lines · by estimated delivery date, ${commercial.week_start} to ${commercial.week_end}; the map shows ETA at port${clickNote}`}
           onClick={onApplySmartPreset ? () => onApplySmartPreset('arriving_week') : undefined}
         />
         <HeadlineFigure

@@ -206,6 +206,7 @@ def test_port_markers_carry_a_label_side_only_where_the_map_config_sets_one() ->
     from app.services.shipping.on_the_water import PORT_LABEL_SIDE, port_markers
 
     by_id = {m["id"]: m for m in port_markers()}
-    assert PORT_LABEL_SIDE == {"CHONGQING": "left"}
+    assert PORT_LABEL_SIDE == {"CHONGQING": "left", "SHANGHAI": "above"}  # Shanghai's name above its dot so it does not run over Chongqing's
     assert by_id["CHONGQING"]["label_side"] == "left"
-    assert all("label_side" not in m for k, m in by_id.items() if k != "CHONGQING")
+    assert by_id["SHANGHAI"]["label_side"] == "above"
+    assert all("label_side" not in m for k, m in by_id.items() if k not in PORT_LABEL_SIDE)

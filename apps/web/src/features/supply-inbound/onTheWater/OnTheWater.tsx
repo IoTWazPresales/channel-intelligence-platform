@@ -11,7 +11,7 @@ import { apiGet, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
 import { BASEMAP_DOTS, BASEMAP_SIZE } from './basemapDots';
-import { daysText, fmtDay, fmtDayYear, fmtMoney, fmtUnits, historyText, nameUnits, slipShort } from './format';
+import { badgeText, daysText, fmtDay, fmtDayYear, fmtMoney, fmtUnits, historyText, nameUnits, slipShort } from './format';
 import { clusterChip, clusterVessels, placeLabels, portsInUse, type Cluster } from './layout';
 import type { OnTheWaterData, PortRow, Vessel } from './types';
 
@@ -159,8 +159,9 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
       .filter((p) => portNamed(p.id))
       .map((p) => {
         const w = pctX(p.label.length * 7.6 + 12);
-        const left = (p.label_side ?? (p.x > 82 ? 'left' : 'right')) === 'left';
-        return { id: `p:${p.id}`, x: left ? p.x - pctX(6) - w : p.x + pctX(6), y: p.y - pctY(9), w, h: pctY(18) };
+        const side = p.label_side ?? (p.x > 82 ? 'left' : 'right');
+        if (side === 'above') return { id: `p:${p.id}`, x: p.x - w / 2, y: p.y - pctY(26), w, h: pctY(18) };
+        return { id: `p:${p.id}`, x: side === 'left' ? p.x - pctX(6) - w : p.x + pctX(6), y: p.y - pctY(9), w, h: pctY(18) };
       }),
     ...clusters.map((c) => ({ id: `m:${c.id}`, x: c.x - pctX(14), y: c.y - pctY(14), w: pctX(28), h: pctY(28) })),
     // The Durban note sits on the map (not under it) except on a phone-width map.
@@ -318,7 +319,7 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                       ) : null}
                       <Box component="span" sx={{ display: 'block', width: 7, height: 7, borderRadius: '50%', bgcolor: t.text.primary, boxShadow: `0 0 0 2px ${t.bg.default}` }} />
                       {named ? (
-                        <Box component="span" data-testid={`otw-port-name-${p.id}`} sx={{ position: 'absolute', ...((p.label_side ?? (p.x > 82 ? 'left' : 'right')) === 'left' ? { right: '12px' } : { left: '12px' }), top: '-6px', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 600, letterSpacing: '.04em', color: t.text.primary, pointerEvents: 'none' }}>
+                        <Box component="span" data-testid={`otw-port-name-${p.id}`} sx={{ position: 'absolute', ...labelPlace(p.label_side ?? (p.x > 82 ? 'left' : 'right')), whiteSpace: 'nowrap', fontSize: 11, fontWeight: 600, letterSpacing: '.04em', color: t.text.primary, pointerEvents: 'none' }}>
                           {p.label}
                         </Box>
                       ) : null}
@@ -360,7 +361,7 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                     >
                       <Box sx={{ fontSize: 12, fontWeight: 700 }}>{chip ? chip.title : `${v.forwarder} · ${fmtUnits(v.units)} u`}</Box>
                       <Box sx={{ fontSize: 11, color: t.text.secondary, fontVariantNumeric: 'tabular-nums' }}>
-                        {chip ? chip.sub : `${v.overdue ? 'Arrival overdue' : `ETA ${fmtDay(v.eta)}`}${v.slip_days ? ` · +${v.slip_days}d` : v.overdue ? '' : ' · on time'}`}
+                        {chip ? chip.sub : `${v.overdue ? daysText(v) : `ETA at port ${fmtDay(v.eta)}`}${v.slip_days ? ` · moved +${v.slip_days}d` : v.overdue ? '' : ' · on time'}`}
                       </Box>
                     </Box>
                   );
@@ -376,7 +377,7 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
               {narrow ? <Box sx={{ px: 0.5, display: 'flex', flexDirection: 'column', gap: 0.75, alignItems: 'flex-start' }}><MapNotes /></Box> : null}
             </Box>
 
-            <Box sx={{ flex: '1 1 340px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Box sx={{ flex: '1 1 360px', minWidth: 'min(360px, 100%)', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {panel ? <SelectedPanel vessel={panel} picked={Boolean(picked)} t={t} amber={amber} /> : null}
               <Box sx={{ ...card, p: 1 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, p: 1 }}>Arriving next</Typography>
@@ -429,6 +430,12 @@ function Legend({ swatch, children }: { swatch: ReactNode; children: ReactNode }
   );
 }
 
+/** Where a port's name sits against its dot: left, right, or centred above it. */
+function labelPlace(side: 'left' | 'right' | 'above') {
+  if (side === 'above') return { left: '50%', top: '-24px', transform: 'translateX(-50%)' };
+  return side === 'left' ? { right: '12px', top: '-6px' } : { left: '12px', top: '-6px' };
+}
+
 function SlipChip({ vessel, t, amber }: { vessel: Vessel; t: Tok; amber: string }) {
   const late = vessel.slip_days > 0 || vessel.overdue;
   const color = late ? amber : t.semantic.success;
@@ -449,8 +456,8 @@ function ClusterMarker({
   const color = on ? t.accent.primary : late ? amber : t.accent.primary;
   const size = (on ? 16 : 11) + (multi ? 5 : 0);
   const aria = multi
-    ? `${cluster.vessels.length} vessels near ${fmtDay(lead.eta)} ETA, ${fmtUnits(cluster.vessels.reduce((s, v) => s + v.units, 0))} units`
-    : `${lead.forwarder}, ETA ${fmtDay(lead.eta)}, ${fmtUnits(lead.units)} units${lead.overdue ? ', arrival overdue' : ''}`;
+    ? `${cluster.vessels.length} vessels near ${fmtDay(lead.eta)} ETA at port, ${fmtUnits(cluster.vessels.reduce((s, v) => s + v.units, 0))} units`
+    : `${lead.forwarder}, ETA at port ${fmtDay(lead.eta)}, ${fmtUnits(lead.units)} units${lead.overdue ? `, ${daysText(lead)}` : ''}`;
   return (
     <Box
       component="button"
@@ -494,7 +501,7 @@ function HoverCard({ vessel, cluster, t }: { vessel: Vessel; cluster: Cluster | 
       ) : null}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, alignItems: 'baseline' }}>
         <Box component="span" sx={{ fontSize: 13, fontWeight: 700 }}>{vessel.forwarder}</Box>
-        <Box component="span" sx={{ fontSize: 11, color: t.text.secondary, fontVariantNumeric: 'tabular-nums' }}>{`ETA ${fmtDay(vessel.eta)} · ${fmtUnits(vessel.units)} u · ${fmtMoney(vessel.amount)}`}</Box>
+        <Box component="span" sx={{ fontSize: 11, color: t.text.secondary, fontVariantNumeric: 'tabular-nums' }}>{`ETA at port ${fmtDay(vessel.eta)} · ${fmtUnits(vessel.units)} u · ${fmtMoney(vessel.amount)}`}</Box>
       </Box>
       <CardLabel t={t}>Distributors</CardLabel>
       <Box sx={{ fontSize: 12, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' }}>{nameUnits(vessel.distributors, 5)}</Box>
@@ -528,13 +535,13 @@ function SelectedPanel({ vessel: v, picked, t, amber }: { vessel: Vessel; picked
           </Box>
         </Box>
         <Box component="span" sx={{ fontSize: 12, fontWeight: 700, px: 1.25, py: 0.5, borderRadius: 999, whiteSpace: 'nowrap', color: late ? amber : t.semantic.success, bgcolor: alpha(late ? amber : t.semantic.success, 0.16) }}>
-          {v.overdue ? (v.slip_days > 0 ? `Arrival overdue · ETA +${v.slip_days} days` : 'Arrival overdue') : late ? `ETA +${v.slip_days} days` : 'ETA unchanged'}
+          {badgeText(v)}
         </Box>
       </Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: t.text.secondary }}>
           <span>On board {fmtDay(v.on_board)}</span>
-          <span>ETA {fmtDay(v.eta)} · {daysText(v)}</span>
+          <span>ETA at port {fmtDay(v.eta)} · {daysText(v)}</span>
         </Box>
         <Box sx={{ height: 6, borderRadius: 0.75, bgcolor: t.bg.surfaceMuted, overflow: 'hidden' }}>
           <Box role="progressbar" aria-label="Share of the voyage elapsed" aria-valuenow={Math.round(v.pct)} aria-valuemin={0} aria-valuemax={100} sx={{ height: '100%', width: `${v.pct}%`, background: `linear-gradient(90deg, ${alpha(t.accent.primary, 0.55)}, ${t.accent.primary})` }} />

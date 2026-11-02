@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildOnTheWaterUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
 
-import { daysText, fmtDay, fmtDayYear, fmtMoney, historyText, nameUnits, slipShort } from './format';
+import { badgeText, daysText, fmtDay, fmtDayYear, fmtMoney, historyText, nameUnits, slipShort } from './format';
 import { clusterChip, clusterVessels, etaRange, placeLabels, portsInUse } from './layout';
 import type { Vessel } from './types';
 
@@ -59,7 +59,7 @@ describe('clusters and labels', () => {
   it('a cluster chip names the nearest port, the units and the ETA range', () => {
     const ports = [{ label: 'DURBAN', x: 33.54, y: 86.18 }, { label: 'SHANGHAI', x: 90, y: 26 }];
     const c = clusterVessels([vessel({ id: 'a', x: 33.5, y: 86.2, units: 3170, eta: '2026-10-27' }), vessel({ id: 'b', x: 31.2, y: 89.1, units: 843, eta: '2026-10-30' })], 4)[0];
-    expect(clusterChip(c, ports)).toEqual({ title: '2 vessels at or near Durban', sub: '4,013 u · ETA 27–30 Oct' });
+    expect(clusterChip(c, ports)).toEqual({ title: '2 vessels at or near Durban', sub: '4,013 u · ETA at port 27–30 Oct' });
     expect(etaRange('2026-10-30', '2026-11-02')).toBe('30 Oct–2 Nov');
   });
 
@@ -82,6 +82,16 @@ describe('clusters and labels', () => {
         const q = boxes[j];
         expect(p.x < q.x + q.w && p.x + p.w > q.x && p.y < q.y + q.h && p.y + p.h > q.y).toBe(false);
       }
+  });
+});
+
+describe('badgeText', () => {
+  it('says how late the vessel is and how far its ETA moved, as two facts', () => {
+    expect(badgeText({ overdue: true, days_overdue: 2, slip_days: 14 })).toBe('2 days overdue · ETA moved +14 days');
+    expect(badgeText({ overdue: true, days_overdue: 1, slip_days: 1 })).toBe('1 day overdue · ETA moved +1 day');
+    expect(badgeText({ overdue: true, days_overdue: 8, slip_days: 0 })).toBe('8 days overdue');
+    expect(badgeText({ overdue: false, days_overdue: 0, slip_days: 7 })).toBe('ETA moved +7 days');
+    expect(badgeText({ overdue: false, days_overdue: 0, slip_days: 0 })).toBe('ETA unchanged');
   });
 });
 
@@ -117,10 +127,21 @@ describe('page scope into the map', () => {
     productModel: '', currencyCode: '', operatingUnit: '', podDateFilter: '', planQuarter: '', planBusinessUnit: '', lineupAttribution: '', lifecycleBucket: '', slipDirection: '', cohort: '',
   };
 
-  it('keeps the page filters but leaves out a clicked vessel and the needs-a-look cohort', () => {
-    expect(buildOnTheWaterUrl(base)).toBe('/api/v1/shipping/on-the-water?distributor_id=7&date_field=eta_date');
-    expect(buildOnTheWaterUrl({ ...base, vessel: 'i:2026-09-19|2026-11-05|ZAJNB|asia_durban' })).toBe('/api/v1/shipping/on-the-water?distributor_id=7&date_field=eta_date');
-    expect(buildOnTheWaterUrl({ ...base, cohort: 'needs_look' })).toBe('/api/v1/shipping/on-the-water?distributor_id=7&date_field=eta_date');
-    expect(buildOnTheWaterUrl({ ...base, cohort: 'overdue' })).toContain('cohort=overdue');
+  const SCOPE = '/api/v1/shipping/on-the-water?distributor_id=7';
+
+  it('keeps who the page is about and nothing that picks lines for the grid', () => {
+    expect(buildOnTheWaterUrl(base)).toBe(SCOPE);
+    expect(buildOnTheWaterUrl({ ...base, vessel: 'i:2026-09-19|2026-11-05|ZAJNB|asia_durban' })).toBe(SCOPE);
+    expect(buildOnTheWaterUrl({ ...base, cohort: 'needs_look' })).toBe(SCOPE);
+    expect(buildOnTheWaterUrl({ ...base, cohort: 'overdue' })).toBe(SCOPE);
+    expect(
+      buildOnTheWaterUrl({
+        ...base, lineState: 'shipped', cargoStatus: 'scheduled', search: 'x', dateField: 'effective_arrival_date', dateFrom: '2026-11-01', dateTo: '2026-11-08',
+        podDateFilter: 'true', lifecycleBucket: 'shipped', slipDirection: 'slipped_out',
+      }),
+    ).toBe(SCOPE);
+    expect(buildOnTheWaterUrl({ ...base, customerId: 3, purchaseOrderId: 9, productFamily: 'P', currencyCode: 'USD', planQuarter: '26Q4' })).toBe(
+      '/api/v1/shipping/on-the-water?distributor_id=7&customer_id=3&purchase_order_id=9&product_family=P&currency_code=USD&plan_quarter=26Q4',
+    );
   });
 });

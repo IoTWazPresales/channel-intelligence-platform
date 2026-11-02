@@ -44,6 +44,7 @@ import { fmtShortDate } from '@/app/(app)/shipping/shippingGridFormatters';
 import { shippingDistributorCellValue } from '@/app/(app)/shipping/shippingDistributorDisplay';
 import { gridRowMetrics } from '@/features/plan-vs-executed/gridPagination';
 import type { SmartPresetId } from '@/app/(app)/shipping/shippingSmartPresets';
+import { useSelectionInUrl } from './useSelectionInUrl';
 
 const LS_GRID = 'cip.commercial.inbound-shipments.grid.optional.v1';
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500] as const;
@@ -179,6 +180,7 @@ export function InboundShipmentsWorkspace() {
   const [cohort, setCohort] = useState<ShippingFilterParams['cohort']>('');
   // On the water: the vessel whose lines the grid shows (opaque key from the API); '' = all.
   const [vesselKey, setVesselKey] = useState('');
+  useSelectionInUrl(vesselKey, cohort ?? '');
   const [skip, setSkip] = useState(0);
   const [limit, setLimit] = useState<number>(50);
 
@@ -419,6 +421,9 @@ export function InboundShipmentsWorkspace() {
     if (pbu) setPlanBusinessUnit(pbu);
     // Attention's "Open the lines" (needs a look) lands here with the cohort already set.
     if (sp.get('cohort') === 'needs_look') setCohort('needs_look');
+    // A shared or reloaded address with a vessel selected lands on that vessel's lines.
+    const vessel = sp.get('vessel');
+    if (vessel) setVesselKey(vessel);
     const cid = sp.get('customer_id');
     if (cid && /^\d+$/.test(cid)) {
       const id = Number(cid);
@@ -692,7 +697,7 @@ export function InboundShipmentsWorkspace() {
             },
             {
               key: 'arriving_week',
-              label: 'Arriving this week',
+              label: 'Arriving this week (est. delivery)',
               active: smartPreset === 'arriving_week',
               onToggle: () => toggleSmartPreset('arriving_week'),
             },

@@ -28,6 +28,7 @@ def _no_retire(monkeypatch) -> None:
     monkeypatch.setattr(
         facts_mod, "retire_po_less_twins_written_by_job", lambda db, job_id: {"retired": 0, "repointed": 0, "quantity_differs": []}
     )
+    monkeypatch.setattr(facts_mod, "retire_orphaned_open_rows", lambda db, job_id: {"superseded": 0, "disappeared": 0})
 
 
 def test_upsert_retires_po_less_twins_after_the_chunks(monkeypatch) -> None:
@@ -44,6 +45,7 @@ def test_upsert_retires_po_less_twins_after_the_chunks(monkeypatch) -> None:
         return {"retired": 2, "repointed": 0, "quantity_differs": [(5, 4.0, 3.0)]}
 
     monkeypatch.setattr(facts_mod, "retire_po_less_twins_written_by_job", fake)
+    monkeypatch.setattr(facts_mod, "retire_orphaned_open_rows", lambda db, job_id: {"superseded": 0, "disappeared": 0})
     db = _db_with_lines(3)
     assert facts_mod.upsert_inbound_shipment_facts_for_job(db, 32) == 3
     assert seen == [32]

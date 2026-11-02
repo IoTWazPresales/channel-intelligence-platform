@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, screen, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
@@ -104,7 +104,43 @@ describe('OnTheWater', () => {
   it('asks the API with the page scope and without the selection filters', async () => {
     setup(payload(), { filterParams: { ...scope, distributorId: 7, vessel: 'k1', cohort: 'needs_look' } });
     await screen.findByTestId('otw-tile-at-sea');
-    expect(hoisted.urls).toEqual(['/api/v1/shipping/on-the-water?distributor_id=7&date_field=eta_date']);
+    expect(hoisted.urls).toEqual(['/api/v1/shipping/on-the-water?distributor_id=7']);
+  });
+
+  it('does not ask for the map again when a grid filter changes (a vessel, the needs-a-look cohort, line state, dates, search)', async () => {
+    hoisted.body = payload();
+    hoisted.urls = [];
+    let setScope: (p: ShippingFilterParams) => void = () => {};
+
+    function Harness() {
+      const [p, set] = useState<ShippingFilterParams>(scope);
+      setScope = set;
+      return <OnTheWater filterParams={p} onSelectVessel={() => {}} onOpenNeedsLook={() => {}} byDistributor={<div />} />;
+    }
+
+    renderWithProviders(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <Harness />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('otw-map');
+    expect(hoisted.urls).toHaveLength(1);
+    for (const change of [
+      { vessel: 'i:2026-09-19|2026-11-05|ZAJNB|asia_durban' },
+      { vessel: '', cohort: 'needs_look' as const },
+      { cohort: '' as const, lineState: 'shipped', cargoStatus: 'scheduled' },
+      { dateField: 'effective_arrival_date', dateFrom: '2026-11-02', dateTo: '2026-11-08', podDateFilter: 'true' as const },
+      { search: 'P1503' },
+    ]) {
+      await act(async () => setScope({ ...scope, ...change }));
+      await screen.findByTestId('otw-map');
+    }
+    expect(hoisted.urls).toHaveLength(1); // still the one request: the map query did not change
+    // and a change of who the page is about does ask again
+    await act(async () => setScope({ ...scope, distributorId: 9 }));
+    await screen.findByTestId('otw-map');
+    await waitFor(() => expect(hoisted.urls).toHaveLength(2));
+    expect(hoisted.urls[1]).toBe('/api/v1/shipping/on-the-water?distributor_id=9');
   });
 
   it('toggles between the map and the by-distributor chart', async () => {
@@ -123,11 +159,11 @@ describe('OnTheWater', () => {
     setup(payload());
     const markers = await screen.findAllByTestId('otw-vessel');
     const v4 = markers.find((m) => m.getAttribute('data-vessel') === 'v4')!;
-    expect(v4).toHaveAccessibleName('COSCO, ETA 5 Nov, 4,286 units');
+    expect(v4).toHaveAccessibleName('COSCO, ETA at port 5 Nov, 4,286 units');
     fireEvent.mouseEnter(v4);
     let card = screen.getByTestId('otw-hover-card');
     expect(card).toHaveAttribute('role', 'tooltip');
-    expect(card).toHaveTextContent('ETA 5 Nov · 4,286 u · US$3.22M');
+    expect(card).toHaveTextContent('ETA at port 5 Nov · 4,286 u · US$3.22M');
     expect(card).toHaveTextContent('Rectron 1,498 · Mustek 1,350 · Pepkor 972');
     expect(card).toHaveTextContent('P1503CVAY 708 · X1504VAP 612 · M1502XA 612 · P1403CVAY 468');
     expect(card).toHaveTextContent('+17 more models · click to see every line');
@@ -155,7 +191,8 @@ describe('OnTheWater', () => {
     setup(payload({ vessels: payload().vessels.map((v) => (v.id === 'v1' ? { ...v, slip_days: 14, history: { first_eta: '2026-10-13', first_report: '2026-09-29', current_eta: '2026-10-27', latest_report: '2026-10-27' } } : v)) }), { selectedKey: 'k1' });
     const panel = await screen.findByTestId('otw-selected');
     expect(panel).toHaveTextContent('Selected vessel · inferred');
-    expect(panel).toHaveTextContent('ETA +14 days');
+    expect(panel).toHaveTextContent('1 day overdue · ETA moved +14 days'); // two facts in one badge
+    expect(panel).toHaveTextContent('ETA at port 27 Oct');
     expect(panel).toHaveTextContent('13 Oct on 29 Sep → 27 Oct on 27 Oct');
     expect(panel).toHaveTextContent('Grouped by matching on-board date and ETA');
     const list = screen.getByText('Arriving next').parentElement!;
@@ -195,15 +232,21 @@ describe('OnTheWater', () => {
   it('puts a port name on the side the map config says, else to the right (and to the left near the right edge)', async () => {
     const ports = [
       { id: 'CHONGQING', label: 'CHONGQING', x: 88, y: 30, label_side: 'left' as const },
-      { id: 'SHANGHAI', label: 'SHANGHAI', x: 90.8, y: 26 },
+      { id: 'SHANGHAI', label: 'SHANGHAI', x: 90.8, y: 26, label_side: 'above' as const },
+      { id: 'SINGAPORE', label: 'SINGAPORE', x: 91, y: 70 },
       { id: 'DURBAN', label: 'DURBAN', x: 33.5, y: 86 },
     ];
     setup(payload({ map: { ...payload().map, ports } }));
     await screen.findByTestId('otw-map');
     // a name to the left of its dot is positioned by `right`, a name to the right by `left`
     expect(getComputedStyle(screen.getByTestId('otw-port-name-CHONGQING')).right).toBe('12px');
-    expect(getComputedStyle(screen.getByTestId('otw-port-name-SHANGHAI')).right).toBe('12px');
+    expect(getComputedStyle(screen.getByTestId('otw-port-name-SINGAPORE')).right).toBe('12px'); // near the right edge: flipped
     expect(getComputedStyle(screen.getByTestId('otw-port-name-DURBAN')).left).toBe('12px');
+    // above: centred over the dot, not beside it
+    const above = getComputedStyle(screen.getByTestId('otw-port-name-SHANGHAI'));
+    expect(above.left).toBe('50%');
+    expect(above.top).toBe('-24px');
+    expect(above.right).not.toBe('12px');
   });
 
   describe('port names by map width', () => {
