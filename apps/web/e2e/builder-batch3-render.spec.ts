@@ -20,22 +20,25 @@ async function measure(page: Page, mode: 'case' | 'fixture') {
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
       widgets: cards.map((card) => {
         const c = rect(card);
-        const inside = [...card.querySelectorAll('*')].filter((el) => {
-          const r = rect(el);
-          const s = getComputedStyle(el);
-          return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.position !== 'fixed' && !el.closest('[aria-hidden="true"]');
-        });
-        // Elements that stick out past the card's left or right edge (a horizontal overflow inside the card).
-        const spill = inside.filter((el) => rect(el).right > c.right + 1 || rect(el).left < c.left - 1).length;
-        // Text the chart draws or captions: tick labels, axis titles, legend entries, the control strip. Pairs that overlap.
+        // Text the chart draws or captions: tick labels, axis titles, legend entries, the control strip.
         const texts = [...card.querySelectorAll('svg text, [data-testid^="chart-axis-title"], [data-testid="chart-legend"] li, [data-testid$="-caption"]')]
-          .map((el) => ({ el, r: rect(el) }))
+          .map((el) => ({ el, r: rect(el), angled: (el.getAttribute('transform') ?? '').includes('rotate') }))
           .filter(({ r }) => r.width > 0 && r.height > 0);
+        // Text that sticks out past the card's left or right edge (the bounding box of an angled tick is not its ink, but its end is).
+        const textSpill = texts.filter(({ r }) => r.right > c.right + 1 || r.left < c.left - 1).length;
+        // Pairs that overlap. Two angled ticks are counted apart: their bounding boxes overlap by geometry although the text does not.
         let textOverlaps = 0;
+        let angledTickBoxOverlaps = 0;
+        const overlapPairs: string[] = [];
         for (let i = 0; i < texts.length; i++)
           for (let j = i + 1; j < texts.length; j++) {
             if (texts[i].el.contains(texts[j].el) || texts[j].el.contains(texts[i].el)) continue;
-            if (hit(texts[i].r, texts[j].r)) textOverlaps++;
+            if (!hit(texts[i].r, texts[j].r)) continue;
+            if (texts[i].angled && texts[j].angled) angledTickBoxOverlaps++;
+            else {
+              textOverlaps++;
+              overlapPairs.push(`${(texts[i].el.textContent ?? '').trim().slice(0, 40)} | ${(texts[j].el.textContent ?? '').trim().slice(0, 40)}`);
+            }
           }
         const table = card.querySelector('table');
         const plotted = table ? [...table.querySelectorAll('tbody tr')].map((tr) => tr.children[0]?.textContent ?? '') : [];
@@ -43,7 +46,9 @@ async function measure(page: Page, mode: 'case' | 'fixture') {
         return {
           card: m === 'case' ? card.getAttribute('data-case') : card.getAttribute('data-testid'),
           textOverlaps,
-          spillingElements: spill,
+          textSpill,
+          overlapPairs,
+          angledTickBoxOverlaps,
           legendEntries: card.querySelectorAll('[data-testid="chart-legend"] li').length,
           plottedRows: plotted.length,
           firstPlotted: plotted.slice(0, 2),

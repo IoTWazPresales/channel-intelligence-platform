@@ -166,6 +166,24 @@ describe('page scope into the map', () => {
   });
 });
 
+describe('label placement (GOV-008 batch 3)', () => {
+  it('a wide label that fits no corner is tried one box higher before it is dropped', () => {
+    // The anchor is near the left edge (no room to its left) and a port name blocks both right-hand corners.
+    const anchor = { id: 'c:durban', x: 10, y: 50, priority: 1 };
+    const size = { w: 30, h: 8 };
+    const avoid = [{ id: 'p:CITY DEEP', x: 12, y: 38, w: 38, h: 24 }];
+    const placed = placeLabels([anchor], size, avoid, { x: 2, y: 2 });
+    expect(placed).toHaveLength(1); // before: 0, the label was dropped
+    expect(placed[0].y).toBeLessThan(38 - size.h + 0.001);
+    expect(placed[0].x).toBeGreaterThanOrEqual(0);
+  });
+
+  it('still takes the first free corner when there is one', () => {
+    const placed = placeLabels([{ id: 'a', x: 50, y: 50, priority: 1 }], { w: 20, h: 8 }, [], { x: 2, y: 2 });
+    expect(placed[0]).toMatchObject({ x: 52, y: 40 }); // right, above
+  });
+});
+
 describe('label width (GOV-008 batch 3)', () => {
   it('is as wide as the label draws: the render of "4 vessels at or near Durban" was 201 px, the old reserved box 160 px', () => {
     expect(labelWidthPx('4 vessels at or near Durban', '3,494 u · ETA at port 31 Oct–5 Nov')).toBeGreaterThanOrEqual(201);

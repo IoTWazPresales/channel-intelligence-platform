@@ -115,7 +115,7 @@ function overlaps(a: LabelBox, b: LabelBox): boolean {
 /**
  * Place a label box beside each anchor so no two overlap, none covers a box in `avoid` (port names, markers) and none
  * leaves the map. Anchors are tried in priority order (the selected vessel first), at four corners around the anchor;
- * one that fits nowhere gets no label. Sizes, gaps and boxes are percentages of the map, so the caller converts from
+ * one that fits nowhere (after the four corners, and the same four one box higher or lower) gets no label. Sizes, gaps and boxes are percentages of the map, so the caller converts from
  * pixels with the map's real size (a label is the same size in pixels on a phone as on a desk).
  */
 export function placeLabels(
@@ -132,6 +132,12 @@ export function placeLabels(
       [a.x - gap.x - own.w, a.y - gap.y - own.h], // left, above
       [a.x + gap.x, a.y + gap.y], // right, below
       [a.x - gap.x - own.w, a.y + gap.y], // left, below
+      // When a label as wide as its text fits no corner, it is tried one box higher or lower (still beside its anchor) before it
+      // is dropped, so a crowded corner of the map loses its label only when nothing nearby is free.
+      [a.x + gap.x, a.y - 2 * gap.y - 2 * own.h], // right, one box higher
+      [a.x - gap.x - own.w, a.y - 2 * gap.y - 2 * own.h], // left, one box higher
+      [a.x + gap.x, a.y + 2 * gap.y + own.h], // right, one box lower
+      [a.x - gap.x - own.w, a.y + 2 * gap.y + own.h], // left, one box lower
     ];
     for (const [x, y] of corners) {
       const box: LabelBox = { id: a.id, x, y, w: own.w, h: own.h };
