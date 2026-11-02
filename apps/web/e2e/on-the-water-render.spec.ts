@@ -40,6 +40,11 @@ async function layoutMetrics(page: Page) {
     const noteOverCaption = note && caption ? hit(rect(note), rect(caption)) : false;
     const noteOverPortNames = note ? portNames.filter((n) => hit(rect(note), n)).length : 0;
     const noteOverLabels = note ? labels.filter((l) => hit(rect(note), l)).length : 0;
+    const noteLabelPairs = note
+      ? [...document.querySelectorAll('[data-testid="otw-label"]')]
+          .filter((l) => hit(rect(note), rect(l)))
+          .map((l) => ({ label: (l.textContent ?? '').slice(0, 30), l: [rect(l).left, rect(l).top, rect(l).right, rect(l).bottom].map((n) => Math.round(n * 10) / 10), note: [rect(note).left, rect(note).top, rect(note).right, rect(note).bottom].map((n) => Math.round(n * 10) / 10) }))
+      : [];
     const markers = [...document.querySelectorAll('[data-testid="otw-vessel"]')].map((b) => rect(b));
     const pulse = document.querySelector('[data-testid="otw-pulse"]');
     return {
@@ -53,6 +58,7 @@ async function layoutMetrics(page: Page) {
       noteOverCaption,
       noteOverPortNames,
       noteOverLabels,
+      noteLabelPairs,
       labelsOutsideMap: outside,
       pulseAnimation: pulse ? getComputedStyle(pulse).animationName : null,
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
