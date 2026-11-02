@@ -1,0 +1,735 @@
+{
+ "as_of": "2026-11-02",
+ "map": {
+  "cluster_radius_pct": 4.0,
+  "lanes": [
+   {
+    "d": "M908.2 169.7 L914.6 196.3 L895.6 224.8 L863.9 278.7 L829.1 329.3 L799.4 359.7 L759.5 332.5 L696.2 332.5 L632.9 348.3 L531.6 418.0 L443.0 500.3 L373.4 547.8 L335.4 556.7",
+    "id": "asia_durban",
+    "kind": "sea"
+   },
+   {
+    "d": "M861.4 225.5 L863.9 278.7",
+    "id": "south_china_feeder",
+    "kind": "leg"
+   },
+   {
+    "d": "M166.5 38.3 L120.3 60.2 L69.6 101.3 L38.0 177.3 L15.8 253.3 L38.0 329.3 L107.6 373.7 L170.9 443.3 L208.9 532.0 L250.0 590.9 L291.1 592.8 L335.4 556.7",
+    "id": "europe_durban",
+    "kind": "sea"
+   },
+   {
+    "d": "M335.4 556.7 L317.1 533.3",
+    "id": "durban_city_deep_rail",
+    "kind": "leg"
+   },
+   {
+    "d": "M813.3 179.9 L861.4 225.5",
+    "id": "chongqing_truck",
+    "kind": "leg"
+   }
+  ],
+  "ports": [
+   {
+    "id": "SHANGHAI",
+    "label": "SHANGHAI",
+    "label_side": "above",
+    "x": 90.82,
+    "y": 26.27
+   },
+   {
+    "id": "SHENZHEN",
+    "label": "SHENZHEN",
+    "x": 86.14,
+    "y": 34.9
+   },
+   {
+    "id": "CHONGQING",
+    "label": "CHONGQING",
+    "label_side": "left",
+    "x": 81.33,
+    "y": 27.84
+   },
+   {
+    "id": "SINGAPORE",
+    "label": "SINGAPORE",
+    "x": 79.62,
+    "y": 55.59
+   },
+   {
+    "id": "ROTTERDAM",
+    "label": "ROTTERDAM",
+    "x": 16.65,
+    "y": 5.93
+   },
+   {
+    "id": "PORT LOUIS",
+    "label": "PORT LOUIS",
+    "x": 50.32,
+    "y": 76.63
+   },
+   {
+    "id": "CITY DEEP",
+    "label": "CITY DEEP",
+    "x": 31.71,
+    "y": 82.55
+   },
+   {
+    "id": "DURBAN",
+    "label": "DURBAN",
+    "x": 33.54,
+    "y": 86.18
+   }
+  ],
+  "size": [
+   1000,
+   646
+  ]
+ },
+ "needs_look": {
+  "days": 7,
+  "distributors": [
+   {
+    "name": "Pepkor",
+    "units": 523.0
+   },
+   {
+    "name": "DCC",
+    "units": 130.0
+   },
+   {
+    "name": "Mustek",
+    "units": 57.0
+   },
+   {
+    "name": "Rectron",
+    "units": 21.0
+   }
+  ],
+  "lines": 9,
+  "on_board_moved": {
+   "from": "2026-10-11",
+   "to": "2026-10-18"
+  },
+  "since": "2026-07-21",
+  "units": 731.0
+ },
+ "port_rows": [
+  {
+   "code": "MUPLU",
+   "condition": null,
+   "label": "Port Louis",
+   "waiting_units": 404.0
+  },
+  {
+   "code": "ZAJNB",
+   "condition": null,
+   "label": "City Deep",
+   "waiting_units": 5108.0
+  }
+ ],
+ "position_note": "Positions are estimated from the on-board date and the port ETA; live tracking is planned.",
+ "report_age_days": 6,
+ "report_date": "2026-10-27",
+ "report_stale": false,
+ "reports": {
+  "count": 12,
+  "earlier": 11,
+  "since": "2026-08-18"
+ },
+ "stale_report_days": 7,
+ "tiles": {
+  "arrived": {
+   "by_port": [
+    {
+     "name": "City Deep",
+     "units": 5108.0
+    },
+    {
+     "name": "Port Louis",
+     "units": 404.0
+    }
+   ],
+   "lines": 66,
+   "units": 5512.0
+  },
+  "at_sea": {
+   "air_units": 142.0,
+   "amount": [
+    {
+     "amount": 9059960.8,
+     "currency": "USD"
+    }
+   ],
+   "lines": 131,
+   "overdue_vessels": 3,
+   "units": 14987.0,
+   "vessels": 8
+  },
+  "booked": {
+   "lines": 0,
+   "units": 0.0
+  },
+  "eta_moved": {
+   "max_days": 46,
+   "min_days": 7,
+   "since": "2026-08-18",
+   "vessels": 8,
+   "vessels_moved": 7
+  }
+ },
+ "vessels": [
+  {
+   "amount": [
+    {
+     "amount": 75365.4,
+     "currency": "USD"
+    }
+   ],
+   "days_overdue": 6,
+   "days_to_eta": -6,
+   "deliver_port": "ZAJNB",
+   "deliveries": 3,
+   "distributors": [
+    {
+     "name": "Mustek",
+     "units": 1990.0
+    },
+    {
+     "name": "DCC",
+     "units": 1180.0
+    }
+   ],
+   "eta": "2026-10-27",
+   "eta_shift_days": 29,
+   "forwarder": "PREMIERE",
+   "history": {
+    "current_eta": "2026-10-27",
+    "first_eta": "2026-09-28",
+    "first_report": "2026-09-01",
+    "latest_report": "2026-10-27"
+   },
+   "id": "ve4d45f0b",
+   "inferred": true,
+   "key": "i:2026-08-31|2026-10-27|ZAJNB|europe_durban",
+   "lane_id": "europe_durban",
+   "lane_label": "Rotterdam \u2192 Durban \u2192 City Deep",
+   "lines": 10,
+   "more_models": 3,
+   "on_board": "2026-08-31",
+   "overdue": true,
+   "pct": 100.0,
+   "position_known": true,
+   "products": [
+    {
+     "name": "AP4600 ASUS BACKPACK",
+     "units": 2400.0
+    },
+    {
+     "name": "AC68-01(AD10820)/EU",
+     "units": 270.0
+    },
+    {
+     "name": "U2000 KEYBOARD+MOUSE/BK/UI",
+     "units": 150.0
+    },
+    {
+     "name": "W5000 KEYBOARD+MOUSE/BK/UI",
+     "units": 150.0
+    }
+   ],
+   "route_assumed": false,
+   "slip_days": 29,
+   "units": 3170.0,
+   "vessel_name": null,
+   "x": 33.54,
+   "y": 86.18
+  },
+  {
+   "amount": [
+    {
+     "amount": 3796.4,
+     "currency": "USD"
+    }
+   ],
+   "days_overdue": 4,
+   "days_to_eta": -4,
+   "deliver_port": "ZAJNB",
+   "deliveries": 1,
+   "distributors": [
+    {
+     "name": "DCC",
+     "units": 40.0
+    }
+   ],
+   "eta": "2026-10-29",
+   "eta_shift_days": 11,
+   "forwarder": "PREMIERE",
+   "history": {
+    "current_eta": "2026-10-29",
+    "first_eta": "2026-10-18",
+    "first_report": "2026-09-01",
+    "latest_report": "2026-10-27"
+   },
+   "id": "vd80e0015",
+   "inferred": true,
+   "key": "i:2026-09-06|2026-10-29|ZAJNB|europe_durban",
+   "lane_id": "europe_durban",
+   "lane_label": "Rotterdam \u2192 Durban \u2192 City Deep",
+   "lines": 1,
+   "more_models": 0,
+   "on_board": "2026-09-06",
+   "overdue": true,
+   "pct": 100.0,
+   "position_known": true,
+   "products": [
+    {
+     "name": "DC320 11 IN 1 USB-C DOCK/EU",
+     "units": 40.0
+    }
+   ],
+   "route_assumed": false,
+   "slip_days": 11,
+   "units": 40.0,
+   "vessel_name": null,
+   "x": 33.54,
+   "y": 86.18
+  },
+  {
+   "amount": [
+    {
+     "amount": 784170.0,
+     "currency": "USD"
+    }
+   ],
+   "days_overdue": 3,
+   "days_to_eta": -3,
+   "deliver_port": "ZAJNB",
+   "deliveries": 10,
+   "distributors": [
+    {
+     "name": "Mustek",
+     "units": 529.0
+    },
+    {
+     "name": "Rectron",
+     "units": 142.0
+    },
+    {
+     "name": "Pinnacle",
+     "units": 96.0
+    },
+    {
+     "name": "Pepkor",
+     "units": 36.0
+    }
+   ],
+   "eta": "2026-10-30",
+   "eta_shift_days": 46,
+   "forwarder": "KGIL + WWP",
+   "history": {
+    "current_eta": "2026-10-30",
+    "first_eta": "2026-09-14",
+    "first_report": "2026-08-18",
+    "latest_report": "2026-10-27"
+   },
+   "id": "v18ae5247",
+   "inferred": true,
+   "key": "i:2026-09-01|2026-10-30|ZAJNB|asia_durban",
+   "lane_id": "asia_durban",
+   "lane_label": "China / Shanghai \u2192 Durban \u2192 City Deep",
+   "lines": 15,
+   "more_models": 8,
+   "on_board": "2026-09-01",
+   "overdue": true,
+   "pct": 100.0,
+   "position_known": true,
+   "products": [
+    {
+     "name": "PM5406CKA-R516512GAIW",
+     "units": 145.0
+    },
+    {
+     "name": "P3606CCA-U516512G0X",
+     "units": 108.0
+    },
+    {
+     "name": "P5405CSA-U516512GAIX",
+     "units": 90.0
+    },
+    {
+     "name": "P500SV-C716512G1X",
+     "units": 84.0
+    }
+   ],
+   "route_assumed": false,
+   "slip_days": 46,
+   "units": 803.0,
+   "vessel_name": null,
+   "x": 33.54,
+   "y": 86.18
+  },
+  {
+   "amount": [
+    {
+     "amount": 3216610.0,
+     "currency": "USD"
+    }
+   ],
+   "days_overdue": 0,
+   "days_to_eta": 3,
+   "deliver_port": "ZAJNB",
+   "deliveries": 26,
+   "distributors": [
+    {
+     "name": "Rectron",
+     "units": 1498.0
+    },
+    {
+     "name": "Mustek",
+     "units": 1350.0
+    },
+    {
+     "name": "Pepkor",
+     "units": 972.0
+    },
+    {
+     "name": "DCC",
+     "units": 418.0
+    },
+    {
+     "name": "Pinnacle",
+     "units": 48.0
+    }
+   ],
+   "eta": "2026-11-05",
+   "eta_shift_days": 0,
+   "forwarder": "COSCO",
+   "history": {
+    "current_eta": "2026-11-05",
+    "first_eta": "2026-11-05",
+    "first_report": "2026-09-29",
+    "latest_report": "2026-10-27"
+   },
+   "id": "v506ff67e",
+   "inferred": true,
+   "key": "i:2026-09-19|2026-11-05|ZAJNB|asia_durban",
+   "lane_id": "asia_durban",
+   "lane_label": "Chongqing / Shenzhen \u2192 Durban \u2192 City Deep",
+   "lines": 32,
+   "more_models": 17,
+   "on_board": "2026-09-19",
+   "overdue": false,
+   "pct": 93.6,
+   "position_known": true,
+   "products": [
+    {
+     "name": "P1503CVAY-C716512G0W",
+     "units": 708.0
+    },
+    {
+     "name": "M1502XA-78512BL0W",
+     "units": 612.0
+    },
+    {
+     "name": "X1504VAP-I516512BL4W",
+     "units": 612.0
+    },
+    {
+     "name": "P1403CVAY-C58512G0W",
+     "units": 468.0
+    }
+   ],
+   "route_assumed": false,
+   "slip_days": 0,
+   "units": 4286.0,
+   "vessel_name": null,
+   "x": 38.19,
+   "y": 83.91
+  },
+  {
+   "amount": [
+    {
+     "amount": 1578840.0,
+     "currency": "USD"
+    }
+   ],
+   "days_overdue": 0,
+   "days_to_eta": 5,
+   "deliver_port": "ZAJNB",
+   "deliveries": 10,
+   "distributors": [
+    {
+     "name": "Pepkor",
+     "units": 2832.0
+    },
+    {
+     "name": "Pinnacle",
+     "units": 81.0
+    }
+   ],
+   "eta": "2026-11-07",
+   "eta_shift_days": 13,
+   "forwarder": "COSCO",
+   "history": {
+    "current_eta": "2026-11-07",
+    "first_eta": "2026-10-25",
+    "first_report": "2026-09-29",
+    "latest_report": "2026-10-27"
+   },
+   "id": "v0cbd70f2",
+   "inferred": true,
+   "key": "i:2026-10-20|2026-11-07|ZAJNB|asia_durban",
+   "lane_id": "asia_durban",
+   "lane_label": "Chongqing \u2192 Durban \u2192 City Deep",
+   "lines": 13,
+   "more_models": 5,
+   "on_board": "2026-10-20",
+   "overdue": false,
+   "pct": 72.2,
+   "position_known": true,
+   "products": [
+    {
+     "name": "X1504MA-I582BL2W",
+     "units": 1692.0
+    },
+    {
+     "name": "X1504MA-I582BL1W",
+     "units": 1080.0
+    },
+    {
+     "name": "FX610JH-I716512B0W",
+     "units": 48.0
+    },
+    {
+     "name": "UX3405CA-OU91610BL1X",
+     "units": 36.0
+    }
+   ],
+   "route_assumed": false,
+   "slip_days": 13,
+   "units": 2913.0,
+   "vessel_name": null,
+   "x": 50.98,
+   "y": 67.85
+  },
+  {
+   "amount": [
+    {
+     "amount": 2445574.0,
+     "currency": "USD"
+    }
+   ],
+   "days_overdue": 0,
+   "days_to_eta": 16,
+   "deliver_port": "ZAJNB",
+   "deliveries": 35,
+   "distributors": [
+    {
+     "name": "DCC",
+     "units": 1545.0
+    },
+    {
+     "name": "Mustek",
+     "units": 935.0
+    },
+    {
+     "name": "Pinnacle",
+     "units": 198.0
+    },
+    {
+     "name": "Pepkor",
+     "units": 24.0
+    }
+   ],
+   "eta": "2026-11-18",
+   "eta_shift_days": 7,
+   "forwarder": "KGIL + WWP",
+   "history": {
+    "current_eta": "2026-11-18",
+    "first_eta": "2026-11-11",
+    "first_report": "2026-10-23",
+    "latest_report": "2026-10-27"
+   },
+   "id": "v740d61ff",
+   "inferred": true,
+   "key": "i:2026-10-18|2026-11-18|ZAJNB|asia_durban",
+   "lane_id": "asia_durban",
+   "lane_label": "China / Chongqing \u2192 Durban \u2192 City Deep",
+   "lines": 41,
+   "more_models": 24,
+   "on_board": "2026-10-18",
+   "overdue": false,
+   "pct": 48.4,
+   "position_known": true,
+   "products": [
+    {
+     "name": "P1503CVAY-C716512G0W",
+     "units": 304.0
+    },
+    {
+     "name": "BR1402FGA-I316512G0W",
+     "units": 270.0
+    },
+    {
+     "name": "P1503CVAY-C516512G0W",
+     "units": 228.0
+    },
+    {
+     "name": "B1503CVA-C516512G0X",
+     "units": 170.0
+    }
+   ],
+   "route_assumed": false,
+   "slip_days": 7,
+   "units": 2702.0,
+   "vessel_name": null,
+   "x": 66.33,
+   "y": 52.75
+  },
+  {
+   "amount": [
+    {
+     "amount": 317694.0,
+     "currency": "USD"
+    }
+   ],
+   "days_overdue": 0,
+   "days_to_eta": 23,
+   "deliver_port": "ZAJNB",
+   "deliveries": 5,
+   "distributors": [
+    {
+     "name": "Mustek",
+     "units": 176.0
+    },
+    {
+     "name": "Rectron",
+     "units": 165.0
+    },
+    {
+     "name": "Pepkor",
+     "units": 21.0
+    },
+    {
+     "name": "Firsttech",
+     "units": 2.0
+    }
+   ],
+   "eta": "2026-11-25",
+   "eta_shift_days": 13,
+   "forwarder": "WWP",
+   "history": {
+    "current_eta": "2026-11-25",
+    "first_eta": "2026-11-12",
+    "first_report": "2026-10-23",
+    "latest_report": "2026-10-27"
+   },
+   "id": "vbbf871db",
+   "inferred": true,
+   "key": "i:2026-10-24|2026-11-25|ZAJNB|asia_durban",
+   "lane_id": "asia_durban",
+   "lane_label": "China \u2192 Durban \u2192 City Deep",
+   "lines": 5,
+   "more_models": 1,
+   "on_board": "2026-10-24",
+   "overdue": false,
+   "pct": 28.1,
+   "position_known": true,
+   "products": [
+    {
+     "name": "D501MER-I58512B0X",
+     "units": 165.0
+    },
+    {
+     "name": "P440VAK-C516512B0X",
+     "units": 120.0
+    },
+    {
+     "name": "P500SV-C58512G0W",
+     "units": 56.0
+    },
+    {
+     "name": "V470VAK-I716512W1WR",
+     "units": 21.0
+    }
+   ],
+   "route_assumed": false,
+   "slip_days": 13,
+   "units": 364.0,
+   "vessel_name": null,
+   "x": 80.7,
+   "y": 54.48
+  },
+  {
+   "amount": [
+    {
+     "amount": 637911.0,
+     "currency": "USD"
+    }
+   ],
+   "days_overdue": 0,
+   "days_to_eta": 30,
+   "deliver_port": "ZAJNB",
+   "deliveries": 12,
+   "distributors": [
+    {
+     "name": "Pepkor",
+     "units": 339.0
+    },
+    {
+     "name": "Mustek",
+     "units": 260.0
+    },
+    {
+     "name": "DCC",
+     "units": 110.0
+    }
+   ],
+   "eta": "2026-12-02",
+   "eta_shift_days": 13,
+   "forwarder": "WWP",
+   "history": {
+    "current_eta": "2026-12-02",
+    "first_eta": "2026-11-19",
+    "first_report": "2026-10-23",
+    "latest_report": "2026-10-27"
+   },
+   "id": "vba070951",
+   "inferred": true,
+   "key": "i:2026-10-30|2026-12-02|ZAJNB|asia_durban",
+   "lane_id": "asia_durban",
+   "lane_label": "China \u2192 Durban \u2192 City Deep",
+   "lines": 14,
+   "more_models": 6,
+   "on_board": "2026-10-30",
+   "overdue": false,
+   "pct": 9.1,
+   "position_known": true,
+   "products": [
+    {
+     "name": "V501MV-I38512B0W",
+     "units": 180.0
+    },
+    {
+     "name": "P440VAK-C716512B0X",
+     "units": 150.0
+    },
+    {
+     "name": "P440VAK-C516512B0X",
+     "units": 120.0
+    },
+    {
+     "name": "V440VAK-I58512W1WR",
+     "units": 78.0
+    }
+   ],
+   "route_assumed": false,
+   "slip_days": 13,
+   "units": 709.0,
+   "vessel_name": null,
+   "x": 89.12,
+   "y": 35.95
+  }
+ ]
+}
