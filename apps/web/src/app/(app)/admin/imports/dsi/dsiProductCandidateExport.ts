@@ -1,5 +1,7 @@
 'use client';
 
+import { guardFormulaText } from '@/lib/csvFormulaGuard';
+
 import type { DsiCandidateRow } from './dsi-mapping-steward-panel';
 import { dsiRawProductTokenForCandidate } from './dsi-mapping-steward-panel';
 
@@ -60,7 +62,8 @@ export function buildDsiProductCandidateExportRows(
 }
 
 function escapeCsvCell(value: string | number): string {
-  const s = String(value ?? '');
+  // A product token comes from a distributor file: guard text that a spreadsheet would run as a formula (numbers are untouched).
+  const s = typeof value === 'string' ? guardFormulaText(value) : String(value ?? '');
   if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return `"${s.replace(/"/g, '""')}"`;
   }

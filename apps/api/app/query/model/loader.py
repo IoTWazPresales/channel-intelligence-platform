@@ -34,7 +34,9 @@ CALC_KINDS = frozenset({
     "running_total",
     "share_of_total",
 })
-TIME_FLOORS = frozenset({"day", "stored_period_type"})
+# day: the stored date is a real day. stored_period_type: never finer than the coarsest stored period type in scope.
+# period_start: the stored date is the FIRST DAY of a month or quarter (a plan, a sell-in period): day and week are refused.
+TIME_FLOORS = frozenset({"day", "stored_period_type", "period_start"})
 NULL_KEYS = frozenset({"unassigned", "exclude_when_grouped"})
 # Rules and measure expressions that need SQL are built in code (rules.py); the file only names them.
 KNOWN_RULES = frozenset({"cpor_portfolio_lines", "lineup_current_cases", "shipment_live_lines"})

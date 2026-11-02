@@ -274,8 +274,13 @@ def build_vessels(lines: list[WaterLine], *, as_of: date, report_date: date | No
         eta = max(etas) if etas else None
         on_board = min((r.on_board for r in rows if r.on_board), default=None)
         overdue = eta is not None and eta < as_of
+        # No ETA means the share of the voyage elapsed is unknown: the vessel sits at the start of its lane (0%), flagged
+        # ``position_known: false``, never at the end (GOV-008 minor: it used to be drawn at 100%, as if it had arrived).
+        position_known = eta is not None
         if eta and on_board and eta > on_board:
             elapsed = (as_of - on_board).days / (eta - on_board).days
+        elif eta is None:
+            elapsed = 0.0
         else:
             elapsed = 1.0
         elapsed = max(0.0, min(1.0, elapsed))
@@ -291,6 +296,9 @@ def build_vessels(lines: list[WaterLine], *, as_of: date, report_date: date | No
                 d = (r.port_eta - r.first_eta).days
                 if slip_line is None or d > slip:
                     slip, slip_line = d, r
+        # ``slip_days`` stays the later-ETA figure (never negative: tiles and sorting use it). ``eta_shift_days`` is the
+        # signed move of the ETA: negative when the ETA was pulled in (the badge must not call that "unchanged").
+        eta_shift = slip  # the largest line shift: negative only when every line with a first ETA was pulled in
         slip = max(slip, 0)
         first_eta = (slip_line.first_eta if slip_line else None)
         first_report = (slip_line.first_eta_report if slip_line else None)
@@ -334,6 +342,8 @@ def build_vessels(lines: list[WaterLine], *, as_of: date, report_date: date | No
                 "products": products[:4],
                 "more_models": max(0, len(products) - 4),
                 "slip_days": slip,
+                "eta_shift_days": eta_shift,
+                "position_known": position_known,
                 "history": {
                     "first_eta": _day(first_eta),
                     "first_report": _day(first_report),

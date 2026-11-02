@@ -42,8 +42,12 @@ def _build_blank_template_workbook() -> Workbook:
 
 
 def template_workbook_bytes() -> bytes:
+    from app.services.export_literal_guard import force_text_cells
+
+    wb = _build_blank_template_workbook()
+    force_text_cells(wb)
     bio = BytesIO()
-    _build_blank_template_workbook().save(bio)
+    wb.save(bio)
     return bio.getvalue()
 
 

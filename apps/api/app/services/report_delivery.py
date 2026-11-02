@@ -172,9 +172,11 @@ async def saved_report_payload(db: AsyncSession, report: SavedReport, *, skip_ca
         period_grain=report.period_grain, skip_cache=skip_cache,
     )
     payload = result.as_dict()
-    if definition is not None and result.ok:
-        # Old migrated definitions keep their governed/legacy handler authority.
-        # Only v2-defined rows receive v2's implicit ordering and display cap.
+    if definition is not None and result.ok and not definition.get("migrated_from"):
+        # Old migrated definitions (``migrated_from`` is written only by the migration
+        # script) keep their governed/legacy handler rows, order and totals: export and
+        # delivery equal the on-screen v1 report (GOV-008 M3). Only v2-defined rows
+        # receive v2's implicit ordering and display cap.
         from app.query.model.execute import present_handler_rows
         plan = check_definition(definition, tenant_id=report.tenant_id).plan
         rows = payload.get("rows") or []

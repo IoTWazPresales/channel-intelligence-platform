@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import or_, select, text, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.session import AsyncSessionLocal
@@ -133,6 +134,39 @@ def claim_due_calendar_schedule_ids(db: Session, *, now: datetime | None = None)
     return claimed
 
 
+def _exception_chain(exc: BaseException):
+    seen: set[int] = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        yield exc
+        orig = getattr(exc, "orig", None)
+        if isinstance(orig, BaseException) and id(orig) not in seen:
+            yield orig
+        exc = exc.__cause__ or exc.__context__
+
+
+def is_statement_timeout(exc: BaseException) -> bool:
+    """True only when the database or event loop stopped the run for time (GOV-008 M4)."""
+    for item in _exception_chain(exc):
+        if isinstance(item, (TimeoutError, asyncio.TimeoutError)):
+            return True
+        if "statement timeout" in str(item).lower():
+            return True
+    return False
+
+
+def recipient_safe_error(exc: BaseException, *, timed_out: bool, timeout_ms: int) -> str:
+    """The text an inbox recipient may read: no SQL, parameters or driver detail."""
+    if timed_out:
+        return f"The report took longer than its {max(1, int(timeout_ms) // 1000)}-second limit and was stopped."
+    if isinstance(exc, SQLAlchemyError):
+        return "The report query failed in the database. The platform team has been alerted."
+    message = f"{type(exc).__name__}: {exc}"
+    for marker in ("[SQL:", "[parameters:", "(Background on this error"):
+        message = message.split(marker)[0]
+    return message.strip()[:500]
+
+
 async def _write_failed_delivery(
     db,
     *,
@@ -140,15 +174,24 @@ async def _write_failed_delivery(
     report: SavedReport | None,
     trigger: str,
     error: str,
+    recipients: list | None = None,
+    timed_out: bool | None = None,
 ) -> None:
+    """Write a failed inbox row for ``recipients`` (default: every subscriber).
+
+    ``error`` must already be recipient-safe. ``timed_out`` says the run really hit the time
+    limit; when omitted the text decides.
+    """
     now = datetime.now(timezone.utc)
     name = report.name if report is not None else f"schedule {sched.id}"
     metric = report.metric_key if report is not None else None
-    recipients = list(sched.subscriber_user_ids or [])
-    if not recipients:
-        recipients = [sched.owner_user_id] if sched.owner_user_id is not None else [None]
-    timeoutish = "timeout" in error.lower() or "canceling statement" in error.lower()
-    prefix = "[TIMEOUT]" if timeoutish else "[FAILED]"
+    if recipients is None:
+        recipients = list(sched.subscriber_user_ids or [])
+        if not recipients:
+            recipients = [sched.owner_user_id] if sched.owner_user_id is not None else [None]
+    if timed_out is None:
+        timed_out = "timeout" in error.lower() or "canceling statement" in error.lower()
+    prefix = "[TIMEOUT]" if timed_out else "[FAILED]"
     if report is None or report.tenant_id != sched.tenant_id:
         return
     for rid in recipients:
@@ -203,9 +246,14 @@ async def _deliver_schedule_async(
             recipients = [sched.owner_user_id] if sched.owner_user_id is not None else [None]
         cadence = sched.cadence
 
-        try:
-            delivery_ids: list[int] = []
-            for rid in recipients:
+        report_id = int(report.id)
+        delivery_ids: list[int] = []
+        failed_recipients: list[Any] = []
+        first_error: str | None = None
+        for rid in recipients:
+            # One recipient's failure (deactivated, revoked, a query error) never stops the
+            # ones after it (GOV-008 M4); only the recipient that failed gets a failed row.
+            try:
                 # LOCAL so the cap applies to execute_query and does not leak onto pooled connections.
                 await db.execute(text(f"SET LOCAL statement_timeout = {int(timeout_ms)}"))
                 d = await deliver_saved_report(
@@ -218,48 +266,52 @@ async def _deliver_schedule_async(
                     skip_cache=import_event_skips_cache(trigger),
                 )
                 delivery_ids.append(int(d.id))
-        except Exception as exc:
-            logger.exception("report schedule delivery failed schedule_id=%s", schedule_id)
-            alert_report_delivery_failure(
-                task_name="reports.schedule_delivery",
-                task_run_id=str(schedule_id),
-                error=str(exc),
-            )
-            await db.rollback()
-            sched = await db.get(ReportSchedule, schedule_id)
-            report = None
-            if sched is not None and sched.saved_report_id:
-                report = await db.get(SavedReport, sched.saved_report_id)
-            if sched is not None:
-                await _write_failed_delivery(
-                    db,
-                    sched=sched,
-                    report=report,
-                    trigger=trigger,
-                    error=f"{type(exc).__name__}: {exc} (statement_timeout_ms={timeout_ms})",
+            except Exception as exc:
+                logger.exception("report schedule delivery failed schedule_id=%s recipient=%s", schedule_id, rid)
+                # Ops see the full text; the recipient only sees the safe one.
+                alert_report_delivery_failure(
+                    task_name="reports.schedule_delivery",
+                    task_run_id=f"{schedule_id}:{rid}",
+                    error=str(exc),
                 )
-            if advance_clock:
-                now = datetime.now(timezone.utc)
+                await db.rollback()
+                failed_recipients.append(rid)
+                if first_error is None:
+                    first_error = str(exc)
+                timed_out = is_statement_timeout(exc)
                 sched = await db.get(ReportSchedule, schedule_id)
+                report = await db.get(SavedReport, report_id)
                 if sched is not None:
-                    sched.last_run_at = now
-                    sched.next_run_at = next_run_for_cadence(sched.cadence, now=now)
-                    sched.updated_at = now
-                    await db.commit()
-            return {
-                "schedule_id": schedule_id,
-                "ok": False,
-                "error": str(exc),
-                "cadence": cadence,
-                "trigger": trigger,
-            }
+                    await _write_failed_delivery(
+                        db,
+                        sched=sched,
+                        report=report,
+                        trigger=trigger,
+                        error=recipient_safe_error(exc, timed_out=timed_out, timeout_ms=timeout_ms),
+                        recipients=[rid],
+                        timed_out=timed_out,
+                    )
+                if sched is None or report is None:
+                    break
 
         if advance_clock:
             now = datetime.now(timezone.utc)
-            sched.last_run_at = now
-            sched.next_run_at = next_run_for_cadence(sched.cadence, now=now)
-            sched.updated_at = now
-            await db.commit()
+            sched = await db.get(ReportSchedule, schedule_id)
+            if sched is not None:
+                sched.last_run_at = now
+                sched.next_run_at = next_run_for_cadence(sched.cadence, now=now)
+                sched.updated_at = now
+                await db.commit()
+        if failed_recipients:
+            return {
+                "schedule_id": schedule_id,
+                "ok": False,
+                "error": first_error,
+                "deliveries": delivery_ids,
+                "failed_recipients": failed_recipients,
+                "cadence": cadence,
+                "trigger": trigger,
+            }
         return {
             "schedule_id": schedule_id,
             "ok": True,

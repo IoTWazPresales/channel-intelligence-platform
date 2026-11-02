@@ -36,6 +36,30 @@ MAX_FILTER_TEXT = 256
 
 # Same text as registry._validate_period_grain (v1): day stays refused until decision 1 is taken.
 DAILY_REFUSAL = "Lowest calendar grain is week; daily is not this unit (transaction_date stays storage-only)."
+# Facts dated by the first day of a period (floor ``period_start``): a quarter's plan is not a first-day or first-week figure.
+FINER_THAN_PERIOD_START = frozenset({"day", "week"})
+
+
+def period_start_refusal(model_label: str) -> str:
+    return (
+        f"{model_label} is dated by the start of a planning period, so it cannot be shown by day or week. "
+        "Use month, quarter or year."
+    )
+
+
+def period_grains_for(dm: DataModel, m: Measure | Calculated) -> list[str]:
+    """The period grains the planner accepts for ``m``: the one rule the catalog and the planner share."""
+    base = base_inputs(dm, m)
+    if not base or any(not b.allows_period or b.additivity == "semi_additive" for b in base):
+        return []
+    model = dm.models[m.model]
+    grains = list(dm.period.grains)
+    floor = model.time.floor if model.time is not None else "day"
+    if floor == "stored_period_type":
+        grains = [g for g in grains if not is_daily_grain(g)]
+    elif floor == "period_start":
+        grains = [g for g in grains if g not in FINER_THAN_PERIOD_START]
+    return grains
 
 ENTITY_BREAKDOWNS = frozenset({"product", "customer", "distributor", "case"})
 
@@ -152,7 +176,8 @@ def derived_breakdowns(dm: DataModel, model: FactModel) -> list[str]:
 
 def measure_breakdowns(dm: DataModel, m: Measure | Calculated) -> list[str]:
     allowed = derived_breakdowns(dm, dm.models[m.model])
-    if isinstance(m, Measure) and m.additivity == "semi_additive":
+    # Stock is never summed over time, and an open-order figure has no ship date: neither offers period.
+    if not period_grains_for(dm, m):
         allowed = [b for b in allowed if b != "period"]
     return allowed
 
@@ -301,6 +326,11 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
             target = next(m.id for m in dm.measures.values() if m.legacy_key == metric.key)
             plan.refusals.append(Refusal(measure=mid, reason=f"Use {target} for {metric.key} in v2 queries."))
             continue
+        pending = next((p for p in dm.pending if p["id"] == mid), None)
+        if pending is not None:
+            # Declared but not built: say why (the catalog lists the same reason), not "Unknown measure".
+            plan.refusals.append(Refusal(measure=mid, reason=f"{mid} is not available yet. {pending['reason']}"))
+            continue
         plan.refusals.append(
             Refusal(measure=mid, reason=f"Unknown measure {mid!r}. Only measures in the v2 catalog can be queried.")
         )
@@ -357,6 +387,9 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
     if period_in:
         if grain is None:
             grain = dm.period.default_grain
+        if model.time is not None and model.time.floor == "period_start" and grain in FINER_THAN_PERIOD_START:
+            plan.refusals.append(Refusal(measure=None, reason=period_start_refusal(model.label)))
+            return plan
         if is_daily_grain(grain):
             # v2 day is the stored day on a day-floored fact. Weekly or monthly
             # sell-through stays refused with the v1 sentence (never split into days).

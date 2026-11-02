@@ -1,6 +1,10 @@
+import math
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -39,6 +43,22 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+
+
+def _finite_safe(value: Any) -> Any:
+    """A validation error echoes the rejected input. NaN and Infinity are not JSON: the 422 itself would fail as a 500."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _finite_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_finite_safe(v) for v in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_with_finite_input(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(_finite_safe(exc.errors()))})
 
 
 @app.middleware("http")

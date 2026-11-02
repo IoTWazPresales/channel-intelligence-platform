@@ -833,9 +833,13 @@ class JobDataRemoval:
                         JOIN unnest(CAST(:deliveries AS text[]), CAST(:items AS text[])) AS q(dn, it)
                           ON l.delivery_no = q.dn AND l.item_code = q.it
                         WHERE NOT (l.import_job_id = ANY(:d))
+                          AND (SELECT j.tenant_id FROM import_job j WHERE j.id = l.import_job_id) = ANY(:tenants)
                         """
                     ),
-                    {"deliveries": deliveries, "items": items, "d": self.d_list},
+                    # Only this tenant's own earlier loads can restore its fact (GOV-008 M5): a key string is not
+                    # unique across tenants.
+                    {"deliveries": deliveries, "items": items, "d": self.d_list,
+                     "tenants": sorted({str(r.get("tenant_id") or "default") for r in rows})},
                 ).all()
             ]
             for start in range(0, len(line_ids), 1000):

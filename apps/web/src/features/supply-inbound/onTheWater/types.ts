@@ -29,6 +29,10 @@ export type Vessel = {
   products: NamedUnits[];
   more_models: number;
   slip_days: number;
+  /** Signed move of the ETA since the first report: negative when it was pulled in. Absent on older payloads. */
+  eta_shift_days?: number;
+  /** False when the vessel has no ETA: its place on the lane is not known (it is drawn at the start, not the end). */
+  position_known?: boolean;
   history: { first_eta: string | null; first_report: string | null; current_eta: string | null; latest_report: string | null };
   /** Position on the map in percent of its width and height. */
   x: number;

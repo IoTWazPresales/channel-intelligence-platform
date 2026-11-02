@@ -107,3 +107,47 @@ describe('conditional colour', () => {
     expect(ruleText(rules[2])).toBe('Problem: between 10 to 0');
   });
 });
+
+describe('CSV export fidelity (GOV-008 M9)', () => {
+  const fidelity: V2Response = {
+    ok: true,
+    columns: [
+      { id: 'product', kind: 'breakdown', label: 'Product', fields: ['product_id', 'product_name'] },
+      { id: 'customer', kind: 'breakdown', label: 'Customer', fields: ['customer_id', 'customer_name'] },
+      { id: 'bu', kind: 'breakdown', label: 'Business unit', fields: ['bu'] },
+      { id: 'cpor.delivery_rate', kind: 'measure', label: 'Delivery rate', fields: ['cpor.delivery_rate'], unit: 'ratio' },
+      { id: 'cst_sellthrough.units', kind: 'measure', label: 'Units', fields: ['cst_sellthrough.units'], unit: 'units' },
+    ],
+    rows: [
+      { product_id: 1, product_name: 'UX3405MA', customer_id: 7, customer_name: 'ACBU', bu: 'NB', 'cpor.delivery_rate': 0.86, 'cst_sellthrough.units': 12 },
+      { product_id: 2, product_name: '=SUM(A1)', customer_id: 8, customer_name: 'makro (pty) ltd', bu: 'AIO', 'cpor.delivery_rate': 0.57, 'cst_sellthrough.units': 3 },
+      { product_id: 3, product_name: null, customer_id: null, customer_name: null, bu: null, 'cpor.delivery_rate': null, 'cst_sellthrough.units': 0 },
+    ],
+    totals: {},
+    truncated: false,
+    refusals: [],
+  };
+  const lines = toCsv(tableCols(fidelity), fidelity.rows).slice(1).split('\r\n');
+
+  it('codes and names keep their exact text, not the on-screen re-casing', () => {
+    expect(lines[1].split(',').slice(0, 3)).toEqual(['UX3405MA', 'ACBU', 'NB']);
+    expect(lines[1]).not.toContain('Ux3405Ma');
+    expect(lines[2].split(',')[1]).toBe('makro (pty) ltd');
+  });
+
+  it('keeps the formula guard: the text is intact behind the leading apostrophe', () => {
+    expect(lines[2].split(',')[0]).toBe("'=SUM(A1)");
+  });
+
+  it('a percent column exports the number its header says', () => {
+    expect(lines[0]).toContain('Delivery rate (%)');
+    expect(lines[1].split(',')[3]).toBe('86');
+    expect(lines[2].split(',')[3]).toBe('57'); // 0.57 * 100 would be 56.99999999999999 unrounded
+    expect(lines[3].split(',')[3]).toBe('');
+    expect(lines[1].split(',')[4]).toBe('12'); // other units are untouched
+  });
+
+  it('a missing value still reads Unassigned', () => {
+    expect(lines[3].split(',').slice(0, 3)).toEqual(['Unassigned', 'Unassigned', 'Unassigned']);
+  });
+});

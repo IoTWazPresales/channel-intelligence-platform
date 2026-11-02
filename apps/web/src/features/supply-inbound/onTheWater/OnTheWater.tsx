@@ -544,7 +544,7 @@ function SelectedPanel({ vessel: v, picked, t, amber }: { vessel: Vessel; picked
           <span>ETA at port {fmtDay(v.eta)} · {daysText(v)}</span>
         </Box>
         <Box sx={{ height: 6, borderRadius: 0.75, bgcolor: t.bg.surfaceMuted, overflow: 'hidden' }}>
-          <Box role="progressbar" aria-label="Share of the voyage elapsed" aria-valuenow={Math.round(v.pct)} aria-valuemin={0} aria-valuemax={100} sx={{ height: '100%', width: `${v.pct}%`, background: `linear-gradient(90deg, ${alpha(t.accent.primary, 0.55)}, ${t.accent.primary})` }} />
+          <Box role="progressbar" aria-label="Share of the voyage elapsed" aria-valuenow={v.position_known === false ? undefined : Math.round(v.pct)} aria-valuetext={v.position_known === false ? 'No ETA: share of the voyage elapsed is not known' : undefined} aria-valuemin={0} aria-valuemax={100} sx={{ height: '100%', width: v.position_known === false ? '0%' : `${v.pct}%`, background: `linear-gradient(90deg, ${alpha(t.accent.primary, 0.55)}, ${t.accent.primary})` }} />
         </Box>
       </Box>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 1.25 }}>

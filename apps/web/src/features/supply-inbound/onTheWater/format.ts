@@ -54,8 +54,15 @@ export function daysText(v: Pick<Vessel, 'days_to_eta' | 'overdue' | 'days_overd
  * The vessel badge: two facts, not one. How far past its ETA at port the vessel is, and how far the ETA has moved from the first
  * report: "2 days overdue · ETA moved +14 days", "ETA moved +7 days", "ETA unchanged".
  */
-export function badgeText(v: Pick<Vessel, 'overdue' | 'days_overdue' | 'slip_days'>): string {
-  const moved = v.slip_days > 0 ? `ETA moved +${v.slip_days} ${v.slip_days === 1 ? 'day' : 'days'}` : null;
+export function badgeText(v: Pick<Vessel, 'overdue' | 'days_overdue' | 'slip_days'> & { eta_shift_days?: number }): string {
+  // eta_shift_days is signed (negative: the ETA was pulled in); older payloads only carry slip_days.
+  const shift = v.eta_shift_days ?? v.slip_days;
+  const moved =
+    shift > 0
+      ? `ETA moved +${shift} ${shift === 1 ? 'day' : 'days'}`
+      : shift < 0
+        ? `ETA pulled in ${-shift} ${shift === -1 ? 'day' : 'days'}`
+        : null;
   if (v.overdue) {
     const over = `${v.days_overdue} ${v.days_overdue === 1 ? 'day' : 'days'} overdue`;
     return moved ? `${over} · ${moved}` : over;
@@ -71,6 +78,7 @@ export function nameUnits(rows: Array<{ name: string; units: number }>, limit?: 
 export function historyText(v: Vessel): string {
   const h = v.history;
   if (!h.first_eta) return 'Not in an earlier report';
-  if (v.slip_days > 0) return `${fmtDay(h.first_eta)} on ${fmtDay(h.first_report)} → ${fmtDay(h.current_eta)} on ${fmtDay(h.latest_report)}`;
+  const shift = v.eta_shift_days ?? v.slip_days;
+  if (shift !== 0) return `${fmtDay(h.first_eta)} on ${fmtDay(h.first_report)} → ${fmtDay(h.current_eta)} on ${fmtDay(h.latest_report)}`;
   return `${fmtDay(h.current_eta)} in every report since ${fmtDay(h.first_report)}`;
 }

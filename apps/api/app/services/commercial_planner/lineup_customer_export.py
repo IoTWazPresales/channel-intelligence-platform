@@ -143,6 +143,9 @@ async def build_customer_lineup_slice_xlsx(
             ws.cell(row=row_idx, column=col, value=val)
         row_idx += 1
 
+    from app.services.export_literal_guard import force_text_cells
+
+    force_text_cells(wb)
     bio = BytesIO()
     wb.save(bio)
 

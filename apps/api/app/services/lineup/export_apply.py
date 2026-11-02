@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.export_literal_guard import guard_csv_text
 from app.services.lineup.bias_correction import volume_bias_by_bu
 from app.services.lineup.bulk import bulk_upsert_lineup_items
 from app.services.lineup.net_requirement import build_net_requirement_rows
@@ -86,7 +87,7 @@ def net_requirement_to_csv(payload: dict[str, Any]) -> str:
             [
                 r.get("distributor_id"),
                 r.get("product_id"),
-                r.get("business_unit") or "",
+                guard_csv_text(r.get("business_unit") or ""),
                 r.get("period_from"),
                 r.get("period_to"),
                 r.get("forecast_demand"),
@@ -180,6 +181,9 @@ def net_requirement_to_xlsx_bytes(
                 ]
             )
 
+    from app.services.export_literal_guard import force_text_cells
+
+    force_text_cells(wb)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

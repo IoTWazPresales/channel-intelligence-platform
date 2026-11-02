@@ -16,7 +16,6 @@ from app.query.model.loader import Calculated, DataModel, Measure
 SPEC_PREFIX = "spec_"
 SPEC_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 MAX_SPEC_KEYS = 20
-_LINE_AGGS = frozenset({"avg", "min", "max"})
 
 
 @dataclass(frozen=True)
@@ -27,6 +26,8 @@ class CounterpartPolicy:
     label: str
     hidden: bool
     grains: tuple[frozenset[str], ...] | None
+    # True when the measure is restricted only because it reads the metric's column or takes it as an input.
+    inherited: bool = False
 
 
 def normalize_spec_keys(raw: object, *, strict: bool) -> list[str]:
@@ -84,46 +85,36 @@ def spec_breakdown_ids(catalog: object) -> list[str]:
     return [spec_breakdown_id(k) for k in spec_keys_of(catalog)]
 
 
-def _legacy_anchor(dm: DataModel, measure: Measure | Calculated, seen: set[str]) -> Measure | None:
+def _legacy_anchors(dm: DataModel, measure: Measure | Calculated, seen: set[str]) -> list[Measure]:
+    """Every legacy-keyed measure whose governed metric restricts ``measure``.
+
+    A measure is restricted by the metric of a legacy-keyed measure when it IS that measure, when it reads the same column of
+    the same model with ANY aggregate, filter or rule (``priced_units`` is the same units column with a price filter), or
+    when a calculated measure takes one of them as an input (transitively). GOV-008 M6: before, only plain avg/min/max
+    of the column were covered, so hiding ``sellout_units`` left ``dsi_sellout.priced_units`` queryable.
+    """
     if measure.id in seen:
-        return None
+        return []
     seen.add(measure.id)
     if isinstance(measure, Measure) and measure.legacy_key:
-        return measure
+        return [measure]
     if isinstance(measure, Calculated):
+        found: list[Measure] = []
         for src_id in measure.inputs:
             src = dm.measure(src_id)
-            if src is None:
-                continue
-            found = _legacy_anchor(dm, src, seen)
-            if found is not None:
-                return found
-        return None
-    if (
-        isinstance(measure, Measure)
-        and measure.agg in _LINE_AGGS
-        and measure.column
-        and not measure.when_not_null
-        and not measure.rule
-    ):
-        for other in dm.models[measure.model].measures.values():
-            if (
-                other.legacy_key
-                and other.column == measure.column
-                and not other.when_not_null
-                and not other.rule
-            ):
-                return other
-    return None
+            if src is not None:
+                found.extend(_legacy_anchors(dm, src, seen))
+        return found
+    if isinstance(measure, Measure) and measure.column:
+        return [
+            other
+            for other in dm.models[measure.model].measures.values()
+            if other.legacy_key and other.column == measure.column
+        ]
+    return []
 
 
-def counterpart_policy(dm: DataModel, measure: Measure | Calculated, catalog: object) -> CounterpartPolicy | None:
-    """Hide, relabel, or narrow when the tenant catalog differs from the platform metric."""
-    if catalog is None:
-        return None
-    anchor = _legacy_anchor(dm, measure, set())
-    if anchor is None or not anchor.legacy_key:
-        return None
+def _anchor_policy(anchor: Measure, catalog: object, *, inherited: bool) -> CounterpartPolicy | None:
     metric = catalog.metric_by_key(anchor.legacy_key) if hasattr(catalog, "metric_by_key") else None
     if metric is None:
         return None
@@ -134,13 +125,47 @@ def counterpart_policy(dm: DataModel, measure: Measure | Calculated, catalog: ob
     if platform is not None and set(metric.allowed_grains) != set(platform.allowed_grains):
         grains = tuple(metric.allowed_grains)
     label_changed = platform is None or metric.label != platform.label
-    if not metric.hidden and grains is None and not label_changed:
+    if inherited:
+        # A measure that only reads the anchor's column keeps its own label; it takes the restriction, not the name.
+        if not metric.hidden and grains is None:
+            return None
+    elif not metric.hidden and grains is None and not label_changed:
         return None
     return CounterpartPolicy(
         metric_key=metric.key,
         label=metric.label,
         hidden=bool(metric.hidden),
         grains=grains,
+        inherited=inherited,
+    )
+
+
+def counterpart_policy(dm: DataModel, measure: Measure | Calculated, catalog: object) -> CounterpartPolicy | None:
+    """Hide, relabel, or narrow when the tenant catalog differs from the platform metric.
+
+    The most restrictive policy of every anchor wins: hidden first; otherwise the grains every anchor allows.
+    """
+    if catalog is None:
+        return None
+    policies = [
+        p
+        for anchor in _legacy_anchors(dm, measure, set())
+        if (p := _anchor_policy(anchor, catalog, inherited=anchor is not measure)) is not None
+    ]
+    if not policies:
+        return None
+    for p in policies:
+        if p.hidden:
+            return p
+    narrowed = [p for p in policies if p.grains is not None]
+    if not narrowed:
+        return policies[0]
+    grains = narrowed[0].grains
+    for p in narrowed[1:]:
+        grains = tuple(g for g in grains if g in p.grains)
+    return CounterpartPolicy(
+        metric_key=narrowed[0].metric_key, label=narrowed[0].label, hidden=False, grains=grains,
+        inherited=narrowed[0].inherited,
     )
 
 

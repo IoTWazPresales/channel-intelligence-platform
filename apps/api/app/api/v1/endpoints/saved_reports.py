@@ -68,7 +68,14 @@ class SavedReportUpdate(BaseModel):
 
 def _checked(definition_v2: dict[str, Any], tenant_id: str) -> CheckedDefinition:
     try:
-        return check_definition(definition_v2, tenant_id=tenant_id)
+        checked = check_definition(definition_v2, tenant_id=tenant_id)
+        if checked.needs_date_range:
+            # A report has no dashboard to supply dates, so a per-week rate with no window could be stored here but
+            # never exported or delivered (GOV-008 minor). Promotion from a widget refuses the same way.
+            from app.services.dashboard_definitions import _refuse
+
+            raise _refuse("This report needs execution dates. Choose a date range before saving it.")
+        return checked
     except DefinitionRefused as exc:
         raise exc.http() from exc
 

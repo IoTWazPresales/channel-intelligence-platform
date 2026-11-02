@@ -184,6 +184,7 @@ async def run_v2(
         grain=plan.period_grain if "period" in plan.breakdowns else None,
         vintage_min=vmin,
         vintage_max=vmax,
+        calendar=plan.calendar,
     )
     totals = {m.id: _float(total_for(dm, m, base_totals, weeks=weeks)) for m in plan.measures}
 

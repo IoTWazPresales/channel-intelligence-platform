@@ -83,13 +83,55 @@ def line_state_for_shipped_sheet(
     return LINE_SHIPPED
 
 
-def job_is_older_than_applied_book(db: Session, job: ImportJob) -> bool:
-    """True when this job's report date is strictly before the newest applied date in its scope."""
+def superseded_scopes(db: Session, job: ImportJob) -> tuple[list[tuple[str, str]], set[tuple[str, str]]]:
+    """(scopes this job carries, the ones with a strictly newer applied report in the SAME scope).
+
+    A scope is (report type, operating unit), the unit the book is closed in. An operating unit whose own book lags
+    behind another unit's is not older (GOV-008: the guard used to compare across units). The BOM report is
+    one book for every unit, so it is compared as one scope.
+    """
     mine = report_date_for_job(job)
-    if mine is None:
-        return False
-    latest = _latest_other_report_date(db, job)
-    return latest is not None and mine < latest
+    carried = sorted(
+        {
+            (str(s["report_type"]), "" if s["report_type"] == REPORT_ACZA_BOM else str(s["operating_unit"]))
+            for s in _scopes_for_job(db, int(job.id))
+        }
+    )
+    if mine is None or not carried:
+        return carried, set()
+    rows = db.execute(
+        text(
+            f"""
+            SELECT l.report_type AS report_type, coalesce(l.operating_unit, '') AS operating_unit,
+                   max({_FILE_DATE_SQL}) AS report_date
+            FROM import_job j
+            JOIN shipment_evidence_line l ON l.import_job_id = j.id
+            WHERE j.status = 'completed'
+              AND j.template_slug = 'inbound_shipments'
+              AND j.id <> :job_id
+              AND j.tenant_id = :tenant
+              AND l.report_type IN (
+                    SELECT DISTINCT report_type FROM shipment_evidence_line WHERE import_job_id = :job_id
+                  )
+            GROUP BY 1, 2
+            """
+        ),
+        {"job_id": int(job.id), "tenant": str(getattr(job, "tenant_id", None) or "default")},
+    ).mappings().all()
+    latest: dict[tuple[str, str], date] = {}
+    for r in rows:
+        if not isinstance(r["report_date"], date):
+            continue
+        key = (str(r["report_type"]), "" if r["report_type"] == REPORT_ACZA_BOM else str(r["operating_unit"]))
+        if key not in latest or r["report_date"] > latest[key]:
+            latest[key] = r["report_date"]
+    return carried, {scope for scope in carried if scope in latest and mine < latest[scope]}
+
+
+def job_is_older_than_applied_book(db: Session, job: ImportJob) -> bool:
+    """True when every scope this job carries has a strictly newer applied report in that same scope."""
+    carried, superseded = superseded_scopes(db, job)
+    return bool(carried) and len(superseded) == len(carried)
 
 
 OPEN_BOOK_NOTICE_HEADLINE = "This load did not close open orders"
@@ -137,6 +179,20 @@ def open_book_close_notice(db: Session, job: ImportJob) -> dict[str, Any] | None
             "reason": "This report date is older than the newest applied book.",
             "code": "older_than_applied_book",
         }
+    meta = job.staged_metadata if isinstance(getattr(job, "staged_metadata", None), dict) else {}
+    partial = meta.get(PARTIAL_SHIP_KEY) if isinstance(meta.get(PARTIAL_SHIP_KEY), dict) else None
+    if partial and int(partial.get("lines") or 0):
+        lines, units = int(partial["lines"]), float(partial.get("missing_units") or 0)
+        return {
+            "headline": "Some closed orders shipped less than was open",
+            "reason": (
+                f"{lines} open line(s) were closed as shipped, but the shipped sheet reports {units:g} unit(s) fewer than were open. "
+                "The rest is not on any book: check whether it was cancelled or is still to ship."
+            ),
+            "code": "partial_shipment",
+            "lines": lines,
+            "missing_units": units,
+        }
     return None
 
 
@@ -151,7 +207,8 @@ def write_shipment_facts_and_close_book(
     An older report does neither. The caller commits.
     """
     started = time.perf_counter()
-    if job_is_older_than_applied_book(db, job):
+    carried_scopes, superseded = superseded_scopes(db, job)
+    if bool(carried_scopes) and len(superseded) == len(carried_scopes):
         logger.info(
             "shipment open book: job %s report date is older than the applied book; facts unchanged",
             job.id,
@@ -175,8 +232,10 @@ def write_shipment_facts_and_close_book(
 
         guard = frozenset(complete_open_book_report_types(str(getattr(job, "tenant_id", None) or "default")))
     guard_report: dict[str, Any] = {}
+    # A multi-unit file whose unit A is older than the applied book of unit A but whose unit B is current writes unit B only.
     fact_rows = upsert_inbound_shipment_facts_for_job(
-        db, int(job.id), on_progress=on_progress, guard_report_types=guard, report=guard_report
+        db, int(job.id), on_progress=on_progress, guard_report_types=guard, report=guard_report,
+        skip_scopes=frozenset(superseded) if superseded else None,
     )
     closed = close_open_book_for_job(db, job)
     if guard is not None:
@@ -194,6 +253,28 @@ def write_shipment_facts_and_close_book(
         "already_closed_not_reopened": int(guard_report["already_closed_not_reopened"]),
         "already_open_not_duplicated": int(guard_report["already_open_not_duplicated"]),
     }
+
+
+PARTIAL_SHIP_KEY = "shipment_partial_ship"
+
+
+def _record_partial_shipments(job: ImportJob, closed: list[dict[str, Any]]) -> None:
+    """Keep the lines closed as shipped with less shipped than was open on the job, for the Import Center notice."""
+    partial = [row for row in closed if row.get("missing_quantity")]
+    if not partial:
+        return
+    meta = dict(job.staged_metadata) if isinstance(getattr(job, "staged_metadata", None), dict) else {}
+    meta[PARTIAL_SHIP_KEY] = {
+        "lines": len(partial),
+        "missing_units": round(sum(float(row["missing_quantity"]) for row in partial), 4),
+        "facts": [
+            {"fact_id": int(row["id"]), "order_no": row.get("order_no"), "item_code": row.get("item_code"),
+             "open_quantity": row["quantity"], "shipped_quantity": row["shipped_quantity"],
+             "missing_quantity": row["missing_quantity"]}
+            for row in partial[:50]
+        ],
+    }
+    job.staged_metadata = meta
 
 
 UNDATED_WRITE_KEY = "shipment_undated_write"
@@ -220,13 +301,22 @@ def close_open_book_for_job(db: Session, job: ImportJob) -> list[dict[str, Any]]
     this report's Unship sheet, otherwise ``closed_disappeared``.
     """
     report_date = report_date_for_job(job)
-    if report_date is None or job_is_older_than_applied_book(db, job):
+    if report_date is None:
+        return []
+    carried_scopes, superseded = superseded_scopes(db, job)
+    if bool(carried_scopes) and len(superseded) == len(carried_scopes):
         return []
     from app.services.commercial_tenant_profile import complete_open_book_report_types
 
     tenant_id = str(getattr(job, "tenant_id", None) or "default")
     complete = set(complete_open_book_report_types(tenant_id))
-    scopes = [scope for scope in _scopes_for_job(db, int(job.id)) if scope["report_type"] in complete]
+    scopes = [
+        scope
+        for scope in _scopes_for_job(db, int(job.id))
+        if scope["report_type"] in complete
+        and (str(scope["report_type"]), "" if scope["report_type"] == REPORT_ACZA_BOM else str(scope["operating_unit"]))
+        not in superseded
+    ]
     if not scopes:
         return []
     closed: list[dict[str, Any]] = []
@@ -258,21 +348,49 @@ def close_open_book_for_job(db: Session, job: ImportJob) -> list[dict[str, Any]]
     if closed:
         _append_close_observations(db, closed, closing_job_id=int(job.id), report_date=report_date)
         _write_audit(db, tenant_id=tenant_id, job_id=int(job.id), closed=closed, report_date=report_date)
+        _record_partial_shipments(job, closed)
     return closed
 
 
-def reclassify_unconfirmed_shipped(db: Session) -> list[int]:
-    """Shipped facts with no ship-confirm date become open orders. Returns the fact ids."""
+def _reclass_scope(import_job_id: int | None, loaded_on_or_before: date | None) -> tuple[str, dict[str, Any]]:
+    """The WHERE tail that scopes the reclassification. At least one scope is required: it is never table-wide.
+
+    The first version updated every shipped fact with no confirm date, and so also turned three leaked test facts into open
+    orders on cip (GOV-008 review 2 Nov). A job id limits it to the facts that job wrote; a date limits it to facts created on
+    or before that day.
+    """
+    if import_job_id is None and loaded_on_or_before is None:
+        raise ValueError("reclassify needs a scope: import_job_id and/or loaded_on_or_before (never table-wide)")
+    clauses, params = [], {}
+    if import_job_id is not None:
+        clauses.append("AND import_job_id = :scope_job")
+        params["scope_job"] = int(import_job_id)
+    if loaded_on_or_before is not None:
+        clauses.append("AND created_at::date <= :scope_date")
+        params["scope_date"] = loaded_on_or_before
+    return " ".join(clauses), params
+
+
+def reclassify_unconfirmed_shipped(
+    db: Session, *, import_job_id: int | None = None, loaded_on_or_before: date | None = None
+) -> list[int]:
+    """Shipped facts with no ship-confirm date become open orders, inside the given scope. Returns the fact ids.
+
+    Scope (at least one of): the facts one import job wrote, and/or the facts created on or before a date.
+    """
+    tail, params = _reclass_scope(import_job_id, loaded_on_or_before)
     rows = db.execute(
         text(
-            """
+            f"""
             UPDATE fact_inbound_shipment
             SET line_state = 'open_order', updated_at = now()
             WHERE lower(line_state) = 'shipped'
               AND ship_confirm_date IS NULL
+              {tail}
             RETURNING id
             """
-        )
+        ),
+        params,
     ).all()
     return [int(row.id) for row in rows]
 
@@ -310,17 +428,23 @@ def close_against_newest_reports(db: Session, *, apply: bool = True) -> list[dic
     return closed
 
 
-def preview_unconfirmed_shipped_ids(db: Session) -> list[int]:
+def preview_unconfirmed_shipped_ids(
+    db: Session, *, import_job_id: int | None = None, loaded_on_or_before: date | None = None
+) -> list[int]:
+    """The ids ``reclassify_unconfirmed_shipped`` would change with the same scope (read only)."""
+    tail, params = _reclass_scope(import_job_id, loaded_on_or_before)
     rows = db.execute(
         text(
-            """
+            f"""
             SELECT id
             FROM fact_inbound_shipment
             WHERE lower(line_state) = 'shipped'
               AND ship_confirm_date IS NULL
+              {tail}
             ORDER BY id
             """
-        )
+        ),
+        params,
     ).all()
     return [int(row.id) for row in rows]
 
@@ -440,6 +564,15 @@ def _newest_scopes(db: Session) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+# What the shipped sheet reports for the same unit, order and item (NULL when it reports none). Compared with the open quantity,
+# it shows a PARTIAL shipment: open 100, 60 shipped. The close still reads closed_shipped; the gap is flagged, not hidden.
+_SHIPPED_QTY_SQL = """(
+    SELECT t.shipped_qty FROM shipped_twin t
+    WHERE t.ou_key = lower(trim(coalesce(f.operating_unit, '')))
+      AND t.order_key = lower(trim(f.order_no))
+      AND t.item_key = lower(trim(f.item_code))
+)"""
+
 _CLASSIFY_SQL = """
 CASE
     WHEN f.report_type = 'acza_workbook_bom_not_ready'
@@ -501,7 +634,8 @@ def _close_scope(
             shipped_twin AS (
                 SELECT lower(trim(coalesce(s.operating_unit, ''))) AS ou_key,
                        lower(trim(s.order_no)) AS order_key,
-                       lower(trim(s.item_code)) AS item_key
+                       lower(trim(s.item_code)) AS item_key,
+                       sum(coalesce(s.quantity, 0)) AS shipped_qty
                 FROM fact_inbound_shipment s
                 WHERE s.tenant_id = :tenant
                   AND lower(s.line_state) = 'shipped'
@@ -545,13 +679,13 @@ def _close_scope(
               AND lower(f.line_state) = 'open_order'
             RETURNING f.id, f.line_state, f.quantity, f.order_no, f.item_code,
                       f.import_job_id AS origin_import_job_id, f.report_type, f.operating_unit,
-                      f.tenant_id
+                      f.tenant_id, {_SHIPPED_QTY_SQL} AS shipped_quantity
         """
     else:
         sql = prefix + f"""
             SELECT f.id, {_CLASSIFY_SQL} AS line_state, f.quantity, f.order_no, f.item_code,
                    f.import_job_id AS origin_import_job_id, f.report_type, f.operating_unit,
-                   f.tenant_id
+                   f.tenant_id, {_SHIPPED_QTY_SQL} AS shipped_quantity
             FROM fact_inbound_shipment f
             JOIN doomed ON doomed.id = f.id
         """
@@ -571,6 +705,16 @@ def _close_scope(
     for row in rows:
         item = dict(row)
         item["quantity"] = float(item["quantity"]) if item["quantity"] is not None else None
+        shipped = item.get("shipped_quantity")
+        item["shipped_quantity"] = float(shipped) if shipped is not None else None
+        item["missing_quantity"] = None
+        if (
+            item["line_state"] == LINE_CLOSED_SHIPPED
+            and item["shipped_quantity"] is not None
+            and item["quantity"] is not None
+            and round(item["shipped_quantity"], 4) < round(item["quantity"], 4)
+        ):
+            item["missing_quantity"] = round(item["quantity"] - item["shipped_quantity"], 4)
         item["closing_job_id"] = closing_job_id
         item["report_date"] = report_date.isoformat()
         out.append(item)
@@ -688,9 +832,12 @@ def _write_audit(
             "item_code": row["item_code"],
             "origin_import_job_id": row["origin_import_job_id"],
             "report_type": row["report_type"],
+            "shipped_quantity": row.get("shipped_quantity"),
+            "missing_quantity": row.get("missing_quantity"),
         }
         for row in closed
     ]
+    partial = [row for row in listed if row["missing_quantity"]]
     db.add(
         PlatformAuditEvent(
             tenant_id=tenant_id or "default",
@@ -706,6 +853,8 @@ def _write_audit(
                 "closed_shipped": sum(1 for row in listed if row["line_state"] == LINE_CLOSED_SHIPPED),
                 "closed_disappeared": sum(1 for row in listed if row["line_state"] == LINE_CLOSED_DISAPPEARED),
                 "closed_moved": sum(1 for row in listed if row["line_state"] == LINE_CLOSED_MOVED),
+                "partial_shipments": len(partial),
+                "partial_missing_units": round(sum(float(row["missing_quantity"]) for row in partial), 4),
                 "facts": listed,
             },
         )

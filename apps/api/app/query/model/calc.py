@@ -38,15 +38,25 @@ def window_weeks(
     grain: str | None,
     vintage_min: date | None,
     vintage_max: date | None,
+    calendar: Any = None,
 ) -> Decimal | None:
-    """Business weeks covered by the query window (for per_week_rate totals)."""
+    """Business weeks covered by the query window (for per_week_rate totals).
+
+    ``calendar`` is the tenant's business calendar when it is not the platform one (Sunday week, fiscal or retail
+    periods). Open edges are the edges of the CALENDAR's buckets, the same buckets the per-row week counts use, so a
+    total never disagrees with its own rows (GOV-008 M8). Without it the Gregorian Monday-week buckets apply.
+    """
     start = period_from
     end = period_to
     if grain:
         if start is None and vintage_min is not None:
-            start = bucket_start_of(vintage_min, grain)
+            start = bucket_start_of(vintage_min, grain) if calendar is None else calendar.bucket(vintage_min, grain).start
         if end is None and vintage_max is not None:
-            end = bucket_last_day(bucket_start_of(vintage_max, grain), grain)
+            end = (
+                bucket_last_day(bucket_start_of(vintage_max, grain), grain)
+                if calendar is None
+                else calendar.bucket(vintage_max, grain).end
+            )
     if start is None or end is None or end < start:
         return None
     return Decimal((end - start).days + 1) / Decimal(7)

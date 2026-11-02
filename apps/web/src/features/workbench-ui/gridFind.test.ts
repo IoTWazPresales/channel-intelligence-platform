@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { createElement, createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { guardedCsvCell } from '@/lib/csvFormulaGuard';
+
 import { GridCsvExportButton, readSavedFindViews, visibleFilteredCsvParams } from './gridFind';
 import type { AgGridReact } from 'ag-grid-react';
 
@@ -49,6 +51,7 @@ describe('visible filtered CSV export', () => {
       exportedRows: 'filteredAndSorted',
       onlySelected: false,
       columnKeys: ['customer_label', 'sku'],
+      processCellCallback: guardedCsvCell,
     });
     expect(visibleFilteredCsvParams('roadmap.csv', ['sku']).fileName).toBe('roadmap.csv');
   });

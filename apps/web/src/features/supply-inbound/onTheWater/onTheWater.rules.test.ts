@@ -93,6 +93,26 @@ describe('badgeText', () => {
     expect(badgeText({ overdue: false, days_overdue: 0, slip_days: 7 })).toBe('ETA moved +7 days');
     expect(badgeText({ overdue: false, days_overdue: 0, slip_days: 0 })).toBe('ETA unchanged');
   });
+
+  it('a pulled-in ETA is not "unchanged" (GOV-008 minor)', () => {
+    expect(badgeText({ overdue: false, days_overdue: 0, slip_days: 0, eta_shift_days: -3 })).toBe('ETA pulled in 3 days');
+    expect(badgeText({ overdue: false, days_overdue: 0, slip_days: 0, eta_shift_days: -1 })).toBe('ETA pulled in 1 day');
+    expect(badgeText({ overdue: true, days_overdue: 2, slip_days: 0, eta_shift_days: -5 })).toBe('2 days overdue · ETA pulled in 5 days');
+    expect(badgeText({ overdue: false, days_overdue: 0, slip_days: 0, eta_shift_days: 0 })).toBe('ETA unchanged');
+    // The signed field wins over the clamped one; without it the old payload still reads as before.
+    expect(badgeText({ overdue: false, days_overdue: 0, slip_days: 7, eta_shift_days: 7 })).toBe('ETA moved +7 days');
+  });
+
+  it('the history text does not claim "every report" when the ETA moved earlier', () => {
+    const pulled = vessel({
+      slip_days: 0,
+      eta_shift_days: -4,
+      history: { first_eta: '2026-11-09', first_report: '2026-09-29', current_eta: '2026-11-05', latest_report: '2026-10-27' },
+    });
+    expect(historyText(pulled)).toBe('9 Nov on 29 Sep → 5 Nov on 27 Oct');
+    const same = vessel({ history: { first_eta: '2026-11-05', first_report: '2026-09-29', current_eta: '2026-11-05', latest_report: '2026-10-27' } });
+    expect(historyText(same)).toBe('5 Nov in every report since 29 Sep');
+  });
 });
 
 describe('portsInUse', () => {

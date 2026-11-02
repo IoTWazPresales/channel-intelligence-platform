@@ -5,6 +5,8 @@ import type { ColumnState, CsvExportParams } from 'ag-grid-community';
 import type { AgGridReact } from 'ag-grid-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
+import { guardedCsvCell } from '@/lib/csvFormulaGuard';
+
 const ALL_VIEW = 'All';
 
 /** Sort, visibility, width, and pin for one column. JSON-safe subset of AG Grid column state. */
@@ -173,6 +175,7 @@ export function visibleFilteredCsvParams(fileName: string, columnKeys: string[])
     exportedRows: 'filteredAndSorted',
     onlySelected: false,
     columnKeys,
+    processCellCallback: guardedCsvCell,
   };
 }
 

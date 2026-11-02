@@ -274,7 +274,8 @@ models:
     label: Distributor sell-in
     table: fact_sales_sellin
     tenant_via: dim_product
-    time: {column: period_start, floor: day}
+    # period_start is the first day of a period, not a day of sales: day and week are refused (GOV-008 M7).
+    time: {column: period_start, floor: period_start}
     joins:
       product: {fk: product_id}
       distributor: {fk: distributor_id}
@@ -353,7 +354,8 @@ models:
     base_joins:
       case: {table: commercial_lineup_case, fk: case_id, key: id}
     rules: [lineup_current_cases]
-    time: {column: inferred_period_start, via: case, floor: day}
+    # inferred_period_start is the first day of the planned period (all dated cases on cip start on the 1st).
+    time: {column: inferred_period_start, via: case, floor: period_start}
     joins:
       product: {fk: product_id}
       customer: {fk: customer_id, null_keys: unassigned}

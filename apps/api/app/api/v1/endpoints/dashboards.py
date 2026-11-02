@@ -228,6 +228,24 @@ def _spec_keeps_v2(spec: WidgetSpec, w: DashboardWidget) -> bool:
     )
 
 
+async def _check_saved_report_ref(
+    db: AsyncSession, report_id: int | None, tenant_id: str, user: dict | None, *, current: int | None = None
+) -> None:
+    """A widget may point only at a saved report of its own tenant that the caller can view (GOV-008 minor).
+
+    An id the widget already holds is not re-checked for visibility, so editing an old widget never newly fails.
+    """
+    if report_id is None or (current is not None and int(report_id) == int(current)):
+        return
+    report = await db.get(SavedReport, int(report_id))
+    if report is None or report.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail=f"Saved report {report_id} not found in tenant")
+    if not can_view_owned_item(
+        visibility=report.visibility, owner_user_id=report.owner_user_id, shared_roles=report.shared_roles, user=user
+    ):
+        raise HTTPException(status_code=403, detail=f"Cannot attach report {report_id} to a widget")
+
+
 async def _widget_from_saved_report(
     db: AsyncSession,
     *,
@@ -366,6 +384,7 @@ async def create_dashboard(
 
     index = 0
     for spec in body.widgets:
+        await _check_saved_report_ref(db, spec.saved_report_id, tid, user)
         w = DashboardWidget(dashboard_id=row.id, tenant_id=tid, title=spec.title.strip())
         _apply_widget_fields(
             w,
@@ -549,6 +568,7 @@ async def replace_dashboard_widgets(
         layout = spec.layout_json or default_layout(i)
         if spec.id is not None and spec.id in existing:
             w = existing[spec.id]
+            await _check_saved_report_ref(db, spec.saved_report_id, tid, user, current=w.saved_report_id)
             _apply_widget_fields(
                 w,
                 title=spec.title,
@@ -566,6 +586,7 @@ async def replace_dashboard_widgets(
             )
             seen.add(spec.id)
         else:
+            await _check_saved_report_ref(db, spec.saved_report_id, tid, user)
             w = DashboardWidget(dashboard_id=row.id, tenant_id=tid, title=spec.title.strip())
             _apply_widget_fields(
                 w,
@@ -600,6 +621,7 @@ async def add_dashboard_widget(
     tid = tenant_id_from_user(user)
     row = await _get_editable_dashboard(db, dashboard_id, tid, user)
     index = len(row.widgets or [])
+    await _check_saved_report_ref(db, body.saved_report_id, tid, user)
     w = DashboardWidget(dashboard_id=row.id, tenant_id=tid, title=body.title.strip())
     _apply_widget_fields(
         w,

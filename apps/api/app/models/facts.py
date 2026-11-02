@@ -131,7 +131,8 @@ class FactInboundShipment(ShipmentWaterColumns, Base, TimestampMixin):
     __table_args__ = (
         Index("ix_fact_inbound_shipment_import_job_id", "import_job_id"),
         # One fact per shipped identity (20260630_0061). NULL keys do not collide: see ``fact_upsert_key``.
-        UniqueConstraint("fact_upsert_key", name="uq_fact_inbound_shipment_fact_upsert_key"),
+        # Per tenant since 20261102_0051 (GOV-008 M5): the key carries no tenant.
+        UniqueConstraint("tenant_id", "fact_upsert_key", name="uq_fact_inbound_shipment_fact_upsert_key"),
         # As-of weeks-of-cover reads: delivered/open lines per distributor and product by POD date.
         Index("ix_fact_inbound_shipment_woc_asof", "distributor_id", "product_id", "pod_date", "line_state"),
     )

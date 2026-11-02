@@ -203,10 +203,10 @@ def _merge_shipped_row_into(target: dict[str, Any], incoming: dict[str, Any]) ->
 
 def _dedupe_rows_for_fact_upsert(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Collapse rows sharing ``fact_upsert_key`` within a chunk (shipped sums qty)."""
-    order: list[str] = []
-    by_key: dict[str, dict[str, Any]] = {}
+    order: list[Any] = []
+    by_key: dict[Any, dict[str, Any]] = {}
     for row in rows:
-        key = str(row["fact_upsert_key"])
+        key = (str(row.get("tenant_id") or "default"), str(row["fact_upsert_key"]))
         if key not in by_key:
             by_key[key] = dict(row)
             order.append(key)
@@ -291,11 +291,13 @@ def _upsert_evidence_chunk(
         ) from chunk_exc
 
 
-def _existing_pod_by_fact_keys(db: Session, keys: list[str]) -> dict[str, date]:
+def _existing_pod_by_fact_keys(db: Session, keys: list[str], tenant_id: str = "default") -> dict[str, date]:
+    """Prior POD per fact key of ONE tenant: a key string is only unique inside a tenant (GOV-008 M5)."""
     if not keys:
         return {}
     rows = db.execute(
         select(FactInboundShipment.fact_upsert_key, FactInboundShipment.pod_date).where(
+            FactInboundShipment.tenant_id == tenant_id,
             FactInboundShipment.fact_upsert_key.in_(keys),
             FactInboundShipment.pod_date.is_not(None),
         )
@@ -319,10 +321,21 @@ def _upsert_shipped_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) -> 
     if not rows:
         return
     aggregated = _dedupe_rows_for_fact_upsert(rows)
-    keys = [str(r["fact_upsert_key"]) for r in aggregated]
-    prior_pod = _existing_pod_by_fact_keys(db, keys)
-    _apply_sticky_pod_to_rows(aggregated, prior_pod)
-    db.execute(delete(FactInboundShipment).where(FactInboundShipment.fact_upsert_key.in_(keys)))
+    # The replace is per tenant: tenant B's load of a key that tenant A also holds must never read or delete A's fact
+    # (GOV-008 M5, probe P8). With the 0051 unique constraint (tenant_id, fact_upsert_key) both facts coexist; on a
+    # database still on the old global constraint the insert then fails loudly instead of deleting A's fact.
+    by_tenant: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in aggregated:
+        by_tenant[(str(row.get("tenant_id") or "default").strip() or "default")].append(row)
+    for tenant, tenant_rows in by_tenant.items():
+        keys = [str(r["fact_upsert_key"]) for r in tenant_rows]
+        prior_pod = _existing_pod_by_fact_keys(db, keys, tenant)
+        _apply_sticky_pod_to_rows(tenant_rows, prior_pod)
+        db.execute(
+            delete(FactInboundShipment).where(
+                FactInboundShipment.tenant_id == tenant, FactInboundShipment.fact_upsert_key.in_(keys)
+            )
+        )
     db.execute(pg_insert(tbl).values(aggregated))
 
 
@@ -337,8 +350,8 @@ def _norm(value: Any) -> str:
     return str(value or "").strip().lower()
 
 
-def _closed_keys_among(db: Session, keys: list[str]) -> set[str]:
-    """Fact keys (of ``keys``) whose fact is closed: the book already decided that line is gone."""
+def _closed_keys_among(db: Session, keys: list[str], tenant_id: str = "default") -> set[str]:
+    """Fact keys (of ``keys``) whose fact, in this tenant, is closed: the book already decided that line is gone."""
     found: set[str] = set()
     for i in range(0, len(keys), _GUARD_LOOKUP_BATCH):
         batch = keys[i : i + _GUARD_LOOKUP_BATCH]
@@ -346,6 +359,7 @@ def _closed_keys_among(db: Session, keys: list[str]) -> set[str]:
             str(k)
             for k in db.scalars(
                 select(FactInboundShipment.fact_upsert_key).where(
+                    FactInboundShipment.tenant_id == tenant_id,
                     FactInboundShipment.fact_upsert_key.in_(batch),
                     ~live_line(FactInboundShipment.line_state),
                 )
@@ -415,7 +429,7 @@ def _apply_closed_and_duplicate_guard(
     Both are counted in ``report``; nothing is deleted and no fact is touched.
     """
     guarded = [i for i, v in enumerate(values) if v.get("report_type") in guard_report_types and v.get("fact_upsert_key")]
-    closed_keys = _closed_keys_among(db, sorted({str(values[i]["fact_upsert_key"]) for i in guarded}))
+    closed_keys = _closed_keys_among(db, sorted({str(values[i]["fact_upsert_key"]) for i in guarded}), tenant_id)
     open_rows = [values[i] for i in guarded if (values[i].get("line_state") or "").strip().lower() != "shipped"]
     identities = _open_line_identities_under_other_keys(db, tenant_id, import_job_id, open_rows)
 
@@ -450,6 +464,7 @@ def upsert_inbound_shipment_facts_for_job(
     chunk_size: int = _UPSERT_CHUNK_SIZE,
     guard_report_types: frozenset[str] | None = None,
     report: dict[str, Any] | None = None,
+    skip_scopes: frozenset[tuple[str, str]] | None = None,
 ) -> int:
     """Insert/update ``fact_inbound_shipment`` for every evidence line on the job.
 
@@ -483,6 +498,14 @@ def upsert_inbound_shipment_facts_for_job(
         report = {}
     for k in ("already_closed_not_reopened", "already_closed_not_reopened_units", "already_open_not_duplicated", "already_open_not_duplicated_units"):
         report.setdefault(k, 0)
+    if skip_scopes:
+        # Scopes (report type, operating unit) whose own book is newer than this file: this older file writes nothing for them.
+        def _scope(v: dict[str, Any]) -> tuple[str, str]:
+            rt = str(v.get("report_type") or "")
+            return rt, "" if rt == "acza_workbook_bom_not_ready" else str(v.get("operating_unit") or "")
+
+        keep = [i for i, v in enumerate(values) if _scope(v) not in skip_scopes]
+        lines, values = [lines[i] for i in keep], [values[i] for i in keep]
     if guard_report_types:
         lines, values = _apply_closed_and_duplicate_guard(
             db, tenant_id=tid, import_job_id=int(import_job_id), lines=lines, values=values,

@@ -176,9 +176,12 @@ def run_retire_orphans(*, job: int, apply: bool, expect_db: str | None) -> dict:
             db.rollback()
             return out
         done = retire_orphaned_open_rows(db, job, plan)
-        if done["superseded"] + done["disappeared"] != len(plan):
+        # Rows the plan flags (quantity_differs, ambiguous) are left open on purpose; every other row must have been retired.
+        actionable = sum(1 for r in plan if r.get("action") in (None, "supersede", "disappear"))
+        out["flagged_left_open"] = [{"fact": r["id"], "reason": r["action"]} for r in plan if r.get("action") in ("quantity_differs", "ambiguous")]
+        if done["superseded"] + done["disappeared"] != actionable:
             db.rollback()
-            raise SystemExit(f"ROLLED BACK: retired {done}, the plan said {len(plan)}")
+            raise SystemExit(f"ROLLED BACK: retired {done}, the plan said {actionable}")
         from app.services.platform_audit import record_platform_audit_sync
 
         record_platform_audit_sync(

@@ -36,6 +36,7 @@ import { ProductSkuEconomicsPanel } from '@/features/admin/ProductSkuEconomicsPa
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiDeleteJson, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
+import { guardedCsvCell } from '@/lib/csvFormulaGuard';
 import { toQueryError } from '@/lib/queryError';
 
 const DSI_REFERENCE_LABELS = new Set(['Distributor inventory', 'Sell-out']);
@@ -789,7 +790,9 @@ function AdminProductsPageContent() {
             <Button
               variant="outlined"
               disabled={!gridApi}
-              onClick={() => gridApi?.exportDataAsCsv({ fileName: `products_control_view_page${page}.csv` })}
+              onClick={() =>
+                gridApi?.exportDataAsCsv({ fileName: `products_control_view_page${page}.csv`, processCellCallback: guardedCsvCell })
+              }
             >
               Export current filtered/sorted view
             </Button>

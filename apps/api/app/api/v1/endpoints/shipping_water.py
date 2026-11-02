@@ -133,13 +133,16 @@ async def _fetch_lines(db: AsyncSession, filt: dict[str, Any], *where: Any) -> l
 _HISTORY_SQL = text(
     """
     WITH cur AS MATERIALIZED (
-      SELECT f.id AS fact_id, o.line_identity_key AS k
+      SELECT f.id AS fact_id, f.tenant_id AS tid, o.line_identity_key AS k
       FROM fact_inbound_shipment f
       JOIN shipment_evidence_observation o ON o.evidence_line_id = f.shipment_evidence_line_id
+      JOIN import_job oj ON oj.id = o.import_job_id AND oj.tenant_id = f.tenant_id
       WHERE f.id = ANY(CAST(:ids AS integer[]))
     ), hist AS MATERIALIZED (
       SELECT c.fact_id, o.id, o.import_job_id, o.valid_from, o.port_eta_date, o.on_board_date
-      FROM cur c JOIN shipment_evidence_observation o ON o.line_identity_key = c.k
+      FROM cur c
+      JOIN shipment_evidence_observation o ON o.line_identity_key = c.k
+      JOIN import_job hj ON hj.id = o.import_job_id AND hj.tenant_id = c.tid
     )
     SELECT DISTINCT ON (fact_id, kind) fact_id, kind, import_job_id, valid_from, d FROM (
       SELECT fact_id, 'seen' AS kind, import_job_id, valid_from, id, NULL::date AS d FROM hist
@@ -279,7 +282,7 @@ async def on_the_water(
 # ---------------------------------------------------------------------------------- port conditions
 class PortConditionIn(BaseModel):
     port_code: str = Field(min_length=3, max_length=16)
-    delay_days: float = Field(ge=0, le=365)
+    delay_days: float = Field(ge=0, le=365, allow_inf_nan=False)
     note: str | None = Field(default=None, max_length=1000)
 
 
@@ -309,8 +312,9 @@ async def add_port_condition(
 ) -> dict[str, Any]:
     """Append a manual port delay. A correction is a new row: rows are never changed or removed."""
     code = body.port_code.strip().upper()
-    if not re.fullmatch(r"[A-Z0-9]{3,16}", code):
-        raise HTTPException(status_code=422, detail="Port code is the UN/LOCODE, for example ZADUR")
+    # UN/LOCODE: two letters of country, three of place (ZADUR). "XXX" and other short codes name no port.
+    if not re.fullmatch(r"[A-Z]{2}[A-Z0-9]{3}", code):
+        raise HTTPException(status_code=422, detail="Port code is the 5-character UN/LOCODE, for example ZADUR")
     who = str(admin.get("display_name") or admin.get("email") or admin.get("id") or "admin")[:256]
     row = PortCondition(
         tenant_id=tenant_id_from_user(admin) or DEFAULT_TENANT_ID,

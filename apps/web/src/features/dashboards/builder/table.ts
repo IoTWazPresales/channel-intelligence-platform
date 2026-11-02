@@ -122,13 +122,28 @@ export function quoteCell(s: string): string {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/**
+ * The cell as the file holds it. Text keeps its exact characters: a code or a name is not re-cased for display
+ * (UX3405MA stays UX3405MA; displayPartyName is for the grid only). A percent column holds the number its header says
+ * (a "Delivery rate (%)" column over 86, not the stored ratio 0.86). Only a missing value reads "Unassigned".
+ */
+export function csvCellValue(row: V2Row, col: TableCol): string | number | null {
+  const v = cellValue(row, col);
+  if (typeof v === 'number') {
+    return col.unit === 'percent' ? Number((v * 100).toPrecision(12)) : v;
+  }
+  if (v == null || col.kind === 'measure') return v;
+  const raw = row[col.field];
+  return raw == null || String(raw).trim() === '' ? 'Unassigned' : String(raw);
+}
+
 export function toCsv(cols: TableCol[], rows: V2Row[]): string {
   const lines = [cols.map((c) => quoteCell(guardCell(c.header))).join(',')];
   for (const r of rows) {
     lines.push(
       cols
         .map((c) => {
-          const v = cellValue(r, c);
+          const v = csvCellValue(r, c);
           if (v == null) return '';
           if (typeof v === 'number') return String(v);
           return quoteCell(guardCell(v));

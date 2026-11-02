@@ -183,6 +183,9 @@ def build_cpor_case_workbook_bytes(session: Session, case_id: int) -> tuple[byte
         ws2.append([])
         ws2.append(["NOTE: missing_roe — USD values may be blank/zero on lines without ROE."])
 
+    from app.services.export_literal_guard import force_text_cells
+
+    force_text_cells(wb)  # names and notes are text, never formulas
     buf = BytesIO()
     wb.save(buf)
     data = buf.getvalue()

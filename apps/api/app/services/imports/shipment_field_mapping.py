@@ -219,13 +219,61 @@ def remembered_sheet_names(source: SourceDefinition | None) -> list[str]:
     return [str(name) for name in raw if isinstance(name, str) and str(name).strip()]
 
 
-def remember_selected_sheets(db: Session, *, source_id: int, sheet_names: list[str]) -> None:
-    """Store the operator's sheet choice on the source so the next file can skip the dialog."""
+def remembered_seen_sheet_names(source: SourceDefinition | None) -> list[str]:
+    """Every sheet the operator was shown when they last confirmed the choice (selected or not)."""
+    if source is None or not isinstance(source.column_mapping_memory, dict):
+        return []
+    raw = source.column_mapping_memory.get("seen_sheet_names")
+    if not isinstance(raw, list):
+        return []
+    return [str(name) for name in raw if isinstance(name, str) and str(name).strip()]
+
+
+def sheet_changes_since_remembered(source: SourceDefinition | None, available: list[str]) -> dict[str, list[str]]:
+    """New sheets (never shown to the operator) and missing sheets (remembered, absent now). A rename is one of each.
+
+    Without a stored list of the sheets that were shown (memory from before this field), every sheet that was not
+    selected counts as new once: the operator confirms again and the list is stored.
+    """
+    selected = remembered_sheet_names(source)
+    seen = set(remembered_seen_sheet_names(source)) | set(selected)
+    return {
+        "new": [name for name in available if name not in seen],
+        "missing": [name for name in selected if name not in set(available)],
+    }
+
+
+def initial_sheet_selection(
+    source: SourceDefinition | None, names: list[str], default_choice: list[str]
+) -> tuple[list[str], bool, dict[str, list[str]]]:
+    """(sheets to select, whether the dialog may be skipped, what changed since the remembered choice).
+
+    A remembered choice skips the dialog only when the operator has seen every sheet of this file: a sheet that is new,
+    or renamed, is never dropped silently. The dialog opens with it listed and unselected, and says what changed.
+    Nothing remembered: the default choice, confirmed only for a one-sheet file.
+    """
+    remembered = remembered_sheet_names(source)
+    present = [name for name in names if name in set(remembered)]
+    if not present:
+        return list(default_choice), len(names) <= 1, {"new": [], "missing": []}
+    changes = sheet_changes_since_remembered(source, names)
+    return present, not changes["new"], changes
+
+
+def remember_selected_sheets(
+    db: Session, *, source_id: int, sheet_names: list[str], available_sheets: list[str] | None = None
+) -> None:
+    """Store the operator's sheet choice on the source so the next file can skip the dialog.
+
+    ``available_sheets`` is every sheet the operator was shown; a sheet outside it is new on the next file.
+    """
     src = db.get(SourceDefinition, source_id)
     if src is None:
         return
     root: dict[str, Any] = dict(src.column_mapping_memory or {})
     root["selected_sheet_names"] = [str(name) for name in sheet_names]
+    if available_sheets is not None:
+        root["seen_sheet_names"] = [str(name) for name in available_sheets]
     root["schema_version"] = root.get("schema_version") or MEMORY_SCHEMA_VERSION
     src.column_mapping_memory = root
     db.add(src)
@@ -508,14 +556,9 @@ def infer_shipment_import_job_sync(db: Session, job_id: int) -> ImportJob:
     if names:
         meta = dict(job.staged_metadata or {})
         if not isinstance(meta.get("selected_sheets"), list):
-            remembered = remembered_sheet_names(job.source)
-            present = [name for name in names if name in set(remembered)]
-            if present:
-                chosen = present
-                confirmed = True
-            else:
-                chosen = default_selected_sheets(names)
-                confirmed = len(names) <= 1
+            chosen, confirmed, changes = initial_sheet_selection(job.source, names, default_selected_sheets(names))
+            if changes["new"] or changes["missing"]:
+                meta["sheet_changes"] = changes
             meta["available_sheets"] = names
             meta["selected_sheets"] = chosen
             meta["sheet_selection_confirmed"] = confirmed
@@ -596,6 +639,8 @@ def shipment_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         "mapping_adjustment_notices": notices,
         "column_samples": samples,
         "field_target_descriptions": dict(SHIPMENT_FIELD_TARGET_DESCRIPTIONS),
+        # Sheets that are new (or renamed) since the remembered choice: the sheet dialog lists them, unselected.
+        "sheet_changes": (job.staged_metadata or {}).get("sheet_changes") or {"new": [], "missing": []},
         "available_sheets": [str(name) for name in (job.staged_metadata or {}).get("available_sheets") or []]
         or [
             str(item.get("sheet"))

@@ -92,8 +92,16 @@ def _kinds(rows: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def execute(db_name: str, *, apply: bool) -> dict[str, Any]:
-    """Read, or apply, the open-book close. Raises SystemExit on a refused database or a count mismatch."""
+def execute(
+    db_name: str, *, apply: bool, reclass_job: int | None = None, reclass_loaded_on_or_before: date | None = None
+) -> dict[str, Any]:
+    """Read, or apply, the open-book close. Raises SystemExit on a refused database or a count mismatch.
+
+    The reclassification of shipped facts with no confirm date is scoped (``reclass_job`` and/or
+    ``reclass_loaded_on_or_before``); with neither, it is skipped and the close runs alone.
+    """
+    scoped = reclass_job is not None or reclass_loaded_on_or_before is not None
+    scope = {"import_job_id": reclass_job, "loaded_on_or_before": reclass_loaded_on_or_before}
     if (db_name or "").strip().lower() == "cip" and apply:
         print("apply target is cip; continuing because --expect-db cip was passed")
     engine = _engine(db_name)
@@ -106,7 +114,7 @@ def execute(db_name: str, *, apply: bool) -> dict[str, Any]:
         if current != db_name:
             raise SystemExit(f"refusing: current_database() is {current!r}, expected {db_name!r}")
         before = _measure(db)
-        planned_reclass = preview_unconfirmed_shipped_ids(db)
+        planned_reclass = preview_unconfirmed_shipped_ids(db, **scope) if scoped else []
         planned_close = close_against_newest_reports(db, apply=False)
         planned_kinds = _kinds(planned_close)
         if not apply:
@@ -121,7 +129,7 @@ def execute(db_name: str, *, apply: bool) -> dict[str, Any]:
             print(json.dumps(result, indent=2, default=str))
             return result
 
-        reclassed = reclassify_unconfirmed_shipped(db)
+        reclassed = reclassify_unconfirmed_shipped(db, **scope) if scoped else []
         if set(reclassed) != set(planned_reclass):
             raise SystemExit(
                 f"reclass count mismatch: planned {len(planned_reclass)} returning {len(reclassed)}"
@@ -172,8 +180,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expect-db", required=True, help="Abort unless current_database() matches")
     parser.add_argument("--apply", action="store_true", help="Write the close. Default is a read-only preview")
+    parser.add_argument("--reclass-job", type=int, help="Reclassify shipped facts with no confirm date: only those this job wrote")
+    parser.add_argument("--reclass-loaded-on-or-before", type=date.fromisoformat,
+                        help="Reclassify shipped facts with no confirm date: only those created on or before YYYY-MM-DD")
     args = parser.parse_args(argv)
-    execute(args.expect_db.strip(), apply=bool(args.apply))
+    execute(
+        args.expect_db.strip(), apply=bool(args.apply), reclass_job=args.reclass_job,
+        reclass_loaded_on_or_before=args.reclass_loaded_on_or_before,
+    )
     return 0
 
 

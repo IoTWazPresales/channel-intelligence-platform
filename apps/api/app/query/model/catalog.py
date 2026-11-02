@@ -15,7 +15,8 @@ from app.query.model.graph import (
     filter_refusals,
     governed_honours,
     measure_breakdowns,
-    needs_period,
+    needs_period_breakdown,
+    period_grains_for,
 )
 from app.query.model.loader import Calculated, DataModel
 from app.query.model.tenant_restrictions import (
@@ -88,13 +89,13 @@ def catalog_v2(dm: DataModel, v1_catalog: Any, *, is_admin: bool) -> dict[str, A
             allowed = _visible_breakdowns(dm, m.model, measure_breakdowns(dm, m), v1_catalog, policy)
             entry: dict[str, Any] = {
                 "id": m.id,
-                "label": policy.label if policy is not None else m.label,
+                "label": policy.label if policy is not None and not policy.inherited else m.label,
                 "unit": m.unit,
                 "model": m.model,
                 "kind": "base",
                 "additivity": m.additivity,
                 "breakdowns": allowed,
-                "period_grains": list(dm.period.grains) if "period" in allowed else [],
+                "period_grains": period_grains_for(dm, m) if "period" in allowed else [],
                 "requires": [],
                 "legacy_key": m.legacy_key,
             }
@@ -111,7 +112,7 @@ def catalog_v2(dm: DataModel, v1_catalog: Any, *, is_admin: bool) -> dict[str, A
             if src is not None and not isinstance(src, Calculated):
                 allowed = [b for b in allowed if b in measure_breakdowns(dm, src)]
         allowed = _visible_breakdowns(dm, c.model, allowed, v1_catalog, policy)
-        requires = ["period"] if needs_period(dm, c) else (["period or period.from+to"] if c.kind == "per_week_rate" else [])
+        requires = ["period"] if needs_period_breakdown(dm, c) else (["period or period.from+to"] if c.kind == "per_week_rate" else [])
         entry = {
             "id": c.id,
             "label": c.label,
@@ -122,7 +123,7 @@ def catalog_v2(dm: DataModel, v1_catalog: Any, *, is_admin: bool) -> dict[str, A
             "inputs": list(c.inputs),
             "additivity": c.additivity,
             "breakdowns": allowed,
-            "period_grains": list(dm.period.grains) if "period" in allowed else [],
+            "period_grains": period_grains_for(dm, c) if "period" in allowed else [],
             "requires": requires,
             "legacy_key": None,
         }

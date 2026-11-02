@@ -1750,7 +1750,9 @@ async def post_shipment_sheets(job_id: int, body: dict[str, Any] = Body(...), db
     await db.commit()
     if job.source_id is not None:
         with SessionLocal() as sync_db:
-            remember_selected_sheets(sync_db, source_id=int(job.source_id), sheet_names=chosen)
+            remember_selected_sheets(
+                sync_db, source_id=int(job.source_id), sheet_names=chosen, available_sheets=available or None
+            )
             sync_db.commit()
     with SessionLocal() as sync_db:
         infer_shipment_import_job_sync(sync_db, job_id)
