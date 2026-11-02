@@ -1,0 +1,2186 @@
+{
+  "cases-1280-light": {
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "card": "Sell-out units by customer, against the previous period",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 10,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Support and delivery rate by customer",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 17,
+        "legendEntries": 2,
+        "plottedRows": 10,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved Z to A",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Name Z–A",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved top 50",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 12,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 50"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved Z to A",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 5,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 12",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 12",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Name Z–A",
+        "pressedButtons": [
+          "Show top 5"
+        ]
+      }
+    ]
+  },
+  "fixtures-1280-light": {
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "card": "dashboard-widget-1",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-2",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Accessories",
+          "Notebook"
+        ],
+        "tickNames": [
+          "Accessories",
+          "Notebook"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-3",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 9,
+        "firstPlotted": [
+          "Impala Gadgets",
+          "Fynbos Office Supply"
+        ],
+        "tickNames": [
+          "Impala Gadgets",
+          "Fynbos Office Supply"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      },
+      {
+        "card": "dashboard-widget-4",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 4,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-08-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": [
+          "Show top 5"
+        ]
+      },
+      {
+        "card": "dashboard-widget-5",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2026-07-06 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 13,
+        "firstPlotted": [
+          "2026-07-06",
+          "2026-07-13"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-6",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2025-12-29 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 14,
+        "firstPlotted": [
+          "2025-12-29",
+          "2026-01-05"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-7",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 2,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-10-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-8",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 2,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-10-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-9",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "US$ 0 | 52.5%"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 8,
+        "firstPlotted": [
+          "Kestrel Home Stores",
+          "Marula Electronics"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-10",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-11",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Education",
+          "Retail"
+        ],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-12",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Cashback",
+          "Price drop"
+        ],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-13",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-15",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-16",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-17",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-18",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-14",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-20",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-19",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100000",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100001",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100002",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100003",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100004",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2026-07-06 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 13,
+        "firstPlotted": [
+          "2026-07-06",
+          "2026-07-13"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100005",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 6,
+        "firstPlotted": [
+          "Pulse monitor 27",
+          "Aero 14 laptop"
+        ],
+        "tickNames": [
+          "Pulse monitor 27",
+          "Aero 14 laptop"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100006",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100007",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 6,
+        "firstPlotted": [
+          "Gateway",
+          "Rosebank"
+        ],
+        "tickNames": [
+          "Gateway",
+          "Rosebank"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      }
+    ]
+  },
+  "cases-1280-dark": {
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "card": "Sell-out units by customer, against the previous period",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 10,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Support and delivery rate by customer",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 17,
+        "legendEntries": 2,
+        "plottedRows": 10,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved Z to A",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Name Z–A",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved top 50",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 12,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 50"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved Z to A",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 5,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 12",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 12",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Name Z–A",
+        "pressedButtons": [
+          "Show top 5"
+        ]
+      }
+    ]
+  },
+  "fixtures-1280-dark": {
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "card": "dashboard-widget-1",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-2",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Accessories",
+          "Notebook"
+        ],
+        "tickNames": [
+          "Accessories",
+          "Notebook"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-3",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 9,
+        "firstPlotted": [
+          "Impala Gadgets",
+          "Fynbos Office Supply"
+        ],
+        "tickNames": [
+          "Impala Gadgets",
+          "Fynbos Office Supply"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      },
+      {
+        "card": "dashboard-widget-4",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 4,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-08-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": [
+          "Show top 5"
+        ]
+      },
+      {
+        "card": "dashboard-widget-5",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2026-07-06 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 13,
+        "firstPlotted": [
+          "2026-07-06",
+          "2026-07-13"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-6",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2025-12-29 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 14,
+        "firstPlotted": [
+          "2025-12-29",
+          "2026-01-05"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-7",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 2,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-10-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-8",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 2,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-10-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-9",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "US$ 0 | 52.5%"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 8,
+        "firstPlotted": [
+          "Kestrel Home Stores",
+          "Marula Electronics"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-10",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-11",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Education",
+          "Retail"
+        ],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-12",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Cashback",
+          "Price drop"
+        ],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-13",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-15",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-16",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-17",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-18",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-14",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-20",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-19",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100000",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100001",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100002",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100003",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100004",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2026-07-06 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 13,
+        "firstPlotted": [
+          "2026-07-06",
+          "2026-07-13"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100005",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 6,
+        "firstPlotted": [
+          "Pulse monitor 27",
+          "Aero 14 laptop"
+        ],
+        "tickNames": [
+          "Pulse monitor 27",
+          "Aero 14 laptop"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100006",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100007",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 6,
+        "firstPlotted": [
+          "Gateway",
+          "Rosebank"
+        ],
+        "tickNames": [
+          "Gateway",
+          "Rosebank"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      }
+    ]
+  },
+  "cases-390-light": {
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "card": "Sell-out units by customer, against the previous period",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 10,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Support and delivery rate by customer",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 30,
+        "legendEntries": 2,
+        "plottedRows": 10,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved Z to A",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Name Z–A",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved top 50",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 12,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 50"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved Z to A",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 5,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 12",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 12",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Name Z–A",
+        "pressedButtons": [
+          "Show top 5"
+        ]
+      }
+    ]
+  },
+  "fixtures-390-light": {
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "card": "dashboard-widget-1",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-2",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Accessories",
+          "Notebook"
+        ],
+        "tickNames": [
+          "Accessories",
+          "Notebook"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-3",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 9,
+        "firstPlotted": [
+          "Impala Gadgets",
+          "Fynbos Office Supply"
+        ],
+        "tickNames": [
+          "Impala Gadgets",
+          "Fynbos Office Supply"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      },
+      {
+        "card": "dashboard-widget-4",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 4,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-08-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": [
+          "Show top 5"
+        ]
+      },
+      {
+        "card": "dashboard-widget-5",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2026-07-06 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 13,
+        "firstPlotted": [
+          "2026-07-06",
+          "2026-07-13"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-6",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2025-12-29 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 14,
+        "firstPlotted": [
+          "2025-12-29",
+          "2026-01-05"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-7",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 2,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-10-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-8",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 2,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-10-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-9",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "US$ 0 | 52.5%"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 8,
+        "firstPlotted": [
+          "Kestrel Home Stores",
+          "Marula Electronics"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-10",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-11",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Education",
+          "Retail"
+        ],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-12",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Cashback",
+          "Price drop"
+        ],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-13",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-15",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-16",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-17",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-18",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-14",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-20",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-19",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100000",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100001",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100002",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100003",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100004",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2026-07-06 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 13,
+        "firstPlotted": [
+          "2026-07-06",
+          "2026-07-13"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100005",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 6,
+        "firstPlotted": [
+          "Pulse monitor 27",
+          "Aero 14 laptop"
+        ],
+        "tickNames": [
+          "Pulse monitor 27",
+          "Aero 14 laptop"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100006",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100007",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 6,
+        "firstPlotted": [
+          "Gateway",
+          "Rosebank"
+        ],
+        "tickNames": [
+          "Gateway",
+          "Rosebank"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      }
+    ]
+  },
+  "cases-390-dark": {
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "card": "Sell-out units by customer, against the previous period",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 10,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Support and delivery rate by customer",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 30,
+        "legendEntries": 2,
+        "plottedRows": 10,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved Z to A",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Name Z–A",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved top 50",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 12,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 06",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 50"
+        ]
+      },
+      {
+        "card": "Sell-out units by customer, saved Z to A",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 5,
+        "firstPlotted": [
+          "Kestrel Home and Garden Superstores Region 12",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "tickNames": [
+          "Kestrel Home and Garden Superstores Region 12",
+          "Kestrel Home and Garden Superstores Region 11"
+        ],
+        "sortMenu": "Name Z–A",
+        "pressedButtons": [
+          "Show top 5"
+        ]
+      }
+    ]
+  },
+  "fixtures-390-dark": {
+    "horizontalOverflow": false,
+    "widgets": [
+      {
+        "card": "dashboard-widget-1",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-2",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Accessories",
+          "Notebook"
+        ],
+        "tickNames": [
+          "Accessories",
+          "Notebook"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-3",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 9,
+        "firstPlotted": [
+          "Impala Gadgets",
+          "Fynbos Office Supply"
+        ],
+        "tickNames": [
+          "Impala Gadgets",
+          "Fynbos Office Supply"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      },
+      {
+        "card": "dashboard-widget-4",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 4,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-08-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": [
+          "Show top 5"
+        ]
+      },
+      {
+        "card": "dashboard-widget-5",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2026-07-06 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 13,
+        "firstPlotted": [
+          "2026-07-06",
+          "2026-07-13"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-6",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2025-12-29 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 14,
+        "firstPlotted": [
+          "2025-12-29",
+          "2026-01-05"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-7",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 2,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-10-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-8",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 2,
+        "plottedRows": 2,
+        "firstPlotted": [
+          "2026-07-01",
+          "2026-10-01"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-9",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "US$ 0 | 52.5%"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 8,
+        "firstPlotted": [
+          "Kestrel Home Stores",
+          "Marula Electronics"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-10",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-11",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Education",
+          "Retail"
+        ],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-12",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 4,
+        "firstPlotted": [
+          "Cashback",
+          "Price drop"
+        ],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-13",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-15",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-16",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-17",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-18",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-14",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-20",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-19",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100000",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100001",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100002",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100003",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100004",
+        "textOverlaps": 1,
+        "textSpill": 0,
+        "overlapPairs": [
+          "2026-07-06 | 0"
+        ],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 13,
+        "firstPlotted": [
+          "2026-07-06",
+          "2026-07-13"
+        ],
+        "tickNames": [],
+        "sortMenu": null,
+        "pressedButtons": []
+      },
+      {
+        "card": "dashboard-widget-100005",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 6,
+        "firstPlotted": [
+          "Pulse monitor 27",
+          "Aero 14 laptop"
+        ],
+        "tickNames": [
+          "Pulse monitor 27",
+          "Aero 14 laptop"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100006",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 0,
+        "firstPlotted": [],
+        "tickNames": [],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 10"
+        ]
+      },
+      {
+        "card": "dashboard-widget-100007",
+        "textOverlaps": 0,
+        "textSpill": 0,
+        "overlapPairs": [],
+        "angledTickBoxOverlaps": 0,
+        "legendEntries": 0,
+        "plottedRows": 6,
+        "firstPlotted": [
+          "Gateway",
+          "Rosebank"
+        ],
+        "tickNames": [
+          "Gateway",
+          "Rosebank"
+        ],
+        "sortMenu": "Highest first",
+        "pressedButtons": [
+          "Show top 15"
+        ]
+      }
+    ]
+  }
+}
