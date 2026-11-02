@@ -1,0 +1,301 @@
+{
+ "headline_now": {
+  "open_lines": 948,
+  "open_units": 69681.0,
+  "pipeline_lines": 740,
+  "pipeline_units": 48928.0,
+  "shipped_lines": 208,
+  "shipped_units": 20753.0,
+  "landed_units": 1353028.0
+ },
+ "audit_cols": [
+  "id",
+  "created_at",
+  "tenant_id",
+  "actor_user_id",
+  "actor",
+  "area",
+  "action",
+  "target_type",
+  "target_id",
+  "detail_json"
+ ],
+ "audit_events_brief": [
+  {
+   "id": "18",
+   "created_at": "2026-10-29T08:06:39.001624+00:00",
+   "tenant_id": "default",
+   "actor_user_id": "None",
+   "actor": "open-book",
+   "area": "admin",
+   "action": "open_book_close",
+   "target_type": "import_job",
+   "target_id": "1339",
+   "detail_json": "{'facts': [{'fact_id': 134129, 'order_no': '151126061011433', 'quantity': 252.0, 'item_code': '90NX09Y1-M00440', 'line_state': 'closed_shipped', 'report_type': 'acza_workbook_shipped', 'origin_import_"
+  },
+  {
+   "id": "22",
+   "created_at": "2026-11-01T15:50:17.608329+00:00",
+   "tenant_id": "default",
+   "actor_user_id": "None",
+   "actor": "scripts/ops/backfill_shipment_water_fields.py",
+   "area": "admin",
+   "action": "shipment_water_backfill",
+   "target_type": "shipment_tables",
+   "target_id": "20261101_0049",
+   "detail_json": "{'per_table_per_job': {'fact_inbound_shipment': {'32': {'file': 'ACZA Shipped Unshipped 20260526.xlsx', 'rows': 48, 'filled': {'ship_way': 48, 'origin_hub': 48, 'deliver_port': 48, 'forwarder_code': 4"
+  },
+  {
+   "id": "23",
+   "created_at": "2026-11-02T07:15:29.741665+00:00",
+   "tenant_id": "default",
+   "actor_user_id": "None",
+   "actor": "scripts/merge_shipped_fact_identity_twins.py --retire-po-less",
+   "area": "admin",
+   "action": "shipped_fact_po_less_retire",
+   "target_type": "fact_inbound_shipment",
+   "target_id": "20261101_0050",
+   "detail_json": "{'retired': 37, 'fact_ids': [113212, 113213, 113214, 113215, 113216, 113217, 113218, 113219, 113220, 113221, 113222, 113223, 113225, 113226, 113227, 113228, 113229, 113230, 113231, 113232, 113235, 113"
+  },
+  {
+   "id": "24",
+   "created_at": "2026-11-02T07:17:04.054924+00:00",
+   "tenant_id": "default",
+   "actor_user_id": "None",
+   "actor": "scripts/ops/reprocess_shipment_job.py",
+   "area": "admin",
+   "action": "shipment_job_reprocess",
+   "target_type": "import_job",
+   "target_id": "1697",
+   "detail_json": "{'closed': 0, 'fact_rows': 8071, 'evidence_lines_after': 8071, 'evidence_lines_before': 7967}"
+  },
+  {
+   "id": "25",
+   "created_at": "2026-11-02T07:22:49.055789+00:00",
+   "tenant_id": "default",
+   "actor_user_id": "None",
+   "actor": "scripts/merge_shipped_fact_identity_twins.py --retire-po-less",
+   "area": "admin",
+   "action": "shipped_fact_po_less_retire",
+   "target_type": "fact_inbound_shipment",
+   "target_id": "20261101_0050",
+   "detail_json": "{'retired': 10, 'fact_ids': [113211, 113224, 134343, 134344, 134345, 134346, 134347, 134348, 134349, 134350], 'quantity_differs': []}"
+  },
+  {
+   "id": "26",
+   "created_at": "2026-11-02T12:57:35.226895+00:00",
+   "tenant_id": "default",
+   "actor_user_id": "None",
+   "actor": "scripts/merge_shipped_fact_identity_twins.py --retire-orphan-open-rows",
+   "area": "admin",
+   "action": "shipped_fact_orphan_open_retire",
+   "target_type": "import_job",
+   "target_id": "1697",
+   "detail_json": "{'fact_ids': [148768, 148777, 148780, 148785, 148786, 148801, 157127, 163464, 163465], 'superseded': 9, 'disappeared': 0}"
+  }
+ ],
+ "event26_raw_head": "{\"fact_ids\": [148768, 148777, 148780, 148785, 148786, 148801, 157127, 163464, 163465], \"superseded\": 9, \"disappeared\": 0}",
+ "event26_fact_ids": [
+  148768,
+  148777,
+  148780,
+  148785,
+  148786,
+  148801,
+  157127,
+  163464,
+  163465
+ ],
+ "event26_facts": [
+  {
+   "id": 148768,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126081010672",
+   "order_line": "1.1",
+   "item_code": "90NX09J2-M00RW0",
+   "quantity": 21.0,
+   "superseded_by_fact_id": 170755,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260345763|90NX09J2-M00RW0|ord:151126081010672|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  },
+  {
+   "id": 148777,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126071008977",
+   "order_line": "1.1",
+   "item_code": "90NX0AL1-M004B0",
+   "quantity": 128.0,
+   "superseded_by_fact_id": 170759,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260365958|90NX0AL1-M004B0|ord:151126071008977|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  },
+  {
+   "id": 148780,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126081014465",
+   "order_line": "1.1",
+   "item_code": "90NX0861-M01X30",
+   "quantity": 36.0,
+   "superseded_by_fact_id": 170760,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260369718|90NX0861-M01X30|ord:151126081014465|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  },
+  {
+   "id": 148785,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126081013514",
+   "order_line": "1.1",
+   "item_code": "90NX0AM2-M00640",
+   "quantity": 120.0,
+   "superseded_by_fact_id": 170761,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260369724|90NX0AM2-M00640|ord:151126081013514|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  },
+  {
+   "id": 148786,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126081013513",
+   "order_line": "1.1",
+   "item_code": "90NX09J2-M00RW0",
+   "quantity": 10.0,
+   "superseded_by_fact_id": 170813,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260369725|90NX09J2-M00RW0|ord:151126081013513|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  },
+  {
+   "id": 148801,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126081010739",
+   "order_line": "1.1",
+   "item_code": "90NX09J2-M00FP0",
+   "quantity": 21.0,
+   "superseded_by_fact_id": 170814,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260380237|90NX09J2-M00FP0|ord:151126081010739|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  },
+  {
+   "id": 157127,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126091006582",
+   "order_line": "1.1",
+   "item_code": "90NX08N1-M03CC0",
+   "quantity": 125.0,
+   "superseded_by_fact_id": 170754,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260389394|90NX08N1-M03CC0|ord:151126091006582|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  },
+  {
+   "id": 163464,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126091007566",
+   "order_line": "1.1",
+   "item_code": "90NX08F1-M01520",
+   "quantity": 300.0,
+   "superseded_by_fact_id": 170815,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260389394|90NX08F1-M01520|ord:151126091007566|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  },
+  {
+   "id": 163465,
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "status": "scheduled",
+   "order_no": "151126101003140",
+   "order_line": "1.1",
+   "item_code": "90NX0AM2-M00N10",
+   "quantity": 160.0,
+   "superseded_by_fact_id": 170816,
+   "superseded_by_key": "acza_workbook_shipped:shipped|15260406777|90NX0AM2-M00N10|ord:151126101003140|1.1",
+   "updated_at": "2026-11-02T12:57:35.226895+00:00"
+  }
+ ],
+ "join_counts": {
+  "workbook_open_lines": 737,
+  "workbook_open_units": 48898.0,
+  "cip_pipeline_facts": 740,
+  "cip_pipeline_units": 48928.0,
+  "keys_matched_equal_qty": 737,
+  "units_matched_equal_qty": 48898.0,
+  "keys_matched_qty_differs": 0,
+  "workbook_units_on_qty_differs": 0,
+  "cip_units_on_qty_differs": 0,
+  "workbook_only_lines": 0,
+  "workbook_only_units": 0,
+  "cip_only_facts": 3,
+  "cip_only_units": 30.0
+ },
+ "qty_diff": [],
+ "workbook_only": [],
+ "cip_only": [
+  {
+   "fact_id": 99964,
+   "job_id": null,
+   "report_type": "shipped",
+   "source_sheet": null,
+   "order_no": null,
+   "order_line": null,
+   "item_code": "AUD-PARI-3f28cac69439",
+   "customer_po": null,
+   "counted_qty": 10.0,
+   "created_at": "2026-07-02T13:40:39.416267+00:00"
+  },
+  {
+   "fact_id": 99966,
+   "job_id": null,
+   "report_type": "shipped",
+   "source_sheet": null,
+   "order_no": null,
+   "order_line": null,
+   "item_code": "AUD-PARI-14b06f1277b7",
+   "customer_po": null,
+   "counted_qty": 10.0,
+   "created_at": "2026-07-02T13:41:35.056767+00:00"
+  },
+  {
+   "fact_id": 99968,
+   "job_id": null,
+   "report_type": "shipped",
+   "source_sheet": null,
+   "order_no": null,
+   "order_line": null,
+   "item_code": "AUD-PARI-dbcd8569ad87",
+   "customer_po": null,
+   "counted_qty": 10.0,
+   "created_at": "2026-07-02T13:42:40.218020+00:00"
+  }
+ ],
+ "test_facts": [],
+ "job_1697_states": [
+  {
+   "line_state": "closed_superseded",
+   "n": 9,
+   "units": 921.0
+  },
+  {
+   "line_state": "open_order",
+   "n": 737,
+   "units": 48898.0
+  },
+  {
+   "line_state": "shipped",
+   "n": 6612,
+   "units": 506120.0
+  }
+ ]
+}
