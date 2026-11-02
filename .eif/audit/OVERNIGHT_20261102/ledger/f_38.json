@@ -1,0 +1,4 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "EIF runtime: the programme node id counter lags the real ids (state ids.node = 5), so an event node.add with no id fails NODE_EXISTS on N-0006; ids N-0117 to N-0119 were assigned by hand. Fix in the EIF repo, not CIP. Found by RUN-20261102-OVERNIGHT."
+}

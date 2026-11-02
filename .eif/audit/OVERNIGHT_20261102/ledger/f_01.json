@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Mapping memory (source_definition.column_mapping_memory: header mappings, remembered sheets, cleared tokens) and the alias tables carry no tenant and are reused automatically across tenants (review M5; M5c not fixed). Options need a decision: tenant_id on source_definition and alias tables with a backfill, or a per-tenant namespace in the JSON. One tenant on cip today. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Needs Warren 1 and .eif/audit/REVIEW_20261102/FINDINGS.md M5.",
+  "node": "N-0119"
+}

@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Decision for Warren: editor default top N (columns 10, ranked bars 15, the renderer's own); the other way round is one number. See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Needs Warren 4.",
+  "node": "N-0114"
+}

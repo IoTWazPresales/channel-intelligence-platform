@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Orphan retire where the replacement has another quantity is left open and flagged; the alternative is to retire anyway. Warren's call. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Needs Warren 6.",
+  "node": "N-0119"
+}

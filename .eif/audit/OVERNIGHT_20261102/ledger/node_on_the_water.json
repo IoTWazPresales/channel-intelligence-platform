@@ -1,0 +1,13 @@
+{
+  "id": "N-0119",
+  "title": "On the water: voyage fields, port conditions and the Shipments map (retroactive record)",
+  "class": "feature",
+  "origin": "retroactive",
+  "risk": "R3",
+  "touches_existing": true,
+  "acceptance_criteria": [
+    "Retroactive record of work already built and applied: migration 20261101_0049 (voyage columns, port_condition), the backfill on cip (audit event 22), GET /shipping/on-the-water, port-conditions, the vessel and needs_look filters, the Attention row, the map and /admin/port-conditions",
+    "Open-book orphan retire on job 1697 (audit event 26) and the review fixes in batches 1 to 3 and the deploy of 2 November",
+    "Charter only: no acceptance is recorded here; acceptance is Warren's"
+  ]
+}

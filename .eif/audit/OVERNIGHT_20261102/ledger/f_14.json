@@ -1,0 +1,4 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "API lint not run: ruff is not installed in apps/api/.venv (batches 1 and 2); web lint was run (0 errors, 50 warnings). See .eif/audit/REVIEW_20261102/BATCH1_REPORT.md Gates and .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Gate."
+}

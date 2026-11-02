@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Parity: no per-caller parity matrix was re-run for 'every existing caller keeps working with a test'; only the full suite. See .eif/audit/REVIEW_20261102/FINDINGS.md N-0115 table, row 'Parity'.",
+  "node": "N-0115"
+}

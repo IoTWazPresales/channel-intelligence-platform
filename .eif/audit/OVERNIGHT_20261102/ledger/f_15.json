@@ -1,0 +1,4 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "tests/test_shipment_resolved_entities.py::test_branch_bill_to_variants_resolve_same_root_distributor catches every exception including its own failed assert and skips with 'DB not available'; on cip_test the resolver returns None for two aliases of one distributor, so the skip hides a failure (the 25th skip). Not investigated. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md 'Test counts and mutation checks'."
+}

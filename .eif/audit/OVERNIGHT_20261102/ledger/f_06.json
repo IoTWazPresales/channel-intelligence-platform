@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Migrated v1 saved reports keep the v1 rows, untruncated and in the handler order (batch 2 reading of the code comment); if they should take the v2 cap and order it is one condition. Warren's call. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Needs Warren 7 and .eif/audit/REVIEW_20261102/FINDINGS.md M3.",
+  "node": "N-0116"
+}

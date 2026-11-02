@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "AUD-PARI test facts still on cip: 3 shipped-turned-open facts (ids 99964, 99966, 99968; 30 units) leaked by tests/test_data_integrity_audit.py count in open units. Cleanup script scripts/ops/remove_leaked_test_shipment_facts.py exists (dry run default); plan batch2/AUD_PARI_CLEANUP_PLAN.md needs a clone proof, then Warren's go. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Needs Warren 4 and .eif/audit/REVIEW_20261102/FINDINGS.md Minor.",
+  "node": "N-0119"
+}

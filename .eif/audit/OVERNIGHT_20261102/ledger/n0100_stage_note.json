@@ -1,0 +1,5 @@
+{
+  "node": "N-0100",
+  "expected_revision": 5,
+  "note": "Scope extended on 2 Nov 2026 (decision D-0133 priority order item 2; D-0138 My accounts default, no database restriction): a job per user and the customer accounts each user covers; dashboards, Brief and Attention default to My accounts (clearable); a My accounts starter dashboard bound to the user. Stage unchanged (discovery). Feature definition: .eif/audit/OVERNIGHT_20261102/N0100_DEFINITION.md. Users today have only admin, steward, planner and viewer roles; there is no job and no customer-account assignment (app/core/security.py, app/models/iam.py)."
+}

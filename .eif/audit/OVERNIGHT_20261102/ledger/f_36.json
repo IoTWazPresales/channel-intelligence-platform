@@ -1,0 +1,4 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Clones still in Postgres (the guard denies DROP DATABASE): cip_otw, cip_retire, cip_retire2, cip_retire3 and any later clones; Warren to drop by hand. Not verified tonight. See docs/memory/CURRENT.md (2 Nov entries) and .eif/audit/REVIEW_20261102/FINDINGS.md section 'Audit events'."
+}

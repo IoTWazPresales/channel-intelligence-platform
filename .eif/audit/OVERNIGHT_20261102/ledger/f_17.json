@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Decision for Warren: dual axis chart now starts at the top 10 categories (it plotted every category before), with Show all and the Sort menu. Keep, or start with all? See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Needs Warren 1.",
+  "node": "N-0114"
+}

@@ -1,0 +1,4 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "D-0132 status mismatch: the ledger records it accepted by Warren on 26 Oct (EIF 2778) but .eif/DECISIONS.md lists it PROPOSED (written that way by batch 2 on instruction). Not changed tonight (standing instruction: do not confirm D-0132). See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Needs Warren 2."
+}

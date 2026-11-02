@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Scheduled delivery: no delivery and no failure row on 5 Oct and 26 Oct for the only enabled schedule on cip (cause not established); delivered on 2 Nov 09:00. See .eif/audit/REVIEW_20261102/FINDINGS.md N-0116 table, row 'Scheduled reports keep sending'.",
+  "node": "N-0116"
+}

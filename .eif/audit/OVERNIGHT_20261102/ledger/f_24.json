@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Render limits: no render on cip data, none by a person, no real-device or screen reader check; every visual and starter in N-0114/N-0116 not independently seen light and dark at both widths; side panel minimum 360 px source-only; hover and keyboard state of the new charts not captured. See .eif/audit/REVIEW_20261102/FINDINGS.md (UNABLE_TO_RENDER) and .eif/audit/REVIEW_20261102/BATCH3_REPORT.md 'What these renders cannot show'.",
+  "node": "N-0114"
+}

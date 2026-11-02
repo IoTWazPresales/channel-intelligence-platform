@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "No RLS policy checks tenant on any table (all policies are product-line only), so tenant isolation rests on the application; non-owner RLS, concurrency and HTTP timing were not tested (role cip is the table owner). dashboard, dashboard_widget, saved_report, cpor_case and report_schedule have no RLS on cip. See .eif/audit/REVIEW_20261102/FINDINGS.md N-0115 table and N-0116 table.",
+  "node": "N-0115"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "N-0118",
+  "title": "Load staged-but-unloaded store-level sell-through",
+  "class": "feature",
+  "origin": "operator",
+  "risk": "R3",
+  "touches_existing": true,
+  "acceptance_criteria": [
+    "The customers that have store or site level rows staged and not loaded are discovered from the data (staged rows against loaded rows, by customer and job), not assumed",
+    "For each such customer: the jobs that hold the staged rows, their status and stage, what stops each from loading, row and unit counts and date range are recorded",
+    "Loading follows the repo rules: oldest file first, validate then apply, clone proof first, then a 'run against cip' gate from Warren; each job's load report matches the clone proof",
+    "No master is auto-created; unmatched products and stores go to the steward",
+    "Plan: .eif/audit/OVERNIGHT_20261102/LOAD_PLAN.md"
+  ]
+}

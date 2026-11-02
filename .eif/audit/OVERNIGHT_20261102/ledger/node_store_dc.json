@@ -1,0 +1,21 @@
+{
+  "id": "N-0117",
+  "title": "Store and DC replenishment",
+  "class": "inception",
+  "origin": "operator",
+  "risk": "R3",
+  "touches_existing": true,
+  "depends_on": ["N-0110", "N-0108"],
+  "acceptance_criteria": [
+    "Store sales and stock are shown per store or site for any customer whose reports carry a site; a store is shown by its own name and is never aliased to its parent customer",
+    "Every site has a level (distributor stock, customer DC, store, other) and an owner (distributor or customer); a distributor-owned site cannot be set to customer DC",
+    "A customer DC exists only on evidence: a customer report or an ASUS shipment names the site as a distribution or fulfilment centre, or a steward confirms it once (remembered). Name patterns and stock behaviour only propose a candidate; a candidate is not a DC until confirmed; nothing is auto-created",
+    "With no stated DC there is no DC level: stock sits at store or account level supplied through the distributor, and the module does not invent a DC",
+    "Customer DC stock, DC to store needs where a DC exists, and distributor to store needs where it does not",
+    "Which distributor supplies a site from distributor stock, with lead times learned from history per distributor and site",
+    "Slow and unsold stock with a suggested path: promote, move between stores or customers, or return to the distributor",
+    "A store map in the On the water style",
+    "Everything is driven by data and tenant configuration; no customer, distributor, retailer, store, DC, product or vendor name appears in a rule, default, pattern or test; the module works unchanged for a customer with no DC and for a customer added later",
+    "N-0110 and N-0108 fold in as dependencies of this node"
+  ]
+}

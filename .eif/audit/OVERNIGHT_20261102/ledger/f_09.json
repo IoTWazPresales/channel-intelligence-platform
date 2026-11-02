@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "0050 downgrade limit: an orphaned open Shipped-sheet line with a future confirm date whose replacement has since closed comes back as shipped; removing the limit needs a column recording the prior state (new migration). See .eif/audit/REVIEW_20261102/BATCH1_REPORT.md M1.",
+  "node": "N-0119"
+}

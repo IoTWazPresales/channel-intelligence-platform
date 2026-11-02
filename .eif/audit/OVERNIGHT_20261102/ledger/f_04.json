@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Partial shipment remainder: the open quantity not shipped is flagged but the line closes as closed_shipped; Warren to decide the remainder state (open line for the difference, or a closed_cancelled state). See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Needs Warren 5.",
+  "node": "N-0119"
+}

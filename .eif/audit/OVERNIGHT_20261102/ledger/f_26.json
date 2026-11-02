@@ -1,0 +1,4 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Invalid batch 3 API run: Postgres went into recovery mode during a full suite run started alongside the render harness on cip_test (28 failed, 3,583 passed); cause not established. Rule: run the full suite alone. See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Gate."
+}

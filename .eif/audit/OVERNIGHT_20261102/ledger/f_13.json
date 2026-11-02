@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "A cancelled remainder can be labelled closed_shipped; not fixable from the data (the sheets do not say why a line is gone). The partial-shipment flag is the part that can be done. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Not done.",
+  "node": "N-0119"
+}

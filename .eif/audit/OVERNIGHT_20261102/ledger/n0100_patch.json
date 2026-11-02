@@ -1,0 +1,16 @@
+{
+  "node": "N-0100",
+  "expected_revision": 4,
+  "acceptance_criteria": [
+    "Separation per Warren's mapping (D-0029 Q3); the four system roles stay unless Warren decides otherwise",
+    "PM edits pre-approval only; Ken cannot write MAC or terms (per the mapping)",
+    "The public case-approval route (GET/POST /api/v1/case-approval) is throttled per client and per token so a token cannot be brute-forced or the route flooded (finding from N-0082)",
+    "The older customer-merge endpoints (merge preview, bulk preview and confirm) check sign-in only; they must require the steward role like the N-0095 change-keeper endpoints (Warren 2026-10-16, finding from N-0095)",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files",
+    "Scope extension (Warren, 2 Nov 2026, D-0133, D-0138): a user has a job (account manager, product manager, finance, country manager, admin) and covers customer accounts through an assignment; what each job sees first is defined",
+    "Scope extension: dashboards, Brief and Attention default to a My accounts filter that the user can clear; there is no database restriction (D-0138)",
+    "Scope extension: a My accounts starter dashboard is built from the existing dashboard builder with the account filter bound to the signed-in user",
+    "Scope extension: no customer, distributor, retailer or product name in any rule, default or test; accounts come from the assignment data",
+    "Definition: .eif/audit/OVERNIGHT_20261102/N0100_DEFINITION.md"
+  ]
+}

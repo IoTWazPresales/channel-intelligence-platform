@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "import_job_delete_figures._shipments (restores only from the same tenant's earlier loads) has no test of its own; covered only by the existing delete-figures tests. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Not done.",
+  "node": "N-0119"
+}

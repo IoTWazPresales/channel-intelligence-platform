@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Dual axis at 390 px: ten long names are drawn as angled one-line ticks cut to the same first words; a dual axis cannot use horizontal bars. Full name is in the tick title and the data table. Not fixed. See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Not done.",
+  "node": "N-0114"
+}

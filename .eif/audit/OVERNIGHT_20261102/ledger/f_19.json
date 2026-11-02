@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Decision for Warren: tiles keep their query while a vessel is selected; the alternative is to follow the filters the click clears (tiles then change on every click). See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Needs Warren 3.",
+  "node": "N-0119"
+}

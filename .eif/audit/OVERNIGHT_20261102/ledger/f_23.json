@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Four fixture widgets (a line, an area, a scatter and one starter) have the first x label or origin tick sharing a corner with the y-axis '0'. Not fixed. See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Renders.",
+  "node": "N-0114"
+}

@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Closed-line reader grep for B1 covered apps/api/app only; scripts, packages and web-side readers were not searched. See .eif/audit/REVIEW_20261102/FINDINGS.md B1 and .eif/audit/REVIEW_20261102/BATCH1_REPORT.md reader list.",
+  "node": "N-0119"
+}

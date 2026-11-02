@@ -1,0 +1,6 @@
+{
+  "scope": "N-0117",
+  "origin": "operator",
+  "status": "accepted",
+  "statement": "DC level rule (Warren, 2 November 2026): every site has a level (distributor stock, customer DC, store, other) and an owner (distributor or customer). A distributor's warehouse or business-unit account is distributor-level stock and is never a customer DC; a distributor-owned site cannot be set to customer DC. A customer DC exists only on evidence: a customer report or an ASUS shipment names the site as a distribution or fulfilment centre, or a steward confirms it once (remembered). Name patterns and stock behaviour only propose a candidate; a candidate is not a DC until confirmed; never auto-create. With no stated DC there is no DC level: stock sits at store or account level supplied through the distributor, and the module must not invent a DC. Open question (separate proposed decision, Task 4): whether ASUS shipping directly to a customer's receiving site is sufficient evidence of a DC on its own."
+}

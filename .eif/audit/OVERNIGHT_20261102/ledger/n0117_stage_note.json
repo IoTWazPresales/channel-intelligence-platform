@@ -1,0 +1,5 @@
+{
+  "node": "N-0117",
+  "expected_revision": 0,
+  "note": "Inception chartered 2 Nov 2026 (D-0133 item 4; D-0134 to D-0137 and D-0139 accepted). Evidence EV-0204: .eif/audit/STORE_DC_CENSUS_20261030/REPORT.md. N-0110 and N-0108 are recorded as dependencies (they fold in); this is a dependency edge, not a re-parenting. Definition: .eif/audit/OVERNIGHT_20261102/STORE_DC_MODULE_DEFINITION.md. Stage not advanced."
+}

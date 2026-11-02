@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Decision for Warren: the multi-vessel cluster label at the busiest port is not drawn at 1280 on the fixture map (no free place); draw it over a port name, or use a smaller cluster label? See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Needs Warren 5 and 'What the renders showed that I did not fix'.",
+  "node": "N-0119"
+}

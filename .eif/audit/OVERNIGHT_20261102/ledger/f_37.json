@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Deploy of 2 Nov: no authenticated API call or logged-in render after the restart (unauthenticated GETs return 401); the brief's route /shipping/one does not exist in apps/web/src/app (only /shipping, /supply/shipments, /supply/shipments/[id]); tracked changes outside the commit (apps/web/next-env.d.ts, apps/web/tsconfig.builder-e2e.json) and untracked ops probes remain. See .eif/audit/REVIEW_20261102/DEPLOY_20261102.md Steps 0 and 4.",
+  "node": "N-0119"
+}

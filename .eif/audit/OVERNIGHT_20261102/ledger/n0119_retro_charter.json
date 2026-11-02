@@ -1,0 +1,7 @@
+{
+  "node": "N-0119",
+  "expected_revision": 0,
+  "as_of": "2026-11-02",
+  "evidence_ids": ["EV-0205", "EV-0206", "EV-0207", "EV-0208", "EV-0209", "EV-0210", "EV-0211"],
+  "note": "Retroactive charter only, recorded 2 Nov 2026 by RUN-20261102-OVERNIGHT. No stage change, no completion, no acceptance. Work was written by earlier sessions (see STEP8 to STEP12 reports); the GOV-008 review of 2 Nov matched the figures read-only (FINDINGS.md). Audit events 22 (voyage backfill) and 26 (orphan open retire) are rows in platform_audit_event on cip, cited through EV-0210."
+}

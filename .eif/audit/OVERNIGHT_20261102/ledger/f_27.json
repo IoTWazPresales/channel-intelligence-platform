@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "avg/min/max measures are declared only for sell-out and sell-through units and average prices; none for shipments, stock, returns, lineup or CPOR (N-0115 requirement not met). See .eif/audit/REVIEW_20261102/FINDINGS.md N-0115 table, row 'Measures with sum/count/distinct/avg/min/max'.",
+  "node": "N-0115"
+}

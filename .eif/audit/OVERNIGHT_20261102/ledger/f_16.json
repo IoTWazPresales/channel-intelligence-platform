@@ -1,0 +1,4 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Batch 2 tests not mutation-checked: four sheet-memory tests (remember and store round trip, nothing remembered, unchanged workbook, memory from before the seen list) and the cleanup script's delete-and-audit test. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Test counts."
+}

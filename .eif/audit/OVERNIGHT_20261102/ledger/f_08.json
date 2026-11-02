@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "cst_alias_era_derive still counts closed shipment rows for first-movement dates (min pod_date, min ship_confirm_date); batch 1 left it as evidence of first movement. Warren's call. See .eif/audit/REVIEW_20261102/BATCH1_REPORT.md 'Not filtered, and why' and .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Needs Warren 8.",
+  "node": "N-0119"
+}

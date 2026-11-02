@@ -1,0 +1,5 @@
+{
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/REVIEW_20261102/FINDINGS.md",
+  "note": "Evidence for N-0119 (retroactive): platform_audit_event 22 (voyage backfill, 0049) and 26 (orphan open retire, job 1697) matched read-only by the GOV-008 review; section Audit events."
+}

@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "catalog_for_tenant_cached has no TTL (a changed tenant model is not seen until restart). Untouched. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Not done and .eif/audit/REVIEW_20261102/FINDINGS.md Minor.",
+  "node": "N-0115"
+}

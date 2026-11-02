@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "On-hand for a product absent from the latest report is a null row, not 0. Untouched. See .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Not done and .eif/audit/REVIEW_20261102/FINDINGS.md Minor.",
+  "node": "N-0115"
+}

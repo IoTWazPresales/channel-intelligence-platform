@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Decision for Warren: comparison chart over categories uses a two-entry legend and one colour for current bars (previously one colour and a legend pair per category). Keep? See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Needs Warren 2.",
+  "node": "N-0114"
+}

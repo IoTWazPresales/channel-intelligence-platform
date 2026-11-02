@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "LABEL_HEIGHT_PX >= 49 and the render metrics are not mutation-checked; design-lab surfaces (own chart primitives) were not changed. See .eif/audit/REVIEW_20261102/BATCH3_REPORT.md Not done.",
+  "node": "N-0114"
+}

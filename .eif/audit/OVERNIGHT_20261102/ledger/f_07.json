@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "M2 rule for an undated complete-book file (closed facts stay closed, no second open fact for a line already open under another key) is a proposed rule Warren can overrule. See .eif/audit/REVIEW_20261102/BATCH1_REPORT.md M2 and .eif/audit/REVIEW_20261102/BATCH2_REPORT.md Needs Warren 8.",
+  "node": "N-0119"
+}

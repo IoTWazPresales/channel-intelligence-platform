@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Sell-in and recorded-price measures cannot be verified (both tables empty on cip); sales value is still a decision (D-0117, D-0118). Lineup drops 53 lines / 553 units with no product. See .eif/audit/REVIEW_20261102/FINDINGS.md N-0115 E7 row.",
+  "node": "N-0115"
+}

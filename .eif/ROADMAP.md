@@ -118,3 +118,6 @@
 - N-0114 **Chart fixes: axis titles with units, legends, full names, horizontal bars for long labels, top N and sort, unit formatting on every dashboard and report chart** `in_progress`/`in_progress` (feature)
 - N-0115 **Data model under the builder: fact models with measures, shared breakdowns, declared walls, calculated measures and one query compiler replacing one hand-written query per metric** `in_progress`/`in_progress` (inception)
 - N-0116 **Dashboard builder on the new data model: dashboard and widget filters, full visual set, click to filter, view rows, widget tools, migration of saved dashboards and reports, three starter dashboards** `in_progress`/`in_progress` (feature)
+- N-0117 **Store and DC replenishment** `proposed`/`proposed` (inception)
+- N-0118 **Load staged-but-unloaded store-level sell-through** `proposed`/`proposed` (feature)
+- N-0119 **On the water: voyage fields, port conditions and the Shipments map (retroactive record)** `proposed`/`proposed` (feature) RETROACTIVE

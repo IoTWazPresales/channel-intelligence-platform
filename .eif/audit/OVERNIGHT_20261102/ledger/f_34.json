@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "note": "Migration 20261101_0049 downgrade drops port_condition with its history. See .eif/audit/REVIEW_20261102/FINDINGS.md On the water, row 'Voyage columns (0049) and backfill'.",
+  "node": "N-0119"
+}

@@ -1,0 +1,6 @@
+{
+  "scope": null,
+  "origin": "operator",
+  "status": "accepted",
+  "statement": "Priority order (Warren, 2 November 2026): (1) close N-0114, N-0115 and N-0116 through one independent review that also covers On the water and the shipment fixes; (2) N-0100 extended: a job per user (account manager, product manager, finance, country manager, admin) plus the customer accounts each user covers, with dashboards, Brief and Attention defaulting to My accounts and a My accounts starter dashboard; (3) load the staged-but-unloaded store-level data for whichever customers are found, from the data, to hold it; (4) new inception module Store and DC replenishment (store sales and stock, customer DC stock where a DC is evidenced, DC to store needs, which distributor supplies a site from distributor stock with learned lead times, slow and unsold stock with a suggested path, the store map), with N-0110 and N-0108 folded in; (5) competition and customer websites: N-0102, then N-0105, N-0106, N-0104, N-0103, N-0076, N-0077; (6) enablers: N-0074, N-0089, N-0111, N-0088; (7) later: N-0094, N-0097, N-0098, N-0084, N-0070 and the blocked or deferred nodes. Source: docs/memory/CLAUDE_CHAT_HANDOVER_20261102.md, section Priority order."
+}

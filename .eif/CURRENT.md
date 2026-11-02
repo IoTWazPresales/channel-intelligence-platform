@@ -14,6 +14,8 @@
 ## Ready leaves
 
 - **N-0098** Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5) (feature, R3, stage=None)
+- **N-0118** Load staged-but-unloaded store-level sell-through (feature, R3, stage=None)
+- **N-0119** On the water: voyage fields, port conditions and the Shipments map (retroactive record) (feature, R3, stage=None) RETROACTIVE
 - **N-0069** Stage 8: steward and import engine follow-ons (trigger-gated umbrella) (feature, R2, stage=None)
 - **N-0084** Price elasticity: what price a product would move at (spec section 9.8), data-gated on settled claims (feature, R2, stage=None)
 - **N-0088** Promotion planner: suggested line quantities, and plans exported in the customer's own workbook layout (feature, R2, stage=None)
