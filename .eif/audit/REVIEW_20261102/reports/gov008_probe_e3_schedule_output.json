@@ -1,0 +1,105 @@
+{
+ "mixed_recipients": {
+  "runner_result": {
+   "schedule_id": 259,
+   "ok": false,
+   "cadence": "daily_0700",
+   "trigger": "schedule"
+  },
+  "runner_error": "Scheduled recipient must be active and belong to the report tenant.",
+  "deliveries": [
+   {
+    "recipient": 2058,
+    "status": "delivered",
+    "subject": "E3 fictional published (support_spend)",
+    "value": "10.0",
+    "error": null
+   },
+   {
+    "recipient": 2058,
+    "status": "failed",
+    "subject": "[TIMEOUT] E3 fictional published",
+    "value": null,
+    "error": "PermissionError: Scheduled recipient must be active and belong to the report tenant. (statement_timeout_ms=90000)"
+   },
+   {
+    "recipient": 2057,
+    "status": "failed",
+    "subject": "[TIMEOUT] E3 fictional published",
+    "value": null,
+    "error": "PermissionError: Scheduled recipient must be active and belong to the report tenant. (statement_timeout_ms=90000)"
+   }
+  ],
+  "users": {
+   "admin": 2057,
+   "viewer": 2058,
+   "none": 2059,
+   "other": 2060
+  }
+ },
+ "cache_order": {
+  "viewer/admin/none/viewer": {
+   "ok": true,
+   "values": [
+    "10.0",
+    "70.0",
+    "0.0",
+    "10.0"
+   ]
+  },
+  "none/admin/viewer": {
+   "ok": true,
+   "values": [
+    "0.0",
+    "70.0",
+    "10.0"
+   ]
+  },
+  "tenant_b_other": "1000.0"
+ },
+ "aborted_sql_runner": {
+  "inside": [
+   "N0116-A-ce819091a4",
+   "!",
+   "viewer"
+  ],
+  "after": [
+   "",
+   "",
+   ""
+  ],
+  "result_ok": false,
+  "error_head": "(sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.DivisionByZeroError'>: division by zero\n[SQL: SELECT 1/0]\n(Background on this error at",
+  "failed_rows": [
+   [
+    2066,
+    "failed",
+    "DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.DivisionByZeroError'>: division by zero\n[SQL: SELECT 1/0]\n(Background on this error at: https://sqlalche.me/e/20/dbapi) (statement_timeout_ms=90000)"
+   ]
+  ]
+ },
+ "import_event": {
+  "values": [
+   "10.0",
+   "10.0",
+   "15.0"
+  ],
+  "ok": [
+   true,
+   true,
+   true
+  ]
+ },
+ "tenant_binding_mutation": {
+  "bound": {
+   "ok": true,
+   "value": "70.0",
+   "error": ""
+  },
+  "binding_removed": {
+   "ok": true,
+   "value": "70.0",
+   "error": ""
+  }
+ }
+}

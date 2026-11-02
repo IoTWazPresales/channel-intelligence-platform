@@ -1,0 +1,15 @@
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22msends and schedules the loaded saved model definition without a legacy run or save [33m538[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mkeeps edited legacy form export ad-hoc and preserves its saved calendar grain [33m767[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mruns the same governed query and shows the KPI tile with unit, target and state counts [33m346[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mbar view: sorted low to high, direct values, threshold and state key [33m532[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mtable view shows the grid only once [33m515[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mno engineering vocabulary on screen; formula and scope sit behind "About this figure" [33m713[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mdistributor is a picker of names; the payload keeps the id filter [33m1112[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22msend and schedule explain why they are disabled until the report is saved [33m370[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mperiod breakdown offers a trend with the latest point labelled [33m655[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m49 passed[39m[22m[90m (49)[39m
+[2m   Start at [22m 15:52:56
+[2m   Duration [22m 43.57s[2m (transform 1.95s, setup 12.56s, collect 58.31s, tests 8.37s, environment 25.50s, prepare 3.33s)[22m
+

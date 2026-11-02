@@ -1,0 +1,310 @@
+{
+ "migration_parity": {
+  "definition": {
+   "v": 1,
+   "kind": "model",
+   "query": {
+    "measures": [
+     "dsi_sellout.units"
+    ],
+    "breakdowns": [
+     "product"
+    ]
+   },
+   "v1_equivalent": true,
+   "migrated_from": {
+    "metric_key": "sellout_units",
+    "grains": [
+     "product"
+    ],
+    "period_grain": null,
+    "visual": "table",
+    "filters": {},
+    "at": "2026-11-02",
+    "script": "n0116_migrate_definitions"
+   }
+  },
+  "rows_before": 522,
+  "rows_after": 500,
+  "same_order_first_20": false,
+  "first5_before": [
+   [
+    913,
+    69618,
+    "Fixture product 0"
+   ],
+   [
+    99,
+    69619,
+    "Fixture product 1"
+   ],
+   [
+    1,
+    69621,
+    "G8 0"
+   ],
+   [
+    2,
+    69622,
+    "G8 1"
+   ],
+   [
+    3,
+    69623,
+    "G8 2"
+   ]
+  ],
+  "first5_after": [
+   [
+    913,
+    69618,
+    "Fixture product 0"
+   ],
+   [
+    520,
+    70140,
+    "G8 519"
+   ],
+   [
+    519,
+    70139,
+    "G8 518"
+   ],
+   [
+    518,
+    70138,
+    "G8 517"
+   ],
+   [
+    517,
+    70137,
+    "G8 516"
+   ]
+  ],
+  "value_col_types": [
+   "int"
+  ],
+  "deliver_before_vintage": {
+   "formula": "SUM(fact_sales_sellout units) at calendar no-period grain",
+   "as_of_utc": "2026-11-02T13:48:53.505929+00:00",
+   "row_count": 522,
+   "bucket_max": null,
+   "bucket_min": null,
+   "period_grain": null,
+   "source_table": "fact_sales_sellout"
+  },
+  "deliver_after_vintage": {
+   "formula": "SUM(fact_sales_sellout units) at calendar no-period grain",
+   "as_of_utc": "2026-11-02T13:48:53.505929+00:00",
+   "row_count": 522,
+   "truncated": true,
+   "bucket_max": null,
+   "bucket_min": null,
+   "period_grain": null,
+   "source_table": "fact_sales_sellout",
+   "returned_rows": 500
+  },
+  "deliver_values": [
+   "136472.0",
+   "136472.0"
+  ]
+ },
+ "units_per_week_direct": {
+  "create_status": 200,
+  "create_body": {
+   "definition_v2": {
+    "v": 1,
+    "kind": "model",
+    "query": {
+     "measures": [
+      "dsi_sellout.units_per_week"
+     ],
+     "breakdowns": []
+    },
+    "v1_equivalent": false
+   }
+  },
+  "export_status": 400,
+  "export_detail": {
+   "detail": {
+    "ok": false,
+    "status": "refused",
+    "value": null,
+    "rows": [],
+    "message": "Sell-out units per week needs period as a breakdown or both period.from and period.to.",
+    "data_vintage": {
+     "engine": "v2",
+     "period": {
+      "from": null,
+      "to": null
+     },
+     "truncated": false,
+     "returned_rows": 0,
+     "row_count": null
+    }
+   }
+  },
+  "deliver": {
+   "status": "failed",
+   "error_message": "Sell-out units per week needs period as a breakdown or both period.from and period.to.",
+   "value_preview": null,
+   "subject": "[MISSING DATA] G8 rate no dates (dsi_sellout.units_per_week)"
+  }
+ },
+ "chain": {
+  "saved_definition": {
+   "v": 1,
+   "kind": "model",
+   "query": {
+    "sort": {
+     "by": "dsi_sellout.units",
+     "dir": "asc"
+    },
+    "limit": 2,
+    "period": {
+     "grain": "month"
+    },
+    "measures": [
+     "dsi_sellout.units"
+    ],
+    "breakdowns": [
+     "product",
+     "period"
+    ]
+   },
+   "dashboard": {
+    "fixed_window": {
+     "to": "2026-02-28",
+     "from": "2026-01-01"
+    }
+   },
+   "v1_equivalent": false
+  },
+  "card_rows": [
+   [
+    70147,
+    "2026-01",
+    13.0
+   ],
+   [
+    70148,
+    "2026-01",
+    99.0
+   ]
+  ],
+  "card_total": {
+   "dsi_sellout.units": 1012.0
+  },
+  "card_truncated": true,
+  "xlsx_rows": [
+   [
+    70147,
+    "2026-01",
+    13
+   ],
+   [
+    70148,
+    "2026-01",
+    99
+   ]
+  ],
+  "xlsx_header": [
+   "product_id",
+   "bucket_key",
+   "bucket_start",
+   "bucket_end",
+   "dsi_sellout.units",
+   "product_name"
+  ],
+  "pdf_status": 200,
+  "pdf_rows": [
+   [
+    70147,
+    "2026-01",
+    13.0
+   ],
+   [
+    70148,
+    "2026-01",
+    99.0
+   ]
+  ],
+  "pdf_value": 1012.0,
+  "delivery": {
+   "value_preview": "1012.0",
+   "data_vintage": {
+    "max": "2026-02-05",
+    "min": "2026-01-05",
+    "engine": "v2",
+    "period": {
+     "to": "2026-02-28",
+     "from": "2026-01-01"
+    },
+    "as_of_utc": "2026-11-02T13:48:58.897493+00:00",
+    "row_count": 3,
+    "truncated": true,
+    "returned_rows": 2
+   },
+   "status": "delivered"
+  }
+ },
+ "promote_no_execution": {
+  "relative": [
+   400,
+   {
+    "message": "Send this widget's current execution filters and dates before saving it as a report.",
+    "refusals": [
+     {
+      "measure": null,
+      "reason": "Send this widget's current execution filters and dates before saving it as a report.",
+      "wall": null
+     }
+    ]
+   }
+  ],
+  "no_bar": [
+   200,
+   {
+    "v": 1,
+    "kind": "model",
+    "query": {
+     "measures": [
+      "dsi_sellout.units"
+     ],
+     "breakdowns": []
+    },
+    "v1_equivalent": false
+   }
+  ],
+  "customer_only": [
+   400,
+   {
+    "message": "Send this widget's current execution filters and dates before saving it as a report.",
+    "refusals": [
+     {
+      "measure": null,
+      "reason": "Send this widget's current execution filters and dates before saving it as a report.",
+      "wall": null
+     }
+    ]
+   }
+  ]
+ },
+ "v2_patch_v1_fields": {
+  "status": 400,
+  "definition_v2_after": {
+   "detail": {
+    "ok": false,
+    "metric_id": null,
+    "metric_key": "dsi_sellout.units",
+    "requested_grains": [
+     "customer"
+    ],
+    "message": "Unknown metric 'dsi_sellout.units'. Only metrics in the governed catalog (docs/COMMERCIAL_SEMANTICS.md) are available \u2014 this is not an ad-hoc BI column picker.",
+    "allowed_grains": [],
+    "period_grain": null
+   }
+  },
+  "metric_after": null
+ }
+}

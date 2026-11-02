@@ -1,0 +1,98 @@
+== E1 governed CPOR (real handler via run_v2, cip_test seeded, no ContextVar tenant set)
+PASS E1.1 support_spend customer bu=NB total: got=40.0 want=40.0
+PASS E1.1 rows sum == total: got=40.0 want=40.0
+PASS E1.2 nonexistent customer total/rows: got=(0.0, []) want=(0.0, [])
+PASS E1.3 tenant B customer id from tenant A: got=(0.0, []) want=(0.0, [])
+PASS E1.4 tenant A by bu (B's 900 must not appear): got=(100.0, [40.0, 60.0]) want=(100.0, [40.0, 60.0])
+PASS E1.5 support_spend ['customer'] {} total, rows-sum: got=(100.0, 100.0) want=(100.0, 100.0)
+PASS E1.5 support_spend ['customer'] {'bu': 'NB'} total, rows-sum: got=(40.0, 40.0) want=(40.0, 40.0)
+PASS E1.5 support_spend ['customer'] {'bu': 'nr'} total, rows-sum: got=(60.0, 60.0) want=(60.0, 60.0)
+PASS E1.5 support_spend ['customer'] {'customer': 7886} total, rows-sum: got=(85.0, 85.0) want=(85.0, 85.0)
+PASS E1.5 support_spend ['customer'] {'customer': 7887, 'bu': 'NB'} total, rows-sum: got=(15.0, 15.0) want=(15.0, 15.0)
+PASS E1.5 support_spend ['customer'] {'customer': 7887, 'bu': 'NR'} total, rows-sum: got=(0.0, 0) want=(0.0, 0.0)
+PASS E1.5 support_spend ['bu'] {} total, rows-sum: got=(100.0, 100.0) want=(100.0, 100.0)
+PASS E1.5 support_spend ['bu'] {'bu': 'NB'} total, rows-sum: got=(40.0, 40.0) want=(40.0, 40.0)
+PASS E1.5 support_spend ['bu'] {'bu': 'nr'} total, rows-sum: got=(60.0, 60.0) want=(60.0, 60.0)
+PASS E1.5 support_spend ['bu'] {'customer': 7886} total, rows-sum: got=(85.0, 85.0) want=(85.0, 85.0)
+PASS E1.5 support_spend ['bu'] {'customer': 7887, 'bu': 'NB'} total, rows-sum: got=(15.0, 15.0) want=(15.0, 15.0)
+PASS E1.5 support_spend ['bu'] {'customer': 7887, 'bu': 'NR'} total, rows-sum: got=(0.0, 0) want=(0.0, 0.0)
+PASS E1.5 support_spend ['promo_type'] {} total, rows-sum: got=(100.0, 100.0) want=(100.0, 100.0)
+PASS E1.5 support_spend ['promo_type'] {'bu': 'NB'} total, rows-sum: got=(40.0, 40.0) want=(40.0, 40.0)
+PASS E1.5 support_spend ['promo_type'] {'bu': 'nr'} total, rows-sum: got=(60.0, 60.0) want=(60.0, 60.0)
+PASS E1.5 support_spend ['promo_type'] {'customer': 7886} total, rows-sum: got=(85.0, 85.0) want=(85.0, 85.0)
+PASS E1.5 support_spend ['promo_type'] {'customer': 7887, 'bu': 'NB'} total, rows-sum: got=(15.0, 15.0) want=(15.0, 15.0)
+PASS E1.5 support_spend ['promo_type'] {'customer': 7887, 'bu': 'NR'} total, rows-sum: got=(0.0, 0) want=(0.0, 0.0)
+PASS E1.6 delivery_rate ['customer'] customer A0 total: got=0.5 want=0.5
+PASS E1.6 delivery_rate ['bu'] customer A0 total: got=0.5 want=0.5
+PASS E1.7 unsupported product filter refused: got=False want=False
+      refusal: ['Support spend by customer / BU / promo type cannot be filtered by product: the figure is worked out without it.']
+PASS E1.8 cross-tab refused: got=False want=False
+      refusal: ['Invalid grain for Support spend by customer / BU / promo type (A2-01): {bu, customer} is not allowed. Allowed grains: {customer}; {bu}; {promo_type}.']
+PASS E1.9 multi-value bu refused: got=False want=False
+== E6 tenant overlay: counterpart refusals, spec keys executed on cip_test
+  hidden sellout_units -> dsi_sellout.units: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.units_avg: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.units_min: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.units_max: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.units_prior_year: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.units_running_total: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.units_share: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.units_per_week: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.units_change: REFUSED (Metric Sell-out units (sellout_units) is hidden for this tenant and ca)
+  hidden sellout_units -> dsi_sellout.priced_units: ALLOWED
+  hidden sellout_units -> dsi_sellout.lines: ALLOWED
+  hidden sellout_units -> dsi_sellout.dealers: ALLOWED
+  narrowed sellout_units={product} -> dsi_sellout.units by ['customer']: REFUSED
+  narrowed sellout_units={product} -> dsi_sellout.units_avg by ['customer']: REFUSED
+  narrowed sellout_units={product} -> dsi_sellout.priced_units by ['customer']: ALLOWED
+  narrowed sellout_units={product} -> dsi_sellout.units by ['product']: ALLOWED
+  narrowed {product} + customer filter: ALLOWED (filters are not grains)
+  non-admin catalog lists (hidden): units=False avg=False priced_units=True prior_year=False
+  spec breakdown 'spec_gpu': ALLOWED
+  spec breakdown 'spec_cpu': REFUSED (Unknown product spec key. Only keys on the tenant overlay are extracted from spe)
+  spec breakdown "spec_gpu'--": REFUSED (Unknown product spec key. Only keys on the tenant overlay are extracted from spe)
+  spec breakdown 'spec_gpu.vram': REFUSED (Unknown product spec key. Only keys on the tenant overlay are extracted from spe)
+  spec breakdown 'spec_GPU': ALLOWED
+  spec breakdown 'spec_': REFUSED (Unknown product spec key. Only keys on the tenant overlay are extracted from spe)
+  filter on unknown spec key: REFUSED
+  exec spec_gpu filter={}: rows=[('Unassigned', 7.0), ("'; drop table dim_product; --", 5.0), ('RTX 4060', 3.0)]
+  exec spec_gpu filter={'spec_gpu': 'RTX 4060'}: rows=[('RTX 4060', 3.0)]
+  exec spec_gpu filter={'spec_gpu': "'; drop table dim_product; --"}: rows=[("'; drop table dim_product; --", 5.0)]
+  exec spec_gpu filter={'spec_gpu': None}: rows=[('Unassigned', 7.0)]
+PASS E6 injection-shaped spec value left dim_product intact: got=1 want=1
+== E7 shipments closed states, on-hand latest, returns tenancy
+  shipments by customer rows=[(7891, 30.0, 5.0)] totals={'shipments.quantity': 30.0, 'shipments.lines': 5.0}
+FAIL E7.1 shipped quantity counts state 'shipped' only (10+4+6): got=30.0 want=20.0
+FAIL E7.1 shipped lines (3): got=5.0 want=3.0
+PASS E7.2 open quantity = remainder 5; closed states 0: got=(5.0, 1.0) want=(5.0, 1.0)
+  mixed shipped+open: {'shipments.quantity': 30.0, 'shipments.open_quantity': 5.0}
+PASS E7.3 on-hand total = D1 latest (8) + D2 latest (2), not 18: got=10.0 want=10.0
+  on-hand by distributor x product: [(1739, 69550, 8.0), (1740, 69550, 2.0), (1739, 69551, None)]
+PASS E7.4 on-hand as of 2026-01-31 = 5 + 3: got=8.0 want=8.0
+  on-hand filter product=P2 (only in D1's older report): rows=[(69551, None)] total={'distributor_stock.on_hand': None}
+  on-hand by period: ['Stock is a count on a day. It is shown as the latest count, never added up across dates.']
+PASS E7.5 returns tenant A only: got=(2.0, 1.0) want=(2.0, 1.0)
+PASS E7.6 returns filtered by tenant-B customer id: got=0.0 want=0.0
+  refused shipments.amount: ["Unknown measure 'shipments.amount'. Only measures in the v2 catalog can be queried."]
+  refused dsi_sellout.value_ex_vat: ["Unknown measure 'dsi_sellout.value_ex_vat'. Only measures in the v2 catalog can be queried."]
+  refused cst_sellthrough.value: ["Unknown measure 'cst_sellthrough.value'. Only measures in the v2 catalog can be queried."]
+  refused cpor.open_cases: ["Unknown measure 'cpor.open_cases'. Only measures in the v2 catalog can be queried."]
+  refused listing_observation: ["Unknown measure 'listing_observation'. Only measures in the v2 catalog can be queried."]
+== E8/E10 calendar values
+PASS D1 platform month window: (bucket, units, prev, prior_year): got=[('2026-03-01', 10.0, 7.0, 100.0), ('2026-04-01', 20.0, 10.0, 40.0)] want=[('2026-03-01', 10.0, 7.0, 100.0), ('2026-04-01', 20.0, 10.0, 40.0)]
+PASS D2 Sunday week rows (first bucket partial=4, its prev 11, prior-year 50): got=[('2026-03-01', 4.0, 11.0, 50.0), ('2026-03-08', 6.0, 4.0, None)] want=[('2026-03-01', 4.0, 11.0, 50.0), ('2026-03-08', 6.0, 4.0, None)]
+PASS D2 rows sum == total: got=10.0 want=10.0
+PASS D3 retail_445 month FY boundary (units, prev, prior_year): got=[(22.0, 11.0, 101.0), (33.0, 22.0, 202.0)] want=[(22.0, 11.0, 101.0), (33.0, 22.0, 202.0)]
+PASS D3 retail_445 quarter FY boundary (units, prev, prior_year): got=[(22.0, 11.0, 101.0), (33.0, 22.0, 202.0)] want=[(22.0, 11.0, 101.0), (33.0, 22.0, 202.0)]
+  53-week retail year found: FY23 2022-12-26..2023-12-31
+  D4 P12 of 53-wk year 2023-11-20..2023-12-31 (42 d): [(3.0, 70.0)] (expected units 3, prior year = P12 prior year incl. its last week = 30+40 if w53_py falls in it: w53_py=2022-12-19)
+  D4 week 53 2023-12-25: [(2.0, 40.0)] (python py week 2022-12-19)
+PASS D5 day grain (units, prev day, same day last year): got=[('2026-03-10', 5.0, 3.0, 70.0)] want=[('2026-03-10', 5.0, 3.0, 70.0)]
+  day grain cst_sellthrough.units: REFUSED: Lowest calendar grain is week; daily is not this unit (trans
+  day grain cpor.result_units: ALLOWED
+  day grain lineup.units: ALLOWED
+  day grain sellin.units: ALLOWED
+  day grain recorded_prices.net_price_avg: ALLOWED
+  day grain returns.units: ALLOWED
+  D6 retail P03 2026-02-23..2026-03-29 (35 d): row per_week=[14.0] total per_week=8.305084745762711 expected 14.0000
+PASS D7 share/running: got=[('2026-05-01', True, 30.0, 0.3, 30.0), ('2026-05-01', False, 10.0, 0.1, 10.0), ('2026-06-01', True, 60.0, 0.6, 90.0)] want=[('2026-05-01', True, 30.0, 0.3, 30.0), ('2026-05-01', False, 10.0, 0.1, 10.0), ('2026-06-01', True, 60.0, 0.6, 90.0)]

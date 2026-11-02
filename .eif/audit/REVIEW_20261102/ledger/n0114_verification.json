@@ -1,0 +1,1 @@
+{"node": "N-0114", "expected_revision": 17, "kind": "behavioral", "state": "blocked", "evidence": ".eif/audit/REVIEW_20261102/FINDINGS.md", "path": "apps/web/src/features/dashboards/builder/V2WidgetBody.tsx"}

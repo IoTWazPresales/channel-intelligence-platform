@@ -1,0 +1,1131 @@
+[
+ {
+  "pure": [
+   {
+    "label": "=1+1",
+    "cover_A1": [
+     true,
+     "s",
+     "'=1+1'"
+    ],
+    "header_type": [
+     "s",
+     "'=1+1'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "'=1+1'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "+cmd|' /C calc'!A0",
+    "cover_A1": [
+     true,
+     "s",
+     "\"+cmd|' /C calc'!A0\""
+    ],
+    "header_type": [
+     "s",
+     "\"+cmd|' /C calc'!A0\""
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "\"+cmd|' /C calc'!A0\""
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "-2+3",
+    "cover_A1": [
+     true,
+     "s",
+     "'-2+3'"
+    ],
+    "header_type": [
+     "s",
+     "'-2+3'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "'-2+3'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "@SUM(A1)",
+    "cover_A1": [
+     true,
+     "s",
+     "'@SUM(A1)'"
+    ],
+    "header_type": [
+     "s",
+     "'@SUM(A1)'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "'@SUM(A1)'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "\t=1+1",
+    "cover_A1": [
+     true,
+     "s",
+     "'\\t=1+1'"
+    ],
+    "header_type": [
+     "s",
+     "'\\t=1+1'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "'\\t=1+1'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "\r=1+1",
+    "cover_A1": [
+     false,
+     "s",
+     "'\\n=1+1'"
+    ],
+    "header_type": [
+     "s",
+     "'\\n=1+1'"
+    ],
+    "label_cell": [
+     false,
+     "s",
+     "'\\n=1+1'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "=HYPERLINK(\"https://example.invalid/\",\"fictional\")",
+    "cover_A1": [
+     true,
+     "s",
+     "'=HYPERLINK(\"https://example.invalid/\",\"fictional\")'"
+    ],
+    "header_type": [
+     "s",
+     "'=HYPERLINK(\"https://example.invalid/\",\"fictional\")'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "'=HYPERLINK(\"https://example.invalid/\",\"fictional\")'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "#N/A",
+    "cover_A1": [
+     true,
+     "s",
+     "'#N/A'"
+    ],
+    "header_type": [
+     "s",
+     "'#N/A'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "'#N/A'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "#DIV/0!",
+    "cover_A1": [
+     true,
+     "s",
+     "'#DIV/0!'"
+    ],
+    "header_type": [
+     "s",
+     "'#DIV/0!'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "'#DIV/0!'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": " =1+1",
+    "cover_A1": [
+     true,
+     "s",
+     "' =1+1'"
+    ],
+    "header_type": [
+     "s",
+     "' =1+1'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "' =1+1'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   },
+   {
+    "label": "=1+1\n",
+    "cover_A1": [
+     true,
+     "s",
+     "'=1+1\\n'"
+    ],
+    "header_type": [
+     "s",
+     "'=1+1\\n'"
+    ],
+    "label_cell": [
+     true,
+     "s",
+     "'=1+1\\n'"
+    ],
+    "xml_formula": false,
+    "any_f": false,
+    "numbers": {
+     "int": [
+      "17",
+      "n"
+     ],
+     "neg": [
+      "-12.5",
+      "n"
+     ],
+     "dec": [
+      "'\"123.45\"'",
+      "s"
+     ],
+     "flag": [
+      "True",
+      "b"
+     ],
+     "none": [
+      "None",
+      "n"
+     ],
+     "day": [
+      "'\"2026-01-05\"'",
+      "s"
+     ],
+     "ts": [
+      "'\"2026-01-05 07:00:00\"'",
+      "s"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "http": [
+   {
+    "label": "=1+1",
+    "path": "ad_hoc",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "=1+1",
+    "path": "saved_v1",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "=1+1",
+    "path": "saved_v2_equivalent(v1_equivalent=True)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "=1+1",
+    "path": "saved_v2_model(v1_equivalent=False)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "customer_id",
+     "dsi_sellout.units",
+     "dsi_sellout.lines",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "-2+3",
+    "path": "ad_hoc",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "-2+3",
+    "path": "saved_v1",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "-2+3",
+    "path": "saved_v2_equivalent(v1_equivalent=True)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "-2+3",
+    "path": "saved_v2_model(v1_equivalent=False)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "customer_id",
+     "dsi_sellout.units",
+     "dsi_sellout.lines",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "@SUM(A1)",
+    "path": "ad_hoc",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "@SUM(A1)",
+    "path": "saved_v1",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "@SUM(A1)",
+    "path": "saved_v2_equivalent(v1_equivalent=True)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "@SUM(A1)",
+    "path": "saved_v2_model(v1_equivalent=False)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "customer_id",
+     "dsi_sellout.units",
+     "dsi_sellout.lines",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "\t=1+1",
+    "path": "ad_hoc",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "\t=1+1",
+    "path": "saved_v1",
+    "label_cells": 1,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     false,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "\t=1+1",
+    "path": "saved_v2_equivalent(v1_equivalent=True)",
+    "label_cells": 1,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     false,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "\t=1+1",
+    "path": "saved_v2_model(v1_equivalent=False)",
+    "label_cells": 1,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     false,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "customer_id",
+     "dsi_sellout.units",
+     "dsi_sellout.lines",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "=HYPERLINK(\"https://example.invalid/\",\"x\")",
+    "path": "ad_hoc",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "=HYPERLINK(\"https://example.invalid/\",\"x\")",
+    "path": "saved_v1",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "=HYPERLINK(\"https://example.invalid/\",\"x\")",
+    "path": "saved_v2_equivalent(v1_equivalent=True)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "=HYPERLINK(\"https://example.invalid/\",\"x\")",
+    "path": "saved_v2_model(v1_equivalent=False)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "customer_id",
+     "dsi_sellout.units",
+     "dsi_sellout.lines",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "+cmd",
+    "path": "ad_hoc",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "+cmd",
+    "path": "saved_v1",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "+cmd",
+    "path": "saved_v2_equivalent(v1_equivalent=True)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "value",
+     "customer_id",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   },
+   {
+    "label": "+cmd",
+    "path": "saved_v2_model(v1_equivalent=False)",
+    "label_cells": 2,
+    "label_types": [
+     "s"
+    ],
+    "cover_A1": [
+     true,
+     "s"
+    ],
+    "any_formula": false,
+    "data_header": [
+     "customer_id",
+     "dsi_sellout.units",
+     "dsi_sellout.lines",
+     "customer_name"
+    ],
+    "data_B_types": [
+     [
+      "int",
+      "n"
+     ]
+    ]
+   }
+  ]
+ }
+]

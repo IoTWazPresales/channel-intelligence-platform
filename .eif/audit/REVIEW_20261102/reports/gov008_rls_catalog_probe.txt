@@ -1,0 +1,72 @@
+db/user/read_only: ('cip_test', 'cip', 'on')
+rolsuper/rolbypassrls: (False, False)
+table | rls | force | owner | policies
+app_user | False | False | cip | 0
+cpor_case | False | False | cip | 0
+cpor_case_line | True | True | cip | 4
+dashboard | False | False | cip | 0
+dashboard_widget | False | False | cip | 0
+dim_customer | False | False | cip | 0
+dim_product | True | True | cip | 4
+fact_sales_sellout | True | True | cip | 4
+report_delivery | False | False | cip | 0
+report_schedule | False | False | cip | 0
+saved_report | False | False | cip | 0
+alembic: [('20261101_0050',)]
+policy: cpor_case_line cip_pl_delete ((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_prod
+policy: cpor_case_line cip_pl_insert 
+policy: cpor_case_line cip_pl_select ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_product_line_
+policy: cpor_case_line cip_pl_update ((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_prod
+policy: fact_sales_sellout cip_pl_delete ((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_prod
+policy: fact_sales_sellout cip_pl_insert 
+policy: fact_sales_sellout cip_pl_select ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_product_line_
+policy: fact_sales_sellout cip_pl_update ((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_prod
+
+db/user/read_only: ('cip', 'cip', 'on')
+rolsuper/rolbypassrls: (False, False)
+table | rls | force | owner | policies
+app_user | False | False | postgres | 0
+cpor_case | False | False | postgres | 0
+cpor_case_line | True | True | postgres | 4
+dashboard | False | False | postgres | 0
+dashboard_widget | False | False | postgres | 0
+dim_customer | False | False | cip | 0
+dim_product | True | True | cip | 4
+fact_sales_sellout | True | True | cip | 4
+report_delivery | False | False | postgres | 0
+report_schedule | False | False | postgres | 0
+saved_report | False | False | postgres | 0
+alembic: [('20261101_0050',)]
+policy: cpor_case_line cip_pl_delete ((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_prod
+policy: cpor_case_line cip_pl_insert 
+policy: cpor_case_line cip_pl_select ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_product_line_
+policy: cpor_case_line cip_pl_update ((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_prod
+policy: fact_sales_sellout cip_pl_delete ((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_prod
+policy: fact_sales_sellout cip_pl_insert 
+policy: fact_sales_sellout cip_pl_select ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_product_line_
+policy: fact_sales_sellout cip_pl_update ((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id
+   FROM dim_product p
+  WHERE cip_prod
+

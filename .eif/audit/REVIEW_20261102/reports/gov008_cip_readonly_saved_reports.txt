@@ -1,0 +1,7 @@
+db/read_only: ('cip', 'on')
+id | metric | grains | period_grain | has_v2 | migrated | v1_equivalent | enabled_schedules
+1 | weeks_of_cover | ['distributor', 'product'] | None | False | None | None | 0
+2 | weeks_of_cover | ['distributor', 'product'] | None | False | None | None | 1
+3 | sellout_units | ['period'] | week | False | None | None | 0
+dashboard_widget total / migrated: (6, 0)
+schedules by cadence/enabled: [('weekly_monday_0700', True, 1)]

@@ -1,0 +1,14 @@
+source 6 inbound_default | keys: ['schema_version', 'shipment_mapping']
+  selected_sheet_names: None
+    ship_way -> shipway
+    shipway -> shipway
+job 1696 ACZA Shipped Unshipped 20261023 (1).xlsx auto: None
+    Ship Way -> shipway
+job 1697 ACZA Shipped Unshipped 20261027.xlsx auto: None
+    ATA Date(Actual Port Arrival) -> port_ata_date
+    Deliver Port -> deliver_port
+    ETA Date(Est Port Arrival) -> port_eta_date
+    On-Board Date -> on_board_date
+    Ship Way -> ship_way
+    Shipping Method -> shipping_method
+    Shipway -> ship_way

@@ -1,0 +1,25 @@
+db=cip read_only=on
+tenant 'default' calendar config: {'type': 'gregorian', 'fiscal_year_start_month': 1, 'week_start_day': 0, 'year_end_rule': 'last', 'fiscal_year_named_by': 'end', 'custom_periods': []}
+[S1] v2 shipments.quantity/lines total = 1379393.0000 / 13700;  state 'shipped' only = 1373781.0000 / 13624;  difference = 5612.0000 units / 76 lines
+[S1] dated lines by state: [('closed_shipped', Decimal('2015.0000'), 29), ('closed_superseded', Decimal('3597.0000'), 47), ('shipped', Decimal('1373781.0000'), 13624)]
+[S1] dated closed_superseded rows / whose superseding row is 'shipped' / superseding row dated: (47, 47, 47)
+[S1] dated closed_shipped rows / with a strict shipped twin: (29, 29)
+[S2] dsi_sellout.units total=400991.8500 priced_units total=178195.8500 (priced share 0.4444)
+[S3] commercial_lineup_case.inferred_period_start: rows, non-null, on day 1, distinct dates, min, max = (36, 32, 32, 7, datetime.date(2025, 1, 1), datetime.date(2026, 7, 1))
+[S3] cpor_case.window_start: rows, non-null, on day 1, distinct dates, min, max = (310, 310, 58, 212, datetime.date(2024, 1, 1), datetime.date(2026, 8, 3))
+[S3] fact_returns.transaction_date: rows, non-null, on day 1, distinct dates, min, max = (6793, 6793, 172, 653, datetime.date(2024, 1, 2), datetime.date(2026, 10, 9))
+[T] dsi units by week (all time): rows=144 cold=122 ms warm=115 ms 
+[T] dsi units+prev+prior_year+pct by month, 2025-01..2026-06: rows=18 cold=86 ms warm=88 ms 
+[T] dsi units by customer x product (limit 500): rows=501 cold=151 ms warm=167 ms 
+[T] dsi units+share+running by month x bu: rows=265 cold=162 ms warm=124 ms 
+[T] dsi dealers+avg by retail_445 month, prev+prior_year: rows=34 cold=498 ms warm=414 ms 
+[T] dsi units by Sunday week + prev, window: rows=57 cold=70 ms warm=64 ms 
+[T] dsi units by day, 2026-03: rows=31 cold=24 ms warm=8 ms 
+[T] cst units+stock by customer: rows=8 cold=139 ms warm=60 ms 
+[T] cst units by month x site: rows=501 cold=44 ms warm=45 ms 
+[T] shipments qty by month x customer: rows=501 cold=100 ms warm=119 ms 
+[T] shipments open qty by customer (twin remainder): rows=25 cold=428 ms warm=434 ms 
+[T] distributor on-hand by distributor x product: rows=501 cold=209 ms warm=178 ms 
+[T] returns by month x distributor: rows=81 cold=42 ms warm=32 ms 
+[T] lineup units by status x bu: rows=10 cold=47 ms warm=19 ms 
+[T] cpor delivery rate by quarter x customer: rows=140 cold=64 ms warm=9 ms 

@@ -1,0 +1,53 @@
+database: cip_test
+
+== P1 partial shipment: open 100 on the 0901 book; 0911 book shows Shipped 60 confirmed, no open line
+P1a (0911 book has no Unship line at all) closed rows: [] | SO-P: [(30872, 'open_order', Decimal('100.0000'), 'u-8493163cdbd040a7be0d8afd9af6b6ea'), (30873, 'shipped', Decimal('60.0000'), 's-b846e5750696466fbe19168e71d09678')]
+=> a newer book whose Unship sheet is empty closes no Unship fact: the scope is the report types the job carries
+P1b (0911 book carries one unrelated Unship line) closed rows: [(True, 'closed_shipped', 100.0)]
+rows for SO-P now: [(30872, 'closed_shipped', Decimal('100.0000'), 'u-8493163cdbd040a7be0d8afd9af6b6ea'), (30873, 'shipped', Decimal('60.0000'), 's-b846e5750696466fbe19168e71d09678')]
+=> 100 open closed as closed_shipped although only 60 shipped; the 40 remainder leaves the book with no flag
+
+== P2 an old partial shipment of the same order+item; the open remainder then vanishes (cancelled)
+remainder 30 state: closed_shipped (the only shipment of SO-Q/IT-Q was 10 units on 1 Aug)
+
+== P3 OU A's book dated 0911 is applied; OU B's book dated 0905 arrives later
+job_is_older_than_applied_book(B): True
+write_shipment_facts_and_close_book(B): {'fact_rows': 0, 'closed': 0, 'skipped_reason': 'older_report_date'} | SO-B facts: []
+=> the guard compares report dates per tenant+report_type, not per OU; OU B's lines are not written at all
+
+== P4 a closed fact; then an undated file that still carries its key is applied
+after 0911 close: closed_disappeared
+undated apply: {'fact_rows': 1, 'closed': 0, 'skipped_reason': None} | fact state now: open_order
+
+== P5 old-shape key (blank invoice) open from 0901; an undated re-export carries the same line under the new ord: key
+old key: acza_workbook_shipped:shipped|OU1|D-K|IT-K | new key: acza_workbook_shipped:shipped|OU1|D-K|IT-K|ord:SO-K|3
+undated apply: {'fact_rows': 1, 'closed': 0, 'skipped_reason': None}
+SO-K rows: [(30878, 'open_order', Decimal('12.0000'), 'acza_workbook_shipped:shipped|OU1|D-K|IT-K'), (30879, 'open_order', Decimal('12.0000'), 'acza_workbook_shipped:shipped|OU1|D-K|IT-K|ord:SO-K|3')]
+control, dated 0915 apply: {'fact_rows': 1, 'closed': 1, 'skipped_reason': None} | SO-K rows: [(30878, 'closed_disappeared', Decimal('12.0000'), 'acza_workbook_shipped:shipped|OU1|D-K|IT-K'), (30879, 'open_order', Decimal('12.0000'), 'acza_workbook_shipped:shipped|OU1|D-K|IT-K|ord:SO-K|3')]
+
+== P6 orphan retire (same job re-read)
+plan: [(30881, 'SO-6A', 8.0, None), (30882, 'SO-6B', 9.0, None), (30884, 'SO-6C', 10.0, None), (30886, 'SO-6D', 50.0, 30888), (30887, 'SO-6D', 5.0, 30888)]
+retire: {'superseded': 2, 'disappeared': 3}
+  a unship, sheet dropped: closed_disappeared -> superseded_by None
+  b moved to Shipped sheet: closed_disappeared -> superseded_by None
+  c now shipped: closed_disappeared -> superseded_by None
+  d1 qty50: closed_superseded -> superseded_by 30888
+  d2 qty5: closed_superseded -> superseded_by 30888
+  e other job: open_order -> superseded_by None
+  d carried ids: qty5 = 30888  qty50 = 30889 | b_new = 30883
+
+== P7 one shipped fact key with 5 invoice lines, chunk_size=3, plus 4 single-line keys
+lines written: 7 | facts for the 5-line key: 1 qty: 60.0 (expected 1 fact, 60)
+
+== P8 tenant A and tenant B load the same OU/delivery/item/PO shipped line
+A facts before B: 1
+A facts after B: 0 | B facts: 1
+
+== P9 PO-less twin: two POs on one delivery+item (sum match), other OU, other tenant
+planned: {'same OU+tenant': (2, 30.0, True)}
+=> two POs summing to the PO-less quantity are treated as one twin set (retire OK); other OU / tenant are not matched
+
+== P10 0050 downgrade statement on an orphan-retired open row (savepoint, rolled back)
+orphan d1 before: closed_superseded | after the downgrade statement: ('shipped', None, 'acza_workbook_shipped') (it was an open_order line with no confirm date)
+
+rolled back; nothing committed

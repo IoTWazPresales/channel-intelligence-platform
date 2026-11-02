@@ -1,0 +1,21 @@
+GOV-008 independent review, 2026-11-02, HEAD 5f442c3c (branch feat/ns-2-brief-nav-collapse). Implementation change scope NONE.
+All DB writes: cip_test only, inside the signed_in outer-transaction rollback fixture. cip: read-only (default_transaction_read_only=on), ids/booleans only.
+
+1. Existing focused tests (cip_test):
+   (cd apps/api && DATABASE_URL=...cip_test DATABASE_URL_SYNC=...cip_test .venv/Scripts/python.exe -m pytest -q -p no:cacheprovider
+      tests/test_report_xlsx_literal_safety.py tests/test_report_schedule_recipient_scope.py tests/test_saved_query_execution_fidelity.py)
+   -> 47 passed (gov008_e2e3e4_existing_tests.txt)
+2. N-0116 related tests: test_dashboard_v2_definitions/_export/_api/_authenticated, test_report_export, test_report_delivery_alert,
+   test_saved_report_access -> 77 passed, 1 skipped (opt-in browser) (gov008_n0116_related_tests.txt)
+3. Web focused: npx vitest run ReportBuilderView.test.tsx builder/table.test.ts builder/requestFor.test.ts -> 3 files, 49 passed
+   (gov008_web_focused_tests.txt)
+4. Probes (run from apps/api with: PYTHONPATH=. ... pytest -q -p no:cacheprovider -c pytest.ini --rootdir . -p tests.conftest <abs probe path>):
+   gov008_probe_e2_xlsx.py        -> 2 passed; output gov008_probe_e2_xlsx_output.json, summary gov008_probe_e2_summary.txt
+   gov008_probe_e3_schedule.py    -> 5 passed (recording probes); output gov008_probe_e3_schedule_output.json
+   gov008_probe_e4_fidelity.py    -> 5 passed (recording probes); output gov008_probe_e4_fidelity_output.json
+   gov008_probe_n0116_tenant.py   -> 1 passed; output gov008_probe_n0116_tenant_output.json
+5. Catalog/read-only:
+   gov008_rls_catalog_probe.py cip_test cip -> gov008_rls_catalog_probe.txt
+   gov008_cip_readonly_saved_reports.py     -> gov008_cip_readonly_saved_reports.txt
+   gov008_cip_readonly_schedule_recipients.py -> gov008_cip_readonly_schedule_recipients.txt
+Note: the E3 probe run took 540 s (parallel full suite on cip_test); no failures, no reruns needed.

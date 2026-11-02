@@ -1,0 +1,135 @@
+[cip_test] role/super/bypassrls/ro: ('cip', False, False, 'on')
+[cip_test] alembic: [('20261101_0050',)]
+[cip_test] table | owner | RLS | FORCE | has tenant_id
+[cip_test]   ('commercial_lineup_case', 'cip', False, False, 0)
+[cip_test]   ('commercial_lineup_line', 'cip', True, True, 0)
+[cip_test]   ('cpor_case', 'cip', False, False, 1)
+[cip_test]   ('cpor_case_line', 'cip', True, True, 0)
+[cip_test]   ('dim_channel', 'cip', False, False, 0)
+[cip_test]   ('dim_customer', 'cip', False, False, 1)
+[cip_test]   ('dim_distributor', 'cip', False, False, 1)
+[cip_test]   ('dim_product', 'cip', True, True, 1)
+[cip_test]   ('dim_region', 'cip', False, False, 0)
+[cip_test]   ('fact_customer_sellthrough', 'cip', True, True, 1)
+[cip_test]   ('fact_inbound_shipment', 'cip', True, True, 1)
+[cip_test]   ('fact_inventory_distributor', 'cip', True, True, 1)
+[cip_test]   ('fact_pricing', 'cip', True, True, 0)
+[cip_test]   ('fact_returns', 'cip', True, True, 0)
+[cip_test]   ('fact_sales_sellin', 'cip', True, True, 0)
+[cip_test]   ('fact_sales_sellout', 'cip', True, True, 1)
+[cip_test] policy commercial_lineup_line.cip_pl_delete DELETE {public} qual=((COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))) OR ((product_id IS NULL) AND (COALESCE(current_setting('cip.request_role'::text, true), ''::text) = 'steward'::text)))
+[cip_test] policy commercial_lineup_line.cip_pl_insert INSERT {public} qual=
+[cip_test] policy commercial_lineup_line.cip_pl_select SELECT {public} qual=((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))) OR ((product_id IS NULL) AND (COALESCE(current_setting('cip.request_role'::text, true), ''::text) = 'steward'::text)))
+[cip_test] policy commercial_lineup_line.cip_pl_update UPDATE {public} qual=((COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))) OR ((product_id IS NULL) AND (COALESCE(current_setting('cip.request_role'::text, true), ''::text) = 'steward'::text)))
+[cip_test] policy cpor_case_line.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy cpor_case_line.cip_pl_insert INSERT {public} qual=
+[cip_test] policy cpor_case_line.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip_test] policy cpor_case_line.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy dim_product.cip_pl_delete DELETE {public} qual=cip_product_line_editable((product_line)::text)
+[cip_test] policy dim_product.cip_pl_insert INSERT {public} qual=
+[cip_test] policy dim_product.cip_pl_select SELECT {public} qual=cip_product_line_visible((product_line)::text)
+[cip_test] policy dim_product.cip_pl_update UPDATE {public} qual=cip_product_line_editable((product_line)::text)
+[cip_test] policy fact_customer_sellthrough.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_customer_sellthrough.cip_pl_insert INSERT {public} qual=
+[cip_test] policy fact_customer_sellthrough.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip_test] policy fact_customer_sellthrough.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_inbound_shipment.cip_pl_delete DELETE {public} qual=((COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))) OR ((product_id IS NULL) AND ((id)::bigint IN ( SELECT m.row_id    FROM cip_inbound_shipment_lineage() m(row_id, inherited_product_id)   WHERE ((m.inherited_pro
+[cip_test] policy fact_inbound_shipment.cip_pl_insert INSERT {public} qual=
+[cip_test] policy fact_inbound_shipment.cip_pl_select SELECT {public} qual=((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))) OR ((product_id IS NULL) AND ((id)::bigint IN ( SELECT m.row_id    FROM cip_inbound_shipment_lineage() m(row_id, inherited_product_id)   WHERE ((m.inherited_product_id IN
+[cip_test] policy fact_inbound_shipment.cip_pl_update UPDATE {public} qual=((COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))) OR ((product_id IS NULL) AND ((id)::bigint IN ( SELECT m.row_id    FROM cip_inbound_shipment_lineage() m(row_id, inherited_product_id)   WHERE ((m.inherited_pro
+[cip_test] policy fact_inventory_distributor.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_inventory_distributor.cip_pl_insert INSERT {public} qual=
+[cip_test] policy fact_inventory_distributor.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip_test] policy fact_inventory_distributor.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_pricing.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_pricing.cip_pl_insert INSERT {public} qual=
+[cip_test] policy fact_pricing.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip_test] policy fact_pricing.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_returns.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_returns.cip_pl_insert INSERT {public} qual=
+[cip_test] policy fact_returns.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip_test] policy fact_returns.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_sales_sellin.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_sales_sellin.cip_pl_insert INSERT {public} qual=
+[cip_test] policy fact_sales_sellin.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip_test] policy fact_sales_sellin.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_sales_sellout.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip_test] policy fact_sales_sellout.cip_pl_insert INSERT {public} qual=
+[cip_test] policy fact_sales_sellout.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip_test] policy fact_sales_sellout.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] role/super/bypassrls/ro: ('cip', False, False, 'on')
+[cip] alembic: [('20261101_0050',)]
+[cip] table | owner | RLS | FORCE | has tenant_id
+[cip]   ('commercial_lineup_case', 'cip', False, False, 0)
+[cip]   ('commercial_lineup_line', 'cip', True, True, 0)
+[cip]   ('cpor_case', 'postgres', False, False, 1)
+[cip]   ('cpor_case_line', 'postgres', True, True, 0)
+[cip]   ('dim_channel', 'cip', False, False, 0)
+[cip]   ('dim_customer', 'cip', False, False, 1)
+[cip]   ('dim_distributor', 'cip', False, False, 1)
+[cip]   ('dim_product', 'cip', True, True, 1)
+[cip]   ('dim_region', 'cip', False, False, 0)
+[cip]   ('fact_customer_sellthrough', 'cip', True, True, 1)
+[cip]   ('fact_inbound_shipment', 'cip', True, True, 1)
+[cip]   ('fact_inventory_distributor', 'cip', True, True, 1)
+[cip]   ('fact_pricing', 'cip', True, True, 0)
+[cip]   ('fact_returns', 'cip', True, True, 0)
+[cip]   ('fact_sales_sellin', 'cip', True, True, 0)
+[cip]   ('fact_sales_sellout', 'cip', True, True, 1)
+[cip] policy commercial_lineup_line.cip_pl_delete DELETE {public} qual=((COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))) OR ((product_id IS NULL) AND (COALESCE(current_setting('cip.request_role'::text, true), ''::text) = 'steward'::text)))
+[cip] policy commercial_lineup_line.cip_pl_insert INSERT {public} qual=
+[cip] policy commercial_lineup_line.cip_pl_select SELECT {public} qual=((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))) OR ((product_id IS NULL) AND (COALESCE(current_setting('cip.request_role'::text, true), ''::text) = 'steward'::text)))
+[cip] policy commercial_lineup_line.cip_pl_update UPDATE {public} qual=((COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))) OR ((product_id IS NULL) AND (COALESCE(current_setting('cip.request_role'::text, true), ''::text) = 'steward'::text)))
+[cip] policy cpor_case_line.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy cpor_case_line.cip_pl_insert INSERT {public} qual=
+[cip] policy cpor_case_line.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip] policy cpor_case_line.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy dim_product.cip_pl_delete DELETE {public} qual=cip_product_line_editable((product_line)::text)
+[cip] policy dim_product.cip_pl_insert INSERT {public} qual=
+[cip] policy dim_product.cip_pl_select SELECT {public} qual=cip_product_line_visible((product_line)::text)
+[cip] policy dim_product.cip_pl_update UPDATE {public} qual=cip_product_line_editable((product_line)::text)
+[cip] policy fact_customer_sellthrough.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_customer_sellthrough.cip_pl_insert INSERT {public} qual=
+[cip] policy fact_customer_sellthrough.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip] policy fact_customer_sellthrough.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_inbound_shipment.cip_pl_delete DELETE {public} qual=((COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))) OR ((product_id IS NULL) AND ((id)::bigint IN ( SELECT m.row_id    FROM cip_inbound_shipment_lineage() m(row_id, inherited_product_id)   WHERE ((m.inherited_pro
+[cip] policy fact_inbound_shipment.cip_pl_insert INSERT {public} qual=
+[cip] policy fact_inbound_shipment.cip_pl_select SELECT {public} qual=((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))) OR ((product_id IS NULL) AND ((id)::bigint IN ( SELECT m.row_id    FROM cip_inbound_shipment_lineage() m(row_id, inherited_product_id)   WHERE ((m.inherited_product_id IN
+[cip] policy fact_inbound_shipment.cip_pl_update UPDATE {public} qual=((COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))) OR ((product_id IS NULL) AND ((id)::bigint IN ( SELECT m.row_id    FROM cip_inbound_shipment_lineage() m(row_id, inherited_product_id)   WHERE ((m.inherited_pro
+[cip] policy fact_inventory_distributor.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_inventory_distributor.cip_pl_insert INSERT {public} qual=
+[cip] policy fact_inventory_distributor.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip] policy fact_inventory_distributor.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_pricing.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_pricing.cip_pl_insert INSERT {public} qual=
+[cip] policy fact_pricing.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip] policy fact_pricing.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_returns.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_returns.cip_pl_insert INSERT {public} qual=
+[cip] policy fact_returns.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip] policy fact_returns.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_sales_sellin.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_sales_sellin.cip_pl_insert INSERT {public} qual=
+[cip] policy fact_sales_sellin.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip] policy fact_sales_sellin.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_sales_sellout.cip_pl_delete DELETE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] policy fact_sales_sellout.cip_pl_insert INSERT {public} qual=
+[cip] policy fact_sales_sellout.cip_pl_select SELECT {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_visible((p.product_line)::text))))
+[cip] policy fact_sales_sellout.cip_pl_update UPDATE {public} qual=((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY (ARRAY[''::text, '*'::text])) OR ((product_id)::bigint IN ( SELECT p.id    FROM dim_product p   WHERE cip_product_line_editable((p.product_line)::text))))
+[cip] db/ro: ('cip', 'on')
+[cip] sellout tenants: [('default', 58128)]
+[cip] shipments state | lines | with ship_confirm | qty | qty with ship_confirm
+[cip]   ('closed_disappeared', 694, 0, Decimal('50707.0000'), Decimal('0'))
+[cip]   ('closed_shipped', 704, 29, Decimal('51586.0000'), Decimal('2015.0000'))
+[cip]   ('closed_superseded', 56, 47, Decimal('4518.0000'), Decimal('3597.0000'))
+[cip]   ('open_order', 740, 0, Decimal('48928.0000'), Decimal('0'))
+[cip]   ('shipped', 13624, 13624, Decimal('1373781.0000'), Decimal('1373781.0000'))
+[cip] distributor stock duplicate (dist,product,date) groups / extra rows: (0, Decimal('0'))
+[cip] distributor stock rows/dates/distributors/min/max: (47411, 91, 10, datetime.date(2025, 1, 3), datetime.date(2026, 6, 8))
+[cip] fact_returns rows: 6793
+[cip] fact_sales_sellin rows: 0
+[cip] fact_pricing rows: 0
+[cip] commercial_lineup_line rows: 3446
+[cip] lineup lines/units with no resolved product (dropped by tenant-via-product join): (53, Decimal('553.0000'))
+[cip] returns whose customer tenant != product tenant: 0
+[cip] shipments resolved_customer not in same-tenant dim_customer: 0

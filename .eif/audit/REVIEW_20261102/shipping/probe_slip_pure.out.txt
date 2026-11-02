@@ -1,0 +1,2 @@
+{'eta': '2026-11-05', 'overdue': False, 'days_overdue': 0, 'days_to_eta': 8, 'slip_days': 0, 'history': {'first_eta': '2026-11-20', 'first_report': '2026-09-29', 'current_eta': '2026-11-05', 'latest_report': '2026-10-27'}, 'pct': 83.0}
+{'eta': None, 'overdue': False, 'days_overdue': 0, 'days_to_eta': None, 'slip_days': 0, 'history': {'first_eta': None, 'first_report': None, 'current_eta': None, 'latest_report': '2026-10-27'}, 'pct': 100.0}

@@ -1,0 +1,2 @@
+v1 refuse_examples=11 not kept by a wall=0 v2 planner text differs=0
+walls=9 models=['cpor', 'cst_sellthrough', 'distributor_stock', 'dsi_sellout', 'lineup', 'recorded_prices', 'returns', 'sellin', 'shipments'] base measures=33 calculated=16

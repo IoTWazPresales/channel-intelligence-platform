@@ -1,0 +1,10 @@
+read_only: on
+schedule 1: same_tenant=True recipients=[1] report_visibility=personal report_owner=1 shared_roles=[] last_run=2026-11-02 09:00:06.003376+02:00 next_run=2026-11-09 09:00:00+02:00
+  recipient 1: (is_active, same_tenant, role) = (True, True, 'admin')
+latest saved-report deliveries (trigger, status, subject prefix, created):
+   ('schedule', 'delivered', 'WoC smoke (w', datetime.datetime(2026, 11, 2, 9, 0, 6, 376231, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))
+   ('schedule', 'delivered', 'WoC smoke (w', datetime.datetime(2026, 10, 19, 9, 17, 48, 203181, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))
+   ('schedule', 'delivered', 'WoC smoke (w', datetime.datetime(2026, 10, 12, 9, 41, 13, 971160, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))
+   ('schedule', 'delivered', 'WoC smoke (w', datetime.datetime(2026, 9, 28, 9, 7, 54, 498449, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))
+   ('schedule', 'delivered', 'WoC smoke (w', datetime.datetime(2026, 9, 21, 9, 0, 34, 708751, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))
+   ('schedule', 'delivered', 'WoC smoke (w', datetime.datetime(2026, 9, 14, 9, 23, 14, 293809, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))

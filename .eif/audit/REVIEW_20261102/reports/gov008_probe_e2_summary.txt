@@ -1,0 +1,36 @@
+PURE '=1+1' cover [True, 's', "'=1+1'"] label [True, 's', "'=1+1'"] xml<f> False type_f False
+PURE "+cmd|' /C calc'!A0" cover [True, 's', '"+cmd|\' /C calc\'!A0"'] label [True, 's', '"+cmd|\' /C calc\'!A0"'] xml<f> False type_f False
+PURE '-2+3' cover [True, 's', "'-2+3'"] label [True, 's', "'-2+3'"] xml<f> False type_f False
+PURE '@SUM(A1)' cover [True, 's', "'@SUM(A1)'"] label [True, 's', "'@SUM(A1)'"] xml<f> False type_f False
+PURE '\t=1+1' cover [True, 's', "'\\t=1+1'"] label [True, 's', "'\\t=1+1'"] xml<f> False type_f False
+PURE '\r=1+1' cover [False, 's', "'\\n=1+1'"] label [False, 's', "'\\n=1+1'"] xml<f> False type_f False
+PURE '=HYPERLINK("https://example.invalid/","fictional")' cover [True, 's', '\'=HYPERLINK("https://example.invalid/","fictional")\''] label [True, 's', '\'=HYPERLINK("https://example.invalid/","fictional")\''] xml<f> False type_f False
+PURE '#N/A' cover [True, 's', "'#N/A'"] label [True, 's', "'#N/A'"] xml<f> False type_f False
+PURE '#DIV/0!' cover [True, 's', "'#DIV/0!'"] label [True, 's', "'#DIV/0!'"] xml<f> False type_f False
+PURE ' =1+1' cover [True, 's', "' =1+1'"] label [True, 's', "' =1+1'"] xml<f> False type_f False
+PURE '=1+1\n' cover [True, 's', "'=1+1\\n'"] label [True, 's', "'=1+1\\n'"] xml<f> False type_f False
+PURE numbers {'int': ['17', 'n'], 'neg': ['-12.5', 'n'], 'dec': ['\'"123.45"\'', 's'], 'flag': ['True', 'b'], 'none': ['None', 'n'], 'day': ['\'"2026-01-05"\'', 's'], 'ts': ['\'"2026-01-05 07:00:00"\'', 's']}
+HTTP '=1+1' ad_hoc cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '=1+1' saved_v1 cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '=1+1' saved_v2_equivalent(v1_equivalent=True) cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '=1+1' saved_v2_model(v1_equivalent=False) cells 2 ['s'] cover [True, 's'] formula False hdr ['customer_id', 'dsi_sellout.units', 'dsi_sellout.lines', 'customer_name'] B [['int', 'n']]
+HTTP '-2+3' ad_hoc cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '-2+3' saved_v1 cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '-2+3' saved_v2_equivalent(v1_equivalent=True) cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '-2+3' saved_v2_model(v1_equivalent=False) cells 2 ['s'] cover [True, 's'] formula False hdr ['customer_id', 'dsi_sellout.units', 'dsi_sellout.lines', 'customer_name'] B [['int', 'n']]
+HTTP '@SUM(A1)' ad_hoc cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '@SUM(A1)' saved_v1 cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '@SUM(A1)' saved_v2_equivalent(v1_equivalent=True) cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '@SUM(A1)' saved_v2_model(v1_equivalent=False) cells 2 ['s'] cover [True, 's'] formula False hdr ['customer_id', 'dsi_sellout.units', 'dsi_sellout.lines', 'customer_name'] B [['int', 'n']]
+HTTP '\t=1+1' ad_hoc cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '\t=1+1' saved_v1 cells 1 ['s'] cover [False, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '\t=1+1' saved_v2_equivalent(v1_equivalent=True) cells 1 ['s'] cover [False, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '\t=1+1' saved_v2_model(v1_equivalent=False) cells 1 ['s'] cover [False, 's'] formula False hdr ['customer_id', 'dsi_sellout.units', 'dsi_sellout.lines', 'customer_name'] B [['int', 'n']]
+HTTP '=HYPERLINK("https://example.invalid/","x")' ad_hoc cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '=HYPERLINK("https://example.invalid/","x")' saved_v1 cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '=HYPERLINK("https://example.invalid/","x")' saved_v2_equivalent(v1_equivalent=True) cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '=HYPERLINK("https://example.invalid/","x")' saved_v2_model(v1_equivalent=False) cells 2 ['s'] cover [True, 's'] formula False hdr ['customer_id', 'dsi_sellout.units', 'dsi_sellout.lines', 'customer_name'] B [['int', 'n']]
+HTTP '+cmd' ad_hoc cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '+cmd' saved_v1 cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '+cmd' saved_v2_equivalent(v1_equivalent=True) cells 2 ['s'] cover [True, 's'] formula False hdr ['value', 'customer_id', 'customer_name'] B [['int', 'n']]
+HTTP '+cmd' saved_v2_model(v1_equivalent=False) cells 2 ['s'] cover [True, 's'] formula False hdr ['customer_id', 'dsi_sellout.units', 'dsi_sellout.lines', 'customer_name'] B [['int', 'n']]

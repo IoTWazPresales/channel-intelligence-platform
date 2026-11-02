@@ -1,0 +1,143 @@
+GOV-008 review: N-0115 query model at HEAD 5f442c3c (2026-11-02)
+(Saved here because the SubagentHandback call was refused by the EIF hook: SHIM_TOOL_UNMAPPED.)
+
+Verdict: VERIFIED_WITH_LIMITATIONS for E1, E6's core, E8 and the E10 calendar fixes.
+NOT MET for E7 and parts of E8.
+- Independence: fresh-context session, rung R2. Not a different --run in the ledger, so it does not
+  satisfy the R3 provenance rule.
+- Writes: no product files edited; nothing written to cip; every cip_test seed rolled back.
+- Key finding: shipped quantity now double counts on cip by 5,612 units across 76 lines. The cause is
+  closed shipment lines that keep a ship confirm date (a later data lifecycle change). The 28 Oct
+  open-line double count is fixed.
+
+REQUIREMENT MATRIX (VERIFIED = re-ran or read the code; ASSERTED = taken from a report)
+
+E1 CPOR filters before aggregation, rows = totals, nonexistent customer 0 .... MET, VERIFIED
+  p2 E1.1-E1.9 all PASS: bu=NB gives 40 (was 100); nonexistent customer gives (0, []) (was total 100).
+  The 3 grains x 6 filters matrix shows rows = totals. Delivery rate recomputed over the filtered set.
+  Product filter, cross-tab and multi-value bu refused. test_cpor_query_filter_fidelity.py passes.
+E1 tenant scoping of the handler ............................................ MET, VERIFIED
+  a2_cpor.py:90-92 passes tenant_id. A tenant-B customer id or BU queried as tenant A returns 0
+  (E1.3, E1.4), with no ContextVar set.
+E6 hidden/narrowed legacy metric refuses its v2 counterpart ................ MET for that list, VERIFIED
+  units, avg, min, max, prior_year, running_total, share, per_week, change (tenant_restrictions.py:87-117).
+E6 other measures on the same units column .................................. NOT MET, VERIFIED
+  Hiding sellout_units leaves dsi_sellout.priced_units (sum of the same units column) queryable, and the
+  non-admin catalog still lists it. A narrowed metric also allows it by customer. On cip it is 44.4% of
+  all sell-out units (p3 S2).
+E6 spec keys: allowlist, injection-shaped and unknown keys .................. MET, VERIFIED
+  Unknown, '--, nested and empty keys refused. A spec breakdown plus a filter on the same key works.
+  An injection-shaped value is bound as a parameter and the table is intact (p2 E6; compiler.py:326-332).
+E6 cache isolation between tenants and overlay versions ..................... MET (single process), VERIFIED
+  p4 K1/K2: tenant B misses A's cached result; a product-line scope change misses. The overlay version
+  is folded into the key (registry.py:279-286, 437).
+E7 shipped quantity: ship confirm date, resolved_customer_id, closed states .. NOT MET, VERIFIED
+  The model has no line-state rule (default.yaml:289-327). p2 E7.1 FAIL: got 30, want 20; lines 5,
+  want 3. On cip (p3 S1): v2 total 1,379,393 vs 1,373,781 for state 'shipped'. All 47 dated
+  closed_superseded rows have a 'shipped' superseding row. All 29 dated closed_shipped rows have a
+  strict shipped twin. Customer grouping on resolved_customer_id is correct.
+E7 open quantity: strict-pair remainder, closed states 0, no period ........ MET, VERIFIED (p2 E7.2: (5, 1))
+E7 distributor on-hand: latest stock date, not summed ....................... MET, VERIFIED
+  p2 E7.3 gives 10 (summing would give 18); E7.4 as of 2026-01-31 gives 8; period refused.
+  No duplicate (distributor, product, date) rows on cip.
+E7 returns, sell-in, lineup, recorded prices ................................ Partly met
+  Returns tenant-scoped through the product (E7.5, E7.6), VERIFIED. fact_sales_sellin and fact_pricing
+  have 0 rows on cip, and no sell-in writer was found in apps/api/app (values UNVERIFIED). Lineup drops
+  53 lines / 553 units with no product; its label says "resolved product".
+E7 refused measures (shipment amount, sales value, open cases, listings) .... MET, generic text, VERIFIED
+  All refused, but the planner says "Unknown measure ..."; the pending reason is only in the catalog.
+E8 day grain only on day-floored facts ...................................... NOT MET, VERIFIED
+  Sell-through day refused (D5). But lineup declares floor: day on inferred_period_start, and on cip all
+  32 dated cases fall on the 1st, over 7 distinct dates (p3 S3). Day and week grains are allowed on
+  lineup (p2 D5), which puts a whole period's plan into its first day or week. Sell-in has the same
+  declaration on period_start.
+E10 defect 1 prior year with a date window .................................. FIXED, VERIFIED
+  p2 D1 gives (10, 7, 100) and (20, 10, 40); retail calendar in D3.
+E10 defect 2 Sunday week + previous period loses first bucket ............... FIXED, VERIFIED
+  p2 D2: rows 4 and 6, previous 11 and 4, prior year 50; rows add up to the total.
+E10 defect 3 4-4-5 previous period ........................................... FIXED, VERIFIED
+  p2 D3, month and quarter, across the fiscal-year boundary: (22, 11, 101) and (33, 22, 202).
+4-4-5 prior year (never probed before) ....................................... MET, VERIFIED
+  D3, and D4 on the 53-week FY23: P12 prior year 70; week 53 maps to week 52 of the prior year,
+  matching BusinessCalendar.
+E10 defect 4 open lines double counted ....................................... FIXED; new double count from closed states (see E7)
+E10 defect 5 customer grouping ............................................... FIXED, VERIFIED (default.yaml:299; p2)
+Committed tests check values, not SQL text ................................... Mostly, VERIFIED
+  test_e10_calendar_values_db.py executes SQL (8 DB tests across 8 calendars).
+  test_query_model_e7_e8.py and test_query_tenant_overlay_e6.py check SQL text or plans only. No test
+  covers closed shipment states, lineup by day/week, per-week totals on non-platform calendars, or
+  priced_units under a hidden overlay.
+Original: sum/count/distinct/avg/min/max for every fact family ............... PARTIAL, VERIFIED
+  The loader supports all of them (loader.py:25). Declared avg/min/max exist only for sell-out and
+  sell-through units plus average recorded prices; none for shipments, stock, returns, lineup or CPOR.
+  Sales value stays a decision.
+Shared breakdowns, attributes, specs_json, business calendar, day-year grains  MET with the lineup caveat, VERIFIED
+  graph.derived_breakdowns; run_v2 uses tenant_calendar (execute.py:134-138).
+Walls with plain reasons; every refuse_example kept .......................... MET, VERIFIED
+  p5: 11 of 11 v1 examples kept, the v2 text is identical, 9 walls.
+Calculated measures (all 8 kinds) ............................................ MET per row; per-week TOTAL wrong on non-platform calendars, VERIFIED
+  p2 D7: share and running total correct. p4 W: one Sunday week shows 14/wk in its row but 7.0 in the
+  total; retail P03 shows 2.8 in its row but 3.16 in the total (also p2 D6: 14 vs 8.31). Cause:
+  calc.window_weeks uses Gregorian bucket edges when no window is given.
+One compiler with tenant and product-line scope, limits, explain, cache ..... MET, VERIFIED
+  compiler.py:244-278 adds a structural tenant predicate on every model; tests pass.
+Under 2 s on cip ............................................................. MET as owner only, VERIFIED (owner)
+  p3: 15 representative queries, slowest 498 ms (retail month) and 434 ms (open-shipment twin). Role
+  cip is the owner, product lines '*'. No non-owner, concurrency or HTTP measurement.
+Per-tenant catalog config; catalog API returns measures/breakdowns/combos ... MET with mismatches, VERIFIED
+  p4: the catalog offers 'day' for every sell-through measure and 'period' for open shipments, which the
+  planner refuses (24 cases). prior_year and running_total show requires: [] but need a period.
+Parity with existing metrics; every caller keeps working .................... UNVERIFIED
+  Only test_query_v1_callers_n0115.py and test_query_v2_api.py were run (pass). No full suite or
+  parity matrix.
+6. Cross-tenant rows on v2 execute/explain/catalog ........................... No leak found, VERIFIED (non-owner untested)
+  Filter values from another tenant return 0 (E1.3, E7.6). The cache key separates tenants (K1).
+  Joins and the latest-stock subquery are tenant-checked.
+RLS / FORCE RLS on cip_test .................................................. Recorded, VERIFIED (p1)
+  FORCE RLS on all fact tables plus cpor_case_line, commercial_lineup_line and dim_product. Off on
+  cpor_case, commercial_lineup_case (no tenant_id at all), dim_customer, dim_distributor, dim_region and
+  dim_channel. Every policy is product-line only; no policy enforces tenant, so tenant isolation is
+  entirely the compiler's predicate. On cip, cpor_case and cpor_case_line are owned by postgres, not cip.
+
+FINDINGS, RANKED
+Blocker for E7 acceptance
+1. Shipped quantity double counts closed lines. Scenario: a PO-less shipped twin retired as
+   closed_superseded, or an open order closed as closed_shipped, keeps its ship confirm date and is
+   counted beside the shipped row that replaces it. Size on cip today: +5,612 units and +76 lines
+   (closed_superseded 3,597; closed_shipped 2,015). Other readers already exclude these states
+   (supply_overview.py:102; comment at shipment_shipped_fact_identity_twin_merge.py:488).
+   Fix direction: count line_state = 'shipped' only, or exclude the four closed states.
+Major
+2. Per-week totals are wrong on any non-platform calendar when no date window is set: one Sunday week
+   shows 14/wk in its row and 7/wk in the total. Affects KPI and total displays (calc.py:34-52).
+3. Lineup and sell-in allow day and week grains on period-start dates. Lineup by week puts a quarter's
+   plan into its first week. On cip, 32 of 32 dated cases start on the 1st.
+4. A hidden or narrowed sellout_units still exposes dsi_sellout.priced_units: the overlay intent is
+   bypassed for 44% of units. Not a row-data leak.
+Minor
+5. The catalog offers grains and breakdowns the planner refuses (CST day, open-shipment period), and
+   requires is empty for prior year and running total.
+6. Pending measures are refused as "Unknown measure" instead of with their pending reason.
+7. On-hand for a product missing from the latest report comes back as a null row, and a null total
+   when filtered, rather than 0.
+8. _legacy_anchor checks only the first legacy input of a calculated measure. Latent: no current
+   measure has two different anchors.
+9. catalog_for_tenant_cached is a process-local lru_cache with no TTL. A worker process keeps old
+   hidden flags until it restarts. From reading the code; not run.
+10. Possible: with a window longer than a year that opens mid-bucket, a later bucket's prior year may
+    be the partial first bucket. From reading the code; not run.
+11. Observation: cip alembic reads 20261101_0050, which differs from CURRENT.md's "cip at 0048"
+    (ASSERTED doc vs VERIFIED query).
+
+WHAT I RAN (apps/api/.venv/Scripts/python.exe; each probe writes its pN_output.txt beside it)
+- p1_rls_and_cip_facts.py: RLS, FORCE and policies on cip_test and cip; read-only data shape on cip.
+- p2_cip_test_values.py: seeded cip_test probes, rolled back: E1 matrix, E6, E7 closed states,
+  on-hand and returns, E8 D1-D7.
+- p3_cip_readonly.py: read-only on cip (default_transaction_read_only=on, 60 s timeout): shipped double
+  count, priced share, date floors, 15 timings.
+- p4_catalog_cache.py: catalog vs planner agreement; cache across tenants and scope; per-week totals.
+- p5_walls_pure.py: pure check with the database blocked: refuse examples and walls.
+- pytest on cip_test, 9 files: 89 passed in 111 s (focused_tests.txt).
+Coverage limits: the non-owner role, concurrency, authenticated HTTP for every caller, the full suite
+and v1/v2 parity were not run. Sell-in and recorded-price values cannot be checked: both tables are
+empty on cip.

@@ -1,0 +1,461 @@
+{
+ "sql": {
+  "readonly_check": [
+   {
+    "current_database": "cip",
+    "current_setting": "on",
+    "current_user": "cip"
+   }
+  ],
+  "alembic": [
+   {
+    "version_num": "20261101_0050"
+   }
+  ],
+  "audit_events": "ERROR UndefinedColumn: column \"detail\" does not exist\nLINE 2:                               left(detail::text, 600) AS det...\n                                           ^",
+  "audit_since_17": [
+   {
+    "id": 17,
+    "action": "import_jobs_archive",
+    "target_id": "895,896,898,899,900,903,904,905,906,907,908,909,910,911,912,913,914,915,916,917,918,919,920,921,922,923,1668,1682,1683,1684,1685",
+    "created_at": "2026-10-22 23:17:47.056647+02:00"
+   },
+   {
+    "id": 18,
+    "action": "open_book_close",
+    "target_id": "1339",
+    "created_at": "2026-10-29 10:06:39.001624+02:00"
+   },
+   {
+    "id": 19,
+    "action": "open_book_close",
+    "target_id": "1695",
+    "created_at": "2026-10-29 12:56:08.701022+02:00"
+   },
+   {
+    "id": 20,
+    "action": "open_book_close",
+    "target_id": "1696",
+    "created_at": "2026-10-29 13:47:04.810517+02:00"
+   },
+   {
+    "id": 21,
+    "action": "open_book_close",
+    "target_id": "1697",
+    "created_at": "2026-10-29 16:27:32.897481+02:00"
+   },
+   {
+    "id": 22,
+    "action": "shipment_water_backfill",
+    "target_id": "20261101_0049",
+    "created_at": "2026-11-01 17:50:17.608329+02:00"
+   },
+   {
+    "id": 23,
+    "action": "shipped_fact_po_less_retire",
+    "target_id": "20261101_0050",
+    "created_at": "2026-11-02 09:15:29.741665+02:00"
+   },
+   {
+    "id": 24,
+    "action": "shipment_job_reprocess",
+    "target_id": "1697",
+    "created_at": "2026-11-02 09:17:04.054924+02:00"
+   },
+   {
+    "id": 25,
+    "action": "shipped_fact_po_less_retire",
+    "target_id": "20261101_0050",
+    "created_at": "2026-11-02 09:22:49.055789+02:00"
+   },
+   {
+    "id": 26,
+    "action": "shipped_fact_orphan_open_retire",
+    "target_id": "1697",
+    "created_at": "2026-11-02 14:57:35.226895+02:00"
+   }
+  ],
+  "line_states": [
+   {
+    "line_state": "closed_disappeared",
+    "lines": 694,
+    "units": "50707.0000"
+   },
+   {
+    "line_state": "closed_shipped",
+    "lines": 704,
+    "units": "51586.0000"
+   },
+   {
+    "line_state": "closed_superseded",
+    "lines": 56,
+    "units": "4518.0000"
+   },
+   {
+    "line_state": "open_order",
+    "lines": 740,
+    "units": "48928.0000"
+   },
+   {
+    "line_state": "shipped",
+    "lines": 13624,
+    "units": "1373781.0000"
+   }
+  ],
+  "superseded_total": [
+   {
+    "lines": 56,
+    "units": "4518.0000",
+    "no_pointer": 0,
+    "dangling": 0
+   }
+  ],
+  "superseded_pointer_target_states": [
+   {
+    "line_state": "open_order",
+    "count": 9
+   },
+   {
+    "line_state": "shipped",
+    "count": 47
+   }
+  ],
+  "orphan_open_all_jobs": [
+   {
+    "import_job_id": null,
+    "lines": 3,
+    "units": "30.0000"
+   }
+  ],
+  "orphan_shipped_all_jobs": [],
+  "job1697_evidence": [
+   {
+    "count": 8071
+   }
+  ],
+  "job1697_obs": [
+   {
+    "count": 16065
+   }
+  ],
+  "job1697_facts_by_state": [
+   {
+    "line_state": "closed_superseded",
+    "count": 9,
+    "sum": "921.0000"
+   },
+   {
+    "line_state": "open_order",
+    "count": 737,
+    "sum": "48898.0000"
+   },
+   {
+    "line_state": "shipped",
+    "count": 6612,
+    "sum": "506120.0000"
+   }
+  ],
+  "dup_open_same_order_line": [],
+  "orphan_retired_facts": [
+   {
+    "id": 148768,
+    "line_state": "closed_superseded",
+    "quantity": "21.0000",
+    "superseded_by_fact_id": 170755,
+    "keeper_qty": "21.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   },
+   {
+    "id": 148777,
+    "line_state": "closed_superseded",
+    "quantity": "128.0000",
+    "superseded_by_fact_id": 170759,
+    "keeper_qty": "128.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   },
+   {
+    "id": 148780,
+    "line_state": "closed_superseded",
+    "quantity": "36.0000",
+    "superseded_by_fact_id": 170760,
+    "keeper_qty": "36.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   },
+   {
+    "id": 148785,
+    "line_state": "closed_superseded",
+    "quantity": "120.0000",
+    "superseded_by_fact_id": 170761,
+    "keeper_qty": "120.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   },
+   {
+    "id": 148786,
+    "line_state": "closed_superseded",
+    "quantity": "10.0000",
+    "superseded_by_fact_id": 170813,
+    "keeper_qty": "10.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   },
+   {
+    "id": 148801,
+    "line_state": "closed_superseded",
+    "quantity": "21.0000",
+    "superseded_by_fact_id": 170814,
+    "keeper_qty": "21.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   },
+   {
+    "id": 157127,
+    "line_state": "closed_superseded",
+    "quantity": "125.0000",
+    "superseded_by_fact_id": 170754,
+    "keeper_qty": "125.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   },
+   {
+    "id": 163464,
+    "line_state": "closed_superseded",
+    "quantity": "300.0000",
+    "superseded_by_fact_id": 170815,
+    "keeper_qty": "300.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   },
+   {
+    "id": 163465,
+    "line_state": "closed_superseded",
+    "quantity": "160.0000",
+    "superseded_by_fact_id": 170816,
+    "keeper_qty": "160.0000",
+    "keeper_state": "open_order",
+    "keeper_job": 1697
+   }
+  ],
+  "rls_flags": [
+   {
+    "relname": "cpor_case",
+    "relrowsecurity": false,
+    "relforcerowsecurity": false,
+    "owner": "postgres"
+   },
+   {
+    "relname": "dashboard",
+    "relrowsecurity": false,
+    "relforcerowsecurity": false,
+    "owner": "postgres"
+   },
+   {
+    "relname": "dashboard_widget",
+    "relrowsecurity": false,
+    "relforcerowsecurity": false,
+    "owner": "postgres"
+   },
+   {
+    "relname": "fact_inbound_shipment",
+    "relrowsecurity": true,
+    "relforcerowsecurity": true,
+    "owner": "cip"
+   },
+   {
+    "relname": "import_job",
+    "relrowsecurity": false,
+    "relforcerowsecurity": false,
+    "owner": "cip"
+   },
+   {
+    "relname": "platform_audit_event",
+    "relrowsecurity": false,
+    "relforcerowsecurity": false,
+    "owner": "postgres"
+   },
+   {
+    "relname": "port_condition",
+    "relrowsecurity": true,
+    "relforcerowsecurity": true,
+    "owner": "postgres"
+   },
+   {
+    "relname": "saved_report",
+    "relrowsecurity": false,
+    "relforcerowsecurity": false,
+    "owner": "postgres"
+   },
+   {
+    "relname": "shipment_evidence_line",
+    "relrowsecurity": true,
+    "relforcerowsecurity": true,
+    "owner": "cip"
+   },
+   {
+    "relname": "shipment_evidence_observation",
+    "relrowsecurity": true,
+    "relforcerowsecurity": true,
+    "owner": "postgres"
+   }
+  ],
+  "role_attrs": [
+   {
+    "rolname": "cip",
+    "rolsuper": false,
+    "rolbypassrls": false
+   }
+  ],
+  "write_refused": "ReadOnlySqlTransaction: cannot execute CREATE TABLE in a read-only transaction"
+ },
+ "app": {
+  "otw_status": 200,
+  "as_of": "2026-11-02",
+  "report_date": "2026-10-27",
+  "report_stale": false,
+  "tiles": {
+   "at_sea": {
+    "units": 14987.0,
+    "lines": 131,
+    "vessels": 8,
+    "amount": [
+     {
+      "currency": "USD",
+      "amount": 9059960.8
+     }
+    ],
+    "air_units": 142.0,
+    "overdue_vessels": 3
+   },
+   "arrived": {
+    "units": 5512.0,
+    "lines": 66,
+    "by_port": [
+     {
+      "name": "City Deep",
+      "units": 5108.0
+     },
+     {
+      "name": "Port Louis",
+      "units": 404.0
+     }
+    ]
+   },
+   "booked": {
+    "units": 0.0,
+    "lines": 0
+   },
+   "eta_moved": {
+    "vessels_moved": 7,
+    "vessels": 8,
+    "min_days": 7,
+    "max_days": 46,
+    "since": "2026-08-18"
+   }
+  },
+  "vessels": 8,
+  "vessels_overdue": 3,
+  "vessel_units_sum": 14987.0,
+  "vessel_lines_sum": 131,
+  "overdue_units": 4013.0,
+  "vessel_rows": [
+   {
+    "forwarder": "PREMIERE",
+    "lane_label": "Rotterdam \u2192 Durban \u2192 City Deep",
+    "eta": "2026-10-27",
+    "slip_days": 29,
+    "overdue": true,
+    "units": 3170.0,
+    "lines": 10
+   },
+   {
+    "forwarder": "PREMIERE",
+    "lane_label": "Rotterdam \u2192 Durban \u2192 City Deep",
+    "eta": "2026-10-29",
+    "slip_days": 11,
+    "overdue": true,
+    "units": 40.0,
+    "lines": 1
+   },
+   {
+    "forwarder": "KGIL + WWP",
+    "lane_label": "China / Shanghai \u2192 Durban \u2192 City Deep",
+    "eta": "2026-10-30",
+    "slip_days": 46,
+    "overdue": true,
+    "units": 803.0,
+    "lines": 15
+   },
+   {
+    "forwarder": "COSCO",
+    "lane_label": "Chongqing / Shenzhen \u2192 Durban \u2192 City Deep",
+    "eta": "2026-11-05",
+    "slip_days": 0,
+    "overdue": false,
+    "units": 4286.0,
+    "lines": 32
+   },
+   {
+    "forwarder": "COSCO",
+    "lane_label": "Chongqing \u2192 Durban \u2192 City Deep",
+    "eta": "2026-11-07",
+    "slip_days": 13,
+    "overdue": false,
+    "units": 2913.0,
+    "lines": 13
+   },
+   {
+    "forwarder": "KGIL + WWP",
+    "lane_label": "China / Chongqing \u2192 Durban \u2192 City Deep",
+    "eta": "2026-11-18",
+    "slip_days": 7,
+    "overdue": false,
+    "units": 2702.0,
+    "lines": 41
+   },
+   {
+    "forwarder": "WWP",
+    "lane_label": "China \u2192 Durban \u2192 City Deep",
+    "eta": "2026-11-25",
+    "slip_days": 13,
+    "overdue": false,
+    "units": 364.0,
+    "lines": 5
+   },
+   {
+    "forwarder": "WWP",
+    "lane_label": "China \u2192 Durban \u2192 City Deep",
+    "eta": "2026-12-02",
+    "slip_days": 13,
+    "overdue": false,
+    "units": 709.0,
+    "lines": 14
+   }
+  ],
+  "needs_look": {
+   "lines": 9,
+   "units": 731.0,
+   "since": "2026-07-21",
+   "days": 7
+  },
+  "ports": [
+   [
+    "MUPLU",
+    404.0
+   ],
+   [
+    "ZAJNB",
+    5108.0
+   ]
+  ],
+  "needs_look_grid": {
+   "status": 200,
+   "rows": 9,
+   "units": 731.0
+  },
+  "unauthenticated_otw_status": 401,
+  "unauthenticated_port_conditions_status": 401
+ }
+}

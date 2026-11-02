@@ -1,0 +1,80 @@
+transaction_read_only = on
+
+-- tenants_in_fact
+   ('default', 15818)
+
+-- line_state_counts
+   ('closed_disappeared', 694, Decimal('50707'))
+   ('closed_shipped', 704, Decimal('51586'))
+   ('closed_superseded', 56, Decimal('4518'))
+   ('open_order', 740, Decimal('48928'))
+   ('shipped', 13624, Decimal('1373781'))
+
+-- closed_with_ship_confirm (semantic 'shipped quantity' + channel_ops movement-lens count these)
+   ('closed_shipped', 29, Decimal('2015'))
+   ('closed_superseded', 47, Decimal('3597'))
+
+-- closed_pod_null_with_dist_and_product (channel_ops /cover-distribution inbound_open counts these)
+   ('closed_disappeared', 563, Decimal('38855'))
+   ('closed_shipped', 545, Decimal('36684'))
+   ('closed_superseded', 49, Decimal('3573'))
+
+-- closed_superseded_by_origin (0050 downgrade resets ALL of these to 'shipped')
+   ('orphan_open (was open_order)', 9, Decimal('921'), 9, 9)
+   ('po_less_twin (was shipped)', 47, Decimal('3597'), 0, 0)
+
+-- superseded_pointer_dangling
+   (0, 56)
+
+-- superseded_target_itself_closed
+   ('open_order', 9)
+   ('shipped', 47)
+
+-- open_order_without_evidence_line_by_job (orphans remaining)
+   (None, 'shipped', 3, Decimal('30'))
+
+-- open_shipped_sheet_old_vs_new_key (blank-invoice grain)
+   ('new ord: key', True, 1697, 12, Decimal('1316'))
+
+-- possible_double_open (same OU+order+line+item open twice on Shipped sheet, any key)
+   (0, Decimal('0'))
+
+-- jobs_report_date_shape
+   (1697, 'completed', 'default', 'ACZA Shipped Unshipped 20261027.xlsx', 1, '<null>/acza_workbook_bom_not_ready, <null>/acza_workbook_shipped, <null>/acza_workbook_unship')
+   (1696, 'completed', 'default', 'ACZA Shipped Unshipped 20261023 (1).xlsx', 1, '<null>/acza_workbook_shipped, <null>/acza_workbook_unship')
+   (1695, 'completed', 'default', 'ACZA Shipped Unshipped 20260929.xlsx', 1, '<null>/acza_workbook_shipped, <null>/acza_workbook_unship')
+   (1345, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1344, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1343, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1342, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1341, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1340, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1339, 'completed', 'default', 'ACZA Shipped Unshipped 20260911.xlsx', 1, '<null>/acza_workbook_shipped, <null>/acza_workbook_unship')
+   (1338, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1337, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1336, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1335, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1334, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1333, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1332, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1331, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1330, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1329, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1328, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1327, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1326, 'completed', 'default', 'ACZA Shipped Unshipped 20260901.xlsx', 1, '<null>/acza_workbook_shipped, <null>/acza_workbook_unship')
+   (1234, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+   (1233, 'failed', 'default', 'mailbox-ingest-auth-error', 0, None)
+
+-- latest_report_date_per_ou_scope
+   ('default', 'acza_workbook_bom_not_ready', '', datetime.date(2026, 10, 27), 1)
+   ('default', 'acza_workbook_shipped', '', datetime.date(2026, 10, 27), 14)
+   ('default', 'acza_workbook_unship', '', datetime.date(2026, 10, 27), 12)
+
+-- po_less_shipped_remaining_with_po_twin_qty_differs
+   (0,)
+
+-- port_condition_rows
+
+-- observation_identity_key_cross_tenant_collisions
+   (0,)

@@ -1,0 +1,78 @@
+GOV-008 independent verification: E2 / E3 / E4 / N-0116 backend (HEAD 5f442c3c), 2026-11-02
+(SubagentHandback was blocked by the EIF hook, SHIM_TOOL_UNMAPPED, so this report is saved here as well.)
+
+HOW INDEPENDENT THIS IS: R2 rung (fresh-context subagent session, same model family as the author), not R3 (another model).
+Anything that needs R3 stays VERIFIED_WITH_LIMITATIONS at most.
+WHAT I RAN: focused tests, probes and read-only queries only. No product files edited. All writes went to cip_test inside the
+rolled-back signed_in fixture. cip was read only (default_transaction_read_only=on, ids and booleans only). No email sent.
+DECISION TEXT: D-0132 is not in .eif/DECISIONS.md (that file holds no D-0xxx ids at all). I read the accepted text from the
+programme ledger, .eif/program/PROGRAM.yaml lines 15272-15284.
+
+REQUIREMENTS
+E2 XLSX literal safety, ad-hoc / saved v1 / saved v2 (v1-equivalent) / saved v2 (model only): MET (VERIFIED).
+  report_export.py:65-69 forces data_type 's' on every string cell. gov008_probe_e2_xlsx.py sent =1+1, +cmd, -2+3, @SUM(A1),
+  \t=1+1 and =HYPERLINK(..) as customer name and title through all 4 HTTP paths. Every matching cell was type 's', with no
+  formula type and no <f> in the sheet XML. Number columns came back int/float, type 'n'. The pure builder gave the same
+  result for 11 labels. Existing tests: 47 passed.
+E2 delivery attachment: N/A (VERIFIED by code). Delivery writes only an inbox row; no file is built. The only caller of
+  build_xlsx_bytes is report_exports.py:100.
+E2 CSV (dashboard widgets, view rows, v1 widget): MET (VERIFIED). guardCell (builder/table.ts:116) prefixes ' on ^[=+\-@\t\r];
+  table.test.ts passes. CSV exports outside N-0116 are not guarded (m4).
+E3 report tenant bound for governed CPOR and model queries: MET (VERIFIED). Tenant A admin gets 70 (CPOR) / 1012 (model);
+  tenant B gets 1000. The v2 view-rows path from tenant B filtering on a tenant-A product id gives total 0 and no rows.
+E3 recipient who lost access / is inactive / is in another tenant / has no identity / cannot see a private report:
+  MET (VERIFIED) for single-recipient schedules. With several recipients the behaviour is wrong (M2).
+E3 GUC reset after aborted SQL: MET (VERIFIED). Through the real runner: inside ('N0116-A-..','!','viewer'), afterwards
+  ('','',''); no ContextVar leaked.
+E3 cache ordering: MET (VERIFIED). viewer/admin/none/viewer gave 10/70/0/10; none/admin/viewer gave 0/70/10. An import
+  trigger skips the cache (10 -> 15).
+E3 code follows D-0132: MET (VERIFIED). Current permissions, tenant membership, active flag and report visibility; no
+  owner-delegated authority; no new role or grant.
+E4 sort asc / limit kept from card -> promote -> saved XLSX/PDF -> delivery, with period grain: MET (VERIFIED, value-level).
+  Card rows = XLSX rows = PDF rows; total 1012 at every hop; delivery shows returned_rows 2, truncated true, fixed window kept.
+E4 dashboard dates/filters captured on promotion, or refused: MET (VERIFIED). Relative date or a customer filter with no
+  execution body is refused 400; with an execution body the dates become a fixed window.
+E4 units_per_week saved without dates: PARTIAL (VERIFIED). Promotion refuses it. A direct POST /saved-reports stores it (200);
+  export then returns 400 and delivery writes a failed / [MISSING DATA] row. API only; the UI can't create v2 reports.
+E4 saved-v2 download from /reports uses v2 execution; saved-v2 is read-only: MET (VERIFIED) in vitest and code. The
+  authenticated Playwright run is opt-in and I did not run it.
+N-0116 S2 migrate without loss, schema and idempotence: MET (VERIFIED). 0048 only adds columns; the script writes only rows
+  where definition_v2 IS NULL; the apply-twice/prove test passes.
+N-0116 S2 / E4 export parity after migration: NOT MET (VERIFIED). See M1.
+N-0116 scheduled reports keep sending: MET on cip (VERIFIED read-only), at risk (M2). cip's only enabled schedule delivered on
+  2 Nov 09:00.
+N-0116 tenant scoping: MET (VERIFIED). Tenant B admin got 404 on all 24 by-id reads and writes against tenant A's objects;
+  same-tenant viewer got 403 on the admin's personal items; tenant A's objects unchanged afterwards.
+N-0116 RLS: OBSERVED. dashboard, dashboard_widget, saved_report, cpor_case, report_schedule, report_delivery and app_user have
+  no RLS on cip_test or cip. The RLS that exists checks product line only, never tenant. Tenant isolation rests entirely on
+  application code. Not tested with a non-owner database role.
+
+FINDINGS (no blockers)
+M1 (major): migrated legacy saved reports lose rows and change order on export and delivery. Introduced by E4 (ab5e5de4).
+  saved_report_payload (report_delivery.py:175-186) applies present_handler_rows (500 cap, value-descending sort) to every
+  definition, including migrated ones; the code comment says migrated ones are exempt, but the code does not check
+  migrated_from. Probe: a v1 report exported 522 rows before the exact definition_from_v1 mapping and 500 reordered rows
+  after it, with truncated true; totals unchanged. Scenario: after n0116_migrate_definitions --apply, any scheduled report
+  with more than 500 groups silently drops rows. The tests miss it because they compare only totals and value preview.
+  Latent on cip (0 of 3 saved reports migrated). Decision needed: migrated reports keep v1 presentation, or take the v2 cap.
+M2 (major): one invalid subscriber breaks the whole schedule. Introduced by E3. The PermissionError is raised inside the
+  recipient loop (runner.py:208-220). Probe: [viewer, deactivated user, admin] -> viewer got the report plus a failed row;
+  admin got only a failed row. Scenario: one deactivated employee stops the weekly report for every later subscriber.
+  Tests cover single-recipient schedules only.
+m1: every scheduled failure is labelled [TIMEOUT] because the error string always includes "statement_timeout_ms"
+  (runner.py:150-151, 239). Pre-existing.
+m2: failure rows show the raw exception text, including [SQL: ...], to inbox recipients. Pre-existing.
+m3: POST/PUT dashboard widgets accept another tenant's saved_report_id with no tenant check (stored 987, 200). Integrity
+  problem and an id-existence test, not a data leak.
+m4: outside E2 scope, other XLSX exporters (cpor/export_xlsx, lineup/export_apply, promo_export/cpor_xlsx,
+  lineup_customer_export; ASSERTED from code) and CSV exports (AG Grid exportDataAsCsv x5, dsiProductCandidateExport) have
+  no literal guard.
+m5: the tenant ContextVar binding is not tested. With it mutated out, the result was unchanged (70) because a2_cpor.py:90
+  passes the tenant id explicitly. Isolation holds, but the tests would not catch the binding's removal.
+m6: pre-existing text fidelity: Decimal, date and datetime values become quoted JSON strings (pure builder only); a leading
+  CR comes back as LF.
+Observation: cip's weekly schedule has no delivery and no failure row on Mondays 5 Oct and 26 Oct. Cause unverified.
+Observation: cip is at alembic 20261101_0050, so 0048 is applied there. The VERIFICATION_AND_FRONTIER report recorded it as
+  not authorised for cip (D-0126); whether it has since been authorised was not assessed.
+
+WHAT I RAN: see gov008_commands.txt. Not run: the opt-in Playwright test, any non-owner database role, concurrency.

@@ -1,0 +1,12 @@
+
+B viewer at_sea (product_id NULL rows; viewer product-line scope): 0.0
+
+A at_sea: 500.0 | B admin at_sea: 7.0
+B vessels: [(7.0, 60, {'first_eta': '2026-10-01', 'first_report': '2026-09-01', 'current_eta': '2026-11-30', 'latest_report': '2026-10-27'})]
+B port_rows conditions: [('ZADUR', None)]
+B port-conditions list: {'items': [], 'current': []}
+B lines for A's vessel key: 0 (B's own vessel shares the key shape: i:2026-09-19|2026-11-05|ZADUR|asia_durban )
+A current after B's post: [{'id': 54, 'port_code': 'ZADUR', 'label': 'Durban', 'delay_days': 12.0, 'note': 'A only', 'entered_by': 'A admin', 'entered_at': '2026-11-02T14:01:33.721886+00:00'}]
+B vessel history (A's old observation had ETA 2026-10-01): {'first_eta': '2026-10-01', 'first_report': '2026-09-01', 'current_eta': '2026-11-30', 'latest_report': '2026-10-27'} slip 60
+.
+1 passed, 1 deselected in 147.97s (0:02:27)

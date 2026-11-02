@@ -1,0 +1,35 @@
+['id', 'created_at', 'tenant_id', 'actor_user_id', 'actor', 'area', 'action', 'target_type', 'target_id', 'detail_json']
+json col ['detail_json']
+id = 18
+created_at = "2026-10-29 10:06:39.001624+02:00"
+tenant_id = "default"
+actor_user_id = null
+actor = "open-book"
+area = "admin"
+action = "open_book_close"
+target_type = "import_job"
+target_id = "1339"
+detail_json = {"facts": [{"fact_id": 134129, "order_no": "151126061011433", "quantity": 252.0, "item_code": "90NX09Y1-M00440", "line_state": "closed_shipped", "report_type": "acza_workbook_shipped", "origin_import_job_id": 1326}, {"fact_id": 134130, "order_no": "151126061011435", "quantity": 264.0, "item_code": "90NX09W1-M004T0", "line_state": "closed_shipped", "report_type": "acza_workbook_shipped", "origin_import_job_id": 1326}, {"fact_id": 33, "order_no": "151126021004786", "quantity": 108.0, "item_code": "90NB0ZR2-M06MU0", "line_state": "closed_disappeared", "report_type": "acza_workbook_unship", "origin_import_job_id": 32}, {"fact_id": 54, "order_no": "151126031011073", "quantity": 24.0, "item_code": "90NR0KS1-M00EX0", "line_state": "closed_shipped", "report_type": "acza_workbook_unship", "origin_import_job_id": 32}, {"fact_id": 55, "order_no": "151126031008340", "quantity": 3.0, "item_code": "90NR0PG2-M004A0", "line_state": "closed_shipped", "report_type": "acza_workbook_unship", "origin_import_job_id": 32}, {"fact_id": 2, "order_no": "151126031010164", "quantity": 6.0, "item_code": "90PF0662-M00CV0", "line_state": "closed_shipped", "report_type": "acza_workbook_unship", "origin_import_job_id": 40}, {"fact_id": 3, "order_no": "151126031014389", "quantity": 10.0, "item_code": "90PF05R3-M01880", "line_state": "closed_shipped", "report_type": "acza_workbook_unship", "origin_import_job_id": 40}, {"fact_id": 4, "order_no": "151126031014391", "quantity": 4.0, "item_code": "90PF0662-M00CV0"
+-----
+id = 22
+created_at = "2026-11-01 17:50:17.608329+02:00"
+tenant_id = "default"
+actor_user_id = null
+actor = "scripts/ops/backfill_shipment_water_fields.py"
+area = "admin"
+action = "shipment_water_backfill"
+target_type = "shipment_tables"
+target_id = "20261101_0049"
+detail_json = {"per_table_per_job": {"fact_inbound_shipment": {"32": {"file": "ACZA Shipped Unshipped 20260526.xlsx", "rows": 48, "filled": {"ship_way": 48, "origin_hub": 48, "deliver_port": 48, "forwarder_code": 48, "shipping_method": 48}, "rows_filled": 48, "already_set_and_different": {}}, "40": {"file": "ACZA Shipped Unshipped 20260602.xlsx", "rows": 130, "filled": {"ship_way": 130, "origin_hub": 130, "deliver_port": 130, "forwarder_code": 130, "shipping_method": 130}, "rows_filled": 130, "already_set_and_different": {}}, "153": {"file": "ACZA Shipped Unshipped 20260623.xlsx", "rows": 536, "filled": {"ship_way": 536, "origin_hub": 536, "deliver_port": 536, "on_board_date": 369, "port_ata_date": 369, "port_eta_date": 369, "forwarder_code": 536, "shipping_method": 536}, "rows_filled": 536, "already_set_and_different": {}}, "154": {"file": "shipped 2020-2023.xlsx", "rows": 6633, "filled": {"ship_way": 6633, "origin_hub": 6599, "deliver_port": 6633, "on_board_date": 6463, "port_ata_date": 6456, "port_eta_date": 6463, "forwarder_code": 6633, "shipping_method": 6633}, "rows_filled": 6633, "already_set_and_different": {}}, "601": {"file": "ACZA Shipped Unshipped 20260721.xlsx", "rows": 89, "filled": {"ship_way": 89, "origin_hub": 83, "deliver_port": 89, "on_board_date": 27, "port_ata_date": 3, "port_eta_date": 27, "forwarder_code": 89, "shipping_method": 89}, "rows_filled": 89, "already_set_and_different": {}}, "605": {"file": "ACZA Shipped Unshipped 20260728.xlsx", "rows": 314, "filled": {"s
+-----
+id = 26
+created_at = "2026-11-02 14:57:35.226895+02:00"
+tenant_id = "default"
+actor_user_id = null
+actor = "scripts/merge_shipped_fact_identity_twins.py --retire-orphan-open-rows"
+area = "admin"
+action = "shipped_fact_orphan_open_retire"
+target_type = "import_job"
+target_id = "1697"
+detail_json = {"fact_ids": [148768, 148777, 148780, 148785, 148786, 148801, 157127, 163464, 163465], "superseded": 9, "disappeared": 0}
+-----

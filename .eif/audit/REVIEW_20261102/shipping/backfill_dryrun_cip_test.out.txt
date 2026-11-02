@@ -1,0 +1,153 @@
+current_database() = cip_test; role cip; transaction_read_only = on; dry run, nothing is changed
+
+shipment_evidence_line: 31,615 rows; 31,434 to fill
+  job 1 (r1d-e2e-dsi.xlsx): 115 rows, nothing to fill
+  job 81 (test_observation_append.csv): 1 rows, nothing to fill
+  job 171 (test_observation_append.csv): 1 rows, nothing to fill
+  job 261 (test_observation_append.csv): 1 rows, nothing to fill
+  job 352 (test_observation_append.csv): 1 rows, nothing to fill
+  job 443 (test_observation_append.csv): 1 rows, nothing to fill
+  job 534 (test_observation_append.csv): 1 rows, nothing to fill
+  job 625 (test_observation_append.csv): 1 rows, nothing to fill
+  job 638 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 640 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 641 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 643 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 644 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 710 (test_observation_append.csv): 1 rows, nothing to fill
+  job 711 (test_observation_append.csv): 1 rows, nothing to fill
+  job 712 (test_observation_append.csv): 1 rows, nothing to fill
+  job 713 (test_observation_append.csv): 1 rows, nothing to fill
+  job 714 (test_observation_append.csv): 1 rows, nothing to fill
+  job 717 (test_observation_append.csv): 1 rows, nothing to fill
+  job 718 (test_observation_append.csv): 1 rows, nothing to fill
+  job 807 (test_observation_append.csv): 1 rows, nothing to fill
+  job 944 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1045 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1145 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1245 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1346 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1515 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1628 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1951 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2092 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2255 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2442 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2586 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2733 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2883 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3038 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3234 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3423 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3648 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3810 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3976 (test_observation_append.csv): 1 rows, nothing to fill
+  job 4142 (test_observation_append.csv): 1 rows, nothing to fill
+  job 4378 (test_observation_append.csv): 1 rows, nothing to fill
+  job 4627 (test_observation_append.csv): 1 rows, nothing to fill
+  job 4843 (test_observation_append.csv): 1 rows, nothing to fill
+  job 5112 (test_observation_append.csv): 1 rows, nothing to fill
+  job 5319 (test_observation_append.csv): 1 rows, nothing to fill
+  job 5718 (test_observation_append.csv): 1 rows, nothing to fill
+  job 5925 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6132 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6339 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6546 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6753 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6960 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7167 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7374 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7581 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7788 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7995 (test_observation_append.csv): 1 rows, nothing to fill
+  job 8051 (test_observation_append.csv): 1 rows, nothing to fill
+  job 8117 (ACZA Shipped Unshipped 20260929.xlsx): 7,768 rows, 7,768 filled: deliver_port 7,768, forwarder_code 7,768, on_board_date 6,807, origin_hub 7,740, port_ata_date 6,559, port_eta_date 6,807, ship_way 7,768, shipping_method 7,768
+  job 8118 (ACZA Shipped Unshipped 20260929.xlsx): 7,768 rows, 7,768 filled: deliver_port 7,768, forwarder_code 7,768, on_board_date 6,807, origin_hub 7,740, port_ata_date 6,559, port_eta_date 6,807, ship_way 7,768, shipping_method 7,768
+  job 8123 (ACZA Shipped Unshipped 20261023 (1).xlsx): 7,931 rows, 7,931 filled: deliver_port 7,931, forwarder_code 7,931, on_board_date 6,870, origin_hub 7,903, port_ata_date 6,731, port_eta_date 6,870, ship_way 7,931, shipping_method 7,931
+  job 8124 (ACZA Shipped Unshipped 20261027.xlsx): 7,967 rows, 7,967 filled: deliver_port 7,965, forwarder_code 7,965, on_board_date 6,935, origin_hub 7,937, port_ata_date 6,801, port_eta_date 6,935, ship_way 7,967, shipping_method 7,965
+  job 8320 (test_observation_append.csv): 1 rows, nothing to fill
+  job 8664 (test_observation_append.csv): 1 rows, nothing to fill
+  job 8762 (test_observation_append.csv): 1 rows, nothing to fill
+  job 9013 (test_observation_append.csv): 1 rows, nothing to fill
+  job 9264 (test_observation_append.csv): 1 rows, nothing to fill
+  job 9566 (test_observation_append.csv): 1 rows, nothing to fill
+  job 9845 (test_observation_append.csv): 1 rows, nothing to fill
+  shipment_evidence_line per field to fill: deliver_port 31,432, forwarder_code 31,432, on_board_date 27,419, origin_hub 31,320, port_ata_date 26,650, port_eta_date 27,419, ship_way 31,434, shipping_method 31,432
+
+shipment_evidence_observation: 31,500 rows; 31,434 to fill
+  job 81 (test_observation_append.csv): 1 rows, nothing to fill
+  job 171 (test_observation_append.csv): 1 rows, nothing to fill
+  job 261 (test_observation_append.csv): 1 rows, nothing to fill
+  job 352 (test_observation_append.csv): 1 rows, nothing to fill
+  job 443 (test_observation_append.csv): 1 rows, nothing to fill
+  job 534 (test_observation_append.csv): 1 rows, nothing to fill
+  job 625 (test_observation_append.csv): 1 rows, nothing to fill
+  job 638 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 640 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 641 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 643 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 644 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  job 710 (test_observation_append.csv): 1 rows, nothing to fill
+  job 711 (test_observation_append.csv): 1 rows, nothing to fill
+  job 712 (test_observation_append.csv): 1 rows, nothing to fill
+  job 713 (test_observation_append.csv): 1 rows, nothing to fill
+  job 714 (test_observation_append.csv): 1 rows, nothing to fill
+  job 717 (test_observation_append.csv): 1 rows, nothing to fill
+  job 718 (test_observation_append.csv): 1 rows, nothing to fill
+  job 807 (test_observation_append.csv): 1 rows, nothing to fill
+  job 944 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1045 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1145 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1245 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1346 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1515 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1628 (test_observation_append.csv): 1 rows, nothing to fill
+  job 1951 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2092 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2255 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2442 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2586 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2733 (test_observation_append.csv): 1 rows, nothing to fill
+  job 2883 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3038 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3234 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3423 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3648 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3810 (test_observation_append.csv): 1 rows, nothing to fill
+  job 3976 (test_observation_append.csv): 1 rows, nothing to fill
+  job 4142 (test_observation_append.csv): 1 rows, nothing to fill
+  job 4378 (test_observation_append.csv): 1 rows, nothing to fill
+  job 4627 (test_observation_append.csv): 1 rows, nothing to fill
+  job 4843 (test_observation_append.csv): 1 rows, nothing to fill
+  job 5112 (test_observation_append.csv): 1 rows, nothing to fill
+  job 5319 (test_observation_append.csv): 1 rows, nothing to fill
+  job 5718 (test_observation_append.csv): 1 rows, nothing to fill
+  job 5925 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6132 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6339 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6546 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6753 (test_observation_append.csv): 1 rows, nothing to fill
+  job 6960 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7167 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7374 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7581 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7788 (test_observation_append.csv): 1 rows, nothing to fill
+  job 7995 (test_observation_append.csv): 1 rows, nothing to fill
+  job 8051 (test_observation_append.csv): 1 rows, nothing to fill
+  job 8117 (ACZA Shipped Unshipped 20260929.xlsx): 7,768 rows, 7,768 filled: deliver_port 7,768, forwarder_code 7,768, on_board_date 6,807, origin_hub 7,740, port_ata_date 6,559, port_eta_date 6,807, ship_way 7,768, shipping_method 7,768
+  job 8118 (ACZA Shipped Unshipped 20260929.xlsx): 7,768 rows, 7,768 filled: deliver_port 7,768, forwarder_code 7,768, on_board_date 6,807, origin_hub 7,740, port_ata_date 6,559, port_eta_date 6,807, ship_way 7,768, shipping_method 7,768
+  job 8123 (ACZA Shipped Unshipped 20261023 (1).xlsx): 7,931 rows, 7,931 filled: deliver_port 7,931, forwarder_code 7,931, on_board_date 6,870, origin_hub 7,903, port_ata_date 6,731, port_eta_date 6,870, ship_way 7,931, shipping_method 7,931
+  job 8124 (ACZA Shipped Unshipped 20261027.xlsx): 7,967 rows, 7,967 filled: deliver_port 7,965, forwarder_code 7,965, on_board_date 6,935, origin_hub 7,937, port_ata_date 6,801, port_eta_date 6,935, ship_way 7,967, shipping_method 7,965
+  job 8320 (test_observation_append.csv): 1 rows, nothing to fill
+  job 8664 (test_observation_append.csv): 1 rows, nothing to fill
+  job 8762 (test_observation_append.csv): 1 rows, nothing to fill
+  job 9013 (test_observation_append.csv): 1 rows, nothing to fill
+  job 9264 (test_observation_append.csv): 1 rows, nothing to fill
+  job 9566 (test_observation_append.csv): 1 rows, nothing to fill
+  job 9845 (test_observation_append.csv): 1 rows, nothing to fill
+  shipment_evidence_observation per field to fill: deliver_port 31,432, forwarder_code 31,432, on_board_date 27,419, origin_hub 31,320, port_ata_date 26,650, port_eta_date 27,419, ship_way 31,434, shipping_method 31,432
+
+fact_inbound_shipment: 65 rows; 0 to fill
+  job None ((no job)): 64 rows, nothing to fill
+  job 644 (session_e_shipment_fixture.csv): 1 rows, nothing to fill
+  fact_inbound_shipment per field to fill: none

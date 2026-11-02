@@ -1,0 +1,10 @@
+-- closed_with_pod (dsi_soh_reconciliation landed sum, channel_ops movement-lens via coalesce(confirm,pod))
+-- closed_with_confirm_or_pod
+   ('closed_shipped', 29, Decimal('2015'))
+   ('closed_superseded', 47, Decimal('3597'))
+-- cover_distribution_inbound_open_like (pod null, dist+product not null; raw qty, before twin remainder)
+   (False, 668, Decimal('45316'))
+   (True, 1157, Decimal('79112'))
+-- cpor_intake_rows_like (PO, price>0, qty>0, landing date)
+   (False, 13901, Decimal('1380713'))
+   (True, 820, Decimal('59712'))

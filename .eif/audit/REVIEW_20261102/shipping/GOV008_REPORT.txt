@@ -1,0 +1,101 @@
+GOV-008 shipping review, HEAD 5f442c3c, 2 Nov 2026. This copy is written here because the EIF hook blocks the SubagentHandback tool (SHIM_TOOL_UNMAPPED).
+
+VERDICT
+VERIFIED_WITH_LIMITATIONS. Several shipped claims are NOT MET:
+- the closed states are still counted by several readers on cip today;
+- the 0050 downgrade puts open rows back as shipped;
+- an undated book re-opens closed lines.
+
+INDEPENDENCE
+Fresh session, same model family. Not a different model. No browser rendering was done.
+
+No product edits, no writes to cip, no --apply runs. The untracked apps/api/scripts/ops/* files in git status were already there and are not mine.
+All probes and outputs are in this folder.
+
+WHAT I RAN
+- API tests on cip_test: 9 files, 87 passed.
+- Frontend vitest: 5 files, 35 passed.
+- Read-only probes on cip (read-only transaction confirmed on): probe_catalog, probe_cip_readonly, probe_cip_closed_readers, probe_cip_mapping_memory, probe_cip_po_change_twins.
+- Write probes on cip_test, all rolled back:
+  - probe_writes_cip_test.py, scenarios P1-P10;
+  - test_probe_otw_cross_tenant.py, the cross-tenant test;
+  - test_probe_otw_input_edges.out.txt, the port-condition input cases. The NaN case fails on purpose: it shows the server error.
+- Pure probe of the slip logic (probe_slip_pure.py).
+- Backfill dry run on cip_test.
+
+MAJOR FINDINGS
+
+1. Closed states are still counted by readers that do not exclude them.
+   Verified by code and cip counts; the endpoints were not executed against cip.
+   - twin_remainder (shipment_strict_pair.py:218-247) only looks at shipped and open_order rows. A closed row falls through as kept, at its full quantity, so any reader that relies on twin.kept counts it.
+   - channel_ops /cover-distribution open inbound (channel_ops.py:1134-1150): 1,157 closed rows / 79,112 units on cip, against 668 / 45,316 that are not closed.
+   - /movement-lens (channel_ops.py:246-256), /forecasts (channel_ops.py:1013-1024), and the dashboards v2 semantic model shipments.quantity and lines (semantics/models/default.yaml:289-314) all count:
+     - 47 closed_superseded rows / 3,597 units, which double-count their PO twins;
+     - 29 closed_shipped rows / 2,015 units.
+   - cpor/intake_weighted_mac.py: 820 closed rows / 59,712 units weight the intake cost.
+
+2. The 0050 downgrade (20261101_0050_fact_superseded.py:32) sets every closed_superseded row to shipped, including orphan-retired open orders.
+   On cip that is 9 rows / 921 units of former open_order lines with no confirm date. Verified by P10.
+
+3. An undated complete-book file still writes facts.
+   job_is_older_than_applied_book returns False when there is no date.
+   - P4: a closed_disappeared fact went back to open_order.
+   - P5: an old-shape key and the new ord: key were both open for one line (12 + 12 units). The orphan retire is limited to the same job, so it does not guard this. A dated newer job does close the old row (control in P5).
+   - The "did not close open orders" notice does not say anything was re-opened.
+
+4. Cross-tenant risk. Latent today: cip has one tenant, default, and 0 identity-key collisions.
+   - fact_upsert_key is globally unique and has no tenant. Tenant B's shipped load deleted tenant A's fact. Verified by P8.
+   - _HISTORY_SQL (shipping_water.py:133-153) joins observations by line_identity_key with no tenant filter. Tenant B's vessel showed slip 60 and first ETA 2026-10-01, taken from tenant A's observation. Verified by probe.
+   - Source mapping memory, remembered sheets, cleared tokens and token aliases have no tenant, and 9c4a27d3 now reuses them automatically. Read in code, not executed.
+
+5. Open-book scope gaps.
+   - P3: the older-report guard ignores operating unit. A lagging OU's book wrote nothing.
+   - P1a: closing only covers the report types the job carries. A newer book with no Unship lines closed no Unship fact.
+   - Remembered sheets: a new or renamed sheet is silently left out and validation auto-starts, with no flag.
+
+MINOR FINDINGS
+- Partial shipment (P1b): open 100 with 60 shipped closed as closed_shipped for 100. The missing 40 are not flagged.
+- Stale shipped twin (P2): a cancelled remainder was labelled closed_shipped because an old partial shipment of the same order and item exists.
+- Orphan retire edge cases (P6):
+  - a fact whose evidence line was purged by a re-validate with a sheet dropped is closed as closed_disappeared, though it is still in the workbook;
+  - a line that moved sheet, or is now shipped, gets closed_disappeared, not superseded;
+  - with no order line, two orphans (50 and 5 units) both point at the same lowest-id fact, with no quantity check;
+  - at load time it writes no audit event and no observation.
+- Pulled-in ETA: slip is clamped to 0, so the badge says "ETA unchanged" and the history text is false. A vessel with no ETA is drawn at 100%.
+- Port conditions: code XXX is accepted (201). A raw NaN body fails while rendering the 422, which would be a 500 in production.
+- A vessel click refetches the tiles when another filter was active. The map and the tiles disagree under date or search filters.
+- The 0049 downgrade drops port_condition and its history.
+- Docstring mismatch: open_book_report_date_rule turns an unknown rule into the filename rule, but the report_date_for_job docstring says it gives no date.
+- refresh_superseded_pointers updates the whole table on every load.
+- GET /inbound-shipments lists closed rows.
+
+READERS THAT DO NOT EXCLUDE CLOSED STATES
+- channel_ops /cover-distribution, /movement-lens, /forecasts
+- semantic model shipments.quantity and lines
+- cpor/intake_weighted_mac
+- dsi_soh_reconciliation (0 closed rows with a POD on cip today)
+- inbound_shipments list
+- lineup_distributor_attribution and lineup_case_po_attribution_gap (attribution evidence, impact unknown)
+Coverage: a grep of apps/api/app only. Scripts and raw SQL views were not swept, so the list may not be complete.
+
+ITEM STATUS
+Met:
+- Chunking (P7).
+- PO-less twin scope (P9 and tests).
+- Loader key shape.
+- Auth and admin-only POST.
+- FORCE RLS on all 4 tables; append-only port_condition through grants and policies.
+- Closed states excluded on the On the water page.
+- Backfill guard and idempotence (by code).
+- Map query not tied to a clicked vessel or the needs-a-look cohort.
+- replaceState URL handling.
+Not met:
+- Closed-state readers (finding 1).
+- Downgrade safety (finding 2 and the 0049 note).
+- Undated report handling (finding 3).
+- Partial shipment (P1b).
+- Badge with a pulled-in ETA or no ETA.
+- Tenant isolation of the history query (finding 4).
+Unverified:
+- 360 px panel at 390 px wide: source only, not rendered.
+- The size of the effect through the actual endpoints.

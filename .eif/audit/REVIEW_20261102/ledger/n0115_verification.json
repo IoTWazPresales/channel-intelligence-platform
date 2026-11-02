@@ -1,0 +1,1 @@
+{"node": "N-0115", "expected_revision": 26, "kind": "behavioral", "state": "blocked", "evidence": ".eif/audit/REVIEW_20261102/FINDINGS.md", "path": "apps/api/app/semantics/models/default.yaml"}

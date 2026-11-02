@@ -1,0 +1,1 @@
+{"node": "N-0116", "expected_revision": 25, "kind": "behavioral", "state": "blocked", "evidence": ".eif/audit/REVIEW_20261102/FINDINGS.md", "path": "apps/api/app/services/report_delivery.py"}

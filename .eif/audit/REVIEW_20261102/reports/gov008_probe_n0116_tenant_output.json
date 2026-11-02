@@ -1,0 +1,90 @@
+{
+ "cross_tenant": {
+  "status_codes": {
+   "other GET /api/v1/dashboards/{A_dash}": 404,
+   "other PATCH /api/v1/dashboards/{A_dash}": 404,
+   "other PATCH /api/v1/dashboards/{A_dash}/layout": 404,
+   "other PUT /api/v1/dashboards/{A_dash}/widgets": 404,
+   "other POST /api/v1/dashboards/{A_dash}/widgets": 404,
+   "other PATCH /api/v1/dashboards/{A_dash}/widgets/{A_widget}": 404,
+   "other POST /api/v1/dashboards/{A_dash}/widgets/{A_widget}/promote": 404,
+   "other POST /api/v1/dashboards/{A_dash}/publish": 404,
+   "other DELETE /api/v1/dashboards/{A_dash}/widgets/{A_widget}": 404,
+   "other DELETE /api/v1/dashboards/{A_dash}": 404,
+   "other PATCH /api/v1/dashboards/{B_dash}/widgets/{A_widget}": 404,
+   "other PATCH /api/v1/dashboards/{B_dash}/layout": 400,
+   "other DELETE /api/v1/dashboards/{B_dash}/widgets/{A_widget}": 404,
+   "other GET /api/v1/saved-reports/{A_report}": 404,
+   "other PATCH /api/v1/saved-reports/{A_report}": 404,
+   "other POST /api/v1/saved-reports/{A_report}/publish": 404,
+   "other PUT /api/v1/saved-reports/{A_report}/overview-pin": 404,
+   "other DELETE /api/v1/saved-reports/{A_report}": 404,
+   "other GET /api/v1/reports/saved/{A_report}/export?format=xlsx": 404,
+   "other POST /api/v1/reports/saved/{A_report}/deliver": 404,
+   "other POST /api/v1/reports/schedules": 404,
+   "other POST /api/v1/reports/schedules/257/run-now": 404,
+   "other GET /api/v1/reports/inbox/763/html": 404,
+   "other POST /api/v1/dashboards": 400,
+   "viewer GET /api/v1/dashboards/{A_dash}": 403,
+   "viewer PATCH /api/v1/dashboards/{A_dash}": 403,
+   "viewer PATCH /api/v1/dashboards/{A_dash}/layout": 403,
+   "viewer PUT /api/v1/dashboards/{A_dash}/widgets": 403,
+   "viewer POST /api/v1/dashboards/{A_dash}/widgets": 403,
+   "viewer PATCH /api/v1/dashboards/{A_dash}/widgets/{A_widget}": 403,
+   "viewer POST /api/v1/dashboards/{A_dash}/widgets/{A_widget}/promote": 403,
+   "viewer POST /api/v1/dashboards/{A_dash}/publish": 403,
+   "viewer DELETE /api/v1/dashboards/{A_dash}/widgets/{A_widget}": 403,
+   "viewer DELETE /api/v1/dashboards/{A_dash}": 403,
+   "viewer PATCH /api/v1/dashboards/{B_dash}/widgets/{A_widget}": 404,
+   "viewer PATCH /api/v1/dashboards/{B_dash}/layout": 404,
+   "viewer DELETE /api/v1/dashboards/{B_dash}/widgets/{A_widget}": 404,
+   "viewer GET /api/v1/saved-reports/{A_report}": 403,
+   "viewer PATCH /api/v1/saved-reports/{A_report}": 403,
+   "viewer POST /api/v1/saved-reports/{A_report}/publish": 403,
+   "viewer PUT /api/v1/saved-reports/{A_report}/overview-pin": 403,
+   "viewer DELETE /api/v1/saved-reports/{A_report}": 403,
+   "viewer GET /api/v1/reports/saved/{A_report}/export?format=xlsx": 403,
+   "viewer POST /api/v1/reports/saved/{A_report}/deliver": 403,
+   "viewer POST /api/v1/reports/schedules": 403,
+   "viewer POST /api/v1/reports/schedules/257/run-now": 403,
+   "viewer GET /api/v1/reports/inbox/763/html": 404,
+   "viewer POST /api/v1/dashboards": 403
+  },
+  "foreign_saved_report_link": {
+   "status": 200,
+   "saved_report_id_stored": 987
+  },
+  "inbox_b_delivery_ids": [],
+  "a_delivery_id": 763,
+  "schedules_b": [],
+  "a_schedule": 257,
+  "a_dashboard_after": {
+   "name": "G8 A private",
+   "visibility": "personal",
+   "widgets": [
+    [
+     1619,
+     "G8 A widget",
+     {
+      "h": 8,
+      "w": 6,
+      "x": 0,
+      "y": 0
+     }
+    ]
+   ]
+  },
+  "a_report_after": {
+   "name": "G8 A report",
+   "visibility": "personal"
+  },
+  "v2_b_filtering_a_product": {
+   "ok": true,
+   "totals": {
+    "dsi_sellout.units": 0.0
+   },
+   "rows": []
+  },
+  "other_success_codes": []
+ }
+}

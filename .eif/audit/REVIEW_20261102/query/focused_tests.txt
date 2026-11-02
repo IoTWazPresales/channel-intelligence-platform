@@ -1,0 +1,13 @@
+GOV-008 review 2026-11-02, HEAD 5f442c3c, cip_test, venv python. Captured from tool stdout (tail).
+
+Command (from repo root, subshell):
+(cd apps/api && DATABASE_URL="postgresql+asyncpg://cip:cip@localhost:5432/cip_test" DATABASE_URL_SYNC="postgresql://cip:cip@localhost:5432/cip_test" .venv/Scripts/python.exe -m pytest -q -p no:cacheprovider tests/test_cpor_query_filter_fidelity.py tests/test_query_tenant_overlay_e6.py tests/test_query_model_e7_e8.py tests/test_e10_calendar_values_db.py tests/test_query_model_db.py tests/test_query_model_graph.py tests/test_query_v2_api.py tests/test_query_v1_callers_n0115.py tests/test_query_model_rules.py)
+
+Result:
+........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 110.61s (0:01:50)
+
+Note: none of these tests seeds a shipment row in a closed_* line state, a lineup row by week/day,
+a per-week total on a non-platform calendar without a window, or dsi_sellout.priced_units under a
+hidden sellout_units overlay. Those are the paths where p2/p3/p4 found defects.
