@@ -1,0 +1,73 @@
+PO-less twin retire, clone proof on cip_retire3 (2026-11-01 22:44 UTC)
+clone cip_retire3 restored from a pg_dump of cip (661 s)
+  row counts cip vs cip_retire3: import_job 340/340, fact_sales_sellout 58128/58128, fact_returns 6793/6793, fact_inventory_distributor 47411/47411, fact_customer_sellthrough 14898/14898, fact_customer_sellthrough_superseded 399/399, fact_distributor_line_superseded 0/0, customer_stock_position 4609/4609, import_distributor_si_staging_line 219566/219566, import_customer_sellthrough_staging_line 93004/93004, dim_customer 5623/5623
+
+== 1. Migration 20261101_0050 (clone is at: INFO  [alembic.runtime.migration] Will assume transactional DDL.)
+  facts 15,788; shipped without a PO id: 158
+  PASS  after upgrade: the two columns exist, every row count is as before
+  PASS  after upgrade: every fact row is byte-identical on its existing columns
+  PASS  after downgrade: columns gone, counts and rows as before
+
+== 2. Dry run and guards
+  dry run: twins found 47, to retire 37 (2,897 units), quantity differs 10
+  PASS  dry run is read-only and changes nothing
+  PASS  --apply without --expect-db is refused
+  PASS  --apply with the wrong database name is refused
+  PASS  refused applies changed nothing
+
+== 3. The retire set, independently
+  independent twin set (key prefix + item + newer job + PO id): 47; stale overdue at-sea facts of 1 Nov: 39
+  quantity differs (listed for Warren, not retired): [113211, 113224, 134343, 134344, 134345, 134346, 134347, 134348, 134349, 134350]
+    fact 113211 job 601 15260244136|90NB14Y1-M00DP0: 40 units vs 80 on 1 PO-key twin(s) (fact 162850)
+    fact 113224 job 601 15260244148|90NB1542-M007D0: 36 units vs 72 on 1 PO-key twin(s) (fact 162863)
+    fact 134343 job 1326 15260318557|90NB1542-M007D0: 36 units vs 108 on 1 PO-key twin(s) (fact 163212)
+    fact 134344 job 1326 15260318558|90NB1542-M007D0: 108 units vs 432 on 1 PO-key twin(s) (fact 163213)
+    fact 134345 job 1326 15260318559|90NB1542-M007D0: 108 units vs 648 on 1 PO-key twin(s) (fact 163214)
+    fact 134346 job 1326 15260318560|90NB1542-M007D0: 108 units vs 648 on 1 PO-key twin(s) (fact 163215)
+    fact 134347 job 1326 15260318561|90NB1542-M007D0: 108 units vs 324 on 1 PO-key twin(s) (fact 163216)
+    fact 134348 job 1326 15260318562|90NB17I1-M00W30: 108 units vs 324 on 1 PO-key twin(s) (fact 163217)
+    fact 134349 job 1326 15260318563|90NB17I1-M00W30: 36 units vs 540 on 1 PO-key twin(s) (fact 163218)
+    fact 134350 job 1326 15260318564|90NR0NA1-M00LJ0: 12 units vs 60 on 1 PO-key twin(s) (fact 163219)
+
+== 4. Apply
+  retired 37 fact rows (2,897 units)
+  PASS  apply committed and retired exactly the planned rows
+  PASS  no row was added or removed in any table (one audit event aside)
+  PASS  retired rows are only rows that were shipped before
+  PASS  every retired row is in the independent twin set - 0 not in it
+  PASS  what the independent set has beyond the retired rows is the quantity-differs pairs plus pairs the independent reading cannot size - 10 left over, 10 listed as quantity differs; 0 are twins whose quantity the independent formulation does not test
+  PASS  the stale overdue at-sea facts are all retired or listed - 39 stale; 37 retired, 2 listed
+  PASS  each retired row points at a shipped PO-key fact of a newer job with the same delivery and item, and its key - (0, 0, 0, 0, 0)
+  PASS  each retired row's quantity equals its PO-key twins' total
+  PASS  exactly the retired rows changed; every column of every other row is as before - 37 rows changed, 37 retired
+  PASS  a retired row differs only in line_state, updated_at and the two pointer columns
+  PASS  this apply wrote one audit event holding the retire - 0 -> 1
+
+== 5. Before and after (the figures the app shows)
+  figure                                                   before          after
+  shipped units (line_state shipped, all)               1370755.0      1367858.0
+  shipped, not landed (supply overview) units             17727.0        14830.0
+  landed units (POD set)                                1353028.0      1353028.0
+  arrived units (ATA, no POD)                                 0.0            0.0
+  open units (not received)                               66260.0        63363.0
+  pipeline units (open orders)                            48533.0        48533.0
+  past-ETA lines with no POD                                   90             56
+  fill rate                                        0.2618659448152819 0.2618659448152819
+  On the water: at sea units                              13516.0        10619.0
+  On the water: at sea lines                                  162            125
+  On the water: vessels                                        14              9
+  On the water: overdue vessels                                 9              4
+  On the water: units on overdue vessels                   6870.0         3973.0
+  On the water: arrived units                              3417.0         3417.0
+  retired facts (closed_superseded)                             0             37
+  PASS  landed units and the open book (pipeline) did not move
+  PASS  fill rate did not move
+  PASS  On the water: overdue vessels and at-sea units fell, nothing arrived or moved
+
+== 6. Idempotence and the round trip
+  PASS  a second dry run plans nothing to retire - twins found 10
+  PASS  a second apply retires nothing
+  PASS  downgrade with the data present puts every retired row back: all rows as before (updated_at aside)
+
+RESULT: ALL PASS
+clone cip_retire3 left in place (drop it by hand when done)

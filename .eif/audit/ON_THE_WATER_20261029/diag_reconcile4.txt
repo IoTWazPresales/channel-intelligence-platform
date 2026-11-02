@@ -1,0 +1,15 @@
+db/user/ro: ('cip', 'cip', 'on')
+rows with quantity 800-900 in job 1697, no POD:
+
+rows by (sheet, line_state, ATA?, POD?, sc?, ob?) with no POD, units:
+   ('Unship', 'open_order', False, False, False, None, 723, Decimal('47259'))
+   ('Shipped', 'shipped', False, True, True, False, 109, Decimal('10014'))
+   ('Shipped', 'shipped', True, True, True, False, 59, Decimal('3417'))
+   ('Unship', 'closed_disappeared', False, False, False, None, 20, Decimal('933'))
+   ('Shipped', 'shipped', False, True, True, True, 19, Decimal('643'))
+   ('Shipped', 'open_order', False, False, False, None, 3, Decimal('585'))
+   ('Unship', 'closed_shipped', False, False, False, None, 14, Decimal('490'))
+   ('Shipped', 'open_order', False, False, True, False, 6, Decimal('336'))
+   ('BOM not ready', 'open_order', False, False, False, None, 2, Decimal('323'))
+   ('Shipped', 'closed_shipped', False, False, False, None, 5, Decimal('114'))
+   ('Shipped', 'shipped', False, True, False, None, 3, Decimal('56'))

@@ -1,0 +1,12 @@
+db/user/ro: ('cip', 'cip', 'on')
+Shipped-sheet rows: 7247 units 500532
+ship-confirmed, on board <= 27 Oct: 6910 488223
+   ('ATA', 'POD', 'sea'):  5424 lines   402,563 units
+   ('ATA', 'POD', 'TRUCK/AIR'):   933 lines    36,992 units
+   ('ATA', 'POD', 'AIR'):   385 lines    35,237 units
+   ('no ATA', 'no POD', 'sea'):   109 lines    10,014 units
+   ('ATA', 'no POD', 'sea'):    59 lines     3,417 units
+no ATA (any POD, any way): 109 10014
+no ATA, no POD, any way: 109 10014
+raw headers: ['POD', 'Est POD', 'shipway', 'Retailer', 'Ship Way', 'Est POD(Week)', 'On-Board Date', 'Shipping Method', 'Ship Confirm Date', 'ETA Date(Est Port Arrival)', 'ATA Date(Actual Port Arrival)']
+raw ATA values where parsed ATA is null (top): [('None', 109)]

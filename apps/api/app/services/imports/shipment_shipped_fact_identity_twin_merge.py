@@ -120,6 +120,8 @@ def _is_legacy_shipped_fact(f: FactInboundShipment) -> bool:
         return False
     if is_legacy_shipped_source_key(f.source_key):
         return True
+    if "|ord:" in (f.source_key or ""):
+        return False  # order-grain key of a line not invoiced yet: a complete row, not an under-count
     if f.invoice_line is None and not shipped_source_key_has_invoice_segment(f.source_key):
         return True
     return False
@@ -477,3 +479,129 @@ TwinBucket = CollapseBucket
 def _classify_group(stable_key: str, facts: list[FactInboundShipment]) -> ShippedFactCollapseGroup:
     """Backward-compatible entry for unit tests."""
     return _build_collapse_group(stable_key, facts)
+
+
+# --------------------------------------------------------------------------------------------- PO-less twins
+# A shipped fact with no purchase_order_id keeps the key it was written under (``ship:{OU|delivery|item}``). Once the
+# purchase order resolves, the same line is written under ``ship:{OU|delivery|item|PO}``: a different key, so the old
+# row is never updated again and keeps counting (the 39 overdue vessels on cip, 1 Nov 2026). It is retired, not deleted:
+# ``line_state`` becomes ``closed_superseded`` and every reader that excludes the closed states drops it. The collapse
+# above needs two rows on one key and deletes the loser; this has two keys and keeps the row, so it is a separate rule
+# in the same module, sharing its keeper-id convention.
+
+LINE_SUPERSEDED = "closed_superseded"
+
+_PO_LESS_TWINS_SQL = """
+WITH old AS (
+  SELECT f.id, f.tenant_id, f.operating_unit, f.delivery_no, f.item_code, f.quantity, f.import_job_id, f.fact_upsert_key
+  FROM fact_inbound_shipment f
+  WHERE f.line_state = 'shipped' AND f.purchase_order_id IS NULL
+    AND coalesce(btrim(f.delivery_no), '') <> '' AND coalesce(btrim(f.item_code), '') <> ''
+), twin AS (
+  SELECT o.id AS old_id, count(*) AS twins, sum(coalesce(s.quantity, 0)) AS twin_qty,
+         min(s.id) AS keeper_id, (array_agg(s.fact_upsert_key ORDER BY s.id))[1] AS keeper_key,
+         max(s.import_job_id) AS keeper_job
+  FROM old o
+  JOIN fact_inbound_shipment s
+    ON s.tenant_id = o.tenant_id AND s.id <> o.id AND s.line_state = 'shipped' AND s.purchase_order_id IS NOT NULL
+   AND s.delivery_no = o.delivery_no AND s.item_code = o.item_code
+   AND s.operating_unit IS NOT DISTINCT FROM o.operating_unit
+   AND coalesce(s.import_job_id, 0) > coalesce(o.import_job_id, 0)
+   {job_scope}
+  GROUP BY o.id
+)
+SELECT o.id AS old_id, o.fact_upsert_key AS old_key, o.import_job_id AS old_job, o.delivery_no, o.item_code,
+       coalesce(o.quantity, 0) AS old_qty, t.twins, t.twin_qty, t.keeper_id, t.keeper_key, t.keeper_job,
+       (round(coalesce(o.quantity, 0), 4) = round(t.twin_qty, 4)) AS qty_match,
+       (SELECT coalesce(sum(l.quantity), 0) FROM shipment_evidence_line l JOIN fact_inbound_shipment k ON k.id = t.keeper_id
+         WHERE l.import_job_id = k.import_job_id AND l.line_state = 'shipped' AND l.delivery_no = o.delivery_no
+           AND l.item_code = o.item_code AND l.purchase_order_id = k.purchase_order_id) AS evidence_qty
+FROM old o JOIN twin t ON t.old_id = o.id
+ORDER BY o.id
+"""
+
+
+@dataclass(frozen=True)
+class PoLessTwin:
+    old_id: int
+    old_key: str | None
+    old_job: int | None
+    delivery_no: str | None
+    item_code: str | None
+    old_qty: float
+    twins: int
+    twin_qty: float
+    keeper_id: int
+    keeper_key: str | None
+    keeper_job: int | None
+    qty_match: bool
+    evidence_qty: float = 0.0
+
+    @property
+    def evidence_match(self) -> bool:
+        """The one PO-key twin holds exactly what its job's evidence lines add up to (the old fact saw only part of it)."""
+        return self.twins == 1 and self.evidence_qty > 0 and round(self.evidence_qty, 4) == round(self.twin_qty, 4)
+
+    def eligible(self, accept_evidence_sum: bool = False) -> bool:
+        return self.qty_match or (accept_evidence_sum and self.evidence_match)
+
+
+def plan_po_less_shipped_twins(db: Session, *, written_by_job: int | None = None) -> list[PoLessTwin]:
+    """Every PO-less shipped fact that a newer job re-wrote under a PO-inclusive key (read only).
+
+    ``written_by_job`` limits the twins to those that job wrote (the load-time call); ``None`` plans the whole table.
+    """
+    sql = _PO_LESS_TWINS_SQL.format(job_scope="AND s.import_job_id = :job" if written_by_job is not None else "")
+    params = {"job": int(written_by_job)} if written_by_job is not None else {}
+    return [
+        PoLessTwin(
+            old_id=int(r["old_id"]), old_key=r["old_key"], old_job=r["old_job"], delivery_no=r["delivery_no"],
+            item_code=r["item_code"], old_qty=float(r["old_qty"]), twins=int(r["twins"]), twin_qty=float(r["twin_qty"]),
+            keeper_id=int(r["keeper_id"]), keeper_key=r["keeper_key"], keeper_job=r["keeper_job"], qty_match=bool(r["qty_match"]),
+            evidence_qty=float(r["evidence_qty"] or 0),
+        )
+        for r in db.execute(text(sql), params).mappings().all()
+    ]
+
+
+def retire_po_less_shipped_twins(db: Session, plan: list[PoLessTwin], *, accept_evidence_sum: bool = False) -> int:
+    """Soft-retire the planned twins whose quantity equals their PO-key twins' (and, with ``accept_evidence_sum``, those whose
+    single PO-key twin equals the sum of its job's evidence lines). Returns how many rows changed."""
+    changed = 0
+    for t in plan:
+        if not t.eligible(accept_evidence_sum):
+            continue
+        r = db.execute(
+            text(
+                "UPDATE fact_inbound_shipment SET line_state = :st, superseded_by_fact_id = :k, superseded_by_key = :kk, "
+                "updated_at = now() WHERE id = :id AND line_state = 'shipped' AND purchase_order_id IS NULL"
+            ),
+            {"st": LINE_SUPERSEDED, "k": t.keeper_id, "kk": t.keeper_key, "id": t.old_id},
+        )
+        changed += int(r.rowcount or 0)
+    return changed
+
+
+def refresh_superseded_pointers(db: Session) -> int:
+    """A reload replaces a fact row (new id, same key): point retired facts at the current id of their key."""
+    r = db.execute(
+        text(
+            "UPDATE fact_inbound_shipment f SET superseded_by_fact_id = k.id FROM fact_inbound_shipment k "
+            "WHERE f.line_state = :st AND k.fact_upsert_key = f.superseded_by_key AND k.tenant_id = f.tenant_id "
+            "AND f.superseded_by_fact_id IS DISTINCT FROM k.id"
+        ),
+        {"st": LINE_SUPERSEDED},
+    )
+    return int(r.rowcount or 0)
+
+
+def retire_po_less_twins_written_by_job(db: Session, import_job_id: int) -> dict[str, Any]:
+    """Load-time rule: the job just wrote PO-key facts; retire the PO-less twins they replace."""
+    plan = plan_po_less_shipped_twins(db, written_by_job=int(import_job_id))
+    retired = retire_po_less_shipped_twins(db, plan)
+    repointed = refresh_superseded_pointers(db)
+    return {
+        "retired": retired,
+        "repointed": repointed,
+        "quantity_differs": [(t.old_id, t.old_qty, t.twin_qty) for t in plan if not t.qty_match],
+    }

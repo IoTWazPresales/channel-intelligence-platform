@@ -1,0 +1,18 @@
+db/user/ro: ('cip', 'cip', 'on')
+rows in job 1697: 8006 units 549537
+
+A  ship-confirmed, on board <= 27 Oct, no ATA, sea:  109 lines   10,014 units (quoted: 169 lines 14,278 units)
+C  cip's rule (shipped, on board <= 1 Nov, no ATA, no POD, sea):  123 lines   10,543 units
+
+-- in A, not in C (reason per group, first match):
+  total A not C:    0 lines        0 units
+-- in C, not in A:
+  on board after 27 Oct (28 Oct-1 Nov)           14 lines      529 units
+  total C not A:   14 lines      529 units
+  A and C:  109 lines   10,014 units
+  check: A = (A and C) + (A not C): 109 = 109 + 0
+
+-- A rows as facts on cip (fact via evidence line):
+   fact shipped                  109 lines   10,014 units
+
+observations vs distinct evidence lines in job 1697: (8006, 7967)

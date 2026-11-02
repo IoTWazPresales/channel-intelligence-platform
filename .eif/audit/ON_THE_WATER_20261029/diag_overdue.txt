@@ -1,0 +1,248 @@
+db/user/read_only: ('cip', 'cip', 'on')
+
+=== 1. import jobs that carry shipment reports (tenant default) ===
+job    29 | report 2026-05-26 |    pending/shipment_mapping_ready | done - | obs      0 ev      0 facts-now      0 | ACZA Shipped Unshipped 20260526.xlsx
+job    32 | report 2026-05-26 |  completed/loaded   | done 2026-06-01 | obs   9307 ev   9307 facts-now     48 | ACZA Shipped Unshipped 20260526.xlsx
+job    33 | report 2026-06-02 |     failed/failed   | done 2026-06-03 | obs      0 ev      0 facts-now      0 | ACZA Shipped Unshipped 20260602.xlsx
+job    34 | report 2026-06-02 |  completed/loaded   | done 2026-06-03 | obs   9317 ev   9317 facts-now      0 | ACZA Shipped Unshipped 20260602.xlsx
+job    40 | report 2026-06-02 |  completed/loaded   | done 2026-06-04 | obs   9317 ev   9317 facts-now    130 | ACZA Shipped Unshipped 20260602.xlsx
+job   147 | report 2023-11-10 |  completed/loaded   | done 2026-06-24 | obs   5322 ev   5322 facts-now      0 | Copy of ACZA Shipped Unshipped 20231110.xlsx
+job   152 | report 2026-06-23 |    pending/shipment_mapping_ready | done - | obs      0 ev      0 facts-now      0 | ACZA Shipped Unshipped 20260623.xlsx
+job   153 | report 2026-06-23 |  completed/loaded   | done 2026-06-24 | obs   9503 ev   9503 facts-now    536 | ACZA Shipped Unshipped 20260623.xlsx
+job   154 | report - |  completed/loaded   | done 2026-06-26 | obs   7215 ev   7215 facts-now   6633 | shipped 2020-2023.xlsx
+job   601 | report 2026-07-21 |  completed/loaded   | done 2026-07-27 | obs   7291 ev   7291 facts-now     89 | ACZA Shipped Unshipped 20260721.xlsx
+job   605 | report 2026-07-28 |  completed/loaded   | done 2026-07-31 | obs   7328 ev   7328 facts-now    314 | ACZA Shipped Unshipped 20260728.xlsx
+job  1158 | report - |     failed/failed   | done 2026-08-18 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1159 | report 2026-08-18 |  completed/loaded   | done 2026-08-18 | obs   7369 ev   7369 facts-now    121 | ACZA Shipped Unshipped 20260818_P2.xlsx
+job  1207 | report - |     failed/failed   | done 2026-08-18 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1208 | report - |     failed/failed   | done 2026-08-18 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1209 | report - |     failed/failed   | done 2026-08-19 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1210 | report - |     failed/failed   | done 2026-08-19 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1211 | report - |     failed/failed   | done 2026-08-20 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1212 | report - |     failed/failed   | done 2026-08-25 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1213 | report - |     failed/failed   | done 2026-08-26 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1214 | report - |     failed/failed   | done 2026-08-26 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1215 | report - |     failed/failed   | done 2026-08-27 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1216 | report - |     failed/failed   | done 2026-08-28 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1217 | report - |     failed/failed   | done 2026-08-29 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1218 | report - |     failed/failed   | done 2026-08-30 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1219 | report - |     failed/failed   | done 2026-08-30 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1220 | report - |     failed/failed   | done 2026-08-30 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1221 | report - |     failed/failed   | done 2026-08-31 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1230 | report - |     failed/failed   | done 2026-08-31 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1231 | report - |     failed/failed   | done 2026-09-01 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1232 | report - |     failed/failed   | done 2026-09-01 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1233 | report - |     failed/failed   | done 2026-09-01 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1234 | report - |     failed/failed   | done 2026-09-02 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1326 | report 2026-09-01 |  completed/loaded   | done 2026-09-02 | obs   7561 ev   7561 facts-now    178 | ACZA Shipped Unshipped 20260901.xlsx
+job  1327 | report - |     failed/failed   | done 2026-09-02 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1328 | report - |     failed/failed   | done 2026-09-03 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1329 | report - |     failed/failed   | done 2026-09-03 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1330 | report - |     failed/failed   | done 2026-09-04 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1331 | report - |     failed/failed   | done 2026-09-06 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1332 | report - |     failed/failed   | done 2026-09-07 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1333 | report - |     failed/failed   | done 2026-09-08 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1334 | report - |     failed/failed   | done 2026-09-08 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1335 | report - |     failed/failed   | done 2026-09-10 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1336 | report - |     failed/failed   | done 2026-09-11 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1337 | report - |     failed/failed   | done 2026-09-12 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1338 | report - |     failed/failed   | done 2026-09-13 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1339 | report 2026-09-11 |  completed/loaded   | done 2026-09-14 | obs   8669 ev   7638 facts-now    238 | ACZA Shipped Unshipped 20260911.xlsx
+job  1340 | report - |     failed/failed   | done 2026-09-14 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1341 | report - |     failed/failed   | done 2026-09-14 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1342 | report - |     failed/failed   | done 2026-09-15 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1343 | report - |     failed/failed   | done 2026-09-15 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1344 | report - |     failed/failed   | done 2026-09-16 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1345 | report - |     failed/failed   | done 2026-09-16 | obs      0 ev      0 facts-now      0 | mailbox-ingest-auth-error
+job  1695 | report 2026-09-29 |  completed/loaded   | done 2026-10-29 | obs   8006 ev   7768 facts-now     93 | ACZA Shipped Unshipped 20260929.xlsx
+job  1696 | report 2026-10-23 |  completed/loaded   | done 2026-10-29 | obs   8021 ev   7931 facts-now     39 | ACZA Shipped Unshipped 20261023 (1).xlsx
+job  1697 | report 2026-10-27 |  completed/loaded   | done 2026-10-29 | obs   8006 ev   7967 facts-now   7328 | ACZA Shipped Unshipped 20261027.xlsx
+job 1697: (1697, 'ACZA Shipped Unshipped 20261027.xlsx', 'completed', 'loaded', datetime.date(2026, 10, 29))
+newest applied report by file-name date: 1697 2026-10-27 ACZA Shipped Unshipped 20261027.xlsx
+
+cip at-sea (sea only, as of 2026-11-01): 162 lines, 13,516 units, 14 vessels (endpoint said 162 / 13,516 / 14)
+
+observations in job 1697: 8006
+
+=== 4. at sea according to job 1697's own rows (same rule) ===
+job 1697 at sea: 123 lines, 10,543 units, 8 vessel groups
+  i:2026-08-31|2026-10-27|ZAJNB|europe_durban                  lines  10 units   3,170 ETA 2026-10-27..2026-10-27
+  i:2026-09-06|2026-10-29|ZAJNB|europe_durban                  lines   1 units      40 ETA 2026-10-29..2026-10-29
+  i:2026-09-01|2026-10-30|ZAJNB|asia_durban                    lines  13 units     687 ETA 2026-10-30..2026-10-30
+  i:2026-09-19|2026-11-05|ZAJNB|asia_durban                    lines  29 units   2,670 ETA 2026-11-05..2026-11-05
+  i:2026-10-20|2026-11-07|ZAJNB|asia_durban                    lines  13 units     621 ETA 2026-11-07..2026-11-07
+  i:2026-10-18|2026-11-18|ZAJNB|asia_durban                    lines  38 units   2,462 ETA 2026-11-18..2026-11-18
+  i:2026-10-24|2026-11-25|ZAJNB|asia_durban                    lines   5 units     364 ETA 2026-11-25..2026-11-25
+  i:2026-10-30|2026-12-02|ZAJNB|asia_durban                    lines  14 units     529 ETA 2026-12-02..2026-12-02
+job 1697 rows by (line_state, has ATA, has POD): {('closed_disappeared', False, False): 20, ('closed_shipped', False, False): 19, ('open_order', False, False): 734, ('shipped', True, True): 6742, ('shipped', False, True): 301, ('shipped', False, False): 131, ('shipped', True, False): 59}
+units by line_state in job 1697: {'closed_disappeared': 933, 'closed_shipped': 604, 'open_order': 48503, 'shipped': 499497}
+
+=== 2/3. overdue vessels: every line, and what job 1697 says about the same order_no + item + PO ===
+overdue vessels (any line with ETA before 2026-11-01): 9; lines 63; units 6,870
+
+-- vessel i:2026-07-25|2026-08-14|ZAJNB|asia_durban | lines 24 units 1,875 | ETA 2026-08-14..2026-08-14
+  fact 113211 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244136|90NB14Y1-M00DP0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=40 order=151126041004644 item=90NB14Y1-M00DP0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113212 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244136|90NB17C1-M003D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=40 order=151126061002677 item=90NB17C1-M003D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113213 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244137|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006242 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113214 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244138|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006243 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113215 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244139|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006246 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113216 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244140|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006247 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113217 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244141|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006248 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113218 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244142|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006259 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113219 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244143|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006264 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113220 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244144|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006268 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113221 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244145|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006269 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113222 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244146|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006274 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113223 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244147|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041006280 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113224 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244148|90NB1542-M007D0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=36 order=151126041006286 item=90NB1542-M007D0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113225 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244149|90NB16V1-M005L0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=24 order=151125111010654 item=90NB16V1-M005L0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113226 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244150|90NB17I1-M012H0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=36 order=151126041011195 item=90NB17I1-M012H0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113227 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244151|90NB17I1-M012H0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041011179 item=90NB17I1-M012H0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113228 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244152|90NB17I1-M012H0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041011180 item=90NB17I1-M012H0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113229 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244153|90NB17I1-M012H0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126041011181 item=90NB17I1-M012H0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113230 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244154|90NB17I1-M00T90 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=108 order=151126061005555 item=90NB17I1-M00T90 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113231 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244155|90NB14W3-M028H0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=36 order=151126051010891 item=90NB14W3-M028H0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113232 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260244156|90NB17H6-M00NU0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=20 order=151126061002679 item=90NB17H6-M00NU0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113235 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260257032|90NB17X1-M000S0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=11 order=151126061005537 item=90NB17X1-M000S0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 113236 job 601 [ACZA Shipped Unshipped 20260721.xlsx] key=ship:15260257033|90NB16Q5-M00JF0 state=shipped inv=None OB=2026-07-25 ETA=2026-08-14 ATA=- POD=- qty=12 order=151126061005552 item=90NB16Q5-M00JF0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+
+-- vessel i:2026-08-11|2026-08-28|ZAJNB|asia_durban | lines 4 units 360 | ETA 2026-08-28..2026-08-28
+  fact 127030 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260264355|90NB13Y1-M02530 state=shipped inv=None OB=2026-08-11 ETA=2026-08-28 ATA=- POD=- qty=108 order=151126061008278 item=90NB13Y1-M02530 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 127031 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260264356|90NB13Y1-M02530 state=shipped inv=None OB=2026-08-11 ETA=2026-08-28 ATA=- POD=- qty=108 order=151126061008279 item=90NB13Y1-M02530 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 127032 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260264357|90NB13Y1-M02530 state=shipped inv=None OB=2026-08-11 ETA=2026-08-28 ATA=- POD=- qty=108 order=151126061008280 item=90NB13Y1-M02530 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 127033 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260264358|90NB13Y1-M02530 state=shipped inv=None OB=2026-08-11 ETA=2026-08-28 ATA=- POD=- qty=36 order=151126061008284 item=90NB13Y1-M02530 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+
+-- vessel i:2026-08-22|2026-09-11|ZAJNB|asia_durban | lines 6 units 348 | ETA 2026-09-11..2026-09-11
+  fact 127171 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260288861|90NR0KS1-M00EX0 state=shipped inv=None OB=2026-08-22 ETA=2026-09-11 ATA=- POD=- qty=48 order=151126051004455 item=90NR0KS1-M00EX0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 127172 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260288862|90NR0JF7-M00VD0 state=shipped inv=None OB=2026-08-22 ETA=2026-09-11 ATA=- POD=- qty=24 order=151126061008534 item=90NR0JF7-M00VD0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 127173 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260288862|90NR0JF7-M00VF0 state=shipped inv=None OB=2026-08-22 ETA=2026-09-11 ATA=- POD=- qty=192 order=151126061008535 item=90NR0JF7-M00VF0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 127174 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260288864|90NB1511-M009S0 state=shipped inv=None OB=2026-08-22 ETA=2026-09-11 ATA=- POD=- qty=36 order=151126051000237 item=90NB1511-M009S0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 127214 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260303226|90NB13Y1-M03TL0 state=shipped inv=None OB=2026-08-22 ETA=2026-09-11 ATA=- POD=- qty=36 order=151126061010093 item=90NB13Y1-M03TL0 PO=POFC00577039 sheet=Shipped way=TRUCK/SEA
+      -> job 1697: obs 134192 lik=order:151126061010093|1.1|90NB13Y1-M03TL0 inv=None st=shipped OB=2026-09-17 ETA=2026-10-20 ATA=2026-10-21 POD=- qty=36.0000 | fact 163127 key=ship:15260303226|90NB13Y1-M03TL0|88147 st=shipped
+  fact 127215 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260303227|90NB16V1-M00YA0 state=shipped inv=None OB=2026-08-22 ETA=2026-09-11 ATA=- POD=- qty=12 order=151126071012522 item=90NB16V1-M00YA0 PO=POFC00577039 sheet=Shipped way=TRUCK/SEA
+      -> job 1697: obs 134193 lik=order:151126071012522|1.1|90NB16V1-M00YA0 inv=None st=shipped OB=2026-09-17 ETA=2026-10-20 ATA=2026-10-21 POD=- qty=12.0000 | fact 163128 key=ship:15260303227|90NB16V1-M00YA0|88147 st=shipped
+
+-- vessel i:2026-08-21|2026-09-14|ZAJNB|asia_durban | lines 1 units 30 | ETA 2026-09-14..2026-09-14
+  fact 127076 job 1159 [ACZA Shipped Unshipped 20260818_P2.xlsx] key=ship:15260273905|90PT03XA-M0C3C0 state=shipped inv=None OB=2026-08-21 ETA=2026-09-14 ATA=- POD=- qty=30 order=151126061002668 item=90PT03XA-M0C3C0 PO=None sheet=Shipped way=SEA
+      -> job 1697: NO row with this order+item+PO
+
+-- vessel i:2026-09-01|2026-09-22|ZAJNB|asia_durban | lines 1 units 36 | ETA 2026-09-22..2026-09-22
+  fact 134229 job 1326 [ACZA Shipped Unshipped 20260901.xlsx] key=ship:15260288866|90PF05R3-M018A0 state=shipped inv=None OB=2026-09-01 ETA=2026-09-22 ATA=- POD=- qty=36 order=151126061009433 item=90PF05R3-M018A0 PO=None sheet=Shipped way=SEA
+      -> job 1697: NO row with this order+item+PO
+
+-- vessel i:2026-10-08|2026-10-25|ZAJNB|asia_durban | lines 3 units 324 | ETA 2026-10-25..2026-10-25
+  fact 148689 job 1695 [ACZA Shipped Unshipped 20260929.xlsx] key=ship:15260363398|90NB17I1-M02910 state=shipped inv=None OB=2026-10-08 ETA=2026-10-25 ATA=- POD=- qty=108 order=151126091003047 item=90NB17I1-M02910 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 148690 job 1695 [ACZA Shipped Unshipped 20260929.xlsx] key=ship:15260363398|90NB17I1-M028Z0 state=shipped inv=None OB=2026-10-08 ETA=2026-10-25 ATA=- POD=- qty=108 order=151126091003056 item=90NB17I1-M028Z0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+  fact 148691 job 1695 [ACZA Shipped Unshipped 20260929.xlsx] key=ship:15260363399|90NB17I1-M028Z0 state=shipped inv=None OB=2026-10-08 ETA=2026-10-25 ATA=- POD=- qty=108 order=151126091003066 item=90NB17I1-M028Z0 PO=None sheet=Shipped way=TRUCK/SEA
+      -> job 1697: NO row with this order+item+PO
+
+-- vessel i:2026-08-31|2026-10-27|ZAJNB|europe_durban | lines 10 units 3,170 | ETA 2026-10-27..2026-10-27
+  fact 163066 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292985|90XB0430-BKM3K0|48053 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=150 order=151126071000030 item=90XB0430-BKM3K0 PO=PUR-308499-1 sheet=Shipped way=SEA
+      -> job 1697: obs 134111 lik=order:151126071000030|1.1|90XB0430-BKM3K0 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=150.0000 | fact 163066 key=ship:15260292985|90XB0430-BKM3K0|48053 st=shipped
+  fact 163067 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292985|90XB0AIN-BDS010|48053 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=20 order=151126071000031 item=90XB0AIN-BDS010 PO=PUR-308499-1 sheet=Shipped way=SEA
+      -> job 1697: obs 134112 lik=order:151126071000031|1.1|90XB0AIN-BDS010 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=20.0000 | fact 163067 key=ship:15260292985|90XB0AIN-BDS010|48053 st=shipped
+  fact 163068 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292985|90XB08DN-BDS080|48053 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=20 order=151126071000032 item=90XB08DN-BDS080 PO=PUR-308499-1 sheet=Shipped way=SEA
+      -> job 1697: obs 134113 lik=order:151126071000032|1.1|90XB08DN-BDS080 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=20.0000 | fact 163068 key=ship:15260292985|90XB08DN-BDS080|48053 st=shipped
+  fact 163069 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292985|90XB0B4N-MPW000|48053 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=180 order=151126071000034 item=90XB0B4N-MPW000 PO=PUR-308499-1 sheet=Shipped way=SEA
+      -> job 1697: obs 134114 lik=order:151126071000034|1.1|90XB0B4N-MPW000 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=180.0000 | fact 163069 key=ship:15260292985|90XB0B4N-MPW000|48053 st=shipped
+  fact 163070 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292985|90XB0A5N-BDS010|48053 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=60 order=151126071000035 item=90XB0A5N-BDS010 PO=PUR-308499-1 sheet=Shipped way=SEA
+      -> job 1697: obs 134115 lik=order:151126071000035|1.1|90XB0A5N-BDS010 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=60.0000 | fact 163070 key=ship:15260292985|90XB0A5N-BDS010|48053 st=shipped
+  fact 163071 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292985|90-XB1000KM001K0-|48053 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=150 order=151126071000036 item=90-XB1000KM001K0- PO=PUR-308499-1 sheet=Shipped way=SEA
+      -> job 1697: obs 134116 lik=order:151126071000036|1.1|90-XB1000KM001K0- inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=150.0000 | fact 163071 key=ship:15260292985|90-XB1000KM001K0-|48053 st=shipped
+  fact 163072 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292986|90XB08L0-BBP050|48053 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=600 order=151126071000033 item=90XB08L0-BBP050 PO=PUR-308499-1 sheet=Shipped way=SEA
+      -> job 1697: obs 134117 lik=order:151126071000033|1.1|90XB08L0-BBP050 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=600.0000 | fact 163072 key=ship:15260292986|90XB08L0-BBP050|48053 st=shipped
+  fact 163073 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292987|90XB08DN-BDS080|48002 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=100 order=151126071000039 item=90XB08DN-BDS080 PO=970766 sheet=Shipped way=SEA
+      -> job 1697: obs 134118 lik=order:151126071000039|1.1|90XB08DN-BDS080 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=100.0000 | fact 163073 key=ship:15260292987|90XB08DN-BDS080|48002 st=shipped
+  fact 163074 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292987|90XB08L0-BBP050|48002 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=1800 order=151126071000040 item=90XB08L0-BBP050 PO=970766 sheet=Shipped way=SEA
+      -> job 1697: obs 134119 lik=order:151126071000040|1.1|90XB08L0-BBP050 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=1800.0000 | fact 163074 key=ship:15260292987|90XB08L0-BBP050|48002 st=shipped
+  fact 163075 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260292987|90XB0B4N-MPW000|47976 state=shipped inv=None OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=90 order=151126071001073 item=90XB0B4N-MPW000 PO=970748 sheet=Shipped way=SEA
+      -> job 1697: obs 134120 lik=order:151126071001073|1.1|90XB0B4N-MPW000 inv=None st=shipped OB=2026-08-31 ETA=2026-10-27 ATA=- POD=- qty=90.0000 | fact 163075 key=ship:15260292987|90XB0B4N-MPW000|47976 st=shipped
+
+-- vessel i:2026-09-06|2026-10-29|ZAJNB|europe_durban | lines 1 units 40 | ETA 2026-10-29..2026-10-29
+  fact 163234 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260322131|90XB0AWN-BDS010|48053 state=shipped inv=None OB=2026-09-06 ETA=2026-10-29 ATA=- POD=- qty=40 order=151126071000037 item=90XB0AWN-BDS010 PO=PUR-308499-1 sheet=Shipped way=SEA
+      -> job 1697: obs 134364 lik=order:151126071000037|1.1|90XB0AWN-BDS010 inv=None st=shipped OB=2026-09-06 ETA=2026-10-29 ATA=- POD=- qty=40.0000 | fact 163234 key=ship:15260322131|90XB0AWN-BDS010|48053 st=shipped
+
+-- vessel i:2026-09-01|2026-10-30|ZAJNB|asia_durban | lines 13 units 687 | ETA 2026-10-30..2026-10-30
+  fact 163065 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260288866|90PF05R3-M018A0|101909 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=36 order=151126061009433 item=90PF05R3-M018A0 PO=US-E3454-IC sheet=Shipped way=SEA
+      -> job 1697: obs 134110 lik=order:151126061009433|1.1|90PF05R3-M018A0 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=36.0000 | fact 163065 key=ship:15260288866|90PF05R3-M018A0|101909 st=shipped
+  fact 163076 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295984|90PT03X7-M09T30|47976 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=40 order=151126041009166 item=90PT03X7-M09T30 PO=970748 sheet=Shipped way=SEA
+      -> job 1697: obs 134121 lik=order:151126041009166|1.1|90PT03X7-M09T30 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=40.0000 | fact 163076 key=ship:15260295984|90PT03X7-M09T30|47976 st=shipped
+  fact 163077 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295984|90PT03X7-M09SC0|47976 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=10 order=151126071000282 item=90PT03X7-M09SC0 PO=970748 sheet=Shipped way=SEA
+      -> job 1697: obs 134122 lik=order:151126071000282|1.1|90PT03X7-M09SC0 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=10.0000 | fact 163077 key=ship:15260295984|90PT03X7-M09SC0|47976 st=shipped
+  fact 163078 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295985|90NX0971-M014Y0|47976 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=145 order=151126041009150 item=90NX0971-M014Y0 PO=970748 sheet=Shipped way=SEA
+      -> job 1697: obs 134123 lik=order:151126041009150|1.1|90NX0971-M014Y0 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=145.0000 | fact 163078 key=ship:15260295985|90NX0971-M014Y0|47976 st=shipped
+  fact 163079 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295985|90NX0AA1-M00DM0|48002 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=80 order=151126061012110 item=90NX0AA1-M00DM0 PO=970766 sheet=Shipped way=SEA
+      -> job 1697: obs 134124 lik=order:151126061012110|1.1|90NX0AA1-M00DM0 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=80.0000 | fact 163079 key=ship:15260295985|90NX0AA1-M00DM0|48002 st=shipped
+  fact 163080 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295986|90NX0861-M01X20|48102 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=50 order=151126061012109 item=90NX0861-M01X20 PO=970768 sheet=Shipped way=SEA
+      -> job 1697: obs 134125 lik=order:151126061012109|1.1|90NX0861-M01X20 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=50.0000 | fact 163080 key=ship:15260295986|90NX0861-M01X20|48102 st=shipped
+  fact 163081 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295987|90PF05A1-M00RN0|47976 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=84 order=151126071000223 item=90PF05A1-M00RN0 PO=970748 sheet=Shipped way=SEA
+      -> job 1697: obs 134126 lik=order:151126071000223|1.1|90PF05A1-M00RN0 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=84.0000 | fact 163081 key=ship:15260295987|90PF05A1-M00RN0|47976 st=shipped
+  fact 163082 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295988|90PT03XA-M09R20|67802 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=40 order=151126061009435 item=90PT03XA-M09R20 PO=973418 sheet=Shipped way=SEA
+      -> job 1697: obs 134127 lik=order:151126061009435|1.1|90PT03XA-M09R20 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=40.0000 | fact 163082 key=ship:15260295988|90PT03XA-M09R20|67802 st=shipped
+  fact 163083 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295989|90NX0AL2-M004W0|48114 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=108 order=151126061011442 item=90NX0AL2-M004W0 PO=5201759 sheet=Shipped way=SEA
+      -> job 1697: obs 134128 lik=order:151126061011442|1.1|90NX0AL2-M004W0 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=108.0000 | fact 163083 key=ship:15260295989|90NX0AL2-M004W0|48114 st=shipped
+  fact 163084 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260295990|90NX0AA1-M00DN0|48008 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=34 order=151126061012116 item=90NX0AA1-M00DN0 PO=5201758 sheet=Shipped way=SEA
+      -> job 1697: obs 134129 lik=order:151126061012116|1.1|90NX0AA1-M00DN0 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=34.0000 | fact 163084 key=ship:15260295990|90NX0AA1-M00DN0|48008 st=shipped
+  fact 163116 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260303219|90PF05R3-M01880|81181 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=12 order=151126061007562 item=90PF05R3-M01880 PO=PURMIDR26014117 sheet=Shipped way=SEA
+      -> job 1697: obs 134181 lik=order:151126061007562|1.1|90PF05R3-M01880 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=12.0000 | fact 163116 key=ship:15260303219|90PF05R3-M01880|81181 st=shipped
+  fact 163117 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260303219|90PF05R3-M01890|81182 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=36 order=151126061002669 item=90PF05R3-M01890 PO=PURMIDR26014119 sheet=Shipped way=SEA
+      -> job 1697: obs 134182 lik=order:151126061002669|1.1|90PF05R3-M01890 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=36.0000 | fact 163117 key=ship:15260303219|90PF05R3-M01890|81182 st=shipped
+  fact 163118 job 1697 [ACZA Shipped Unshipped 20261027.xlsx] key=ship:15260303220|90PF05R3-M01880|81182 state=shipped inv=None OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=12 order=151126071011062 item=90PF05R3-M01880 PO=PURMIDR26014119 sheet=Shipped way=SEA
+      -> job 1697: obs 134183 lik=order:151126071011062|1.1|90PF05R3-M01880 inv=None st=shipped OB=2026-09-01 ETA=2026-10-30 ATA=- POD=- qty=12.0000 | fact 163118 key=ship:15260303220|90PF05R3-M01880|81182 st=shipped
+
+=== cause summary over the overdue lines ===
+  absent_from_1697                                               lines   37 units    2,925
+  same_fact_still_at_sea_in_1697                                 lines   24 units    3,897
+  identity_changed_1697_has_ATA_or_POD_under_other_key           lines    2 units       48
+by vessel:
+  i:2026-07-25|2026-08-14|ZAJNB|asia_durban                    {'absent_from_1697': 24}
+  i:2026-08-11|2026-08-28|ZAJNB|asia_durban                    {'absent_from_1697': 4}
+  i:2026-08-22|2026-09-11|ZAJNB|asia_durban                    {'absent_from_1697': 4, 'identity_changed_1697_has_ATA_or_POD_under_other_key': 2}
+  i:2026-08-21|2026-09-14|ZAJNB|asia_durban                    {'absent_from_1697': 1}
+  i:2026-09-01|2026-09-22|ZAJNB|asia_durban                    {'absent_from_1697': 1}
+  i:2026-10-08|2026-10-25|ZAJNB|asia_durban                    {'absent_from_1697': 3}
+  i:2026-08-31|2026-10-27|ZAJNB|europe_durban                  {'same_fact_still_at_sea_in_1697': 10}
+  i:2026-09-06|2026-10-29|ZAJNB|europe_durban                  {'same_fact_still_at_sea_in_1697': 1}
+  i:2026-09-01|2026-10-30|ZAJNB|asia_durban                    {'same_fact_still_at_sea_in_1697': 13}
+overdue lines by loading job/file: {(601, 'ACZA Shipped Unshipped 20260721.xlsx'): 24, (1159, 'ACZA Shipped Unshipped 20260818_P2.xlsx'): 11, (1326, 'ACZA Shipped Unshipped 20260901.xlsx'): 1, (1695, 'ACZA Shipped Unshipped 20260929.xlsx'): 3, (1697, 'ACZA Shipped Unshipped 20261027.xlsx'): 24}
+
+=== cip at-sea facts (all, not only overdue) vs job 1697, by order+item+PO ===
+  in_1697_at_sea                                     lines  123 units   10,543
+  not_in_1697                                        lines   37 units    2,925
+  in_1697_arrived_or_delivered                       lines    2 units       48
+at sea in 1697 but NOT at sea on cip: 0 order+item+PO keys
+at sea in 1697 and at sea on cip: 123

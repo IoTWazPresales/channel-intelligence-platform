@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildOnTheWaterUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
 
 import { daysText, fmtDay, fmtDayYear, fmtMoney, historyText, nameUnits, slipShort } from './format';
-import { clusterChip, clusterVessels, etaRange, placeLabels } from './layout';
+import { clusterChip, clusterVessels, etaRange, placeLabels, portsInUse } from './layout';
 import type { Vessel } from './types';
 
 function vessel(over: Partial<Vessel> = {}): Vessel {
@@ -82,6 +82,32 @@ describe('clusters and labels', () => {
         const q = boxes[j];
         expect(p.x < q.x + q.w && p.x + p.w > q.x && p.y < q.y + q.h && p.y + p.h > q.y).toBe(false);
       }
+  });
+});
+
+describe('portsInUse', () => {
+  const ports = ['SHANGHAI', 'SHENZHEN', 'CHONGQING', 'SINGAPORE', 'ROTTERDAM', 'PORT LOUIS', 'CITY DEEP', 'DURBAN'].map((l) => ({ id: l, label: l }));
+
+  it('is Durban alone with no vessels', () => {
+    expect([...portsInUse([], ports)]).toEqual(['DURBAN']);
+  });
+
+  it('adds the origins and stops of each lane label and the discharge port, and nothing the lane merely passes', () => {
+    const used = portsInUse(
+      [
+        vessel({ lane_label: 'Chongqing / Shenzhen → Durban → City Deep', deliver_port: 'ZAJNB' }),
+        vessel({ id: 'v2', lane_label: 'Rotterdam → Durban', deliver_port: 'MUPLU' }),
+      ],
+      ports,
+    );
+    expect([...used].sort()).toEqual(['CHONGQING', 'CITY DEEP', 'DURBAN', 'PORT LOUIS', 'ROTTERDAM', 'SHENZHEN']);
+    expect(used.has('SINGAPORE')).toBe(false);
+    expect(used.has('SHANGHAI')).toBe(false);
+  });
+
+  it('ignores an origin that is not a port on the map ("China", "Origin not on the report")', () => {
+    const used = portsInUse([vessel({ lane_label: 'China → Durban', deliver_port: 'ZADUR' }), vessel({ id: 'v2', lane_label: 'Origin not on the report → Durban', deliver_port: 'ZADUR' })], ports);
+    expect([...used]).toEqual(['DURBAN']);
   });
 });
 

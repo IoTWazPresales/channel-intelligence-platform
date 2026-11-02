@@ -141,11 +141,19 @@ def lane_paths() -> list[dict[str, str]]:
     return out
 
 
+# Which side of its dot a port's name sits on. A port not listed here is named to the right, unless it is near the right
+# edge of the map (the page then flips it). Chongqing and Shanghai sit close together: Chongqing's name goes to the left.
+PORT_LABEL_SIDE: dict[str, str] = {"CHONGQING": "left"}
+
+
 def port_markers() -> list[dict[str, Any]]:
     out = []
     for name, (lon, lat) in PORTS.items():
         x, y = project_pct(lon, lat)
-        out.append({"id": name, "label": name, "x": round(x, 2), "y": round(y, 2)})
+        marker: dict[str, Any] = {"id": name, "label": name, "x": round(x, 2), "y": round(y, 2)}
+        if name in PORT_LABEL_SIDE:
+            marker["label_side"] = PORT_LABEL_SIDE[name]
+        out.append(marker)
     return out
 
 

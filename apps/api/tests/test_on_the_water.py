@@ -200,3 +200,12 @@ def test_tenant_override_is_validated():
     assert _normalize_on_the_water({"stale_report_days": 0, "needs_look_days": 5}, strict=False) == {"needs_look_days": 5}
     cfg = config_from_overrides({"hub_lane": {"yy": "europe_durban"}})
     assert lane_for("yy", cfg) == ("europe_durban", False)
+
+
+def test_port_markers_carry_a_label_side_only_where_the_map_config_sets_one() -> None:
+    from app.services.shipping.on_the_water import PORT_LABEL_SIDE, port_markers
+
+    by_id = {m["id"]: m for m in port_markers()}
+    assert PORT_LABEL_SIDE == {"CHONGQING": "left"}
+    assert by_id["CHONGQING"]["label_side"] == "left"
+    assert all("label_side" not in m for k, m in by_id.items() if k != "CHONGQING")

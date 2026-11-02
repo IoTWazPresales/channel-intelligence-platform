@@ -1,0 +1,3 @@
+current_database() = cip; job 1697; APPLY
+saved mapping gains 7 voyage field(s): ['deliver_port', 'on_board_date', 'port_ata_date', 'port_eta_date', 'ship_way', 'ship_way', 'shipping_method']
+committed: evidence lines 7,967 -> 8,071; facts written 8,071; open-book closed 0

@@ -162,6 +162,9 @@ def is_legacy_shipped_source_key(source_key: str | None) -> bool:
         return False
     _report, biz = source_key.split(":", 1)
     parts = [p for p in biz.split("|") if p]
+    # An order-grain key (a line not invoiced yet: ...|item|ord:<order>|<line>) is current, not the pre-job-153 shape.
+    if any(p.startswith("ord:") for p in parts):
+        return False
     # Populated shipped keys: sheet|delivery|invoice_line|item (4+ segments).
     if len(parts) >= 4:
         return False
@@ -174,6 +177,8 @@ def shipped_source_key_has_invoice_segment(source_key: str | None) -> bool:
         return False
     _report, biz = source_key.split(":", 1)
     parts = [p for p in biz.split("|") if p]
+    if any(p.startswith("ord:") for p in parts):
+        return False  # order grain: the invoice line is blank
     return len(parts) >= 4
 
 

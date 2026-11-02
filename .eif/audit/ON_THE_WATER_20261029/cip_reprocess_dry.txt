@@ -1,0 +1,2 @@
+current_database() = cip; job 1697; DRY RUN (nothing is written)
+evidence lines now: 7,967; the stored workbook has 8,071 data rows on 3 sheets (the real run reports the lines it writes)

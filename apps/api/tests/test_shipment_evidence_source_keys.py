@@ -64,6 +64,40 @@ def test_sheet_name_casing_normalized() -> None:
     assert k1 == k2
 
 
+def test_shipped_line_not_invoiced_yet_keeps_its_order_in_the_key() -> None:
+    """Rows of one delivery + item on different orders are real lines: a blank invoice line must not collapse them."""
+    a = _ex(delivery_no="15260303220", item_code="90PF05R3-M01880", order_no="151126061007555", order_line="1.1")
+    b = _ex(delivery_no="15260303220", item_code="90PF05R3-M01880", order_no="151126071009408", order_line="1.1")
+    c = _ex(delivery_no="15260303220", item_code="90PF05R3-M01880", order_no="151126061007555", order_line="2.1")
+    ka, kb, kc = (stable_source_key_for_row(report_type=REPORT_ACZA_SHIPPED, sheet_name="Shipped", ex=e) for e in (a, b, c))
+    assert len({ka, kb, kc}) == 3
+    assert ka.endswith("|15260303220|90PF05R3-M01880|ord:151126061007555|1.1")
+    # the same line in the next report keeps its key
+    assert ka == stable_source_key_for_row(report_type=REPORT_ACZA_SHIPPED, sheet_name="Shipped", ex=dict(a))
+
+
+def test_shipped_line_with_a_numbered_invoice_keeps_the_key_it_always_had() -> None:
+    ex = _ex(delivery_no="900", invoice_line="2", item_code="I", order_no="O1", order_line="1.1")
+    assert business_source_key_fragment(REPORT_ACZA_SHIPPED, ex) == "900|2|I"
+    assert business_source_key_fragment(REPORT_XXOMRPT0025, ex) == "900|2|I"
+
+
+def test_shipped_line_without_an_order_keeps_the_old_shape() -> None:
+    ex = _ex(delivery_no="900", item_code="I")
+    assert business_source_key_fragment(REPORT_ACZA_SHIPPED, ex) == "900|I"
+
+
+def test_order_grain_key_is_neither_legacy_nor_numbered() -> None:
+    from app.services.imports.shipment_evidence_line_identity import (
+        is_legacy_shipped_source_key,
+        shipped_source_key_has_invoice_segment,
+    )
+
+    k = stable_source_key_for_row(report_type=REPORT_ACZA_SHIPPED, sheet_name="Shipped", ex=_ex(delivery_no="D", item_code="I", order_no="O", order_line="1.1"))
+    assert not is_legacy_shipped_source_key(k)
+    assert not shipped_source_key_has_invoice_segment(k)
+
+
 def test_unknown_report_type_raises() -> None:
     with pytest.raises(ShipmentEvidenceSourceKeyError):
         business_source_key_fragment("future_report_v1", _ex(order_no="1"))

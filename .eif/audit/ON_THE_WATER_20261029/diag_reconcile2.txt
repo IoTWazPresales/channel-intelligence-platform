@@ -1,0 +1,18 @@
+db/user/ro: ('cip', 'cip', 'on')
+observations: 8006
+source_sheet/report_type: [('BOM not ready', 'acza_workbook_bom_not_ready'), ('Shipped', 'acza_workbook_shipped'), ('Unship', 'acza_workbook_unship')]
+
+closest definitions to 169 lines / 14,278 units:
+    174 lines    13,767 units  sc any | ob <= 27 Oct | ATA any | no POD | shipped+open | any way
+    174 lines    13,767 units  sc any | ob <= 27 Oct | ATA any | no POD | shipped+open | not air
+    174 lines    13,767 units  sc any | ob <= 27 Oct | ATA any | no POD | shipped+open | sea
+    174 lines    13,767 units  sc any | ob <= 27 Oct | ATA any | no POD | state any | any way
+    174 lines    13,767 units  sc any | ob <= 27 Oct | ATA any | no POD | state any | not air
+    174 lines    13,767 units  sc any | ob <= 27 Oct | ATA any | no POD | state any | sea
+    168 lines    13,431 units  sc <= 27 Oct | ob <= 27 Oct | ATA any | no POD | shipped | any way
+    168 lines    13,431 units  sc <= 27 Oct | ob <= 27 Oct | ATA any | no POD | shipped | not air
+    168 lines    13,431 units  sc <= 27 Oct | ob <= 27 Oct | ATA any | no POD | shipped | sea
+    168 lines    13,431 units  sc <= 27 Oct | ob <= 27 Oct | ATA any | no POD | shipped+open | any way
+    168 lines    13,431 units  sc <= 27 Oct | ob <= 27 Oct | ATA any | no POD | shipped+open | not air
+    168 lines    13,431 units  sc <= 27 Oct | ob <= 27 Oct | ATA any | no POD | shipped+open | sea
+exact on lines or units: []

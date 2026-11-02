@@ -85,12 +85,83 @@ def run(*, dry_run: bool, limit: int | None, sample: int) -> dict:
     return out
 
 
+def _twin_dict(t) -> dict:
+    return {
+        "old_fact": t.old_id, "evidence_qty": t.evidence_qty, "old_key": t.old_key, "old_job": t.old_job, "delivery_no": t.delivery_no,
+        "item_code": t.item_code, "old_qty": t.old_qty, "twins": t.twins, "twin_qty": t.twin_qty,
+        "keeper_fact": t.keeper_id, "keeper_key": t.keeper_key, "keeper_job": t.keeper_job,
+    }
+
+
+def _units(db, where: str) -> float:
+    return float(db.scalar(text(f"SELECT coalesce(sum(quantity), 0) FROM fact_inbound_shipment WHERE {where}")) or 0)
+
+
+def run_retire_po_less(*, apply: bool, expect_db: str | None, accept_evidence_sum: bool = False) -> dict:
+    """Soft-retire shipped facts with no purchase_order_id whose delivery + item a newer job wrote under a PO key.
+
+    Dry run (default) is a read-only transaction. ``--apply`` needs ``--expect-db`` equal to ``current_database()``,
+    runs in one transaction, checks the retired count against the plan and writes one ``platform_audit_event``.
+    Rows whose quantity differs from their twins' are listed and left alone.
+    """
+    from app.services.imports.shipment_shipped_fact_identity_twin_merge import (
+        plan_po_less_shipped_twins,
+        refresh_superseded_pointers,
+        retire_po_less_shipped_twins,
+    )
+
+    out: dict = {}
+    with SessionLocal() as db:
+        dbname = str(db.scalar(text("SELECT current_database()")))
+        out["database"] = dbname
+        if apply and expect_db != dbname:
+            raise SystemExit(f"refused: --apply needs --expect-db {dbname!r} (got {expect_db!r})")
+        if not apply:
+            db.execute(text("SET TRANSACTION READ ONLY"))
+        plan = plan_po_less_shipped_twins(db)
+        match = [t for t in plan if t.eligible(accept_evidence_sum)]
+        differ = [t for t in plan if not t.eligible(accept_evidence_sum)]
+        out["twins_found"] = len(plan)
+        out["to_retire"] = len(match)
+        out["to_retire_units"] = sum(t.old_qty for t in match)
+        out["quantity_differs"] = [_twin_dict(t) for t in differ]
+        out["shipped_units_before"] = _units(db, "line_state = 'shipped'")
+        if not apply:
+            db.rollback()
+            return out
+        changed = retire_po_less_shipped_twins(db, plan, accept_evidence_sum=accept_evidence_sum)
+        refresh_superseded_pointers(db)
+        if changed != len(match):
+            db.rollback()
+            raise SystemExit(f"ROLLED BACK: retired {changed}, plan said {len(match)}")
+        from app.services.platform_audit import record_platform_audit_sync
+
+        record_platform_audit_sync(
+            db, None, area="admin", action="shipped_fact_po_less_retire", target_type="fact_inbound_shipment",
+            target_id="20261101_0050", actor_label="scripts/merge_shipped_fact_identity_twins.py --retire-po-less",
+            detail={"retired": changed, "fact_ids": [t.old_id for t in match], "quantity_differs": [t.old_id for t in differ]},
+        )
+        db.commit()
+        out["retired"] = changed
+        out["shipped_units_after"] = _units(db, "line_state = 'shipped'")
+    return out
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--confirm", action="store_true", help="Execute key regen + collapses")
     p.add_argument("--limit", type=int, default=None, help="Cap collapse groups on confirm")
     p.add_argument("--sample", type=int, default=10, help="Preview sample size in output")
+    p.add_argument("--retire-po-less", action="store_true", help="Retire PO-less shipped facts a PO-key fact replaced (dry run)")
+    p.add_argument("--apply", action="store_true", help="with --retire-po-less: write it (needs --expect-db)")
+    p.add_argument("--expect-db", default=None, help="with --apply: must equal current_database()")
+    p.add_argument("--accept-evidence-sum", action="store_true",
+                   help="with --retire-po-less: also retire a twin whose single PO-key fact equals the sum of its job's evidence lines")
     args = p.parse_args()
+    if args.retire_po_less:
+        print(f"[{'APPLY' if args.apply else 'DRY-RUN'}] merge_shipped_fact_identity_twins --retire-po-less")
+        print(json.dumps(run_retire_po_less(apply=args.apply, expect_db=args.expect_db, accept_evidence_sum=args.accept_evidence_sum), indent=2, default=str))
+        return 0
     result = run(dry_run=not args.confirm, limit=args.limit, sample=max(0, int(args.sample)))
     mode = "CONFIRM" if args.confirm else "DRY-RUN"
     print(f"[{mode}] merge_shipped_fact_identity_twins")

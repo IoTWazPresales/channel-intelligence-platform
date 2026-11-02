@@ -1,0 +1,9 @@
+[DRY-RUN] merge_shipped_fact_identity_twins --retire-po-less
+{
+  "database": "cip",
+  "twins_found": 10,
+  "to_retire": 10,
+  "to_retire_units": 700.0,
+  "quantity_differs": [],
+  "shipped_units_before": 1374481.0
+}

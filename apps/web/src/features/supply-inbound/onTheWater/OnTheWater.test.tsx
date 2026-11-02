@@ -192,6 +192,66 @@ describe('OnTheWater', () => {
     expect(screen.queryByTestId('otw-pulse')).toBeNull();
   });
 
+  it('puts a port name on the side the map config says, else to the right (and to the left near the right edge)', async () => {
+    const ports = [
+      { id: 'CHONGQING', label: 'CHONGQING', x: 88, y: 30, label_side: 'left' as const },
+      { id: 'SHANGHAI', label: 'SHANGHAI', x: 90.8, y: 26 },
+      { id: 'DURBAN', label: 'DURBAN', x: 33.5, y: 86 },
+    ];
+    setup(payload({ map: { ...payload().map, ports } }));
+    await screen.findByTestId('otw-map');
+    // a name to the left of its dot is positioned by `right`, a name to the right by `left`
+    expect(getComputedStyle(screen.getByTestId('otw-port-name-CHONGQING')).right).toBe('12px');
+    expect(getComputedStyle(screen.getByTestId('otw-port-name-SHANGHAI')).right).toBe('12px');
+    expect(getComputedStyle(screen.getByTestId('otw-port-name-DURBAN')).left).toBe('12px');
+  });
+
+  describe('port names by map width', () => {
+    const ports = ['DURBAN', 'SHANGHAI', 'SHENZHEN', 'CHONGQING', 'SINGAPORE'].map((l, i) => ({ id: l, label: l, x: 20 + i * 15, y: 40 }));
+    const withPorts = () => payload({ map: { ...payload().map, ports } });
+
+    it('names every port on a wide map and has no tappable dots', async () => {
+      setup(withPorts());
+      await screen.findByTestId('otw-map');
+      for (const p of ports) expect(screen.getByTestId(`otw-port-name-${p.id}`)).toBeInTheDocument();
+      expect(screen.queryByTestId('otw-port-dot-SHANGHAI')).toBeNull();
+    });
+
+    it('below 600 px names only ports a vessel sails to or from, plus Durban; the others are dots that show their name when tapped', async () => {
+      class FakeResizeObserver {
+        constructor(private readonly cb: () => void) {}
+        observe() {
+          this.cb();
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+      const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(336);
+      try {
+        setup(withPorts()); // the vessels sail Chongqing / Shenzhen -> Durban -> City Deep
+        await screen.findByTestId('otw-map');
+        for (const id of ['DURBAN', 'SHENZHEN', 'CHONGQING']) expect(screen.getByTestId(`otw-port-name-${id}`)).toBeInTheDocument();
+        for (const id of ['SHANGHAI', 'SINGAPORE']) {
+          expect(screen.queryByTestId(`otw-port-name-${id}`)).toBeNull();
+          expect(screen.getByTestId(`otw-port-dot-${id}`)).toBeInTheDocument();
+        }
+        expect(screen.queryByTestId('otw-port-dot-DURBAN')).toBeNull();
+        fireEvent.click(screen.getByTestId('otw-port-dot-SHANGHAI'));
+        expect(screen.getByTestId('otw-port-name-SHANGHAI')).toHaveTextContent('SHANGHAI');
+        expect(screen.getByTestId('otw-port-dot-SHANGHAI')).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.click(screen.getByTestId('otw-port-dot-SINGAPORE'));
+        expect(screen.queryByTestId('otw-port-name-SHANGHAI')).toBeNull();
+        expect(screen.getByTestId('otw-port-name-SINGAPORE')).toBeInTheDocument();
+        fireEvent.click(screen.getByTestId('otw-port-dot-SINGAPORE'));
+        expect(screen.queryByTestId('otw-port-name-SINGAPORE')).toBeNull();
+      } finally {
+        width.mockRestore();
+        vi.unstubAllGlobals();
+      }
+    });
+  });
+
   it('does not break when the API answers with something else', async () => {
     setup({ reference_date: '2026-10-10', total_lines: 10 });
     expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument();

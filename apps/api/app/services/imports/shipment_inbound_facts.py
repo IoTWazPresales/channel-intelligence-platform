@@ -19,6 +19,7 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_water import WATER_FIELDS
 from app.services.imports.shipment_apply_failure import ShipmentApplyRowError
 from app.services.imports.shipment_evidence_line_identity import fact_upsert_key_for_evidence_values
+from app.services.imports.shipment_shipped_fact_identity_twin_merge import retire_po_less_twins_written_by_job
 from app.utils.json_safe import to_jsonable
 
 
@@ -348,14 +349,30 @@ def upsert_inbound_shipment_facts_for_job(
     total = len(lines)
     tbl = FactInboundShipment.__table__
     n = 0
-    for start in range(0, total, chunk_size):
-        chunk = lines[start : start + chunk_size]
-        row_values = [_row_values_from_evidence(line, tenant_id=tid) for line in chunk]
-        _upsert_evidence_chunk(db, tbl, chunk, row_values, tenant_id=tid)
-        n += len(chunk)
+    # Rows that share a fact key (invoice lines of one delivery + item + PO) add up inside one chunk, and a later chunk
+    # replaces the key. So lines of one key are never split across chunks: they are kept together, at the place the key
+    # first appears, and a chunk ends only between keys.
+    values = [_row_values_from_evidence(line, tenant_id=tid) for line in lines]
+    groups: dict[str, list[int]] = {}
+    for i, v in enumerate(values):
+        groups.setdefault(str(v.get("fact_upsert_key") or f"#{i}"), []).append(i)
+    chunks: list[list[int]] = []
+    for idxs in groups.values():
+        if not chunks or len(chunks[-1]) + len(idxs) > chunk_size:
+            chunks.append([])
+        chunks[-1].extend(idxs)
+    for idxs in chunks:
+        _upsert_evidence_chunk(db, tbl, [lines[i] for i in idxs], [values[i] for i in idxs], tenant_id=tid)
+        n += len(idxs)
         if on_progress is not None:
             on_progress(n, total)
     db.flush()
+    twins = retire_po_less_twins_written_by_job(db, int(import_job_id))
+    if twins["retired"] or twins["quantity_differs"]:
+        logger.info(
+            "shipment_stage job_id=%s po_less_twins_retired=%s repointed=%s quantity_differs=%s",
+            int(import_job_id), twins["retired"], twins["repointed"], twins["quantity_differs"][:20],
+        )
     logger.info(
         "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
         int(import_job_id),

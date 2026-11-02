@@ -214,6 +214,11 @@ class FactInboundShipment(ShipmentWaterColumns, Base, TimestampMixin):
     reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="scheduled", nullable=False)
 
+    # ``line_state`` 'closed_superseded': a newer job wrote this delivery + item under a PO-inclusive key. The row stays;
+    # the pointer is the superseding fact's id and, because a reload replaces that row, its stable fact_upsert_key.
+    superseded_by_fact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    superseded_by_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
 
 class FactPricing(Base, TimestampMixin):
     __tablename__ = "fact_pricing"

@@ -73,7 +73,7 @@ export type OnTheWaterData = {
   map: {
     size: [number, number];
     lanes: Array<{ id: string; kind: 'sea' | 'leg'; d: string }>;
-    ports: Array<{ id: string; label: string; x: number; y: number }>;
+    ports: Array<{ id: string; label: string; x: number; y: number; label_side?: 'left' | 'right' }>;
     cluster_radius_pct: number;
   };
   port_rows: PortRow[];

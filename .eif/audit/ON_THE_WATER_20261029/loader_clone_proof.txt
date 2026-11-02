@@ -1,0 +1,77 @@
+Loader proof (Shipped-sheet source key) on cip_retire3 (2026-11-01 22:59 UTC)
+workbook, Shipped sheet: 7,346 rows, 507,436 units; distinct rows under the new key: 7,346
+  the 27 Oct position (ship-confirmed, on board <= 27 Oct, no ATA, sea): 169 lines 14,278 units
+  at sea by cip's rule as of 2026-11-02 (shipped, on board <= today, no ATA, no POD, sea): 197 lines 14,987 units
+
+== 1. The twin retirement first (the same clone)
+  retired now: 37 (this run retired 37)
+  PASS  the twin retirement is in place
+
+== 2. Before (twins retired, old loader output for job 1697)
+  evidence lines (all sheets)             7,967
+  evidence lines (Shipped)                7,242
+  evidence units (Shipped)              500,418
+  observations (all sheets)               8,006
+  facts written by the job                7,328
+  fact units of the job                 548,000
+  27 Oct position in the evidence lines: 109 lines 10,014 units
+  invoice graduation: {}; PO-less twins left to retire / quantity differs: (0, 10)
+
+== 3. Guards of the re-process
+  PASS  dry run reads the workbook and writes nothing - evidence lines now: 7,967; the stored workbook has 8,071 data rows on 3 sheets (the real run reports the lines it writes)
+  PASS  --apply without --expect-db is refused
+  PASS  --apply with the wrong database name is refused
+  PASS  a re-process forced to fail after the writes rolls everything back
+
+== 4. Re-process job 1697 with the fixed loader
+  committed: evidence lines 7,967 -> 8,071; facts written 8,071; open-book closed 0
+  PASS  re-process committed
+  evidence lines (all sheets)             7,967 ->        8,071
+  evidence lines (Shipped)                7,242 ->        7,346
+  evidence units (Shipped)              500,418 ->      507,436
+  observations (all sheets)               8,006 ->       16,065
+  facts written by the job                7,328 ->        7,358
+  fact units of the job                 548,000 ->      555,939
+
+== 5. Checks
+  PASS  evidence lines of the Shipped sheet equal the workbook's rows counted once per new key - 7,346 lines vs 7,346 distinct new keys (7,346 rows)
+  PASS  the Shipped-sheet units rose to the workbook's, less only rows that repeat a full new key - 500,418 -> 507,436 loaded vs 507,436 in the file (0 rows repeat a full key)
+  PASS  the 27 Oct position is 169 lines / 14,278 units - (169, 14278.0)
+  by cip's rule as of 2026-11-02: evidence (197, 14987.0), workbook (197, 14987.0)
+  PASS  facts of every other job are unchanged (pointers and updated_at aside)
+  facts of the job that had a POD before and none now: 0 (0 units)
+  PASS  a surviving fact keeps its product, distributor, customer, PO and state - 0 changed of 7,328
+  facts that now hold more units (lines of the same delivery + item + PO added up): 34; new facts: 30; facts no longer written: 0
+  PASS  no PO-less twin is left to retire - (0, 10) -> (0, 10)
+  PASS  the retired facts are still retired and every pointer resolves - 37 retired, 0 dangling
+  PASS  the invoice graduation finds nothing new - {} -> {}
+  tables whose row count changed: {'fact_inbound_shipment': (15788, 15818), 'platform_audit_event': (24, 25), 'shipment_evidence_line': (110834, 110938), 'import_entity_mapping_candidate': (7044, 6925), 'import_row_result': (135, 136), 'shipment_evidence_observation': (112232, 120291)}
+
+== 6. Before and after (the figures the app shows)
+  figure                                                   before          after
+  shipped units (line_state shipped, all)               1367858.0      1374481.0
+  shipped, not landed units (supply overview)             14830.0        21453.0
+  landed units (POD set)                                1353028.0      1353028.0
+  arrived units (ATA, no POD)                                 0.0            0.0
+  open units (not received)                               63363.0        71302.0
+  pipeline units (open orders)                            48533.0        49849.0
+  fill rate                                        0.2618659448152819 0.2618659448152819
+  On the water: at sea units                              10619.0        15063.0
+  On the water: at sea lines (facts)                          125            133
+  On the water: vessels                                         9              9
+  On the water: overdue vessels                                 4              4
+  On the water: units on overdue vessels                   3973.0         4089.0
+  On the water: arrived units                              3417.0         5512.0
+  at sea expected from the workbook by cip's rule: 14,987 units in 197 rows
+  PASS  On the water at-sea units equal the workbook's, plus only the listed quantity-differs facts that stay at sea - 15,063 = 14,987 (workbook) + 76 (listed, not retired)
+  PASS  arrived units equal the workbook's (ATA set, no POD) - 5512.0 vs 5,512
+  lines: 197 evidence lines at sea; 133 facts (a fact adds up the rows of one delivery + item + PO)
+  PASS  landed units did not move - 1,353,028 -> 1,353,028
+
+== 7. Idempotence
+  observations added by the second pass: 329 (first 400 compared); columns that differ from the earlier observation of the same line: {'customer_id': 329, 'source_row_hash': 329, 'customer_resolution_status': 329}
+  PASS  a second re-process changes no evidence line and no fact
+  observations (append-only history): 16,065 -> 16,394
+
+RESULT: ALL PASS
+clone cip_retire3 left in place (drop it by hand when done)

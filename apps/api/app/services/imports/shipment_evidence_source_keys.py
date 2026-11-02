@@ -71,8 +71,25 @@ def _digest_ex(ex: dict[str, Any]) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:40]
 
 
+ORDER_GRAIN_MARK = "ord:"
+
+
 def _business_shipment_om(ex: dict[str, Any]) -> str:
-    """Shipped / delivery-backed rows: OU + delivery + invoice line + item."""
+    """Shipped / delivery-backed rows: OU + delivery + invoice line + item.
+
+    A line that is not invoiced yet has a blank invoice line, and one delivery can carry the same item on several orders:
+    those are real lines, not duplicates, so the key then also carries the order and its line (``ord:<order>|<line>``).
+    A numbered invoice keeps the key it always had.
+    """
+    if not _norm_seg(ex.get("invoice_line")) and _norm_seg(ex.get("order_no")):
+        body = _pipe(
+            ex.get("operating_unit"),
+            ex.get("delivery_no"),
+            ex.get("item_code"),
+            f"{ORDER_GRAIN_MARK}{_norm_seg(ex.get('order_no'))}",
+            ex.get("order_line"),
+        )
+        return body if body else f"digest:{_digest_ex(ex)}"
     body = _pipe(
         ex.get("operating_unit"),
         ex.get("delivery_no"),

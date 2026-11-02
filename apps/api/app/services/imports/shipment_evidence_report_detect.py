@@ -18,7 +18,11 @@ LINE_OPEN_ORDER = "open_order"
 LINE_CLOSED_SHIPPED = "closed_shipped"
 LINE_CLOSED_DISAPPEARED = "closed_disappeared"
 LINE_CLOSED_MOVED = "closed_moved"
-CLOSED_LINE_STATES = frozenset({LINE_CLOSED_SHIPPED, LINE_CLOSED_DISAPPEARED, LINE_CLOSED_MOVED})
+# A PO-less shipped fact whose delivery + item a newer job wrote under a PO-inclusive key (fact-level only; no observation).
+LINE_CLOSED_SUPERSEDED = "closed_superseded"
+CLOSED_LINE_STATES = frozenset(
+    {LINE_CLOSED_SHIPPED, LINE_CLOSED_DISAPPEARED, LINE_CLOSED_MOVED, LINE_CLOSED_SUPERSEDED}
+)
 
 
 def detect_report_type(columns: set[str], *, sheet_name: str | None, file_name: str) -> tuple[str, str]:

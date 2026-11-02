@@ -1,0 +1,6 @@
+== step 10 restart 2026-11-02 09:30:40: web rebuilt (BUILD_ID 4ghg0ExtpCEW_8hQWCpZJ); web, worker, API restarted once via the supervisor stop script with -Restart
+GET :8001/health/ready -> 200 {"status":"ready","database":"cip","ok":true}
+GET :3000/login -> 200
+GET :3000/supply/shipments -> 200
+GET :3000/admin/port-conditions -> 200
+celery ping -> {'celery@RF2300014-NB3': {'ok': 'pong'}}

@@ -1,0 +1,11 @@
+[APPLY] merge_shipped_fact_identity_twins --retire-po-less
+{
+  "database": "cip",
+  "twins_found": 10,
+  "to_retire": 10,
+  "to_retire_units": 700.0,
+  "quantity_differs": [],
+  "shipped_units_before": 1374481.0,
+  "retired": 10,
+  "shipped_units_after": 1373781.0
+}

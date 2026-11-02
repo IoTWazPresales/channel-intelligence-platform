@@ -1,0 +1,29 @@
+raw Shipped rows: 7346 units 507436
+the 169: 169 14278
+db/user/ro: ('cip', 'cip', 'on')
+observations on the Shipped sheet: 7247 units 500532
+evidence lines (Shipped) for job 1697: (7242, Decimal('500418'))
+
+the 169 lines against job 1697 (observations):
+  A. loaded the same: at sea, no ATA, no POD                                            109 lines   10,014 units
+  F. not loaded at all                                                                   60 lines    4,264 units
+  total: 169 lines 14278 units
+
+-- F. not loaded at all: first 12 (delivery | invoice | order | item | qty | raw ATA/POD) and loaded sibling
+   15260295984 | inv  | 151126041009117 | 90PT03X7-M09T30 | 40 | sc 2026-08-21 ob 2026-09-01 | loaded sibling: 
+   15260295986 | inv  | 151126061012108 | 90NX0861-M01X20 | 40 | sc 2026-08-11 ob 2026-09-01 | loaded sibling: 
+   15260303220 | inv  | 151126061007555 | 90PF05R3-M01880 | 12 | sc 2026-08-21 ob 2026-09-01 | loaded sibling: 
+   15260303220 | inv  | 151126071009408 | 90PF05R3-M01880 | 12 | sc 2026-08-21 ob 2026-09-01 | loaded sibling: 
+   15260303220 | inv  | 151126071009409 | 90PF05R3-M01880 | 12 | sc 2026-08-21 ob 2026-09-01 | loaded sibling: 
+   15260322142 | inv  | 151126041006244 | 90NB1542-M007D0 | 108 | sc 2026-09-12 ob 2026-09-19 | loaded sibling: 
+   15260322142 | inv  | 151126041006252 | 90NB1542-M007D0 | 108 | sc 2026-09-12 ob 2026-09-19 | loaded sibling: 
+   15260322142 | inv  | 151126041006253 | 90NB1542-M007D0 | 108 | sc 2026-09-12 ob 2026-09-19 | loaded sibling: 
+   15260330722 | inv  | 151126081007506 | 90NB13Y1-M02530 | 36 | sc 2026-09-12 ob 2026-09-19 | loaded sibling: 
+   15260330722 | inv  | 151126081007508 | 90NB13Y1-M02530 | 36 | sc 2026-09-12 ob 2026-09-19 | loaded sibling: 
+   15260330722 | inv  | 151126081007509 | 90NB13Y1-M02530 | 36 | sc 2026-09-12 ob 2026-09-19 | loaded sibling: 
+   15260330722 | inv  | 151126081007510 | 90NB13Y1-M02530 | 36 | sc 2026-09-12 ob 2026-09-19 | loaded sibling: 
+
+raw Shipped rows without an observation (multiset difference): 104
+  of which no ATA/POD and on board <= 27 Oct, sea: 60
+  units of the missing rows: 7018 lines 104
+  missing rows by (ATA?, POD?, way): {('noATA', 'noPOD', 'TRUCK/SEA'): 53, ('noATA', 'noPOD', 'SEA'): 27, ('ATA', 'noPOD', 'TRUCK/SEA'): 17, ('ATA', 'noPOD', 'SEA'): 6, ('noATA', 'noPOD', 'TRUCK/AIR'): 1}

@@ -12,7 +12,7 @@ import { tokensFor } from '@/theme/cipTokens';
 
 import { BASEMAP_DOTS, BASEMAP_SIZE } from './basemapDots';
 import { daysText, fmtDay, fmtDayYear, fmtMoney, fmtUnits, historyText, nameUnits, slipShort } from './format';
-import { clusterChip, clusterVessels, placeLabels, type Cluster } from './layout';
+import { clusterChip, clusterVessels, placeLabels, portsInUse, type Cluster } from './layout';
 import type { OnTheWaterData, PortRow, Vessel } from './types';
 
 type View = 'map' | 'distributor';
@@ -46,6 +46,8 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
   // Labels are a fixed size in pixels, so their size on the map follows the map's real size (a phone is not a desk).
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [mapPx, setMapPx] = useState({ w: 1000, h: 646 });
+  // Phone-width map: a port nobody is sailing to or from is a dot that shows its name when tapped.
+  const [tappedPort, setTappedPort] = useState<string | null>(null);
   const hasData = Boolean(data);
   useEffect(() => {
     const el = mapRef.current;
@@ -148,9 +150,18 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
   const pctX = (px: number) => (px / mapPx.w) * 100;
   const pctY = (px: number) => (px / mapPx.h) * 100;
   const narrow = mapPx.w < 560;
+  const compactPorts = mapPx.w < 600;
+  const namedPorts = compactPorts ? portsInUse(data.vessels, data.map.ports) : null;
+  const portNamed = (id: string) => namedPorts === null || namedPorts.has(id) || tappedPort === id;
   // Port names and vessel markers are not to be covered by a label.
   const avoid = [
-    ...data.map.ports.map((p) => ({ id: `p:${p.id}`, x: p.x + pctX(6), y: p.y - pctY(9), w: pctX(p.label.length * 7.6 + 12), h: pctY(18) })),
+    ...data.map.ports
+      .filter((p) => portNamed(p.id))
+      .map((p) => {
+        const w = pctX(p.label.length * 7.6 + 12);
+        const left = (p.label_side ?? (p.x > 82 ? 'left' : 'right')) === 'left';
+        return { id: `p:${p.id}`, x: left ? p.x - pctX(6) - w : p.x + pctX(6), y: p.y - pctY(9), w, h: pctY(18) };
+      }),
     ...clusters.map((c) => ({ id: `m:${c.id}`, x: c.x - pctX(14), y: c.y - pctY(14), w: pctX(28), h: pctY(28) })),
     // The Durban note sits on the map (not under it) except on a phone-width map.
     ...(durban && !narrow
@@ -288,14 +299,32 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                   )}
                 </svg>
 
-                {data.map.ports.map((p) => (
-                  <Box key={p.id} sx={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
-                    <Box component="span" sx={{ display: 'block', width: 7, height: 7, borderRadius: '50%', bgcolor: t.text.primary, boxShadow: `0 0 0 2px ${t.bg.default}` }} />
-                    <Box component="span" sx={{ position: 'absolute', ...(p.x > 82 ? { right: '12px' } : { left: '12px' }), top: '-6px', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 600, letterSpacing: '.04em', color: t.text.primary }}>
-                      {p.label}
+                {data.map.ports.map((p) => {
+                  const named = portNamed(p.id);
+                  // Only a port that is a bare dot on a phone-width map can be tapped; it is a 44 px target under the vessels.
+                  const tappable = compactPorts && !namedPorts?.has(p.id);
+                  return (
+                    <Box key={p.id} sx={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)', pointerEvents: tappable ? 'auto' : 'none' }}>
+                      {tappable ? (
+                        <Box
+                          component="button"
+                          type="button"
+                          data-testid={`otw-port-dot-${p.id}`}
+                          aria-label={`${p.label.charAt(0)}${p.label.slice(1).toLowerCase()}`}
+                          aria-pressed={tappedPort === p.id}
+                          onClick={() => setTappedPort((cur) => (cur === p.id ? null : p.id))}
+                          sx={{ position: 'absolute', left: '50%', top: '50%', width: 44, height: 44, transform: 'translate(-50%, -50%)', border: 0, p: 0, bgcolor: 'transparent', cursor: 'pointer' }}
+                        />
+                      ) : null}
+                      <Box component="span" sx={{ display: 'block', width: 7, height: 7, borderRadius: '50%', bgcolor: t.text.primary, boxShadow: `0 0 0 2px ${t.bg.default}` }} />
+                      {named ? (
+                        <Box component="span" data-testid={`otw-port-name-${p.id}`} sx={{ position: 'absolute', ...((p.label_side ?? (p.x > 82 ? 'left' : 'right')) === 'left' ? { right: '12px' } : { left: '12px' }), top: '-6px', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 600, letterSpacing: '.04em', color: t.text.primary, pointerEvents: 'none' }}>
+                          {p.label}
+                        </Box>
+                      ) : null}
                     </Box>
-                  </Box>
-                ))}
+                  );
+                })}
 
                 {durban && data.tiles.at_sea.overdue_vessels > 0 ? (
                   <Box

@@ -23,12 +23,40 @@ def _db_with_lines(n: int) -> MagicMock:
     return db
 
 
+def _no_retire(monkeypatch) -> None:
+    """These tests count the chunk round trips; the PO-less twin retire step has its own test below."""
+    monkeypatch.setattr(
+        facts_mod, "retire_po_less_twins_written_by_job", lambda db, job_id: {"retired": 0, "repointed": 0, "quantity_differs": []}
+    )
+
+
+def test_upsert_retires_po_less_twins_after_the_chunks(monkeypatch) -> None:
+    monkeypatch.setattr(
+        facts_mod,
+        "_row_values_from_evidence",
+        lambda line, **_: {"source_key": "k", "fact_upsert_key": f"k{id(line)}", "import_job_id": 1, "line_state": "open_order"},
+    )
+    monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: None)
+    seen: list[int] = []
+
+    def fake(db, job_id):
+        seen.append(job_id)
+        return {"retired": 2, "repointed": 0, "quantity_differs": [(5, 4.0, 3.0)]}
+
+    monkeypatch.setattr(facts_mod, "retire_po_less_twins_written_by_job", fake)
+    db = _db_with_lines(3)
+    assert facts_mod.upsert_inbound_shipment_facts_for_job(db, 32) == 3
+    assert seen == [32]
+    db.flush.assert_called()
+
+
 def test_upsert_batches_into_chunked_statements(monkeypatch) -> None:
+    _no_retire(monkeypatch)
     # Replace per-line value extraction with a constant row so no real ORM line is needed.
     monkeypatch.setattr(
         facts_mod,
         "_row_values_from_evidence",
-        lambda line, **_: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+        lambda line, **_: {"source_key": "k", "fact_upsert_key": f"k{id(line)}", "import_job_id": 1, "line_state": "open_order"},
     )
     monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
     monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
@@ -46,11 +74,34 @@ def test_upsert_batches_into_chunked_statements(monkeypatch) -> None:
     db.flush.assert_called_once()
 
 
+def test_lines_of_one_fact_key_are_never_split_across_chunks(monkeypatch) -> None:
+    """Rows of one key add up inside a chunk and a later chunk replaces the key: they must share a chunk (units were lost otherwise)."""
+    _no_retire(monkeypatch)
+    keys = iter(["A", "B", "C", "A", "D", "B", "A", "E"])
+    lines = [object() for _ in range(8)]
+    by_line = {id(ln): k for ln, k in zip(lines, keys)}
+    monkeypatch.setattr(
+        facts_mod, "_row_values_from_evidence",
+        lambda line, **_: {"source_key": by_line[id(line)], "fact_upsert_key": by_line[id(line)], "import_job_id": 1, "line_state": "shipped"},
+    )
+    seen: list[list[str]] = []
+    monkeypatch.setattr(facts_mod, "_upsert_evidence_chunk", lambda db, tbl, chunk, values, **_: seen.append([v["fact_upsert_key"] for v in values]))
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = lines
+    assert facts_mod.upsert_inbound_shipment_facts_for_job(db, 32, chunk_size=3) == 8
+    flat = [k for c in seen for k in c]
+    assert sorted(flat) == sorted(by_line.values())
+    for key in set(flat):
+        assert sum(1 for c in seen if key in c) == 1, f"{key} was split across chunks: {seen}"
+    assert all(len(c) <= 3 or len(set(c)) == 1 for c in seen)  # a chunk is full, or one key that does not fit anywhere else
+
+
 def test_upsert_single_chunk_and_empty(monkeypatch) -> None:
+    _no_retire(monkeypatch)
     monkeypatch.setattr(
         facts_mod,
         "_row_values_from_evidence",
-        lambda line, **_: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+        lambda line, **_: {"source_key": "k", "fact_upsert_key": f"k{id(line)}", "import_job_id": 1, "line_state": "open_order"},
     )
     monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
     monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)

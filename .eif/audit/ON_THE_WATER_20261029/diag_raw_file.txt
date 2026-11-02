@@ -1,0 +1,14 @@
+sheets: ['Unship', 'Shipped', 'BOM not ready']
+columns with dates/ship/qty: ['Ship To', 'Pick Release Date', 'Exwork Date', 'Ship Confirm Date', 'On-Board Date', 'ETA Date(Est Port Arrival)', 'ATA Date(Actual Port Arrival)', 'ERD (Est Revenue Date)', 'Est POD', 'Est POD(Week)', 'POD', 'Qty', 'Schedule Ship Date', 'Promise Date', 'Ship Way', 'Ship to Territory', 'Ship to Country Code', 'Ship to Country', 'Qty reserved', 'Accepted_Qty', 'Created Date', 'Request Date', 'Shipping Method', 'Shipment  Priority', 'Retailer', 'Customer Acceptance Date(HQ Server Time)', 'Ship Region', 'Pricing Date', 'China DC In Date', 'China DC Out Date', 'GL_DATE', 'Reject/Resell Original EXW Date']
+quantity column: Qty
+data rows on Shipped: 7346
+
+user's definition on the raw sheet (ship-confirmed, on board <= 27 Oct, no ATA, sea): 169 lines 14,278 units
+by (ship confirm, on board, ATA, POD, way) - no POD, on board <= 27 Oct:
+   ('sc', 'ob<=27Oct', 'no ATA', 'no POD', 'sea'):   169 lines    14,278 units
+   ('sc', 'ob<=27Oct', 'ATA', 'no POD', 'sea'):    82 lines     5,512 units
+   ('no sc', 'ob<=27Oct', 'no ATA', 'no POD', 'sea'):     9 lines       731 units
+   ('sc', 'ob later', 'no ATA', 'no POD', 'sea'):    28 lines       709 units
+   ('no sc', 'no ob', 'no ATA', 'no POD', 'AIR'):     3 lines       585 units
+   ('sc', 'ob later', 'no ATA', 'no POD', 'TRUCK/AIR'):     6 lines       142 units
+   ('sc', 'no ob', 'no ATA', 'no POD', 'sea'):     6 lines       112 units

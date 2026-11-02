@@ -1,0 +1,8 @@
+db/user/ro: ('cip', 'cip', 'on')
+raw Shipped rows: 7346 | observations: 7247 | raw rows with no observation: 104 (7,018 units)
+  source key (delivery|invoice|item) is carried by another loaded row, invoice line blank               104 rows    7,018 units
+source keys carried by more than one raw row: 47 | raw rows in them: 151 | loaded rows for them: 48
+  of those, invoice line blank: 47 keys
+  units in those raw rows: 9440 | units loaded for them: 2436
+of the 169 at-sea raw lines: 169 | collapsed away: 60 (4,264 units) | all with blank invoice line: True
+source keys whose raw rows all share one order+line (true repeats): 0 of 47

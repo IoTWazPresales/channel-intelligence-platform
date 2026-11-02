@@ -1,0 +1,90 @@
+db/user/read_only: ('cip', 'cip', 'on')
+
+overdue at-sea facts with no job-1697 row on order+item+PO: 37 lines, 2,925 units
+loose matching of those lines against job 1697: {'in_1697_on_order+item_not_PO_with_ATA/POD': 33, 'in_1697_on_order+item_not_PO_still_at_sea/other': 4}
+last loaded by (job, report date): {'601 (2026-07-21)': 24, '1159 (2026-08-18)': 9, '1326 (2026-09-01)': 1, '1695 (2026-09-29)': 3}
+last report that carried the line -> (job, report date, state, has ATA/POD): {(1339, '2026-09-11', 'closed_shipped', False): 24, (1339, '2026-09-11', 'shipped', True): 4, (1697, '2026-10-27', 'shipped', True): 5, (1697, '2026-10-27', 'shipped', False): 4}
+lines whose order+item shows an ATA or POD in some report: 33
+ship_confirm_date null: 0 of 37 | invoice_line set: 0 | customer_po set: 0
+fact_upsert_key shapes (parts): {2: 37}
+report_type/sheet: {('acza_workbook_shipped', 'Shipped'): 37}
+
+per line (stale): fact | job | key | order | item | PO | kind | 1697 order+item rows | last carried by job/state/ATA/POD | later ATA/POD anywhere
+  113211 | 601 | ship:15260244136|90NB14Y1-M00DP0 | 151126041004644 | 90NB14Y1-M00DP0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113212 | 601 | ship:15260244136|90NB17C1-M003D0 | 151126061002677 | 90NB17C1-M003D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113213 | 601 | ship:15260244137|90NB1542-M007D0 | 151126041006242 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113214 | 601 | ship:15260244138|90NB1542-M007D0 | 151126041006243 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113215 | 601 | ship:15260244139|90NB1542-M007D0 | 151126041006246 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113216 | 601 | ship:15260244140|90NB1542-M007D0 | 151126041006247 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113217 | 601 | ship:15260244141|90NB1542-M007D0 | 151126041006248 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113218 | 601 | ship:15260244142|90NB1542-M007D0 | 151126041006259 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113219 | 601 | ship:15260244143|90NB1542-M007D0 | 151126041006264 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113220 | 601 | ship:15260244144|90NB1542-M007D0 | 151126041006268 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113221 | 601 | ship:15260244145|90NB1542-M007D0 | 151126041006269 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113222 | 601 | ship:15260244146|90NB1542-M007D0 | 151126041006274 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113223 | 601 | ship:15260244147|90NB1542-M007D0 | 151126041006280 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113224 | 601 | ship:15260244148|90NB1542-M007D0 | 151126041006286 | 90NB1542-M007D0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113225 | 601 | ship:15260244149|90NB16V1-M005L0 | 151125111010654 | 90NB16V1-M005L0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113226 | 601 | ship:15260244150|90NB17I1-M012H0 | 151126041011195 | 90NB17I1-M012H0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113227 | 601 | ship:15260244151|90NB17I1-M012H0 | 151126041011179 | 90NB17I1-M012H0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113228 | 601 | ship:15260244152|90NB17I1-M012H0 | 151126041011180 | 90NB17I1-M012H0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113229 | 601 | ship:15260244153|90NB17I1-M012H0 | 151126041011181 | 90NB17I1-M012H0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113230 | 601 | ship:15260244154|90NB17I1-M00T90 | 151126061005555 | 90NB17I1-M00T90 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113231 | 601 | ship:15260244155|90NB14W3-M028H0 | 151126051010891 | 90NB14W3-M028H0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113232 | 601 | ship:15260244156|90NB17H6-M00NU0 | 151126061002679 | 90NB17H6-M00NU0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113235 | 601 | ship:15260257032|90NB17X1-M000S0 | 151126061005537 | 90NB17X1-M000S0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  113236 | 601 | ship:15260257033|90NB16Q5-M00JF0 | 151126061005552 | 90NB16Q5-M00JF0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'closed_shipped', '-', '-') | (1697, '2026-08-16', '2026-09-02')
+  127030 | 1159 | ship:15260264355|90NB13Y1-M02530 | 151126061008278 | 90NB13Y1-M02530 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'shipped', '2026-09-08', '-') | (1697, '2026-09-08', '2026-09-18')
+  127031 | 1159 | ship:15260264356|90NB13Y1-M02530 | 151126061008279 | 90NB13Y1-M02530 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'shipped', '2026-09-08', '-') | (1697, '2026-09-08', '2026-09-18')
+  127032 | 1159 | ship:15260264357|90NB13Y1-M02530 | 151126061008280 | 90NB13Y1-M02530 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'shipped', '2026-09-08', '-') | (1697, '2026-09-08', '2026-09-18')
+  127033 | 1159 | ship:15260264358|90NB13Y1-M02530 | 151126061008284 | 90NB13Y1-M02530 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1339, 'shipped', '2026-09-08', '-') | (1697, '2026-09-08', '2026-09-18')
+  127076 | 1159 | ship:15260273905|90PT03XA-M0C3C0 | 151126061002668 | 90PT03XA-M0C3C0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1697, 'shipped', '2026-10-21', '-') | (1697, '2026-10-21', '-')
+  127171 | 1159 | ship:15260288861|90NR0KS1-M00EX0 | 151126051004455 | 90NR0KS1-M00EX0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1697, 'shipped', '2026-10-21', '-') | (1697, '2026-10-21', '-')
+  127172 | 1159 | ship:15260288862|90NR0JF7-M00VD0 | 151126061008534 | 90NR0JF7-M00VD0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1697, 'shipped', '2026-10-21', '-') | (1697, '2026-10-21', '-')
+  127173 | 1159 | ship:15260288862|90NR0JF7-M00VF0 | 151126061008535 | 90NR0JF7-M00VF0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1697, 'shipped', '2026-10-21', '-') | (1697, '2026-10-21', '-')
+  127174 | 1159 | ship:15260288864|90NB1511-M009S0 | 151126051000237 | 90NB1511-M009S0 | None | in_1697_on_order+item_not_PO_with_ATA/POD | 1 | (1697, 'shipped', '2026-10-21', '-') | (1697, '2026-10-21', '-')
+  134229 | 1326 | ship:15260288866|90PF05R3-M018A0 | 151126061009433 | 90PF05R3-M018A0 | None | in_1697_on_order+item_not_PO_still_at_sea/other | 1 | (1697, 'shipped', '-', '-') | None
+  148689 | 1695 | ship:15260363398|90NB17I1-M02910 | 151126091003047 | 90NB17I1-M02910 | None | in_1697_on_order+item_not_PO_still_at_sea/other | 1 | (1697, 'shipped', '-', '-') | None
+  148690 | 1695 | ship:15260363398|90NB17I1-M028Z0 | 151126091003056 | 90NB17I1-M028Z0 | None | in_1697_on_order+item_not_PO_still_at_sea/other | 1 | (1697, 'shipped', '-', '-') | None
+  148691 | 1695 | ship:15260363399|90NB17I1-M028Z0 | 151126091003066 | 90NB17I1-M028Z0 | None | in_1697_on_order+item_not_PO_still_at_sea/other | 1 | (1697, 'shipped', '-', '-') | None
+
+=== facts at sea on cip whose order+item+PO is in 1697 with an ATA or POD (identity change) ===
+  id=127214 | import_job_id=1159 | fact_upsert_key=ship:15260303226|90NB13Y1-M03TL0 | invoice_line=None | quantity=36.0000 | on_board_date=2026-08-22 | port_eta_date=2026-09-11 | order_no=151126061010093 | item_code=90NB13Y1-M03TL0 | customer_po=POFC00577039 | obs=134192 | line_identity_key=order:151126061010093|1.1|90NB13Y1-M03TL0 | o_inv=None | port_ata_date=2026-10-21 | pod_date=None | line_state=shipped | evidence_line_id=187339 | o_facts=163127:ship:15260303226|90NB13Y1-M03TL0|88147:shipped:1697
+  id=127215 | import_job_id=1159 | fact_upsert_key=ship:15260303227|90NB16V1-M00YA0 | invoice_line=None | quantity=12.0000 | on_board_date=2026-08-22 | port_eta_date=2026-09-11 | order_no=151126071012522 | item_code=90NB16V1-M00YA0 | customer_po=POFC00577039 | obs=134193 | line_identity_key=order:151126071012522|1.1|90NB16V1-M00YA0 | o_inv=None | port_ata_date=2026-10-21 | pod_date=None | line_state=shipped | evidence_line_id=187340 | o_facts=163128:ship:15260303227|90NB16V1-M00YA0|88147:shipped:1697
+
+=== job 1697 units by class (all rows; as of 1 Nov) ===
+   ('shipped', 'TRUCK/SEA', True, True, 'OB past', 4451, Decimal('318981'))
+   ('shipped', 'SEA', True, True, 'OB past', 973, Decimal('83582'))
+   ('shipped', 'TRUCK/AIR', True, True, 'OB past', 933, Decimal('36992'))
+   ('shipped', 'AIR', True, True, 'OB past', 385, Decimal('35237'))
+   ('open_order', 'TRUCK/SEA', False, False, 'no OB', 447, Decimal('28338'))
+   ('open_order', 'SEA', False, False, 'no OB', 226, Decimal('16323'))
+   ('shipped', 'TRUCK/SEA', False, True, 'no OB', 82, Decimal('7656'))
+   ('shipped', 'SEA', False, False, 'OB past', 67, Decimal('6266'))
+   ('shipped', 'TRUCK/SEA', False, False, 'OB past', 56, Decimal('4277'))
+   ('shipped', 'EXPRESS', False, True, 'no OB', 213, Decimal('2521'))
+   ('shipped', 'TRUCK/SEA', True, False, 'OB past', 33, Decimal('2162'))
+   ('open_order', 'AIR', False, False, 'no OB', 14, Decimal('1753'))
+   ('open_order', 'TRUCK/AIR', False, False, 'no OB', 35, Decimal('1736'))
+   ('shipped', 'SEA', True, False, 'OB past', 26, Decimal('1255'))
+   ('closed_disappeared', 'AIR', False, False, 'no OB', 3, Decimal('585'))
+   ('closed_shipped', 'SEA', False, False, 'no OB', 13, Decimal('489'))
+   ('open_order', 'SEA', False, False, 'OB past', 6, Decimal('336'))
+   ('shipped', 'SEA', False, True, 'no OB', 3, Decimal('233'))
+   ('closed_disappeared', 'SEA', False, False, 'no OB', 14, Decimal('180'))
+   ('closed_disappeared', 'TRUCK/AIR', False, False, 'no OB', 3, Decimal('168'))
+   ('shipped', 'AIR', False, True, 'no OB', 1, Decimal('120'))
+   ('shipped', 'TRUCK/AIR', False, False, 'OB past', 5, Decimal('114'))
+   ('closed_shipped', 'TRUCK/AIR', False, False, 'no OB', 5, Decimal('114'))
+   ('shipped', 'TRUCK/AIR', False, True, 'no OB', 2, Decimal('45'))
+   ('shipped', 'TRUCK/SEA', False, False, 'no OB', 1, Decimal('36'))
+   ('shipped', 'SEA', False, False, 'no OB', 2, Decimal('20'))
+   ('open_order', 'EXPRESS', False, False, 'no OB', 6, Decimal('17'))
+   ('closed_shipped', 'EXPRESS', False, False, 'no OB', 1, Decimal('1'))
+units: shipped, no ATA/POD, OB past, any way: 10657.0
+units: shipped, no ATA/POD, OB past, SEA: 10543.0
+units: shipped, ATA set, no POD (arrived, not delivered): 3417.0
+units: shipped, no POD, OB known (at sea + arrived): 14074.0
+units: open_order with OB date: 336.0
+units: shipped, no POD, any (incl. no OB): 14130.0
+1697 shipped, no ATA/POD, OB known: by ETA (any ship way): [('2026-10-27', 10, 3170), ('2026-10-29', 1, 40), ('2026-10-30', 13, 687), ('2026-11-02', 5, 114), ('2026-11-05', 29, 2670), ('2026-11-07', 13, 621), ('2026-11-18', 38, 2462), ('2026-11-25', 5, 364), ('2026-12-02', 14, 529)]

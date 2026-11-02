@@ -30,6 +30,27 @@ export function clusterVessels(vessels: Vessel[], radius: number): Cluster[] {
   return clusters;
 }
 
+// UN/LOCODE the importer stores in `deliver_port`, as the map's port ids.
+const DELIVER_PORT_IDS: Record<string, string[]> = { ZADUR: ['DURBAN'], ZAJNB: ['DURBAN', 'CITY DEEP'], MUPLU: ['PORT LOUIS'] };
+
+/**
+ * Ports a vessel is heading to or coming from: the origins and stops in its lane label ("Chongqing / Shenzhen → Durban →
+ * City Deep") and its discharge port, as upper-case map labels. A phone-width map names only these ports and Durban.
+ */
+export function portsInUse(vessels: Vessel[], ports: Array<{ id: string; label: string }>): Set<string> {
+  const names = new Map(ports.map((p) => [p.label.toUpperCase(), p.id]));
+  const used = new Set<string>(['DURBAN']);
+  const add = (name: string) => {
+    const id = names.get(name.trim().toUpperCase());
+    if (id) used.add(id);
+  };
+  for (const v of vessels) {
+    for (const stop of v.lane_label.split('→')) for (const name of stop.split('/')) add(name);
+    for (const id of DELIVER_PORT_IDS[(v.deliver_port ?? '').toUpperCase()] ?? []) used.add(id);
+  }
+  return used;
+}
+
 export function nearestPort(c: { x: number; y: number }, ports: Array<{ label: string; x: number; y: number }>): string {
   let best = ports[0];
   for (const p of ports) if (dist(c, p) < dist(c, best)) best = p;

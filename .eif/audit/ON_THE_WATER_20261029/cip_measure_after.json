@@ -1,0 +1,49 @@
+{
+  "database": "cip",
+  "facts_by_line_state": {
+    "closed_disappeared": {
+      "lines": 694,
+      "units": 50707.0
+    },
+    "closed_shipped": {
+      "lines": 704,
+      "units": 51586.0
+    },
+    "closed_superseded": {
+      "lines": 47,
+      "units": 3597.0
+    },
+    "open_order": {
+      "lines": 749,
+      "units": 49849.0
+    },
+    "shipped": {
+      "lines": 13624,
+      "units": 1373781.0
+    }
+  },
+  "supply": {
+    "open_lines": 957,
+    "open_units": 70602.0,
+    "pipeline_lines": 749,
+    "pipeline_units": 49849.0,
+    "shipped_lines": 208,
+    "shipped_units": 20753.0,
+    "landed_lines": 13416,
+    "landed_units": 1353028.0,
+    "arrived_lines": 0,
+    "arrived_units": 0.0,
+    "eta_past_no_pod_lines": 51
+  },
+  "fill_rate": 0.2618659448152819,
+  "fill_rate_pct": 26,
+  "on_the_water": {
+    "at_sea_units": 14987.0,
+    "at_sea_lines": 131,
+    "vessels": 8,
+    "overdue_vessels": 3,
+    "overdue_units": 4013.0,
+    "arrived_units": 5512.0,
+    "eta_moved": 7
+  }
+}
