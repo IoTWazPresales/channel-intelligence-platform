@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimProduct
 from app.models.facts import FactInboundShipment
+from app.services.shipment_live_line import live_line
 from app.models.purchase_order import PurchaseOrder
 from app.services.commercial_planner.lineup_period_canonical import active_lineup_case_filters
 
@@ -90,6 +91,7 @@ async def _po_gap_worklist_inner(db: AsyncSession, *, include_dismissed: bool) -
             .where(
                 FactInboundShipment.purchase_order_id.isnot(None),
                 FactInboundShipment.product_id.isnot(None),
+                live_line(FactInboundShipment.line_state),
             )
             .group_by(FactInboundShipment.purchase_order_id, FactInboundShipment.product_id)
         )

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCasePo, CommercialLineupLine
 from app.models.facts import FactInboundShipment
+from app.services.shipment_live_line import live_line
 from app.models.purchase_order import PurchaseOrder
 from app.services.commercial_planner.lineup_case_bulk_protection import CaseProtectedError
 from app.services.commercial_planner.lineup_case_po_confirm import (
@@ -26,6 +27,29 @@ from app.services.commercial_planner.lineup_case_po_confirm import (
     link_case_to_existing_po,
 )
 from app.services.steward_audit import record_steward_audit
+
+
+async def _live_po_bearing_ships(db: AsyncSession, product_ids: list[int], distributor_ids: list[int]) -> list[Any]:
+    """(product, distributor, PO) of the live shipment facts that carry a PO.
+
+    A closed fact (the shared live-line rule, GOV-008 B1) is history and does not suggest a PO.
+    """
+    return list(
+        (
+            await db.execute(
+                select(
+                    FactInboundShipment.product_id,
+                    FactInboundShipment.resolved_distributor_id,
+                    FactInboundShipment.purchase_order_id,
+                ).where(
+                    FactInboundShipment.product_id.in_(product_ids),
+                    FactInboundShipment.resolved_distributor_id.in_(distributor_ids),
+                    FactInboundShipment.purchase_order_id.isnot(None),
+                    live_line(FactInboundShipment.line_state),
+                )
+            )
+        ).all()
+    )
 
 
 async def preview_attributed_distributor_case_po_gaps(
@@ -89,19 +113,7 @@ async def preview_attributed_distributor_case_po_gaps(
 
     all_products = {pid for prods in gaps.values() for pid in prods}
     all_dists = {d for _, d in gaps}
-    ships = (
-        await db.execute(
-            select(
-                FactInboundShipment.product_id,
-                FactInboundShipment.resolved_distributor_id,
-                FactInboundShipment.purchase_order_id,
-            ).where(
-                FactInboundShipment.product_id.in_(list(all_products)),
-                FactInboundShipment.resolved_distributor_id.in_(list(all_dists)),
-                FactInboundShipment.purchase_order_id.isnot(None),
-            )
-        )
-    ).all()
+    ships = await _live_po_bearing_ships(db, list(all_products), list(all_dists))
 
     # (dist_id, po_id) -> products seen on PO-bearing ships
     po_products: dict[tuple[int, int], set[int]] = defaultdict(set)

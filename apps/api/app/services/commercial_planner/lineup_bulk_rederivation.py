@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimCustomer
 from app.models.facts import FactInboundShipment
+from app.services.shipment_live_line import live_line
 from app.services.shipment_strict_pair import twin_remainder
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.lineup_bulk_backfill_apply import persist_preview_session
@@ -151,6 +152,7 @@ def _shipment_q1_hint(db: Session, *, product_id: int | None, customer_id: int |
         FactInboundShipment.product_id == int(product_id),
         FactInboundShipment.ship_confirm_date >= q1_start,
         FactInboundShipment.ship_confirm_date < q2_start,
+        live_line(FactInboundShipment.line_state),  # a closed_* fact is history, never a shipped hint (GOV-008 B1)
     ]
     if customer_id is not None:
         scope.append(FactInboundShipment.customer_id == int(customer_id))

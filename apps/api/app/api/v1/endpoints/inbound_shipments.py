@@ -9,6 +9,7 @@ from app.core.security import get_optional_current_user
 from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
+from app.services.shipment_live_line import live_line
 
 router = APIRouter()
 
@@ -23,14 +24,15 @@ class ClearConfirmBody(BaseModel):
 
 @router.get("")
 async def list_inbound(
+    include_closed: bool = False,
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ):
-    res = await db.execute(
-        select(FactInboundShipment)
-        .where(where_tenant(FactInboundShipment.tenant_id, user))
-        .order_by(FactInboundShipment.updated_at.desc())
-    )
+    """Live inbound facts. Closed facts (``closed_*``) are history and only listed with ``include_closed=true``."""
+    stmt = select(FactInboundShipment).where(where_tenant(FactInboundShipment.tenant_id, user))
+    if not include_closed:
+        stmt = stmt.where(live_line(FactInboundShipment.line_state))
+    res = await db.execute(stmt.order_by(FactInboundShipment.updated_at.desc()))
     rows = res.scalars().all()
     out = []
     for s in rows:

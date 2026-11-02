@@ -30,6 +30,7 @@ from app.models.commercial_lineup import (
 )
 from app.models.dimensions import DimCustomer, DimDistributor
 from app.models.facts import FactInboundShipment
+from app.services.shipment_live_line import live_line
 from app.models.import_distributor_si import CustomerSourceTokenAlias
 from app.services.commercial_planner.lineup_customer_alias_resolution import (
     resolve_lineup_customer_id_from_token,
@@ -144,6 +145,7 @@ async def _eligible_ships_for_products(
             ).where(
                 FactInboundShipment.product_id.in_(list(product_ids)),
                 FactInboundShipment.resolved_distributor_id.isnot(None),
+                live_line(FactInboundShipment.line_state),
             )
         )
     ).all()

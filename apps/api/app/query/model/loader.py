@@ -37,7 +37,7 @@ CALC_KINDS = frozenset({
 TIME_FLOORS = frozenset({"day", "stored_period_type"})
 NULL_KEYS = frozenset({"unassigned", "exclude_when_grouped"})
 # Rules and measure expressions that need SQL are built in code (rules.py); the file only names them.
-KNOWN_RULES = frozenset({"cpor_portfolio_lines", "lineup_current_cases"})
+KNOWN_RULES = frozenset({"cpor_portfolio_lines", "lineup_current_cases", "shipment_live_lines"})
 KNOWN_MEASURE_RULES = frozenset({
     "cpor_line_support_usd",
     "shipment_open_quantity",

@@ -16,6 +16,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimProduct
+from app.services.shipment_live_line import live_line_sql
 
 _LIFECYCLE_RANK: dict[str, int] = {
     "published": 0,
@@ -211,7 +212,7 @@ def _fetch_windows(
         return empty
 
     def _run(scope: str, cid: int | None) -> dict[int, InboundWindow]:
-        sql = """
+        sql = f"""
             SELECT
                 product_id,
                 min(pod_date) FILTER (WHERE pod_date IS NOT NULL) AS min_pod,
@@ -221,6 +222,7 @@ def _fetch_windows(
                 coalesce(sum(quantity), 0) AS qty
             FROM fact_inbound_shipment
             WHERE product_id = ANY(:ids)
+              AND {live_line_sql()}
         """
         params: dict[str, Any] = {"ids": ids}
         if cid is not None:

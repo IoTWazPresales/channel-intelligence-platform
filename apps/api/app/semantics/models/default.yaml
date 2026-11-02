@@ -293,6 +293,9 @@ models:
     # Shipped measures are lines with a ship confirm date. Open measures are the strict-pair
     # remainder (D-0057, D-0065) and are not dated: eta_date is present and unused.
     time: {column: ship_confirm_date, floor: day}
+    # Closed facts (closed_shipped / closed_disappeared / closed_moved / closed_superseded) are history,
+    # not shipments: the shared live-line rule leaves them out of every measure (GOV-008 B1).
+    rules: [shipment_live_lines]
     joins:
       product: {fk: product_id, null_keys: unassigned}
       distributor: {fk: distributor_id, null_keys: unassigned}

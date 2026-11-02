@@ -51,6 +51,8 @@ from typing import Any
 from sqlalchemy import and_, case, func, literal_column, or_, select, tuple_
 from sqlalchemy.orm import aliased
 
+from app.services.shipment_live_line import live_line, live_line_sql
+
 # --- D-0065: remainder ---------------------------------------------------------------------
 
 OPEN_TWIN_REMAINDER_SQL = """
@@ -98,8 +100,10 @@ security the planner under-estimates both sides of a self-join and picks a neste
 loop (21 s on cip). The window form sorts 15k rows once.
 """
 
-TWIN_KEPT_SQL = "(twin_rem.fact_id IS NULL OR twin_rem.counted_qty > 0)"
-"""The line counts: no shipped twin, or an open remainder above 0 (needs the ``twin_rem`` join)."""
+TWIN_KEPT_SQL = (
+    f"({live_line_sql()} AND (twin_rem.fact_id IS NULL OR twin_rem.counted_qty > 0))"
+)
+"""The line counts: it is live (not ``closed_*``, see ``shipment_live_line``) and has no shipped twin, or an open remainder above 0 (needs the ``twin_rem`` join)."""
 
 TWIN_COUNTED_QTY_SQL = "coalesce(twin_rem.counted_qty, fact_inbound_shipment.quantity)"
 """Quantity to total: the remainder for an open twin line, else the stored quantity."""
@@ -176,11 +180,12 @@ def _skipped_open_twin_ids(model):
 def keep_counted_line(model):
     """SQLAlchemy filter (D-0065): drop an open line only when its shipped twins cover it.
 
-    An open line with a positive remainder stays, as one line. ``id`` is the primary
+    An open line with a positive remainder stays, as one line. A closed line
+    (``closed_*``, GOV-008 B1) never counts. ``id`` is the primary
     key, so ``NOT IN`` never turns NULL. Use it for line counts and row lists; for
     quantity totals use :func:`twin_remainder`.
     """
-    return model.id.not_in(_skipped_open_twin_ids(model))
+    return and_(live_line(model.line_state), model.id.not_in(_skipped_open_twin_ids(model)))
 
 
 def skipped_open_twin_line(model):
@@ -239,7 +244,9 @@ def twin_remainder(model, *, row_filter: Callable[[Any], Any] | None = None) -> 
     return TwinRemainder(
         subquery=sub,
         onclause=sub.c.fact_id == model.id,
-        kept=or_(sub.c.fact_id.is_(None), sub.c.counted_qty > 0),
+        # A closed row has no twin entry (only shipped/open_order rows are keyed), so without
+        # the live test it fell through as kept (GOV-008 B1).
+        kept=and_(live_line(model.line_state), or_(sub.c.fact_id.is_(None), sub.c.counted_qty > 0)),
         counted_quantity=func.coalesce(sub.c.counted_qty, model.quantity),
         is_partial_twin=and_(sub.c.fact_id.is_not(None), sub.c.counted_qty > 0),
         counted_amount=_counted_amount(model, sub.c.counted_qty),

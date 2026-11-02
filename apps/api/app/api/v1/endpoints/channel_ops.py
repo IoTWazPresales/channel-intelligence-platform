@@ -31,6 +31,7 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
 from app.models.facts import FactInboundShipment, FactInventoryReconciliation, FactSalesSellout
+from app.services.shipment_live_line import live_line
 from app.services.shipment_strict_pair import twin_remainder
 from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import (
@@ -177,7 +178,9 @@ async def channel_ops_movement_lens(
         select(func.max(FactSalesSellout.transaction_date)).where(FactSalesSellout.tenant_id == tid)
     )
     in_date = func.coalesce(FactInboundShipment.ship_confirm_date, FactInboundShipment.pod_date)
-    in_max = await db.scalar(select(func.max(in_date)).where(FactInboundShipment.tenant_id == tid))
+    in_max = await db.scalar(
+        select(func.max(in_date)).where(FactInboundShipment.tenant_id == tid, live_line(FactInboundShipment.line_state))
+    )
 
     if so_max is None and in_max is None:
         return {
@@ -991,8 +994,10 @@ async def _cover_weekly_flow(db: AsyncSession, tid: str, weeks: int = 13) -> dic
         select(func.max(FactSalesSellout.transaction_date)).where(FactSalesSellout.tenant_id == tid)
     )
     in_date = func.coalesce(FactInboundShipment.ship_confirm_date, FactInboundShipment.pod_date)
-    in_max = await db.scalar(select(func.max(in_date)).where(FactInboundShipment.tenant_id == tid))
-    dates = [d for d in (so_max, in_max) if d is not None]
+    in_max = await db.scalar(
+        select(func.max(in_date)).where(FactInboundShipment.tenant_id == tid, live_line(FactInboundShipment.line_state))
+    )
+    dates =[d for d in (so_max, in_max) if d is not None]
     empty = {"points": [], "sell_out_through": so_max.isoformat() if so_max else None, "shipped_through": in_max.isoformat() if in_max else None}
     if not dates:
         return empty
@@ -1082,6 +1087,33 @@ def cover_item_dict(
     }
 
 
+async def _open_inbound_by_pair(db: AsyncSession, tid: str) -> dict[tuple[int, int], float]:
+    """Open inbound units per (distributor, product): not landed, still on the book.
+
+    Counted quantity (D-0057 + D-0065): a covered open twin is skipped, a partly shipped one adds its
+    remainder. ``twin.kept`` also leaves out every closed fact (the shared live-line rule, GOV-008 B1).
+    """
+    twin = twin_remainder(FactInboundShipment)
+    open_rows = (
+        await db.execute(
+            select(
+                FactInboundShipment.distributor_id,
+                FactInboundShipment.product_id,
+                func.coalesce(func.sum(twin.counted_quantity), 0),
+            )
+            .select_from(FactInboundShipment)
+            .outerjoin(twin.subquery, twin.onclause)
+            .where(FactInboundShipment.tenant_id == tid)
+            .where(FactInboundShipment.pod_date.is_(None))
+            .where(FactInboundShipment.distributor_id.is_not(None))
+            .where(FactInboundShipment.product_id.is_not(None))
+            .where(twin.kept)
+            .group_by(FactInboundShipment.distributor_id, FactInboundShipment.product_id)
+        )
+    ).all()
+    return {(int(r.distributor_id), int(r.product_id)): float(r[2] or 0) for r in open_rows}
+
+
 @router.get("/cover-distribution")
 async def channel_ops_cover_distribution(
     db: AsyncSession = Depends(get_db),
@@ -1130,27 +1162,7 @@ async def channel_ops_cover_distribution(
                 str(r.sales_model_name or ""),
             )
 
-    inbound_open: dict[tuple[int, int], float] = {}
-    twin = twin_remainder(FactInboundShipment)  # counted quantity (D-0057 + D-0065)
-    open_rows = (
-        await db.execute(
-            select(
-                FactInboundShipment.distributor_id,
-                FactInboundShipment.product_id,
-                func.coalesce(func.sum(twin.counted_quantity), 0),
-            )
-            .select_from(FactInboundShipment)
-            .outerjoin(twin.subquery, twin.onclause)
-            .where(FactInboundShipment.tenant_id == tid)
-            .where(FactInboundShipment.pod_date.is_(None))
-            .where(FactInboundShipment.distributor_id.is_not(None))
-            .where(FactInboundShipment.product_id.is_not(None))
-            .where(twin.kept)
-            .group_by(FactInboundShipment.distributor_id, FactInboundShipment.product_id)
-        )
-    ).all()
-    for r in open_rows:
-        inbound_open[(int(r.distributor_id), int(r.product_id))] = float(r[2] or 0)
+    inbound_open = await _open_inbound_by_pair(db, tid)
 
     weekly_flow = await _cover_weekly_flow(db, tid)
 

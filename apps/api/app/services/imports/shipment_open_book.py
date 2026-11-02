@@ -11,6 +11,11 @@ on a new observation and on one ``platform_audit_event``.
 
 A report dated before the newest applied report in the same scope writes no
 facts and closes nothing, so a late load of an older file cannot reopen the book.
+
+A complete-book file with no report date closes nothing either, and (GOV-008 M2) its
+fact write leaves closed facts closed and adds no second open fact for a line that is
+already open under another key. The job records how many lines that left out
+(``staged_metadata['shipment_undated_write']``) and the Import Center notice says so.
 """
 
 from __future__ import annotations
@@ -42,6 +47,7 @@ from app.services.imports.shipment_evidence_report_detect import (
     REPORT_ACZA_UNSHIP,
 )
 from app.services.imports.shipment_report_date import report_date_for_job
+from app.services.shipment_live_line import live_line
 from app.utils.json_safe import to_jsonable
 
 logger = logging.getLogger(__name__)
@@ -50,8 +56,8 @@ _OPEN_BOOK_ACTION = "open_book_close"
 
 
 def exclude_closed_inbound(model):
-    """SQLAlchemy predicate: the fact is still on the inbound book."""
-    return func.lower(func.coalesce(model.line_state, "")).notin_(tuple(CLOSED_LINE_STATES))
+    """SQLAlchemy predicate: the fact is still on the inbound book (the shared live-line rule)."""
+    return live_line(model.line_state)
 
 
 def line_state_for_shipped_sheet(
@@ -89,7 +95,7 @@ def job_is_older_than_applied_book(db: Session, job: ImportJob) -> bool:
 OPEN_BOOK_NOTICE_HEADLINE = "This load did not close open orders"
 
 
-def open_book_close_notice(db: Session, job: ImportJob) -> dict[str, str] | None:
+def open_book_close_notice(db: Session, job: ImportJob) -> dict[str, Any] | None:
     """Flag, not a block: this complete-book load did not close open orders, and why.
 
     Shown on the Import Center job detail. A report type that is not a complete
@@ -105,11 +111,26 @@ def open_book_close_notice(db: Session, job: ImportJob) -> dict[str, str] | None
     if not carried.intersection(complete):
         return None
     if report_date_for_job(job) is None:
-        return {
+        notice = {
             "headline": OPEN_BOOK_NOTICE_HEADLINE,
             "reason": "The file name does not contain a single YYYYMMDD report date.",
             "code": "no_report_date",
         }
+        meta = job.staged_metadata if isinstance(getattr(job, "staged_metadata", None), dict) else {}
+        written = meta.get(UNDATED_WRITE_KEY) if isinstance(meta.get(UNDATED_WRITE_KEY), dict) else None
+        if written:
+            closed_n = int(written.get("already_closed_not_reopened") or 0)
+            open_n = int(written.get("already_open_not_duplicated") or 0)
+            parts = []
+            if closed_n:
+                parts.append(f"{closed_n} line(s) already closed, not re-opened")
+            if open_n:
+                parts.append(f"{open_n} line(s) already open under another key, not written twice")
+            if parts:
+                notice["reason"] += " Without a date this file cannot undo a close: " + "; ".join(parts) + "."
+            notice["already_closed_not_reopened"] = closed_n  # type: ignore[assignment]
+            notice["already_open_not_duplicated"] = open_n  # type: ignore[assignment]
+        return notice
     if job_is_older_than_applied_book(db, job):
         return {
             "headline": OPEN_BOOK_NOTICE_HEADLINE,
@@ -145,15 +166,49 @@ def write_shipment_facts_and_close_book(
 
     from app.services.imports.shipment_inbound_facts import upsert_inbound_shipment_facts_for_job
 
-    fact_rows = upsert_inbound_shipment_facts_for_job(db, int(job.id), on_progress=on_progress)
+    # An undated complete-book file cannot say it is newer than a close, so it must not undo one (GOV-008 M2): it leaves
+    # closed facts closed and adds no second open fact for a line that is already open. A dated file is not guarded here:
+    # a newer book that carries a line again does re-open it, and an older one writes nothing at all (above).
+    guard: frozenset[str] | None = None
+    if report_date_for_job(job) is None:
+        from app.services.commercial_tenant_profile import complete_open_book_report_types
+
+        guard = frozenset(complete_open_book_report_types(str(getattr(job, "tenant_id", None) or "default")))
+    guard_report: dict[str, Any] = {}
+    fact_rows = upsert_inbound_shipment_facts_for_job(
+        db, int(job.id), on_progress=on_progress, guard_report_types=guard, report=guard_report
+    )
     closed = close_open_book_for_job(db, job)
+    if guard is not None:
+        _record_undated_write(job, guard_report)
     logger.info(
         "shipment_stage job_id=%s stage=%s elapsed_s=%.3f",
         int(job.id),
         "write_shipment_facts_and_close_book",
         time.perf_counter() - started,
     )
-    return {"fact_rows": fact_rows, "closed": len(closed), "skipped_reason": None}
+    return {
+        "fact_rows": fact_rows,
+        "closed": len(closed),
+        "skipped_reason": None,
+        "already_closed_not_reopened": int(guard_report["already_closed_not_reopened"]),
+        "already_open_not_duplicated": int(guard_report["already_open_not_duplicated"]),
+    }
+
+
+UNDATED_WRITE_KEY = "shipment_undated_write"
+
+
+def _record_undated_write(job: ImportJob, counts: dict[str, Any]) -> None:
+    """Keep what the guard left out on the job, so the Import Center notice can say it (no new table)."""
+    meta = dict(job.staged_metadata) if isinstance(getattr(job, "staged_metadata", None), dict) else {}
+    meta[UNDATED_WRITE_KEY] = {
+        "already_closed_not_reopened": int(counts.get("already_closed_not_reopened", 0)),
+        "already_closed_not_reopened_units": float(counts.get("already_closed_not_reopened_units", 0)),
+        "already_open_not_duplicated": int(counts.get("already_open_not_duplicated", 0)),
+        "already_open_not_duplicated_units": float(counts.get("already_open_not_duplicated_units", 0)),
+    }
+    job.staged_metadata = meta
 
 
 def close_open_book_for_job(db: Session, job: ImportJob) -> list[dict[str, Any]]:

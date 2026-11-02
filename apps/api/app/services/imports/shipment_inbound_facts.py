@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-from sqlalchemy import case, delete, func, literal, select
+from sqlalchemy import case, delete, func, literal, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from app.services.imports.shipment_shipped_fact_identity_twin_merge import (
     retire_orphaned_open_rows,
     retire_po_less_twins_written_by_job,
 )
+from app.services.shipment_live_line import live_line
 from app.utils.json_safe import to_jsonable
 
 
@@ -325,17 +326,140 @@ def _upsert_shipped_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) -> 
     db.execute(pg_insert(tbl).values(aggregated))
 
 
+_GUARD_LOOKUP_BATCH = 2000
+
+
+def _blank(value: Any) -> bool:
+    return value is None or not str(value).strip()
+
+
+def _norm(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _closed_keys_among(db: Session, keys: list[str]) -> set[str]:
+    """Fact keys (of ``keys``) whose fact is closed: the book already decided that line is gone."""
+    found: set[str] = set()
+    for i in range(0, len(keys), _GUARD_LOOKUP_BATCH):
+        batch = keys[i : i + _GUARD_LOOKUP_BATCH]
+        found.update(
+            str(k)
+            for k in db.scalars(
+                select(FactInboundShipment.fact_upsert_key).where(
+                    FactInboundShipment.fact_upsert_key.in_(batch),
+                    ~live_line(FactInboundShipment.line_state),
+                )
+            ).all()
+        )
+    return found
+
+
+def _open_line_identities_under_other_keys(
+    db: Session, tenant_id: str, import_job_id: int, rows: list[dict[str, Any]]
+) -> dict[tuple[str, str, str, str, str], set[str]]:
+    """Open facts of OTHER jobs that carry the same order line as one of ``rows`` under a different key.
+
+    The identity is report type + order + order line + item + operating unit. A row without an order line has no
+    line identity and is never matched (an order + item can hold several lines).
+    """
+    wanted = {
+        (r["report_type"], r["order_no"], r["order_line"], r["item_code"])
+        for r in rows
+        if not (_blank(r.get("order_no")) or _blank(r.get("order_line")) or _blank(r.get("item_code")))
+    }
+    out: dict[tuple[str, str, str, str, str], set[str]] = defaultdict(set)
+    batch_list = list(wanted)
+    for i in range(0, len(batch_list), _GUARD_LOOKUP_BATCH):
+        batch = batch_list[i : i + _GUARD_LOOKUP_BATCH]
+        found = db.execute(
+            select(
+                FactInboundShipment.report_type,
+                FactInboundShipment.order_no,
+                FactInboundShipment.order_line,
+                FactInboundShipment.item_code,
+                FactInboundShipment.operating_unit,
+                FactInboundShipment.fact_upsert_key,
+            ).where(
+                FactInboundShipment.tenant_id == tenant_id,
+                func.lower(func.coalesce(FactInboundShipment.line_state, "")) == "open_order",
+                FactInboundShipment.import_job_id.is_distinct_from(int(import_job_id)),
+                tuple_(
+                    FactInboundShipment.report_type,
+                    FactInboundShipment.order_no,
+                    FactInboundShipment.order_line,
+                    FactInboundShipment.item_code,
+                ).in_(batch),
+            )
+        ).all()
+        for rt, order, oline, item, ou, key in found:
+            out[(str(rt), _norm(order), _norm(oline), _norm(item), _norm(ou))].add(str(key))
+    return out
+
+
+def _apply_closed_and_duplicate_guard(
+    db: Session,
+    *,
+    tenant_id: str,
+    import_job_id: int,
+    lines: list[ShipmentEvidenceLine],
+    values: list[dict[str, Any]],
+    guard_report_types: frozenset[str],
+    report: dict[str, Any],
+) -> tuple[list[ShipmentEvidenceLine], list[dict[str, Any]]]:
+    """Drop the rows an undated complete-book file must not write (GOV-008 M2).
+
+    1. A row whose fact key is a closed fact is not written: a closed fact stays closed. Without a report date the
+       file cannot say it is newer than the close.
+    2. An open row whose order line is already open under another key (another job) is not written: both would be open
+       for one line. The fact already open stays; a dated file re-keys it.
+    Both are counted in ``report``; nothing is deleted and no fact is touched.
+    """
+    guarded = [i for i, v in enumerate(values) if v.get("report_type") in guard_report_types and v.get("fact_upsert_key")]
+    closed_keys = _closed_keys_among(db, sorted({str(values[i]["fact_upsert_key"]) for i in guarded}))
+    open_rows = [values[i] for i in guarded if (values[i].get("line_state") or "").strip().lower() != "shipped"]
+    identities = _open_line_identities_under_other_keys(db, tenant_id, import_job_id, open_rows)
+
+    drop: set[int] = set()
+    for i in guarded:
+        v = values[i]
+        key = str(v["fact_upsert_key"])
+        qty = float(v.get("quantity") or 0)
+        if key in closed_keys:
+            drop.add(i)
+            report["already_closed_not_reopened"] += 1
+            report["already_closed_not_reopened_units"] += qty
+            continue
+        if (v.get("line_state") or "").strip().lower() == "shipped":
+            continue
+        ident = (str(v["report_type"]), _norm(v.get("order_no")), _norm(v.get("order_line")), _norm(v.get("item_code")), _norm(v.get("operating_unit")))
+        others = identities.get(ident, set()) - {key}
+        if others and not (_blank(v.get("order_no")) or _blank(v.get("order_line")) or _blank(v.get("item_code"))):
+            drop.add(i)
+            report["already_open_not_duplicated"] += 1
+            report["already_open_not_duplicated_units"] += qty
+    if not drop:
+        return lines, values
+    return [l for i, l in enumerate(lines) if i not in drop], [v for i, v in enumerate(values) if i not in drop]
+
+
 def upsert_inbound_shipment_facts_for_job(
     db: Session,
     import_job_id: int,
     *,
     on_progress: Callable[[int, int], None] | None = None,
     chunk_size: int = _UPSERT_CHUNK_SIZE,
+    guard_report_types: frozenset[str] | None = None,
+    report: dict[str, Any] | None = None,
 ) -> int:
     """Insert/update ``fact_inbound_shipment`` for every evidence line on the job.
 
     Shipped rows replace by PO-inclusive ``fact_upsert_key`` (invoice lines within PO sum).
     keep per-job ``source_key`` upsert semantics.
+
+    ``guard_report_types`` (an undated complete-book file, GOV-008 M2): rows of these report types never re-open a closed
+    fact and never add a second open fact for a line already open under another key. ``report`` (optional) receives the
+    counts: ``already_closed_not_reopened``, ``already_open_not_duplicated`` (rows) and their ``_units``.
+    The returned number is the evidence rows written, so it excludes the rows the guard left out.
     """
     from app.models.ingestion import ImportJob
 
@@ -349,13 +473,22 @@ def upsert_inbound_shipment_facts_for_job(
             .order_by(ShipmentEvidenceLine.id)
         ).all()
     )
-    total = len(lines)
     tbl = FactInboundShipment.__table__
     n = 0
     # Rows that share a fact key (invoice lines of one delivery + item + PO) add up inside one chunk, and a later chunk
     # replaces the key. So lines of one key are never split across chunks: they are kept together, at the place the key
     # first appears, and a chunk ends only between keys.
     values = [_row_values_from_evidence(line, tenant_id=tid) for line in lines]
+    if report is None:
+        report = {}
+    for k in ("already_closed_not_reopened", "already_closed_not_reopened_units", "already_open_not_duplicated", "already_open_not_duplicated_units"):
+        report.setdefault(k, 0)
+    if guard_report_types:
+        lines, values = _apply_closed_and_duplicate_guard(
+            db, tenant_id=tid, import_job_id=int(import_job_id), lines=lines, values=values,
+            guard_report_types=guard_report_types, report=report,
+        )
+    total = len(lines)
     groups: dict[str, list[int]] = {}
     for i, v in enumerate(values):
         groups.setdefault(str(v.get("fact_upsert_key") or f"#{i}"), []).append(i)

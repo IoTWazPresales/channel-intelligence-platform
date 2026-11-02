@@ -104,9 +104,21 @@ def lineup_current_cases(aliases: dict[str, Any]) -> list[ColumnElement[bool]]:
     ]
 
 
+def shipment_live_lines(aliases: dict[str, Any]) -> list[ColumnElement[bool]]:
+    """Inbound shipment facts that are not closed (the shared live-line rule, GOV-008 B1).
+
+    A ``closed_*`` fact is history: it must not add to shipped quantity or lines, and a
+    PO-less twin closed as ``closed_superseded`` must not count beside the fact that replaced it.
+    """
+    from app.services.shipment_live_line import live_line
+
+    return [live_line(aliases["__base__"].c.line_state)]
+
+
 MODEL_RULES = {
     "cpor_portfolio_lines": cpor_portfolio_lines,
     "lineup_current_cases": lineup_current_cases,
+    "shipment_live_lines": shipment_live_lines,
 }
 MEASURE_RULES = {
     "cpor_line_support_usd": cpor_line_support_usd,

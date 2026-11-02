@@ -27,6 +27,7 @@ _ISO_WEEK_START_SAST = """
 
 _TODAY_SAST = "(now() AT TIME ZONE 'Africa/Johannesburg')::date"
 
+from app.services.shipment_live_line import live_line_sql
 from app.services.shipment_strict_pair import (
     OPEN_TWIN_REMAINDER_SQL as _OPEN_TWIN_REMAINDER,
     TWIN_COUNTED_QTY_SQL as _COUNTED_QTY,
@@ -99,7 +100,7 @@ def _headline_sql(today_sql: str, week_start_sql: str) -> str:
     LEFT JOIN twin_rem ON twin_rem.fact_id = fact_inbound_shipment.id
     WHERE fact_inbound_shipment.tenant_id = :tenant
       AND {_KEPT}
-      AND lower(coalesce(fact_inbound_shipment.line_state, '')) NOT IN ('closed_shipped', 'closed_disappeared', 'closed_moved', 'closed_superseded')
+      AND {live_line_sql()}
     """
 
 

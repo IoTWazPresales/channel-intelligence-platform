@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.commercial_lineup import CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimCustomer, DimDistributor
 from app.models.facts import FactInboundShipment
+from app.services.shipment_live_line import live_line
 from app.models.import_distributor_si import CustomerSourceTokenAlias
 from app.models.purchase_order import PurchaseOrder
 from app.services.commercial_planner.lineup_customer_alias_resolution import (
@@ -137,6 +138,32 @@ def _isolated_product_ids(
     return my_prods - excluded
 
 
+async def _live_ship_rows_for_pos(
+    db: AsyncSession, po_ids: list[int], *, product_ids: list[int] | None = None
+) -> list[Any]:
+    """(po, product, resolved customer, PO distributor) of the live shipment facts on these POs.
+
+    A closed fact (the shared live-line rule, GOV-008 B1) is history and is not evidence for a customer.
+    """
+    stmt = (
+        select(
+            FactInboundShipment.purchase_order_id,
+            FactInboundShipment.product_id,
+            FactInboundShipment.resolved_customer_id,
+            PurchaseOrder.distributor_id,
+        )
+        .join(PurchaseOrder, PurchaseOrder.id == FactInboundShipment.purchase_order_id, isouter=True)
+        .where(
+            FactInboundShipment.purchase_order_id.in_(po_ids),
+            FactInboundShipment.resolved_customer_id.isnot(None),
+            live_line(FactInboundShipment.line_state),
+        )
+    )
+    if product_ids is not None:
+        stmt = stmt.where(FactInboundShipment.product_id.in_(product_ids))
+    return list((await db.execute(stmt)).all())
+
+
 async def _ship_evidence_for_token_lines(
     db: AsyncSession,
     *,
@@ -189,28 +216,7 @@ async def _ship_evidence_for_token_lines(
         return set(), []
 
     if ship_rows is None:
-        ship_rows = list(
-            (
-                await db.execute(
-                    select(
-                        FactInboundShipment.purchase_order_id,
-                        FactInboundShipment.product_id,
-                        FactInboundShipment.resolved_customer_id,
-                        PurchaseOrder.distributor_id,
-                    )
-                    .join(
-                        PurchaseOrder,
-                        PurchaseOrder.id == FactInboundShipment.purchase_order_id,
-                        isouter=True,
-                    )
-                    .where(
-                        FactInboundShipment.purchase_order_id.in_(po_ids),
-                        FactInboundShipment.product_id.in_(list(product_ids)),
-                        FactInboundShipment.resolved_customer_id.isnot(None),
-                    )
-                )
-            ).all()
-        )
+        ship_rows = await _live_ship_rows_for_pos(db, po_ids, product_ids=list(product_ids))
 
     cids: set[int] = set()
     provenance: list[dict[str, Any]] = []
@@ -867,27 +873,7 @@ async def list_customer_token_worklist(
     # Preload ship rows for those POs (all products — filter in memory per token)
     ship_rows_all: list[Any] = []
     if all_po_ids:
-        ship_rows_all = list(
-            (
-                await db.execute(
-                    select(
-                        FactInboundShipment.purchase_order_id,
-                        FactInboundShipment.product_id,
-                        FactInboundShipment.resolved_customer_id,
-                        PurchaseOrder.distributor_id,
-                    )
-                    .join(
-                        PurchaseOrder,
-                        PurchaseOrder.id == FactInboundShipment.purchase_order_id,
-                        isouter=True,
-                    )
-                    .where(
-                        FactInboundShipment.purchase_order_id.in_(list(all_po_ids)),
-                        FactInboundShipment.resolved_customer_id.isnot(None),
-                    )
-                )
-            ).all()
-        )
+        ship_rows_all = await _live_ship_rows_for_pos(db, list(all_po_ids))
 
     name_map, alias_map_dist = await _load_distributor_match_maps(db)
 

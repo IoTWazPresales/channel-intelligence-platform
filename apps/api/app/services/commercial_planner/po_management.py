@@ -21,6 +21,7 @@ from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupC
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.dimensions import DimProduct
 from app.models.facts import FactInboundShipment
+from app.services.shipment_live_line import live_line
 from app.services.commercial_planner.lineup_period_canonical import (
     active_lineup_case_filters,
     case_coverage_key,
@@ -166,6 +167,7 @@ async def _observed_groups(db: AsyncSession) -> dict[tuple[int, int, str], dict[
             .where(
                 FactInboundShipment.purchase_order_id.isnot(None),
                 FactInboundShipment.product_id.isnot(None),
+                live_line(FactInboundShipment.line_state),
             )
             .group_by(FactInboundShipment.purchase_order_id, FactInboundShipment.product_id)
         )

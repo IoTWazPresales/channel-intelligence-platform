@@ -1,0 +1,27 @@
+database: cip | read-only: on on | refused: Error | refused: Error
+rule closed states  before: ['__rule_off__']  after: ['closed_disappeared', 'closed_moved', 'closed_shipped', 'closed_superseded']
+facts by state: {"closed_disappeared": {"rows": 694, "units": 50707.0}, "closed_shipped": {"rows": 704, "units": 51586.0}, "closed_superseded": {"rows": 56, "units": 4518.0}, "open_order": {"rows": 740, "units": 48928.0}, "shipped": {"rows": 13624, "units": 1373781.0}}
+v2_shipments_totals
+  before {'shipments.lines': 13700.0, 'shipments.open_lines': 740.0, 'shipments.open_quantity': 48928.0, 'shipments.quantity': 1379393.0}
+  after  {'shipments.lines': 13624.0, 'shipments.open_lines': 740.0, 'shipments.open_quantity': 48928.0, 'shipments.quantity': 1373781.0}
+cover_distribution_open_inbound
+  before {'pairs': 392, 'units': 124428.0}
+  after  {'pairs': 201, 'units': 45316.0}
+movement_lens_shipped
+  before {'units': 670.0, 'week': 'W44'}
+  after  {'units': 670.0, 'week': 'W44'}
+weekly_flow
+  before {'shipped_through': '2026-10-26', 'shipped_units_13w': 55883.0}
+  after  {'shipped_through': '2026-10-26', 'shipped_units_13w': 52146.0}
+intake_weighting_all_products
+  before {'rows': 14772, 'weight_units': 1442278.0, 'weighted_unit_price': 435.777881}
+  after  {'rows': 13917, 'weight_units': 1381250.0, 'weighted_unit_price': 423.197755}
+products with intake weighting: before 2389 after 2385 | changed: 153
+   ('11554', 'no longer has intake evidence', {'avg': 982.0, 'weight': 320.0}, None)
+   ('61315', 'no longer has intake evidence', {'avg': 4359.0, 'weight': 6.0}, None)
+   ('62669', 'no longer has intake evidence', {'avg': 1201.0, 'weight': 126.0}, None)
+   ('69385', 'no longer has intake evidence', {'avg': 999999.0, 'weight': 1.0}, None)
+   ('68263', -85.33, {'avg': 6846.076023, 'weight': 171.0}, {'avg': 1004.0, 'weight': 73.0})
+   ('54186', -70.58, {'avg': 3520.982587, 'weight': 402.0}, {'avg': 1036.0, 'weight': 161.0})
+   ('8996', -8.13, {'avg': 748.489933, 'weight': 745.0}, {'avg': 687.650602, 'weight': 415.0})
+   ('9012', -6.49, {'avg': 4653.5, 'weight': 40.0}, {'avg': 4351.666667, 'weight': 30.0})

@@ -1,0 +1,4 @@
+FAILED tests/test_shipment_undated_write_m2.py::test_p4_undated_file_does_not_reopen_a_closed_fact
+FAILED tests/test_shipment_undated_write_m2.py::test_a_closed_shipped_state_fact_also_stays_closed
+FAILED tests/test_shipment_undated_write_m2.py::test_p5_undated_file_does_not_leave_two_open_facts_for_one_line
+3 failed, 3 passed in 3.05s

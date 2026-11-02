@@ -1,0 +1,7 @@
+E       AssertionError: assert {31829: 'ship...shipped', ...} == {31829: 'ship...shipped', ...}
+tests\test_fact_superseded_downgrade_m1.py:150: AssertionError
+E       AssertionError: assert Decimal('0') == Decimal('921.0000')
+tests\test_fact_superseded_downgrade_m1.py:168: AssertionError
+FAILED tests/test_fact_superseded_downgrade_m1.py::test_every_retired_row_comes_back_to_the_state_it_had
+FAILED tests/test_fact_superseded_downgrade_m1.py::test_downgrade_never_turns_an_open_order_into_shipped_units
+2 failed, 1 passed in 1.80s
