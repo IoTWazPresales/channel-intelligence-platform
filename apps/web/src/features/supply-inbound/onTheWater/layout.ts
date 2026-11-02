@@ -81,6 +81,9 @@ export type LabelBox = { id: string; x: number; y: number; w: number; h: number 
 /** `size` (percent of the map) overrides the common size for this anchor: a label is as wide as its text. */
 type Anchor = { id: string; x: number; y: number; priority: number; size?: { w: number; h: number } };
 
+/** The height in px a vessel label draws: two lines (12 px and 11 px), padding and border. Measured at 44 px; 46 keeps a 2 px margin. */
+export const LABEL_HEIGHT_PX = 46;
+
 /**
  * The width in px a vessel label draws: its title (12 px bold) or its second line (11 px), whichever is longer, plus padding and
  * border. The label is `nowrap`, so it is as wide as its text whatever box the placement reserved: "4 vessels at or near Durban" with

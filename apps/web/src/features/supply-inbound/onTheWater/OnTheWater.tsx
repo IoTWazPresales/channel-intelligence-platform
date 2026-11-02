@@ -12,7 +12,7 @@ import { tokensFor } from '@/theme/cipTokens';
 
 import { BASEMAP_DOTS, BASEMAP_SIZE } from './basemapDots';
 import { badgeText, daysText, fmtDay, fmtDayYear, fmtMoney, fmtUnits, historyText, nameUnits, slipShort } from './format';
-import { clusterChip, clusterVessels, labelWidthPx, placeLabels, portNameBox, portsInUse, type Cluster } from './layout';
+import { LABEL_HEIGHT_PX, clusterChip, clusterVessels, labelWidthPx, placeLabels, portNameBox, portsInUse, type Cluster } from './layout';
 import type { OnTheWaterData, PortRow, Vessel } from './types';
 
 type View = 'map' | 'distributor';
@@ -158,7 +158,7 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
   // A phone-width map labels the selected vessel only and keeps its fixed box (the label wraps its text there).
   const labelSize = (c: Cluster) => {
     const text = labelText(c);
-    return { w: pctX(narrow ? 128 : labelWidthPx(text.title, text.sub)), h: pctY(42) };
+    return { w: pctX(narrow ? 128 : labelWidthPx(text.title, text.sub)), h: pctY(LABEL_HEIGHT_PX) };
   };
   const labelTargets = [
     ...clusters.filter((c) => c.vessels.length > 1).map((c) => ({ id: `c:${c.id}`, x: c.x, y: c.y, priority: c.vessels.some((v) => v.id === panel?.id) ? 0 : 1, size: labelSize(c) })),
@@ -179,7 +179,7 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
       : []),
   ];
   // The selected vessel and up to four others; a phone-width map labels the selected one only.
-  const placed = placeLabels(labelTargets, { w: pctX(narrow ? 128 : 160), h: pctY(42) }, avoid, { x: pctX(16), y: pctY(10) }).slice(0, narrow ? 1 : 5);
+  const placed = placeLabels(labelTargets, { w: pctX(narrow ? 128 : 160), h: pctY(LABEL_HEIGHT_PX) }, avoid, { x: pctX(16), y: pctY(10) }).slice(0, narrow ? 1 : 5);
   const labelOf = new Map(placed.map((b) => [b.id, b]));
   const durbanRow = data.port_rows.find((r) => r.code === 'ZADUR');
 

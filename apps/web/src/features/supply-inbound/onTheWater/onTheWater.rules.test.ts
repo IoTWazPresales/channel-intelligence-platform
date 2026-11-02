@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildOnTheWaterUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
 
 import { badgeText, daysText, fmtDay, fmtDayYear, fmtMoney, historyText, nameUnits, slipShort } from './format';
-import { clusterChip, clusterVessels, etaRange, labelWidthPx, placeLabels, portsInUse } from './layout';
+import { LABEL_HEIGHT_PX, clusterChip, clusterVessels, etaRange, labelWidthPx, placeLabels, portsInUse } from './layout';
 import type { Vessel } from './types';
 
 function vessel(over: Partial<Vessel> = {}): Vessel {
@@ -188,6 +188,8 @@ describe('label width (GOV-008 batch 3)', () => {
   it('is as wide as the label draws: the render of "4 vessels at or near Durban" was 201 px, the old reserved box 160 px', () => {
     expect(labelWidthPx('4 vessels at or near Durban', '3,494 u · ETA at port 31 Oct–5 Nov')).toBeGreaterThanOrEqual(201);
     expect(labelWidthPx('WWP · 25 u', '2 days overdue')).toBeLessThan(labelWidthPx('4 vessels at or near Durban', '3,494 u · ETA at port 31 Oct–5 Nov'));
+    // The reserved height covers the two drawn lines (measured 44 px): a label placed flush above the Durban note used to touch it.
+    expect(LABEL_HEIGHT_PX).toBeGreaterThanOrEqual(44);
   });
 
   it("placeLabels uses each anchor's own size, so a wide label is moved clear of a box a narrow one would fit beside", () => {
