@@ -136,3 +136,16 @@ Every count matched this report. Outputs: `cip_retire_dry.txt`, `cip_retire_appl
 | Services | restarted once (web, worker, API); `/health/ready` cip; Celery pong; `/supply/shipments` and `/admin/port-conditions` 200 | |
 
 The 10 pairs are retired under `--accept-evidence-sum` (a single PO-key twin that equals the sum of its job's evidence lines); the load-time rule still needs an equal quantity.
+
+## G. The steward queue after the candidate rebuild (read-only, cip, 2 Nov 2026)
+
+Commit `aa83b93c`. The clone copies are gone, so only `cip` as it is now could be read (`diag_steward.py`, `diag_steward2.py`).
+
+- The validate stage of the re-process deletes every `shipment_customer_token` candidate of job 1697 and recreates them only for lines whose customer is not resolved. It logged `earlier_decisions_reused: 23`.
+  Job 1697 now has 23 candidates, all `resolved`, none `needs_review`; that is the 7,044 → 6,925 (119 fewer rows, all job 1697's).
+- Every one of the 8,071 evidence lines of job 1697 has its distributor resolved; every line with a customer token has its customer resolved (12 lines carry no customer token, as in job 1696).
+- Nothing in the queue was created or changed today: 0 `needs_review` candidates touched. The 3,264 `needs_review` items (cst_location_token 1,119, product_identifier 989, cst_product_token 531, customer_dealer_token 410, shipment_customer_token 163, shipment_distributor 52) belong to other jobs and were not touched.
+- Not a queue item, but worth knowing: 479 lines of job 1697 have no product match (`no_match`, 40,695 units), 76 of them (6,738 units) among the 104 recovered rows. Job 1696 has the same kind (431 lines). They count in the units; they have no product name.
+- Caveat: the statuses of the 119 deleted rows before the re-process cannot be shown any more. What can be shown is that nothing remains unresolved for job 1697 that would be asked again.
+
+Verdict: nothing new needs a decision from the steward queue.
