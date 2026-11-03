@@ -9,6 +9,7 @@ class ProductAlias(Base, TimestampMixin):
     __tablename__ = "product_alias"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
     alias_value: Mapped[str] = mapped_column(String(256), nullable=False)
     alias_kind: Mapped[str] = mapped_column(String(64), nullable=False)
