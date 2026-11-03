@@ -20,6 +20,8 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
+
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInventoryDistributor, FactReturns, FactSalesSellout
 from app.services.imports.dsi_fact_source_keys import (
@@ -567,11 +569,11 @@ class ProductResolutionIndex:
     steward_alias_by_key: dict[str, int]
 
 
-def _load_product_resolution_index(db: Session) -> ProductResolutionIndex:
+def _load_product_resolution_index(db: Session, *, tenant_id: str | None = None) -> ProductResolutionIndex:
     """Load Product Master identity fields + ProductAlias (cached, narrow SELECT — no specs_json)."""
     from app.services.imports.product_resolution_index_cache import get_product_resolution_index
 
-    return get_product_resolution_index(db)
+    return get_product_resolution_index(db, tenant_id=tenant_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -733,10 +735,12 @@ def _build_resolution_cache(
     db: Session,
     source_def_id: int | None,
     *,
+    tenant_id: str | None = None,
     on_sub_phase: Any = None,
 ) -> "DSIResolutionCache":
     """Load all DSI entity-resolution reference tables in one pass before the row loop."""
     _ = source_def_id  # alias rows are filtered per-token at resolve time
+    tid = effective_tenant_id(tenant_id)
 
     from app.services.merge_redirect import (
         build_redirect_map,
@@ -747,7 +751,7 @@ def _build_resolution_cache(
     if on_sub_phase is not None:
         on_sub_phase("distributors")
     all_distributors = _dsi_session_read_with_transient_retry(
-        db, lambda: list(db.scalars(select(DimDistributor)).all())
+        db, lambda: list(db.scalars(select(DimDistributor).where(DimDistributor.tenant_id == tid)).all())
     )
     distributor_redirect = build_redirect_map(
         (int(d.id), merged_into_distributor_id(d)) for d in all_distributors
@@ -760,7 +764,10 @@ def _build_resolution_cache(
         db,
         lambda: list(
             db.scalars(
-                select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
+                select(DistributorSourceTokenAlias).where(
+                    DistributorSourceTokenAlias.status == "approved",
+                    tenant_scope_predicate(DistributorSourceTokenAlias, tid),
+                )
             ).all()
         ),
     )
@@ -769,7 +776,7 @@ def _build_resolution_cache(
     if on_sub_phase is not None:
         on_sub_phase("customers")
     all_customers_orm = _dsi_session_read_with_transient_retry(
-        db, lambda: list(db.scalars(select(DimCustomer)).all())
+        db, lambda: list(db.scalars(select(DimCustomer).where(DimCustomer.tenant_id == tid)).all())
     )
     customer_redirect = build_redirect_map(
         (int(c.id), merged_into_customer_id(c)) for c in all_customers_orm
@@ -803,7 +810,10 @@ def _build_resolution_cache(
         db,
         lambda: list(
             db.scalars(
-                select(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.status == "approved")
+                select(CustomerSourceTokenAlias).where(
+                    CustomerSourceTokenAlias.status == "approved",
+                    tenant_scope_predicate(CustomerSourceTokenAlias, tid),
+                )
             ).all()
         ),
     )
@@ -835,7 +845,9 @@ def _build_resolution_cache(
     )
 
 
-def _build_distributor_resolution_cache(db: Session, source_def_id: int | None = None) -> "DSIResolutionCache":
+def _build_distributor_resolution_cache(
+    db: Session, source_def_id: int | None = None, *, tenant_id: str | None = None
+) -> "DSIResolutionCache":
     """Distributor-only resolution cache — loads ``dim_distributor`` + approved aliases only.
 
     Shipment evidence import resolves products via an in-memory index and defers customer
@@ -843,7 +855,8 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
     Loading only distributors keeps the one-time pre-load cheap.
     """
     _ = source_def_id  # alias rows are filtered per-token at resolve time
-    all_distributors = list(db.scalars(select(DimDistributor)).all())
+    tid = effective_tenant_id(tenant_id)
+    all_distributors = list(db.scalars(select(DimDistributor).where(DimDistributor.tenant_id == tid)).all())
     from app.services.merge_redirect import build_redirect_map, merged_into_distributor_id
 
     distributor_redirect = build_redirect_map(
@@ -851,7 +864,10 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
     )
     dist_aliases_orm = list(
         db.scalars(
-            select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
+            select(DistributorSourceTokenAlias).where(
+                DistributorSourceTokenAlias.status == "approved",
+                tenant_scope_predicate(DistributorSourceTokenAlias, tid),
+            )
         ).all()
     )
     return DSIResolutionCache(
@@ -1113,12 +1129,15 @@ def _resolve_product(
     return None, "unresolved_product", None, None
 
 
-def _alias_distributor_id(db: Session, source_id: int | None, normalized_token: str) -> int | None:
+def _alias_distributor_id(
+    db: Session, source_id: int | None, normalized_token: str, *, tenant_id: str | None = None
+) -> int | None:
     if not normalized_token:
         return None
     q = select(DistributorSourceTokenAlias.distributor_id).where(
         DistributorSourceTokenAlias.normalized_token == normalized_token,
         DistributorSourceTokenAlias.status == "approved",
+        tenant_scope_predicate(DistributorSourceTokenAlias, tenant_id),
     )
     if source_id is not None:
         q = q.where(
@@ -1283,6 +1302,7 @@ def _alias_customer_id(
     dealer_group: str | None,
     *,
     canonical_key: str | None = None,
+    tenant_id: str | None = None,
 ) -> int | None:
     """Approved alias for a customer token.
 
@@ -1294,6 +1314,7 @@ def _alias_customer_id(
         return None
     q = select(CustomerSourceTokenAlias.customer_id, CustomerSourceTokenAlias.normalized_token).where(
         CustomerSourceTokenAlias.status == "approved",
+        tenant_scope_predicate(CustomerSourceTokenAlias, tenant_id),
     )
     if source_id is not None:
         q = q.where(
@@ -1343,6 +1364,7 @@ def _resolve_customer(
     dealer_group_raw: str | None,
     channel_raw: str | None,
     open_flag_raw: Any,
+    tenant_id: str | None = None,
 ) -> tuple[int | None, list[str]]:
     """Returns (customer_id, diagnostic_codes)."""
     _ = channel_raw  # reserved; open-channel auto-assign uses explicit evidence column only
@@ -1356,7 +1378,13 @@ def _resolve_customer(
     alias_id: int | None = None
     if not _customer_token_is_placeholder(nt, customer_raw):
         alias_id = _alias_customer_id(
-            db, source_id, distributor_id, nt, dg, canonical_key=customer_source_token_alias_key(customer_raw) or None
+            db,
+            source_id,
+            distributor_id,
+            nt,
+            dg,
+            canonical_key=customer_source_token_alias_key(customer_raw) or None,
+            tenant_id=tenant_id,
         )
         if alias_id is not None:
             diagnostics.append("customer_resolved_alias")
@@ -2120,7 +2148,9 @@ def process_distributor_sales_inventory(
     # End wipe transaction before long-running cache preloads (Supabase idle-in-tx safety).
     _upfront_progress("prepared")
 
-    prod_idx = _dsi_session_read_with_transient_retry(db, lambda: _load_product_resolution_index(db))
+    prod_idx = _dsi_session_read_with_transient_retry(
+        db, lambda: _load_product_resolution_index(db, tenant_id=job.tenant_id)
+    )
     _upfront_progress("product_index")
 
     # --- Pre-load shipment corroboration cache (2 batch queries vs N×6 per-row) ---
@@ -2166,7 +2196,9 @@ def process_distributor_sales_inventory(
     _upfront_progress("product_shipment_window_index")
 
     # Pre-load distributor + customer master data (eliminates 4–6 per-row DB round-trips)
-    res_cache = _build_resolution_cache(db, source_def_id, on_sub_phase=_upfront_progress)
+    res_cache = _build_resolution_cache(
+        db, source_def_id, tenant_id=job.tenant_id, on_sub_phase=_upfront_progress
+    )
     # Commit the alias/open-channel read transaction left open by the cache build before the
     # CPU-bound primary-distributor scan + intelligence reads, so the connection is not held
     # "idle in transaction" across that window (Supabase pooler idle-in-tx safety).
@@ -3616,6 +3648,7 @@ def refresh_dsi_staging_line_resolution(
                     dealer_group_raw=dg_raw,
                     channel_raw=ch_raw,
                     open_flag_raw=open_raw,
+                    tenant_id=job.tenant_id,
                 )
             cust_diag = list(cd)
             diag.extend(cust_diag)
@@ -3806,14 +3839,16 @@ def build_refresh_context(
         "memo": {"dist": {}, "prod": {}, "cust": {}},
         # The same in-memory resolution cache validate uses, so the re-check cannot disagree with validate
         # about distributors, customers or aliases.
-        "res_cache": _build_resolution_cache(db, job.source.id if job.source else None),
+        "res_cache": _build_resolution_cache(
+            db, job.source.id if job.source else None, tenant_id=job.tenant_id
+        ),
     }
 
 
 def refresh_dsi_staging_lines_for_job(db: Session, job: ImportJob) -> None:
     """Re-resolve every DSI staging line for a job (after steward-side mapping changes)."""
 
-    prod_idx = _load_product_resolution_index(db)
+    prod_idx = _load_product_resolution_index(db, tenant_id=job.tenant_id)
     lines = list(
         db.scalars(
             select(ImportDistributorSiStagingLine)

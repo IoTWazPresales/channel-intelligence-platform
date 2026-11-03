@@ -16,6 +16,7 @@ from app.services.imports.dsi_steward_candidate_ops import (
     _source_customer_alias_raw_for_dsi_candidate,
     dsi_customer_alias_normalized_token,
 )
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 
 
 def customer_alias_scope_key(
@@ -40,15 +41,28 @@ def scope_key_for_dsi_candidate(cand: ImportEntityMappingCandidate) -> tuple[tup
     return customer_alias_scope_key(nt, cand.source_definition_id, None), nt
 
 
+def _alias_tenant_for_customer(
+    session: Session,
+    customer_id: int,
+    tenant_id: str | None,
+) -> str:
+    if tenant_id is not None and str(tenant_id).strip():
+        return effective_tenant_id(tenant_id)
+    cust = session.get(DimCustomer, int(customer_id))
+    return effective_tenant_id(getattr(cust, "tenant_id", None) if cust is not None else None)
+
+
 def lookup_approved_customer_alias_for_scope(
     session: Session,
     *,
     normalized_token: str,
     source_definition_id: int | None,
     distributor_id: int | None,
+    tenant_id: str | None = None,
 ) -> CustomerSourceTokenAlias | None:
     scope_src = int(source_definition_id) if source_definition_id is not None else -1
     scope_dist = int(distributor_id) if distributor_id is not None else -1
+    tid = effective_tenant_id(tenant_id)
     return session.scalars(
         select(CustomerSourceTokenAlias)
         .where(
@@ -56,6 +70,7 @@ def lookup_approved_customer_alias_for_scope(
             CustomerSourceTokenAlias.normalized_token == normalized_token[:512],
             func.coalesce(CustomerSourceTokenAlias.source_definition_id, -1) == scope_src,
             func.coalesce(CustomerSourceTokenAlias.distributor_id, -1) == scope_dist,
+            tenant_scope_predicate(CustomerSourceTokenAlias, tid),
         )
         .limit(1)
     ).first()
@@ -67,9 +82,11 @@ async def lookup_approved_customer_alias_for_scope_async(
     normalized_token: str,
     source_definition_id: int | None,
     distributor_id: int | None,
+    tenant_id: str | None = None,
 ) -> CustomerSourceTokenAlias | None:
     scope_src = int(source_definition_id) if source_definition_id is not None else -1
     scope_dist = int(distributor_id) if distributor_id is not None else -1
+    tid = effective_tenant_id(tenant_id)
     return (
         await db.scalars(
             select(CustomerSourceTokenAlias)
@@ -78,6 +95,7 @@ async def lookup_approved_customer_alias_for_scope_async(
                 CustomerSourceTokenAlias.normalized_token == normalized_token[:512],
                 func.coalesce(CustomerSourceTokenAlias.source_definition_id, -1) == scope_src,
                 func.coalesce(CustomerSourceTokenAlias.distributor_id, -1) == scope_dist,
+                tenant_scope_predicate(CustomerSourceTokenAlias, tid),
             )
             .limit(1)
         )
@@ -87,14 +105,18 @@ async def lookup_approved_customer_alias_for_scope_async(
 def load_approved_customer_aliases_for_scopes(
     session: Session,
     scope_keys: set[tuple[str, int, int]],
+    *,
+    tenant_id: str | None = None,
 ) -> dict[tuple[str, int, int], CustomerSourceTokenAlias]:
     if not scope_keys:
         return {}
     normalized_tokens = {k[0] for k in scope_keys}
+    tid = effective_tenant_id(tenant_id)
     rows = session.scalars(
         select(CustomerSourceTokenAlias).where(
             CustomerSourceTokenAlias.status == "approved",
             CustomerSourceTokenAlias.normalized_token.in_(normalized_tokens),
+            tenant_scope_predicate(CustomerSourceTokenAlias, tid),
         )
     ).all()
     out: dict[tuple[str, int, int], CustomerSourceTokenAlias] = {}
@@ -108,13 +130,13 @@ def load_approved_customer_aliases_for_scopes(
 def _alias_insert_sql() -> str:
     return """
             INSERT INTO customer_source_token_alias (
-                customer_id, source_definition_id, distributor_id,
+                tenant_id, customer_id, source_definition_id, distributor_id,
                 raw_token, normalized_token, dealer_group_token,
                 status, notes, created_from_import_job_id,
                 import_entity_mapping_candidate_id, created_at, updated_at
             )
             VALUES (
-                :customer_id, :source_definition_id, :distributor_id,
+                :tenant_id, :customer_id, :source_definition_id, :distributor_id,
                 :raw_token, :normalized_token, :dealer_group_token,
                 'approved', :notes, :created_from_import_job_id,
                 :import_entity_mapping_candidate_id, NOW(), NOW()
@@ -126,6 +148,7 @@ def _alias_insert_sql() -> str:
 
 def _alias_insert_params(
     *,
+    tenant_id: str,
     customer_id: int,
     raw_token: str,
     normalized_token: str,
@@ -137,6 +160,7 @@ def _alias_insert_params(
     import_entity_mapping_candidate_id: int | None,
 ) -> dict[str, Any]:
     return {
+        "tenant_id": effective_tenant_id(tenant_id),
         "customer_id": int(customer_id),
         "source_definition_id": source_definition_id,
         "distributor_id": distributor_id,
@@ -166,11 +190,14 @@ def insert_approved_customer_alias_on_conflict_do_nothing(
     notes: str,
     created_from_import_job_id: int | None,
     import_entity_mapping_candidate_id: int | None,
+    tenant_id: str | None = None,
 ) -> int | None:
     """Insert alias; return new id or None when uq_cust_src_token_alias_approved_scope blocks insert."""
+    tid = _alias_tenant_for_customer(session, customer_id, tenant_id)
     row = session.execute(
         text(_alias_insert_sql()),
         _alias_insert_params(
+            tenant_id=tid,
             customer_id=customer_id,
             raw_token=raw_token,
             normalized_token=normalized_token,
@@ -199,11 +226,17 @@ async def insert_approved_customer_alias_on_conflict_do_nothing_async(
     notes: str,
     created_from_import_job_id: int | None,
     import_entity_mapping_candidate_id: int | None,
+    tenant_id: str | None = None,
 ) -> int | None:
+    tid = effective_tenant_id(tenant_id)
+    if not tid or tid == effective_tenant_id(None):
+        cust = await db.get(DimCustomer, int(customer_id))
+        tid = effective_tenant_id(getattr(cust, "tenant_id", None) if cust is not None else None)
     row = (
         await db.execute(
             text(_alias_insert_sql()),
             _alias_insert_params(
+                tenant_id=tid,
                 customer_id=customer_id,
                 raw_token=raw_token,
                 normalized_token=normalized_token,
@@ -283,6 +316,26 @@ def _bind_candidate_to_mapped_customer(
     return out
 
 
+def _tenant_id_for_dsi_candidate(session: Session, cand: ImportEntityMappingCandidate) -> str:
+    from app.models.ingestion import ImportJob
+
+    job = session.get(ImportJob, int(cand.import_job_id)) if cand.import_job_id else None
+    if job is not None:
+        return effective_tenant_id(job.tenant_id)
+    return effective_tenant_id(None)
+
+
+async def _tenant_id_for_dsi_candidate_async(
+    db: AsyncSession, cand: ImportEntityMappingCandidate
+) -> str:
+    from app.models.ingestion import ImportJob
+
+    job = await db.get(ImportJob, int(cand.import_job_id)) if cand.import_job_id else None
+    if job is not None:
+        return effective_tenant_id(job.tenant_id)
+    return effective_tenant_id(None)
+
+
 def apply_map_dsi_customer_scoped_sync(
     session: Session,
     cand: ImportEntityMappingCandidate,
@@ -315,6 +368,7 @@ def apply_map_dsi_customer_scoped_sync(
     if scope_meta is None:
         raise StewardOpError("raw_token empty after normalization", status_code=400)
     scope_key, nt = scope_meta
+    alias_tid = _tenant_id_for_dsi_candidate(session, cand)
 
     existing_alias = approved_alias_by_scope.get(scope_key)
     if existing_alias is None:
@@ -323,6 +377,7 @@ def apply_map_dsi_customer_scoped_sync(
             normalized_token=nt,
             source_definition_id=cand.source_definition_id,
             distributor_id=None,
+            tenant_id=alias_tid,
         )
         if existing_alias is not None:
             approved_alias_by_scope[scope_key] = existing_alias
@@ -369,6 +424,7 @@ def apply_map_dsi_customer_scoped_sync(
         notes=notes,
         created_from_import_job_id=cand.import_job_id,
         import_entity_mapping_candidate_id=cand.id,
+        tenant_id=alias_tid,
     )
     batch_scope_claimed.add(scope_key)
 
@@ -378,6 +434,7 @@ def apply_map_dsi_customer_scoped_sync(
             normalized_token=nt,
             source_definition_id=cand.source_definition_id,
             distributor_id=None,
+            tenant_id=alias_tid,
         )
         if race_alias is None:
             raise StewardOpError("Could not create or reuse customer alias for scope", status_code=409)
@@ -441,12 +498,14 @@ async def apply_map_dsi_customer_scoped_async(
     if scope_meta is None:
         raise StewardOpError("raw_token empty after normalization", status_code=400)
     scope_key, nt = scope_meta
+    alias_tid = await _tenant_id_for_dsi_candidate_async(db, cand)
 
     existing_alias = await lookup_approved_customer_alias_for_scope_async(
         db,
         normalized_token=nt,
         source_definition_id=cand.source_definition_id,
         distributor_id=None,
+        tenant_id=alias_tid,
     )
     if existing_alias is not None:
         existing_cid = await follow_customer_merge_redirect_async(db, int(existing_alias.customer_id))
@@ -479,6 +538,7 @@ async def apply_map_dsi_customer_scoped_async(
         notes=notes,
         created_from_import_job_id=cand.import_job_id,
         import_entity_mapping_candidate_id=cand.id,
+        tenant_id=alias_tid,
     )
     if alias_id is None:
         race_alias = await lookup_approved_customer_alias_for_scope_async(
@@ -486,6 +546,7 @@ async def apply_map_dsi_customer_scoped_async(
             normalized_token=nt,
             source_definition_id=cand.source_definition_id,
             distributor_id=None,
+            tenant_id=alias_tid,
         )
         if race_alias is None:
             raise StewardOpError("Could not create or reuse customer alias for scope", status_code=409)

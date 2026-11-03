@@ -20,6 +20,7 @@ from app.models.import_distributor_si import (
 from app.models.mapping import ProductAlias
 from app.services.imports.distributor_sales_inventory import _norm_key
 from app.services.imports.dsi_product_steward import raw_product_token_for_dsi_candidate, validate_dsi_product_resolve
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.services.imports.provisional_entity_identity import (
     find_existing_provisional_customer_by_canonical_name_async,
     find_existing_provisional_distributor_by_canonical_name_async,
@@ -187,8 +188,14 @@ async def preview_resolve_dsi_product(
         )
     except ValueError as exc:
         return {"ok": False, "skip_reason": "validation", "detail": str(exc)}
+    alias_tid = effective_tenant_id(getattr(prod, "tenant_id", None))
     existing = (
-        await db.execute(select(ProductAlias).where(func.lower(ProductAlias.alias_value) == raw_val.lower()))
+        await db.execute(
+            select(ProductAlias).where(
+                func.lower(ProductAlias.alias_value) == raw_val.lower(),
+                tenant_scope_predicate(ProductAlias, alias_tid),
+            )
+        )
     ).scalars().first()
     would_create_alias = existing is None
     conflict = False
@@ -242,8 +249,14 @@ async def execute_resolve_dsi_product(
     )
     raw_val = raw.strip()[:256]
     nt = _norm_key(raw)
+    alias_tid = effective_tenant_id(getattr(prod, "tenant_id", None))
     existing = (
-        await db.execute(select(ProductAlias).where(func.lower(ProductAlias.alias_value) == raw_val.lower()))
+        await db.execute(
+            select(ProductAlias).where(
+                func.lower(ProductAlias.alias_value) == raw_val.lower(),
+                tenant_scope_predicate(ProductAlias, alias_tid),
+            )
+        )
     ).scalars().first()
     alias_row: ProductAlias
     if existing is not None:
@@ -255,6 +268,7 @@ async def execute_resolve_dsi_product(
         alias_row = existing
     else:
         alias_row = ProductAlias(
+            tenant_id=alias_tid,
             product_id=int(product_id),
             alias_value=raw_val,
             alias_kind="source_import_token",

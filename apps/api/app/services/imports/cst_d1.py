@@ -17,6 +17,7 @@ from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.utils.json_safe import to_jsonable
 
 DEFAULT_VAT_BASIS = "ex_vat"
@@ -54,12 +55,15 @@ def resolve_customer_article_alias(
     key = normalize_article_token(article_token)
     if not key:
         return None
+    cust = session.get(DimCustomer, int(customer_id))
+    tid = effective_tenant_id(getattr(cust, "tenant_id", None) if cust is not None else None)
     rows = list(
         session.scalars(
             select(CustomerArticleAlias).where(
                 CustomerArticleAlias.customer_id == customer_id,
                 CustomerArticleAlias.article_no_normalized == key,
                 CustomerArticleAlias.status.in_(CONFIRMED_ALIAS_STATUSES),
+                tenant_scope_predicate(CustomerArticleAlias, tid),
             )
         ).all()
     )
@@ -110,10 +114,13 @@ def propose_customer_article_alias(
     key = normalize_article_token(article_token)
     if not key:
         return None
+    cust = session.get(DimCustomer, int(customer_id))
+    tid = effective_tenant_id(getattr(cust, "tenant_id", None) if cust is not None else None)
     existing = session.scalar(
         select(CustomerArticleAlias).where(
             CustomerArticleAlias.customer_id == customer_id,
             CustomerArticleAlias.article_no_normalized == key,
+            tenant_scope_predicate(CustomerArticleAlias, tid),
         )
     )
     if existing is not None:
@@ -127,6 +134,7 @@ def propose_customer_article_alias(
         ):
             return obj
     row = CustomerArticleAlias(
+        tenant_id=tid,
         customer_id=customer_id,
         article_no_normalized=key,
         product_id=int(product_id),

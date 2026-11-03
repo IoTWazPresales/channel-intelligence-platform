@@ -36,6 +36,7 @@ from app.models.import_distributor_si import (
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.utils.json_safe import to_jsonable
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.tenant_mapping_scope import assert_source_tenant, effective_tenant_id, tenant_scope_predicate
 from app.services.imports.dsi_steward_candidate_ops import DISTRIBUTOR_PROVISIONAL_SUSPICIOUS
 from app.services.imports.provisional_entity_consolidation import _repoint_customer_id_references
 from app.services.imports.provisional_entity_identity import (
@@ -100,14 +101,17 @@ def _conflicting_customer_alias(
     target_customer_id: int,
     normalized_token: str,
     source_definition_id: int | None,
+    tenant_id: str | None = None,
 ) -> CustomerSourceTokenAlias | None:
     nt = (normalized_token or "").strip()[:512]
     if not nt:
         return None
+    tid = effective_tenant_id(tenant_id)
     q = select(CustomerSourceTokenAlias).where(
         CustomerSourceTokenAlias.normalized_token == nt,
         CustomerSourceTokenAlias.status == "approved",
         CustomerSourceTokenAlias.customer_id != int(target_customer_id),
+        tenant_scope_predicate(CustomerSourceTokenAlias, tid),
     )
     if source_definition_id is not None:
         q = q.where(
@@ -838,10 +842,12 @@ def _remember_special_case_clear(db: Session, cand: ImportEntityMappingCandidate
     """Remember a steward clear by normalised token and by item code on the source."""
     if cand.source_definition_id is None:
         return
-    from app.models.ingestion import SourceDefinition
+    from app.models.ingestion import ImportJob, SourceDefinition
 
+    job = db.get(ImportJob, int(cand.import_job_id)) if cand.import_job_id else None
+    job_tid = effective_tenant_id(getattr(job, "tenant_id", None) if job else None)
     src = db.get(SourceDefinition, int(cand.source_definition_id))
-    if src is None:
+    if not assert_source_tenant(src, job_tid):
         return
     norms = sorted({_norm_key(token) for token in _source_tokens_from_context(cand) if _norm_key(token)})
     line_ids = _line_ids_from_context(cand)

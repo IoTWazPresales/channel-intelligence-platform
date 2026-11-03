@@ -13,12 +13,14 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimCustomer, DimDistributor
+from app.models.ingestion import ImportJob
 from app.models.import_distributor_si import (
     CustomerSourceTokenAlias,
     DistributorSourceTokenAlias,
     ImportEntityMappingCandidate,
 )
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.services.imports.shipment_evidence_candidate_names import suggested_name_for_distributor_token
 from app.utils.json_safe import to_jsonable
 
@@ -45,17 +47,21 @@ class ShipmentEnrichRefs:
     cust_aliases: list  # list[(normalized_token, customer_id, source_definition_id)] status == approved
 
 
-def build_shipment_enrich_refs(db: Session) -> "ShipmentEnrichRefs":
+def build_shipment_enrich_refs(db: Session, tenant_id: str | None = None) -> "ShipmentEnrichRefs":
     """Load distributor/customer dims + approved aliases once for in-memory candidate scoring."""
-    distributors = list(db.scalars(select(DimDistributor)).all())
-    customers = list(db.scalars(select(DimCustomer)).all())
+    tid = effective_tenant_id(tenant_id)
+    distributors = list(db.scalars(select(DimDistributor).where(DimDistributor.tenant_id == tid)).all())
+    customers = list(db.scalars(select(DimCustomer).where(DimCustomer.tenant_id == tid)).all())
     dist_aliases = list(
         db.execute(
             select(
                 DistributorSourceTokenAlias.normalized_token,
                 DistributorSourceTokenAlias.distributor_id,
                 DistributorSourceTokenAlias.source_definition_id,
-            ).where(DistributorSourceTokenAlias.status == "approved")
+            ).where(
+                DistributorSourceTokenAlias.status == "approved",
+                tenant_scope_predicate(DistributorSourceTokenAlias, tid),
+            )
         ).all()
     )
     cust_aliases = list(
@@ -64,7 +70,10 @@ def build_shipment_enrich_refs(db: Session) -> "ShipmentEnrichRefs":
                 CustomerSourceTokenAlias.normalized_token,
                 CustomerSourceTokenAlias.customer_id,
                 CustomerSourceTokenAlias.source_definition_id,
-            ).where(CustomerSourceTokenAlias.status == "approved")
+            ).where(
+                CustomerSourceTokenAlias.status == "approved",
+                tenant_scope_predicate(CustomerSourceTokenAlias, tid),
+            )
         ).all()
     )
     return ShipmentEnrichRefs(
@@ -458,7 +467,9 @@ def enrich_shipment_distributor_candidates(db: Session, *, import_job_id: int, s
             )
         ).all()
     )
-    refs = build_shipment_enrich_refs(db) if rows else None
+    job = db.get(ImportJob, int(import_job_id))
+    tid = effective_tenant_id(getattr(job, "tenant_id", None) if job else None)
+    refs = build_shipment_enrich_refs(db, tid) if rows else None
     for cand in rows:
         if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
             continue
@@ -482,7 +493,9 @@ def enrich_shipment_customer_token_candidates(db: Session, *, import_job_id: int
             )
         ).all()
     )
-    refs = build_shipment_enrich_refs(db) if rows else None
+    job = db.get(ImportJob, int(import_job_id))
+    tid = effective_tenant_id(getattr(job, "tenant_id", None) if job else None)
+    refs = build_shipment_enrich_refs(db, tid) if rows else None
     for cand in rows:
         if cand.status in SHIPMENT_CANDIDATE_TERMINAL_STATUSES:
             continue

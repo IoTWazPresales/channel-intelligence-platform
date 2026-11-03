@@ -11,6 +11,7 @@ from app.models.dimensions import DimChannel, DimRegion
 from app.models.import_distributor_si import ChannelSourceTokenAlias, RegionSourceTokenAlias
 from app.models.ingestion import ImportJob
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 
 
 def _pick_raw_for_norm(samples: list[Any], norm: str) -> str | None:
@@ -47,6 +48,7 @@ class DSIGeoResolutionCache:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+        self._tenant_id = effective_tenant_id(None)
         self._channels_by_code: dict[str, int] = {}
         self._channels_by_name_norm: dict[str, int] = {}
         self._regions_by_code: dict[str, int] = {}
@@ -55,8 +57,9 @@ class DSIGeoResolutionCache:
         self._region_alias_rows: dict[str, list[tuple[int | None, int]]] = {}
 
     @classmethod
-    def build(cls, session: Session) -> DSIGeoResolutionCache:
+    def build(cls, session: Session, *, tenant_id: str | None = None) -> DSIGeoResolutionCache:
         cache = cls(session)
+        cache._tenant_id = effective_tenant_id(tenant_id)
         cache._load_dim_catalogs()
         return cache
 
@@ -84,6 +87,7 @@ class DSIGeoResolutionCache:
             ).where(
                 ChannelSourceTokenAlias.normalized_token.in_(tokens),
                 ChannelSourceTokenAlias.status == "approved",
+                tenant_scope_predicate(ChannelSourceTokenAlias, self._tenant_id),
             )
         ).all()
         for nt, sid, cid in ch_rows:
@@ -98,6 +102,7 @@ class DSIGeoResolutionCache:
             ).where(
                 RegionSourceTokenAlias.normalized_token.in_(tokens),
                 RegionSourceTokenAlias.status == "approved",
+                tenant_scope_predicate(RegionSourceTokenAlias, self._tenant_id),
             )
         ).all()
         for nt, sid, rid in reg_rows:

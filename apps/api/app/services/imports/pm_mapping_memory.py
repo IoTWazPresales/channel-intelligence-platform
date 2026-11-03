@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.ingestion import SourceDefinition
 from app.services.imports.pm_field_catalog import normalize_pm_mapping_target
+from app.services.imports.tenant_mapping_scope import assert_source_tenant
 
 
 MEMORY_SCHEMA_VERSION = "1"
@@ -77,13 +78,14 @@ def merge_memory_from_pm_save(
     db: Session,
     *,
     source_id: int,
+    tenant_id: str,
     mapping_decisions: dict[str, Any],
     product_line: str | None = None,
     grain: str | None = None,
 ) -> None:
     """Upsert learned mappings after a successful Product Master mapping save."""
     src = db.get(SourceDefinition, source_id)
-    if src is None:
+    if not assert_source_tenant(src, tenant_id):
         return
 
     root: dict[str, Any] = dict(src.column_mapping_memory or {})
