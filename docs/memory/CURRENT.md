@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-03 (My accounts filter on cip)
 
-**Branch:** `feat/user-account-visibility` (created from `feat/ns-2-brief-nav-collapse` at `59033481`). Ledger decisions are `556e4530`, already pushed. No pull request. Do not push to main.
+**Branch:** `feat/user-account-visibility` (created from `feat/ns-2-brief-nav-collapse` at `59033481`). My accounts product commit is `4969d139`. Ledger decisions are `556e4530`, already pushed. No pull request. Do not push to main.
 
 **This unit:** My accounts is a clearable filter (D-0145, following D-0138). An admin picks customer accounts on add-user and edit-user, including "All accounts in this tenant", which stores no rows. Dashboards, Brief, and Attention add one customer predicate while the filter is on. Clear is `sessionStorage` for that sign-in and the header `X-Cip-My-Accounts: off`. It is not a database column and not row security. A user with no rows starts with the filter off and still sees the wider book their role and product lines allow. Product-line scope still applies either way. Import steward and import apply are unchanged. No job column. No backfill.
 
