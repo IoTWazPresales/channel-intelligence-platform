@@ -1,20 +1,18 @@
-﻿# CURRENT state
+# CURRENT state
 
-**Last updated:** 2026-11-03 (My accounts filter on cip)
+**Last updated:** 2026-11-03 (five tracks on one branch)
 
-**Branch:** `feat/user-account-visibility` (created from `feat/ns-2-brief-nav-collapse` at `59033481`). My accounts product commit is `4969d139`. Ledger decisions are `556e4530`, already pushed. No pull request. Do not push to main.
+**Branch:** `feat/integrate-20261103`. My accounts, listing, store and DC, tenant mapping, and shipment D4 are on this branch. Do not push to main.
 
-**This unit:** My accounts is a clearable filter (D-0145, following D-0138). An admin picks customer accounts on add-user and edit-user, including "All accounts in this tenant", which stores no rows. Dashboards, Brief, and Attention add one customer predicate while the filter is on. Clear is `sessionStorage` for that sign-in and the header `X-Cip-My-Accounts: off`. It is not a database column and not row security. A user with no rows starts with the filter off and still sees the wider book their role and product lines allow. Product-line scope still applies either way. Import steward and import apply are unchanged. No job column. No backfill.
+**Alembic code head:** `20261103_0056`. Chain: `20261103_0052` user accounts (already on cip) -> `20261103_0053` listing sites -> `20261103_0054` store and DC -> `20261103_0055` tenant mapping -> `20261103_0056` shipment single-write. `cip` is still `20261103_0052`. This session did not upgrade cip.
 
-**Alembic:** code head and cip are `20261103_0052` (`user_customer_account`). Applied 3 Nov 2026 as the table owner. `current_database()` was `cip`. Role `cip` has SELECT, INSERT, UPDATE, and DELETE on the table, and USAGE and SELECT on `user_customer_account_id_seq`.
+**Proven:** the five revision ids are unique and linear. An upgrade of local `cip_test` ran `0051` through `0054`, then `0055` failed because 64 approved copies of one test alias share the new unique key. The upgrade rolled back. `cip_test` is still `20261101_0050`. On `cip`, that same approved-alias key has 0 duplicate groups.
 
-**Decisions (ledger `556e4530`, rev 2880, no node stage change, no node closed):** D-0145 accepted and D-0141 superseded. D-0146 accepted (cover, both delivery legs) and D-0142 superseded. D-0147 accepted; D-0150 holds the slow and unsold rule. D-0143 accepted; D-0148 records the pin, no geocoder, no hardcoded position. D-0144 accepted option 1; D-0149 records the tenant id column, display name ASUS, id stays `default`. D-0151 accepted for listing nodes N-0076, N-0077, and N-0085. D-0132 was not confirmed. The tenant-id migration, store map, lead-time panel, site level, DC queue, and needs were not built.
+**Not proven:** `20261103_0056` has not been applied anywhere by this session. The browser checks for My accounts, the store map, and listings are still the ones reported by their own chats. D5 (drop the old shipment payload columns) is not done. Listing nodes N-0076, N-0077, and N-0085 are not closed.
 
-**Proven:** the table exists on cip at `20261103_0052`. SQL compile tests show the account predicate in the sell-through query and the Brief slot count while the filter is on, and absent after Clear, with the product-line scope statement present either way. Web tests cover the admin note, saving selected ids, the bar's Clear, and the next sign-in turning the filter back on. **Not proven in the browser:** `next start` is what is listening on port 3000, so it does not contain this UI until the web is rebuilt, and the browser session was on the login page.
+**Next:** say "run the migration" before anything upgrades `cip`. Local `cip_test` needs the duplicate test alias removed before it can reach `0056`.
 
-**Next:** Rebuild the web (this tree is not in the running `next start`) and sign in to check the admin screen, a user with accounts (filter on, then Clear), and a user with no accounts (filter off).
-
-**Blockers requiring Warren:** a signed-in browser check. The hard cut, where a user sees only assigned accounts, is not this build. Slow and unsold, the store map, and the tenant-id column are accepted and not built.
+**Blockers requiring Warren:** the cip upgrade. Do not push to main.
 
 The paragraphs below are older checkpoints. Where they disagree with this block on branch or on cip's Alembic revision, this block wins.
 
