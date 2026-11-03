@@ -1,0 +1,416 @@
+{
+ "total": [
+  {
+   "lines": 479,
+   "units": 40695.0,
+   "null_qty": 0
+  }
+ ],
+ "by_line_state": [
+  {
+   "line_state": "open_order",
+   "lines": 228,
+   "units": 18134.0
+  },
+  {
+   "line_state": "shipped",
+   "lines": 251,
+   "units": 22561.0
+  }
+ ],
+ "by_sheet": [
+  {
+   "source_sheet": "BOM not ready",
+   "report_type": "acza_workbook_bom_not_ready",
+   "lines": 2,
+   "units": 323.0
+  },
+  {
+   "source_sheet": "Shipped",
+   "report_type": "acza_workbook_shipped",
+   "lines": 254,
+   "units": 23146.0
+  },
+  {
+   "source_sheet": "Unship",
+   "report_type": "acza_workbook_unship",
+   "lines": 223,
+   "units": 17226.0
+  }
+ ],
+ "by_distributor": [
+  {
+   "distributor": "Mustek",
+   "dstat": "resolved",
+   "lines": 99,
+   "units": 16202.0
+  },
+  {
+   "distributor": "Pepkor",
+   "dstat": "resolved",
+   "lines": 84,
+   "units": 6102.0
+  },
+  {
+   "distributor": "Pinnacle",
+   "dstat": "resolved",
+   "lines": 69,
+   "units": 5004.0
+  },
+  {
+   "distributor": "Rectron",
+   "dstat": "resolved",
+   "lines": 59,
+   "units": 4495.0
+  },
+  {
+   "distributor": "Compuspeed",
+   "dstat": "resolved",
+   "lines": 69,
+   "units": 3309.0
+  },
+  {
+   "distributor": "DCC",
+   "dstat": "resolved",
+   "lines": 36,
+   "units": 3253.0
+  },
+  {
+   "distributor": "ACZA",
+   "dstat": "resolved",
+   "lines": 29,
+   "units": 871.0
+  },
+  {
+   "distributor": "HV",
+   "dstat": "resolved",
+   "lines": 9,
+   "units": 678.0
+  },
+  {
+   "distributor": "Superdist",
+   "dstat": "resolved",
+   "lines": 6,
+   "units": 304.0
+  },
+  {
+   "distributor": "Firsttech",
+   "dstat": "resolved",
+   "lines": 8,
+   "units": 132.0
+  },
+  {
+   "distributor": "Brandhouse",
+   "dstat": "resolved",
+   "lines": 2,
+   "units": 129.0
+  },
+  {
+   "distributor": "Dgstore",
+   "dstat": "resolved",
+   "lines": 6,
+   "units": 90.0
+  },
+  {
+   "distributor": "Three",
+   "dstat": "resolved",
+   "lines": 1,
+   "units": 76.0
+  },
+  {
+   "distributor": "NITI",
+   "dstat": "resolved",
+   "lines": 1,
+   "units": 35.0
+  },
+  {
+   "distributor": "Syntech",
+   "dstat": "resolved",
+   "lines": 1,
+   "units": 15.0
+  }
+ ],
+ "by_customer": [
+  {
+   "customer": "Open Channel",
+   "lines": 191,
+   "units": 13885.0
+  },
+  {
+   "customer": "Mustek Deal",
+   "lines": 6,
+   "units": 7000.0
+  },
+  {
+   "customer": "Incredible Connection",
+   "lines": 64,
+   "units": 4368.0
+  },
+  {
+   "customer": "SAPS",
+   "lines": 11,
+   "units": 2632.0
+  },
+  {
+   "customer": "Homeless",
+   "lines": 30,
+   "units": 1934.0
+  },
+  {
+   "customer": "Hifi",
+   "lines": 18,
+   "units": 1542.0
+  },
+  {
+   "customer": "Computer Mania",
+   "lines": 35,
+   "units": 1507.0
+  },
+  {
+   "customer": "Game",
+   "lines": 13,
+   "units": 1326.0
+  },
+  {
+   "customer": "Makro",
+   "lines": 14,
+   "units": 1212.0
+  },
+  {
+   "customer": "Takealot",
+   "lines": 13,
+   "units": 826.0
+  },
+  {
+   "customer": "Dept Oh Health Limpopo",
+   "lines": 2,
+   "units": 825.0
+  },
+  {
+   "customer": "<unresolved>",
+   "lines": 12,
+   "units": 766.0
+  },
+  {
+   "customer": "Sapsc5",
+   "lines": 1,
+   "units": 500.0
+  },
+  {
+   "customer": "AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)",
+   "lines": 10,
+   "units": 413.0
+  },
+  {
+   "customer": "TWK",
+   "lines": 1,
+   "units": 300.0
+  },
+  {
+   "customer": "Homeless Q4 Retail",
+   "lines": 2,
+   "units": 228.0
+  },
+  {
+   "customer": "Eshop",
+   "lines": 14,
+   "units": 222.0
+  },
+  {
+   "customer": "Gauteng Department Of Health",
+   "lines": 2,
+   "units": 200.0
+  },
+  {
+   "customer": "Wza260200006",
+   "lines": 2,
+   "units": 200.0
+  },
+  {
+   "customer": "SADC",
+   "lines": 3,
+   "units": 190.0
+  },
+  {
+   "customer": "Evetech",
+   "lines": 9,
+   "units": 139.0
+  },
+  {
+   "customer": "Wza260700043",
+   "lines": 4,
+   "units": 119.0
+  },
+  {
+   "customer": "Retail - Incredible",
+   "lines": 1,
+   "units": 78.0
+  },
+  {
+   "customer": "3g Mobile",
+   "lines": 1,
+   "units": 76.0
+  },
+  {
+   "customer": "Wza260700038",
+   "lines": 2,
+   "units": 49.0
+  },
+  {
+   "customer": "Ministy OR Labour",
+   "lines": 1,
+   "units": 35.0
+  },
+  {
+   "customer": "BT GAMES (PTY) LTD",
+   "lines": 2,
+   "units": 30.0
+  },
+  {
+   "customer": "Ecole Du Centre",
+   "lines": 1,
+   "units": 30.0
+  },
+  {
+   "customer": "Wza260700035",
+   "lines": 2,
+   "units": 30.0
+  },
+  {
+   "customer": "Samples",
+   "lines": 4,
+   "units": 17.0
+  },
+  {
+   "customer": "Wza260700036",
+   "lines": 4,
+   "units": 12.0
+  },
+  {
+   "customer": "Department Of Education MP",
+   "lines": 2,
+   "units": 2.0
+  },
+  {
+   "customer": "Media Sample",
+   "lines": 1,
+   "units": 1.0
+  },
+  {
+   "customer": "Sample ADV",
+   "lines": 1,
+   "units": 1.0
+  }
+ ],
+ "identifier_presence": [
+  {
+   "has_item_code": true,
+   "has_sales_model": true,
+   "has_customer_item": false,
+   "has_ean": true,
+   "has_upc": true,
+   "has_mpor": false,
+   "lines": 448,
+   "units": 39501.0
+  },
+  {
+   "has_item_code": true,
+   "has_sales_model": false,
+   "has_customer_item": false,
+   "has_ean": false,
+   "has_upc": false,
+   "has_mpor": true,
+   "lines": 24,
+   "units": 723.0
+  },
+  {
+   "has_item_code": true,
+   "has_sales_model": true,
+   "has_customer_item": false,
+   "has_ean": false,
+   "has_upc": false,
+   "has_mpor": false,
+   "lines": 2,
+   "units": 323.0
+  },
+  {
+   "has_item_code": true,
+   "has_sales_model": true,
+   "has_customer_item": false,
+   "has_ean": true,
+   "has_upc": true,
+   "has_mpor": true,
+   "lines": 5,
+   "units": 148.0
+  }
+ ],
+ "identifier_presence_resolved_baseline": [
+  {
+   "has_item_code": true,
+   "has_sales_model": true,
+   "has_customer_item": false,
+   "has_ean": true,
+   "has_upc": true,
+   "lines": 7578
+  },
+  {
+   "has_item_code": true,
+   "has_sales_model": false,
+   "has_customer_item": false,
+   "has_ean": false,
+   "has_upc": false,
+   "lines": 2
+  }
+ ],
+ "token_used_vs_detail": [
+  {
+   "product_resolution_detail": "unresolved_product",
+   "lines": 479,
+   "units": 40695.0
+  }
+ ],
+ "resolved_tier_baseline": [
+  {
+   "product_resolution_detail": "product_resolved_sku",
+   "lines": 7536
+  },
+  {
+   "product_resolution_detail": "product_resolved_sales_model_name",
+   "lines": 41
+  },
+  {
+   "product_resolution_detail": "product_resolved_ean",
+   "lines": 3
+  }
+ ],
+ "distinct_values": [
+  {
+   "item_codes": 151,
+   "sales_models": 128,
+   "customer_items": 0,
+   "eans": 127,
+   "upcs": 127,
+   "mpors": 1
+  }
+ ],
+ "dim_product": [
+  {
+   "n": 18157,
+   "active": 18157,
+   "sku": 18157,
+   "pn": 18157,
+   "sm": 18136,
+   "ean": 5593,
+   "upc": 5593,
+   "mn": 17367,
+   "mk": 0
+  }
+ ],
+ "product_alias": [
+  {
+   "alias_kind": "source_import_token",
+   "confidence": "steward_approved",
+   "n": 172
+  }
+ ]
+}

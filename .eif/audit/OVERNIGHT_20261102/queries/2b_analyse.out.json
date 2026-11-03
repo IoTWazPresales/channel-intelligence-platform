@@ -1,0 +1,1184 @@
+{
+ "cause_totals": {
+  "NEAR_FAMILY_ONLY": 321,
+  "CATALOGUE_GAP": 158
+ },
+ "cause_units": {
+  "NEAR_FAMILY_ONLY": 29722.0,
+  "CATALOGUE_GAP": 10973.0
+ },
+ "distinct_item_codes": 151,
+ "item_codes_with_mixed_cause": [],
+ "family_rule_equals_master_product_line": {
+  "True": 17914,
+  "False": 243
+ },
+ "by_family": [
+  {
+   "family": "NX",
+   "lines": 107,
+   "units": 16763.0,
+   "distinct_item_codes": 54,
+   "master_rows_same_family": 5173
+  },
+  {
+   "family": "NB",
+   "lines": 204,
+   "units": 15241.0,
+   "distinct_item_codes": 28,
+   "master_rows_same_family": 6735
+  },
+  {
+   "family": "PT",
+   "lines": 29,
+   "units": 3657.0,
+   "distinct_item_codes": 12,
+   "master_rows_same_family": 1310
+  },
+  {
+   "family": "PF",
+   "lines": 32,
+   "units": 1402.0,
+   "distinct_item_codes": 19,
+   "master_rows_same_family": 2049
+  },
+  {
+   "family": "NR",
+   "lines": 35,
+   "units": 1227.0,
+   "distinct_item_codes": 6,
+   "master_rows_same_family": 1908
+  },
+  {
+   "family": "GM",
+   "lines": 23,
+   "units": 722.0,
+   "distinct_item_codes": 21,
+   "master_rows_same_family": 0
+  },
+  {
+   "family": "NV",
+   "lines": 35,
+   "units": 690.0,
+   "distinct_item_codes": 2,
+   "master_rows_same_family": 10
+  },
+  {
+   "family": "XB",
+   "lines": 7,
+   "units": 569.0,
+   "distinct_item_codes": 5,
+   "master_rows_same_family": 141
+  },
+  {
+   "family": "LC",
+   "lines": 5,
+   "units": 280.0,
+   "distinct_item_codes": 2,
+   "master_rows_same_family": 0
+  },
+  {
+   "family": "GI",
+   "lines": 2,
+   "units": 144.0,
+   "distinct_item_codes": 2,
+   "master_rows_same_family": 0
+  }
+ ],
+ "by_sales_model_leading_letters": [
+  [
+   "X",
+   144,
+   12964.0
+  ],
+  [
+   "P",
+   101,
+   10549.0
+  ],
+  [
+   "B",
+   41,
+   9316.0
+  ],
+  [
+   "SIMPRO",
+   4,
+   1120.0
+  ],
+  [
+   "M",
+   15,
+   1080.0
+  ],
+  [
+   "FX",
+   14,
+   816.0
+  ],
+  [
+   "?",
+   24,
+   723.0
+  ],
+  [
+   "ROG",
+   28,
+   660.0
+  ],
+  [
+   "A",
+   10,
+   546.0
+  ],
+  [
+   "D",
+   6,
+   518.0
+  ],
+  [
+   "AC",
+   3,
+   474.0
+  ],
+  [
+   "UX",
+   18,
+   412.0
+  ],
+  [
+   "FA",
+   15,
+   365.0
+  ],
+  [
+   "C",
+   5,
+   280.0
+  ],
+  [
+   "S",
+   9,
+   233.0
+  ],
+  [
+   "OMNI",
+   2,
+   144.0
+  ],
+  [
+   "VM",
+   3,
+   122.0
+  ],
+  [
+   "H",
+   13,
+   102.0
+  ],
+  [
+   "PM",
+   4,
+   80.0
+  ],
+  [
+   "DC",
+   3,
+   75.0
+  ],
+  [
+   "G",
+   5,
+   45.0
+  ],
+  [
+   "RC",
+   7,
+   30.0
+  ],
+  [
+   "KW",
+   1,
+   20.0
+  ],
+  [
+   "TP",
+   1,
+   18.0
+  ],
+  [
+   "BR",
+   2,
+   2.0
+  ],
+  [
+   "GU",
+   1,
+   1.0
+  ]
+ ],
+ "by_pattern": [
+  {
+   "pattern": "item+model+barcode",
+   "lines": 448,
+   "units": 39501.0
+  },
+  {
+   "pattern": "item+mpor",
+   "lines": 24,
+   "units": 723.0
+  },
+  {
+   "pattern": "item+model",
+   "lines": 2,
+   "units": 323.0
+  },
+  {
+   "pattern": "item+model+barcode+mpor",
+   "lines": 5,
+   "units": 148.0
+  }
+ ],
+ "samples": {
+  "NEAR_FAMILY_ONLY": [
+   {
+    "item_code": "90PF06A1-M007V0",
+    "sales_model_name": "P700ML-U516512G1W",
+    "ean_code": "4711636778312",
+    "upc_code": "199291778313",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 4,
+      "model_base_masters": 4,
+      "sales_model_without_trailer_masters": 4
+     }
+    }
+   },
+   {
+    "item_code": "90PF06A1-M00CU0",
+    "sales_model_name": "P700ML-U716512G0W",
+    "ean_code": "4711636778329",
+    "upc_code": "199291778320",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 4,
+      "model_base_masters": 4,
+      "sales_model_without_trailer_masters": 4
+     }
+    }
+   },
+   {
+    "item_code": "90PF06A1-M00CV0",
+    "sales_model_name": "P700ML-U7165123050G0X",
+    "ean_code": "4711636778336",
+    "upc_code": "199291778337",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 4,
+      "model_base_masters": 4,
+      "sales_model_without_trailer_masters": 4
+     }
+    }
+   },
+   {
+    "item_code": "90PF06A1-M00CV0",
+    "sales_model_name": "P700ML-U7165123050G0X",
+    "ean_code": "4711636778336",
+    "upc_code": "199291778337",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 4,
+      "model_base_masters": 4,
+      "sales_model_without_trailer_masters": 4
+     }
+    }
+   },
+   {
+    "item_code": "90PT03X6-M0CT10",
+    "sales_model_name": "P440VA-BPD051X",
+    "ean_code": "4711636808255",
+    "upc_code": "199291808256",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 93,
+      "model_base_masters": 274,
+      "sales_model_without_trailer_masters": 27
+     }
+    }
+   },
+   {
+    "item_code": "90PT03X6-M0CT10",
+    "sales_model_name": "P440VA-BPD051X",
+    "ean_code": "4711636808255",
+    "upc_code": "199291808256",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 93,
+      "model_base_masters": 274,
+      "sales_model_without_trailer_masters": 27
+     }
+    }
+   }
+  ],
+  "CATALOGUE_GAP": [
+   {
+    "item_code": "90NX0881-M03ST0",
+    "sales_model_name": "P1503CVAY-C716512G0W",
+    "ean_code": "4711636703383",
+    "upc_code": "199291703384",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 115
+     }
+    }
+   },
+   {
+    "item_code": "90NX0881-M03V30",
+    "sales_model_name": "P1503CVAY-C38512G0W",
+    "ean_code": "4711636777254",
+    "upc_code": "199291777255",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 115
+     }
+    }
+   },
+   {
+    "item_code": "90NX0881-M04290",
+    "sales_model_name": "P1503CVAY-C516512G0W",
+    "ean_code": "4711636748810",
+    "upc_code": "199291748811",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 115
+     }
+    }
+   },
+   {
+    "item_code": "90NX0881-M03ST0",
+    "sales_model_name": "P1503CVAY-C716512G0W",
+    "ean_code": "4711636703383",
+    "upc_code": "199291703384",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 115
+     }
+    }
+   },
+   {
+    "item_code": "90NX0881-M04290",
+    "sales_model_name": "P1503CVAY-C516512G0W",
+    "ean_code": "4711636748810",
+    "upc_code": "199291748811",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {
+      "sku_prefix_masters": 115
+     }
+    }
+   },
+   {
+    "item_code": "90NX0AS3-M00UM0",
+    "sales_model_name": "A7406CMA-C516256W0NAW",
+    "ean_code": "4711636795555",
+    "upc_code": "199291795556",
+    "mpor_item_no": null,
+    "ev": {
+     "exact_hits": {},
+     "format_hits": {},
+     "near": {}
+    }
+   }
+  ]
+ },
+ "n_groups": 50,
+ "top25_groups": [
+  {
+   "distributor": "Mustek",
+   "pattern": "item+model+barcode",
+   "family": "NX",
+   "lines": 23,
+   "units": 9741.0,
+   "distinct_item_codes": 11,
+   "top_items": [
+    "90NX0801-M09DK0",
+    "90NX0460-P00030",
+    "90NX0881-M03ST0"
+   ],
+   "top_models": [
+    "B1502CVA-NJ3464W__",
+    "SIMPRO DOCK2",
+    "P1503CVAY-C716512G0W"
+   ],
+   "top_customers": [
+    "Mustek Deal",
+    "Open Channel",
+    "SAPS"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 13,
+    "CATALOGUE_GAP": 10
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 7652.0,
+    "CATALOGUE_GAP": 2089.0
+   }
+  },
+  {
+   "distributor": "Pepkor",
+   "pattern": "item+model+barcode",
+   "family": "NB",
+   "lines": 56,
+   "units": 4686.0,
+   "distinct_item_codes": 5,
+   "top_items": [
+    "90NB1A01-M005S0",
+    "90NB17I1-M028Z0",
+    "90NB17I1-M02910"
+   ],
+   "top_models": [
+    "X1652DA-382S0W",
+    "X1504MA-I582BL2W",
+    "X1504MA-I582BL1W"
+   ],
+   "top_customers": [
+    "Incredible Connection",
+    "Hifi"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 56
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 4686.0
+   }
+  },
+  {
+   "distributor": "Pinnacle",
+   "pattern": "item+model+barcode",
+   "family": "NB",
+   "lines": 52,
+   "units": 4655.0,
+   "distinct_item_codes": 4,
+   "top_items": [
+    "90NB1A01-M005S0",
+    "90NB13Y1-M03TL0",
+    "90NB1992-M00HR0"
+   ],
+   "top_models": [
+    "X1652DA-382S0W",
+    "X1504VAP-I382BL0W",
+    "S5452MA-I716512S0W"
+   ],
+   "top_customers": [
+    "Open Channel",
+    "Game",
+    "Makro"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 51,
+    "CATALOGUE_GAP": 1
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 4641.0,
+    "CATALOGUE_GAP": 14.0
+   }
+  },
+  {
+   "distributor": "Mustek",
+   "pattern": "item+model+barcode",
+   "family": "PT",
+   "lines": 13,
+   "units": 3457.0,
+   "distinct_item_codes": 4,
+   "top_items": [
+    "90PT03X6-M0CT10",
+    "90PT03X5-M0D1R0",
+    "90PT03X6-M0D1S0"
+   ],
+   "top_models": [
+    "P440VA-BPD051X",
+    "P440VA-BPC397X",
+    "P440VA-BPD064X"
+   ],
+   "top_customers": [
+    "SAPS",
+    "Dept Oh Health Limpopo",
+    "Sapsc5"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 13
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 3457.0
+   }
+  },
+  {
+   "distributor": "Rectron",
+   "pattern": "item+model+barcode",
+   "family": "NB",
+   "lines": 41,
+   "units": 3012.0,
+   "distinct_item_codes": 7,
+   "top_items": [
+    "90NB13Y1-M03TL0",
+    "90NB1A01-M005T0",
+    "90NB1AT1-M008R0"
+   ],
+   "top_models": [
+    "X1504VAP-I382BL0W",
+    "X1652DA-516512S0W",
+    "M1502UA-516512BL0W"
+   ],
+   "top_customers": [
+    "Homeless",
+    "Open Channel"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 32,
+    "CATALOGUE_GAP": 9
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 2434.0,
+    "CATALOGUE_GAP": 578.0
+   }
+  },
+  {
+   "distributor": "DCC",
+   "pattern": "item+model+barcode",
+   "family": "NX",
+   "lines": 21,
+   "units": 2689.0,
+   "distinct_item_codes": 10,
+   "top_items": [
+    "90NX0881-M04290",
+    "90NX0881-M03ST0",
+    "90NX0AM2-M00N10"
+   ],
+   "top_models": [
+    "P1503CVAY-C516512G0W",
+    "P1503CVAY-C716512G0W",
+    "P3406CCA-U516512G0W"
+   ],
+   "top_customers": [
+    "Open Channel",
+    "Takealot"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 19,
+    "NEAR_FAMILY_ONLY": 2
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 2289.0,
+    "NEAR_FAMILY_ONLY": 400.0
+   }
+  },
+  {
+   "distributor": "Mustek",
+   "pattern": "item+model+barcode",
+   "family": "NB",
+   "lines": 41,
+   "units": 2019.0,
+   "distinct_item_codes": 14,
+   "top_items": [
+    "90NB1A01-M005S0",
+    "90NB1AT1-M008R0",
+    "90NB17I1-M01YJ0"
+   ],
+   "top_models": [
+    "X1652DA-382S0W",
+    "M1502UA-516512BL0W",
+    "X1504MA-I582BL0W"
+   ],
+   "top_customers": [
+    "Computer Mania",
+    "Open Channel",
+    "Homeless"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 30,
+    "CATALOGUE_GAP": 11
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 1423.0,
+    "CATALOGUE_GAP": 596.0
+   }
+  },
+  {
+   "distributor": "Compuspeed",
+   "pattern": "item+model+barcode",
+   "family": "NX",
+   "lines": 33,
+   "units": 1932.0,
+   "distinct_item_codes": 17,
+   "top_items": [
+    "90NX0881-M04F70",
+    "90NX0801-M0B4S0",
+    "90NX0801-M0B3B0"
+   ],
+   "top_models": [
+    "P1503CVAY-C516512GMU0W",
+    "B1503CVA-C516512BMU1W",
+    "B1503CVA-C516512BMU1X"
+   ],
+   "top_customers": [
+    "Open Channel",
+    "Ecole Du Centre"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 6,
+    "NEAR_FAMILY_ONLY": 27
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 646.0,
+    "NEAR_FAMILY_ONLY": 1286.0
+   }
+  },
+  {
+   "distributor": "Rectron",
+   "pattern": "item+model+barcode",
+   "family": "NX",
+   "lines": 10,
+   "units": 1129.0,
+   "distinct_item_codes": 9,
+   "top_items": [
+    "90NX0871-M02MY0",
+    "90NX0881-M04290",
+    "90NX0460-P00030"
+   ],
+   "top_models": [
+    "P1403CVAY-C58512G0W",
+    "P1503CVAY-C516512G0W",
+    "SIMPRO DOCK2"
+   ],
+   "top_customers": [
+    "Open Channel",
+    "Homeless Q4 Retail",
+    "Sample ADV"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 8,
+    "NEAR_FAMILY_ONLY": 2
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 1090.0,
+    "NEAR_FAMILY_ONLY": 39.0
+   }
+  },
+  {
+   "distributor": "Pepkor",
+   "pattern": "item+model+barcode",
+   "family": "NR",
+   "lines": 17,
+   "units": 888.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90NR0N06-M01000",
+    "90NR0MC1-M00E50"
+   ],
+   "top_models": [
+    "FX607VUA-I716512G0W",
+    "FA608PM-91610G1W"
+   ],
+   "top_customers": [
+    "Incredible Connection"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 14,
+    "NEAR_FAMILY_ONLY": 3
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 816.0,
+    "NEAR_FAMILY_ONLY": 72.0
+   }
+  },
+  {
+   "distributor": "ACZA",
+   "pattern": "item+mpor",
+   "family": "GM",
+   "lines": 23,
+   "units": 722.0,
+   "distinct_item_codes": 21,
+   "top_items": [
+    "22GM0-02610000",
+    "22GM0-01XC0000",
+    "22GM0-022K0000"
+   ],
+   "top_models": [
+    null
+   ],
+   "top_customers": [
+    "<unresolved>",
+    "Wza260200006",
+    "Wza260700043"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 23
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 722.0
+   }
+  },
+  {
+   "distributor": "Compuspeed",
+   "pattern": "item+model+barcode",
+   "family": "NB",
+   "lines": 6,
+   "units": 648.0,
+   "distinct_item_codes": 3,
+   "top_items": [
+    "90NB0TY1-M04BH0",
+    "90NB17I1-M021B0",
+    "90NB0TY1-M04T90"
+   ],
+   "top_models": [
+    "P1511CEA-I382G2X",
+    "X1504MA-I58512BL6W",
+    "P1511CEA-I58512G2X"
+   ],
+   "top_customers": [
+    "Open Channel"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 6
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 648.0
+   }
+  },
+  {
+   "distributor": "HV",
+   "pattern": "item+model+barcode",
+   "family": "NX",
+   "lines": 8,
+   "units": 570.0,
+   "distinct_item_codes": 8,
+   "top_items": [
+    "90NX0881-M04P20",
+    "90NX0621-M00TM0",
+    "90NX08Q1-M006F0"
+   ],
+   "top_models": [
+    "P1503CVAY-C58512GMG0D",
+    "B1502CGA-I382B9X",
+    "P1503CTA-I382GMG1W"
+   ],
+   "top_customers": [
+    "Open Channel",
+    "SADC"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 3,
+    "NEAR_FAMILY_ONLY": 5
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 190.0,
+    "NEAR_FAMILY_ONLY": 380.0
+   }
+  },
+  {
+   "distributor": "Compuspeed",
+   "pattern": "item+model+barcode",
+   "family": "PF",
+   "lines": 15,
+   "units": 508.0,
+   "distinct_item_codes": 8,
+   "top_items": [
+    "90PF05A1-M01YW0",
+    "90PF05A1-M029N0",
+    "90PF05A1-M01YX0"
+   ],
+   "top_models": [
+    "P500SV-05210H124W",
+    "P500SV-C58512GMU2W",
+    "P500SV-05210H232X"
+   ],
+   "top_customers": [
+    "Open Channel"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 15
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 508.0
+   }
+  },
+  {
+   "distributor": "Mustek",
+   "pattern": "item+model",
+   "family": "PF",
+   "lines": 2,
+   "units": 323.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90PF05N1-M04RJ0",
+    "90PF05N1-M04RH0"
+   ],
+   "top_models": [
+    "D701SER-5144001510",
+    "D701SER-5144001500"
+   ],
+   "top_customers": [
+    "<unresolved>"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 2
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 323.0
+   }
+  },
+  {
+   "distributor": "Superdist",
+   "pattern": "item+model+barcode",
+   "family": "NX",
+   "lines": 6,
+   "units": 304.0,
+   "distinct_item_codes": 5,
+   "top_items": [
+    "90NX06X1-M03XM0",
+    "90NX06X1-M049Z0",
+    "90NX0801-M03440"
+   ],
+   "top_models": [
+    "B1502CVA-NJ3183X",
+    "B1503CVA-I58512BMUX",
+    "B1502CVA-NJ3181X"
+   ],
+   "top_customers": [
+    "Open Channel"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 6
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 304.0
+   }
+  },
+  {
+   "distributor": "DCC",
+   "pattern": "item+model+barcode",
+   "family": "XB",
+   "lines": 3,
+   "units": 240.0,
+   "distinct_item_codes": 3,
+   "top_items": [
+    "90XB0B4N-MPW000",
+    "90XB0AWN-BDS010",
+    "90XB0AIN-BDS010"
+   ],
+   "top_models": [
+    "AC68-01(AD10820)/EU",
+    "DC320 11 IN 1 USB-C DOCK/EU",
+    "DC110 4 IN 1 USB-C DOCK/BK/WW"
+   ],
+   "top_customers": [
+    "Open Channel"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 3
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 240.0
+   }
+  },
+  {
+   "distributor": "Pinnacle",
+   "pattern": "item+model+barcode",
+   "family": "NV",
+   "lines": 11,
+   "units": 219.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90NV00D0-P00030",
+    "90NV00K1-M003D0"
+   ],
+   "top_models": [
+    "ROG XBOX ALLY TRAVEL CASE",
+    "RC74XA-Z2410B0W"
+   ],
+   "top_customers": [
+    "Makro",
+    "AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)",
+    "BT GAMES (PTY) LTD"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 11
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 219.0
+   }
+  },
+  {
+   "distributor": "Rectron",
+   "pattern": "item+model+barcode",
+   "family": "XB",
+   "lines": 2,
+   "units": 219.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90XB0B4N-MPW000",
+    "90XB09NN-BDS010"
+   ],
+   "top_models": [
+    "AC68-01(AD10820)/EU",
+    "DC510 TBT5 DOCK/EU"
+   ],
+   "top_customers": [
+    "Open Channel"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 2
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 219.0
+   }
+  },
+  {
+   "distributor": "Pepkor",
+   "pattern": "item+model+barcode",
+   "family": "NV",
+   "lines": 7,
+   "units": 216.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90NV00D0-P00030",
+    "90NV00K1-M003D0"
+   ],
+   "top_models": [
+    "ROG XBOX ALLY TRAVEL CASE",
+    "RC74XA-Z2410B0W"
+   ],
+   "top_customers": [
+    "Incredible Connection"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 7
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 216.0
+   }
+  },
+  {
+   "distributor": "Pepkor",
+   "pattern": "item+model+barcode",
+   "family": "NX",
+   "lines": 2,
+   "units": 192.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90NX0871-M030Z0",
+    "90NX0AS3-M00XY0"
+   ],
+   "top_models": [
+    "P1403CVAY-C516512G0W",
+    "A7406CMA-C516256W0NAX"
+   ],
+   "top_customers": [
+    "Homeless Q4 Retail",
+    "Retail - Incredible"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 2
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 192.0
+   }
+  },
+  {
+   "distributor": "Mustek",
+   "pattern": "item+model+barcode",
+   "family": "PF",
+   "lines": 3,
+   "units": 170.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90PF06A1-M00CV0",
+    "90PF05D1-M03250"
+   ],
+   "top_models": [
+    "P700ML-U7165123050G0X",
+    "D700MF-U51651203050B0X"
+   ],
+   "top_customers": [
+    "Open Channel"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 3
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 170.0
+   }
+  },
+  {
+   "distributor": "DCC",
+   "pattern": "item+model+barcode",
+   "family": "PF",
+   "lines": 6,
+   "units": 144.0,
+   "distinct_item_codes": 3,
+   "top_items": [
+    "90PF06A1-M007V0",
+    "90PF06A1-M00CU0",
+    "90PF06A1-M00CV0"
+   ],
+   "top_models": [
+    "P700ML-U516512G1W",
+    "P700ML-U716512G0W",
+    "P700ML-U7165123050G0X"
+   ],
+   "top_customers": [
+    "Open Channel"
+   ],
+   "causes_lines": {
+    "NEAR_FAMILY_ONLY": 6
+   },
+   "causes_units": {
+    "NEAR_FAMILY_ONLY": 144.0
+   }
+  },
+  {
+   "distributor": "ACZA",
+   "pattern": "item+model+barcode+mpor",
+   "family": "GI",
+   "lines": 2,
+   "units": 144.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90GI0010-BF2100",
+    "90GI0010-BF1200"
+   ],
+   "top_models": [
+    "OMNI004",
+    "OMNI003"
+   ],
+   "top_customers": [
+    "<unresolved>"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 2
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 144.0
+   }
+  },
+  {
+   "distributor": "Mustek",
+   "pattern": "item+model+barcode",
+   "family": "NV",
+   "lines": 8,
+   "units": 141.0,
+   "distinct_item_codes": 2,
+   "top_items": [
+    "90NV00D0-P00030",
+    "90NV00K1-M003D0"
+   ],
+   "top_models": [
+    "ROG XBOX ALLY TRAVEL CASE",
+    "RC74XA-Z2410B0W"
+   ],
+   "top_customers": [
+    "Computer Mania",
+    "Evetech"
+   ],
+   "causes_lines": {
+    "CATALOGUE_GAP": 8
+   },
+   "causes_units": {
+    "CATALOGUE_GAP": 141.0
+   }
+  }
+ ],
+ "top25_units": 38968.0,
+ "distributor_x_cause": {
+  "DCC": {
+   "NEAR_FAMILY_ONLY": 12,
+   "CATALOGUE_GAP": 24
+  },
+  "Mustek": {
+   "NEAR_FAMILY_ONLY": 67,
+   "CATALOGUE_GAP": 32
+  },
+  "Pepkor": {
+   "NEAR_FAMILY_ONLY": 61,
+   "CATALOGUE_GAP": 23
+  },
+  "ACZA": {
+   "CATALOGUE_GAP": 26,
+   "NEAR_FAMILY_ONLY": 3
+  },
+  "Pinnacle": {
+   "NEAR_FAMILY_ONLY": 57,
+   "CATALOGUE_GAP": 12
+  },
+  "Rectron": {
+   "CATALOGUE_GAP": 19,
+   "NEAR_FAMILY_ONLY": 40
+  },
+  "Compuspeed": {
+   "NEAR_FAMILY_ONLY": 61,
+   "CATALOGUE_GAP": 8
+  },
+  "HV": {
+   "CATALOGUE_GAP": 3,
+   "NEAR_FAMILY_ONLY": 6
+  },
+  "Firsttech": {
+   "NEAR_FAMILY_ONLY": 5,
+   "CATALOGUE_GAP": 3
+  },
+  "Three": {
+   "NEAR_FAMILY_ONLY": 1
+  },
+  "Superdist": {
+   "NEAR_FAMILY_ONLY": 6
+  },
+  "Brandhouse": {
+   "NEAR_FAMILY_ONLY": 2
+  },
+  "Dgstore": {
+   "CATALOGUE_GAP": 6
+  },
+  "Syntech": {
+   "CATALOGUE_GAP": 1
+  },
+  "NITI": {
+   "CATALOGUE_GAP": 1
+  }
+ },
+ "format_problem_rows": [],
+ "token_oddities": {
+  "sales_model_name:trailing_sep_or_space": 6
+ }
+}

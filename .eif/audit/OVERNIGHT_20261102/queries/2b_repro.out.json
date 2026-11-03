@@ -1,0 +1,376 @@
+{
+ "ev_status_by_linestate": [
+  {
+   "line_state": "open_order",
+   "st": "inactive_only",
+   "pid_null": true,
+   "lines": 1,
+   "units": 48.0
+  },
+  {
+   "line_state": "open_order",
+   "st": "no_match",
+   "pid_null": true,
+   "lines": 228,
+   "units": 18134.0
+  },
+  {
+   "line_state": "open_order",
+   "st": "resolved_unique",
+   "pid_null": false,
+   "lines": 508,
+   "units": 30716.0
+  },
+  {
+   "line_state": "shipped",
+   "st": "inactive_only",
+   "pid_null": true,
+   "lines": 11,
+   "units": 326.0
+  },
+  {
+   "line_state": "shipped",
+   "st": "no_match",
+   "pid_null": true,
+   "lines": 251,
+   "units": 22561.0
+  },
+  {
+   "line_state": "shipped",
+   "st": "resolved_unique",
+   "pid_null": false,
+   "lines": 7072,
+   "units": 483233.0
+  }
+ ],
+ "ev_status_totals": [
+  {
+   "st": "inactive_only",
+   "pid_null": true,
+   "lines": 12,
+   "units": 374.0
+  },
+  {
+   "st": "no_match",
+   "pid_null": true,
+   "lines": 479,
+   "units": 40695.0
+  },
+  {
+   "st": "resolved_unique",
+   "pid_null": false,
+   "lines": 7580,
+   "units": 513949.0
+  }
+ ],
+ "fact_status_by_linestate": [
+  {
+   "line_state": "closed_superseded",
+   "st": "no_match",
+   "pid_null": true,
+   "lines": 3,
+   "units": 585.0
+  },
+  {
+   "line_state": "closed_superseded",
+   "st": "resolved_unique",
+   "pid_null": false,
+   "lines": 6,
+   "units": 336.0
+  },
+  {
+   "line_state": "open_order",
+   "st": "inactive_only",
+   "pid_null": true,
+   "lines": 1,
+   "units": 48.0
+  },
+  {
+   "line_state": "open_order",
+   "st": "no_match",
+   "pid_null": true,
+   "lines": 228,
+   "units": 18134.0
+  },
+  {
+   "line_state": "open_order",
+   "st": "resolved_unique",
+   "pid_null": false,
+   "lines": 508,
+   "units": 30716.0
+  },
+  {
+   "line_state": "shipped",
+   "st": "inactive_only",
+   "pid_null": true,
+   "lines": 8,
+   "units": 326.0
+  },
+  {
+   "line_state": "shipped",
+   "st": "no_match",
+   "pid_null": true,
+   "lines": 189,
+   "units": 22561.0
+  },
+  {
+   "line_state": "shipped",
+   "st": "resolved_unique",
+   "pid_null": false,
+   "lines": 6415,
+   "units": 483233.0
+  }
+ ],
+ "fact_all_jobs_unmatched": [
+  {
+   "import_job_id": 32,
+   "line_state": "closed_shipped",
+   "lines": 1,
+   "units": 10.0
+  },
+  {
+   "import_job_id": 40,
+   "line_state": "closed_disappeared",
+   "lines": 4,
+   "units": 144.0
+  },
+  {
+   "import_job_id": 40,
+   "line_state": "closed_shipped",
+   "lines": 3,
+   "units": 115.0
+  },
+  {
+   "import_job_id": 153,
+   "line_state": "closed_disappeared",
+   "lines": 4,
+   "units": 316.0
+  },
+  {
+   "import_job_id": 153,
+   "line_state": "shipped",
+   "lines": 3,
+   "units": 122.0
+  },
+  {
+   "import_job_id": 154,
+   "line_state": "shipped",
+   "lines": 86,
+   "units": 7580.0
+  },
+  {
+   "import_job_id": 601,
+   "line_state": "closed_disappeared",
+   "lines": 4,
+   "units": 337.0
+  },
+  {
+   "import_job_id": 601,
+   "line_state": "closed_shipped",
+   "lines": 13,
+   "units": 7266.0
+  },
+  {
+   "import_job_id": 605,
+   "line_state": "closed_disappeared",
+   "lines": 21,
+   "units": 1676.0
+  },
+  {
+   "import_job_id": 605,
+   "line_state": "closed_shipped",
+   "lines": 34,
+   "units": 1667.0
+  },
+  {
+   "import_job_id": 1159,
+   "line_state": "closed_disappeared",
+   "lines": 4,
+   "units": 63.0
+  },
+  {
+   "import_job_id": 1159,
+   "line_state": "closed_shipped",
+   "lines": 14,
+   "units": 841.0
+  },
+  {
+   "import_job_id": 1159,
+   "line_state": "closed_superseded",
+   "lines": 1,
+   "units": 36.0
+  },
+  {
+   "import_job_id": 1326,
+   "line_state": "closed_disappeared",
+   "lines": 13,
+   "units": 912.0
+  },
+  {
+   "import_job_id": 1326,
+   "line_state": "closed_shipped",
+   "lines": 16,
+   "units": 482.0
+  },
+  {
+   "import_job_id": 1339,
+   "line_state": "closed_disappeared",
+   "lines": 52,
+   "units": 6353.0
+  },
+  {
+   "import_job_id": 1339,
+   "line_state": "closed_shipped",
+   "lines": 22,
+   "units": 2236.0
+  },
+  {
+   "import_job_id": 1695,
+   "line_state": "closed_disappeared",
+   "lines": 5,
+   "units": 90.0
+  },
+  {
+   "import_job_id": 1695,
+   "line_state": "closed_shipped",
+   "lines": 24,
+   "units": 1223.0
+  },
+  {
+   "import_job_id": 1695,
+   "line_state": "closed_superseded",
+   "lines": 3,
+   "units": 324.0
+  },
+  {
+   "import_job_id": 1696,
+   "line_state": "closed_disappeared",
+   "lines": 3,
+   "units": 585.0
+  },
+  {
+   "import_job_id": 1696,
+   "line_state": "closed_shipped",
+   "lines": 3,
+   "units": 62.0
+  },
+  {
+   "import_job_id": 1697,
+   "line_state": "closed_superseded",
+   "lines": 3,
+   "units": 585.0
+  },
+  {
+   "import_job_id": 1697,
+   "line_state": "open_order",
+   "lines": 229,
+   "units": 18182.0
+  },
+  {
+   "import_job_id": 1697,
+   "line_state": "shipped",
+   "lines": 197,
+   "units": 22887.0
+  },
+  {
+   "import_job_id": null,
+   "line_state": "open_order",
+   "lines": 3,
+   "units": 30.0
+  }
+ ],
+ "ev_all_jobs_unmatched": [
+  {
+   "import_job_id": 32,
+   "lines": 2124,
+   "units": 181719.0
+  },
+  {
+   "import_job_id": 34,
+   "lines": 2125,
+   "units": 181724.0
+  },
+  {
+   "import_job_id": 40,
+   "lines": 160,
+   "units": 11138.0
+  },
+  {
+   "import_job_id": 147,
+   "lines": 64,
+   "units": 5572.0
+  },
+  {
+   "import_job_id": 153,
+   "lines": 103,
+   "units": 6384.0
+  },
+  {
+   "import_job_id": 154,
+   "lines": 94,
+   "units": 7580.0
+  },
+  {
+   "import_job_id": 601,
+   "lines": 177,
+   "units": 16743.0
+  },
+  {
+   "import_job_id": 605,
+   "lines": 206,
+   "units": 17932.0
+  },
+  {
+   "import_job_id": 1159,
+   "lines": 218,
+   "units": 18726.0
+  },
+  {
+   "import_job_id": 1326,
+   "lines": 276,
+   "units": 25552.0
+  },
+  {
+   "import_job_id": 1339,
+   "lines": 326,
+   "units": 28645.0
+  },
+  {
+   "import_job_id": 1695,
+   "lines": 367,
+   "units": 30722.0
+  },
+  {
+   "import_job_id": 1696,
+   "lines": 455,
+   "units": 38066.0
+  },
+  {
+   "import_job_id": 1697,
+   "lines": 491,
+   "units": 41069.0
+  }
+ ],
+ "ev_corpus_superseded": [
+  {
+   "superseded": false,
+   "pid_null": false,
+   "lines": 7580,
+   "units": 513949.0
+  },
+  {
+   "superseded": false,
+   "pid_null": true,
+   "lines": 491,
+   "units": 41069.0
+  }
+ ],
+ "ev_unmatched_distinct": [
+  {
+   "lines": 491,
+   "keys": 491,
+   "units": 41069.0,
+   "rows_": 491
+  }
+ ]
+}

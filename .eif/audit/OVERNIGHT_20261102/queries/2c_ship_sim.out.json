@@ -1,0 +1,1582 @@
+{
+ "lines_visible_default": 110938,
+ "lines_visible_after_all_product_lines_guc": 110938,
+ "alias_status_counts": {
+  "customer": {
+   "approved": 6458,
+   "revoked": 6
+  },
+  "distributor": {
+   "approved": 57
+  }
+ },
+ "verdicts_by_entity": {
+  "shipment_customer_token": {
+   "WOULD_CLEAR": 161,
+   "not_cleared:alias_partial_coverage_across_tokens": 2
+  },
+  "shipment_distributor": {
+   "not_cleared:apply_insert_hits_unique_alias_index_409": 52
+  }
+ },
+ "totals_by_entity": {
+  "shipment_customer_token": 163,
+  "shipment_distributor": 52
+ },
+ "score_by_entity": {
+  "shipment_customer_token": {
+   "alias_map": 161,
+   "alias_partial_coverage_across_tokens": 2
+  },
+  "shipment_distributor": {
+   "alias_map": 52
+  }
+ },
+ "lines_already_resolved": {
+  "shipment_customer_token|False": 163,
+  "shipment_distributor|False": 52
+ },
+ "line_scope": {
+  "shipment_customer_token|all_found": 163,
+  "shipment_distributor|all_found": 52
+ },
+ "special_category": {
+  "shipment_customer_token|noise_only": 47,
+  "shipment_customer_token|internal_note": 8
+ },
+ "stored_vs_rescored": [
+  {
+   "entity": "shipment_customer_token",
+   "stored": "approved_customer_source_token_alias",
+   "rescored": "alias_map",
+   "n": 47
+  },
+  {
+   "entity": "shipment_customer_token",
+   "stored": "no_alias_or_exact_dim_match",
+   "rescored": "alias_map",
+   "n": 97
+  },
+  {
+   "entity": "shipment_customer_token",
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "rescored": "alias_map",
+   "n": 17
+  },
+  {
+   "entity": "shipment_customer_token",
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "rescored": "alias_partial_coverage_across_tokens",
+   "n": 2
+  },
+  {
+   "entity": "shipment_distributor",
+   "stored": "no_alias_or_exact_dim_match",
+   "rescored": "alias_map",
+   "n": 52
+  }
+ ],
+ "not_cleared_earlier_same_key": [
+  {
+   "entity": "shipment_customer_token",
+   "earlier": "earlier same-key candidate statuses {\"resolved\": 7} targets=1",
+   "n": 2
+  },
+  {
+   "entity": "shipment_distributor",
+   "earlier": "no earlier decision on same key (any job)",
+   "n": 52
+  }
+ ],
+ "by_job": [
+  {
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "month": "2026-06",
+   "file_name": "ACZA Shipped Unshipped 20260526.xlsx",
+   "job_status": "completed",
+   "stage": "loaded",
+   "mode": "validate",
+   "clear": 93
+  },
+  {
+   "entity": "shipment_customer_token",
+   "job": 34,
+   "month": "2026-06",
+   "file_name": "ACZA Shipped Unshipped 20260602.xlsx",
+   "job_status": "completed",
+   "stage": "loaded",
+   "mode": "apply",
+   "clear": 7
+  },
+  {
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "month": "2026-07",
+   "file_name": "ACZA Shipped Unshipped 20260728.xlsx",
+   "job_status": "completed",
+   "stage": "loaded",
+   "mode": "validate",
+   "clear": 14
+  },
+  {
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "month": "2026-08",
+   "file_name": "ACZA Shipped Unshipped 20260818_P2.xlsx",
+   "job_status": "completed",
+   "stage": "loaded",
+   "mode": "validate",
+   "clear": 15
+  },
+  {
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "month": "2026-09",
+   "file_name": "ACZA Shipped Unshipped 20260901.xlsx",
+   "job_status": "completed",
+   "stage": "loaded",
+   "mode": "validate",
+   "not": 1,
+   "clear": 16
+  },
+  {
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "month": "2026-09",
+   "file_name": "ACZA Shipped Unshipped 20260911.xlsx",
+   "job_status": "completed",
+   "stage": "loaded",
+   "mode": "validate",
+   "clear": 16,
+   "not": 1
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "month": "2026-06",
+   "file_name": "ACZA Shipped Unshipped 20260526.xlsx",
+   "job_status": "completed",
+   "stage": "loaded",
+   "mode": "validate",
+   "not": 51
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 605,
+   "month": "2026-07",
+   "file_name": "ACZA Shipped Unshipped 20260728.xlsx",
+   "job_status": "completed",
+   "stage": "loaded",
+   "mode": "validate",
+   "not": 1
+  }
+ ],
+ "top_not_cleared_tokens": [
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "pinnacle-za-ir",
+   "rows": 1823,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "pepkor-za-dr",
+   "rows": 1101,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "mustek-za-ir",
+   "rows": 1061,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "rectron-za-c",
+   "rows": 953,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "pinnacle-za-c",
+   "rows": 613,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "mustek-za-c",
+   "rows": 563,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "mustek-za-bb",
+   "rows": 557,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "rectron-za-bb",
+   "rows": 448,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "pinnacle-za-iet",
+   "rows": 367,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "key": "homeless",
+   "rows": 301,
+   "verdict": "not_cleared:alias_partial_coverage_across_tokens"
+  },
+  {
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "key": "homeless",
+   "rows": 273,
+   "verdict": "not_cleared:alias_partial_coverage_across_tokens"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "pinnacle-za-bb",
+   "rows": 268,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "dgstore-za-et",
+   "rows": 179,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "dcc-za-bb",
+   "rows": 157,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  },
+  {
+   "entity": "shipment_distributor",
+   "job": 32,
+   "key": "mustek-za-tb",
+   "rows": 140,
+   "verdict": "not_cleared:apply_insert_hits_unique_alias_index_409"
+  }
+ ],
+ "would_clear_detail": [
+  {
+   "id": 1033,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 9,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1137,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1138,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1034,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1055,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 28,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1072,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 3,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1225,
+   "entity": "shipment_customer_token",
+   "job": 34,
+   "rows": 8,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": "noise_only"
+  },
+  {
+   "id": 1139,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1144,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 3,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1238,
+   "entity": "shipment_customer_token",
+   "job": 34,
+   "rows": 28,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": "noise_only"
+  },
+  {
+   "id": 1032,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 351,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1042,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 34,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1289,
+   "entity": "shipment_customer_token",
+   "job": 34,
+   "rows": 9,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": "noise_only"
+  },
+  {
+   "id": 1054,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1111,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1084,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1085,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 7,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1092,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1101,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 5,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1135,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1136,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1038,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 3,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1044,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 28,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": "noise_only"
+  },
+  {
+   "id": 1052,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 4,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1053,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 3,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1049,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 41,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1050,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 9,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1051,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1048,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 24,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1066,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1119,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1069,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 114,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1090,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 6,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1108,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1128,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1129,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 6,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1071,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1031,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 8,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": "noise_only"
+  },
+  {
+   "id": 1074,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1047,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 7,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1081,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 10,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1040,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 57,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1093,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 4,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1094,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1095,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 4,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1110,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1132,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 4,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1115,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1116,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 6,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1125,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 4,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1130,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 5,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1131,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": "noise_only"
+  },
+  {
+   "id": 1133,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1140,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1024,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 327,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1026,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 696,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1058,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 6,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1105,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1056,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1145,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1106,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 7,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1107,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1114,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1030,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 216,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1037,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 271,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1061,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1062,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 22,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1153,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1154,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1104,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 17,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1073,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1029,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 19,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1077,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1087,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1088,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 10,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1097,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 9,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": "noise_only"
+  },
+  {
+   "id": 1099,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 4,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1098,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1109,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1057,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 40,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1075,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1059,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1060,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1143,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 4,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1141,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1142,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1150,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 6,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1155,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1161,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1146,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1148,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 2,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1151,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1152,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1158,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1159,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1157,
+   "entity": "shipment_customer_token",
+   "job": 32,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": null
+  },
+  {
+   "id": 1304,
+   "entity": "shipment_customer_token",
+   "job": 34,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 1314,
+   "entity": "shipment_customer_token",
+   "job": 34,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 1323,
+   "entity": "shipment_customer_token",
+   "job": 34,
+   "rows": 1,
+   "stored": "no_alias_or_exact_dim_match",
+   "special": "noise_only"
+  },
+  {
+   "id": 1310,
+   "entity": "shipment_customer_token",
+   "job": 34,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29632,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 304,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 26772,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 14,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26780,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26786,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 12,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26788,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "internal_note"
+  },
+  {
+   "id": 26809,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26819,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "internal_note"
+  },
+  {
+   "id": 26832,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 17,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26841,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26845,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26853,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26859,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 2,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 26785,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 10,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 26787,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 2,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 26791,
+   "entity": "shipment_customer_token",
+   "job": 605,
+   "rows": 6,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29640,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 2,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29643,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 14,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29642,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 736,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29664,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29674,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "internal_note"
+  },
+  {
+   "id": 29687,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 17,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29689,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29698,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29702,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29711,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29362,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 13,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29721,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 13,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29722,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "internal_note"
+  },
+  {
+   "id": 29367,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 14,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29383,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29392,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "internal_note"
+  },
+  {
+   "id": 29406,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 17,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29408,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29416,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29686,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 10,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29697,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 6,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29720,
+   "entity": "shipment_customer_token",
+   "job": 1339,
+   "rows": 2,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29420,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29428,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29435,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 2,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29438,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "internal_note"
+  },
+  {
+   "id": 29342,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 267,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29364,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 6,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29405,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 10,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29437,
+   "entity": "shipment_customer_token",
+   "job": 1159,
+   "rows": 2,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29508,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 301,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29509,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 14,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29533,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29543,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "internal_note"
+  },
+  {
+   "id": 29556,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 17,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29558,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 5,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29566,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29570,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29578,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29586,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 2,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29589,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 13,
+   "stored": "approved_customer_source_token_alias",
+   "special": "noise_only"
+  },
+  {
+   "id": 29590,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 1,
+   "stored": "approved_customer_source_token_alias",
+   "special": "internal_note"
+  },
+  {
+   "id": 29493,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 738,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29555,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 10,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29565,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 6,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  },
+  {
+   "id": 29588,
+   "entity": "shipment_customer_token",
+   "job": 1326,
+   "rows": 2,
+   "stored": "partial_customer_alias_coverage_across_source_tokens",
+   "special": null
+  }
+ ],
+ "row_count_sum_by_verdict": {
+  "shipment_customer_token|WOULD_CLEAR": 5228,
+  "shipment_distributor|not_cleared:apply_insert_hits_unique_alias_index_409": 9332,
+  "shipment_customer_token|not_cleared:alias_partial_coverage_across_tokens": 574
+ },
+ "alias_hit_has_distributor_scope": 0,
+ "customer_aliases_approved": 6458,
+ "distributor_aliases_approved": 57,
+ "customer_aliases_to_merged_loser": 0,
+ "distributor_aliases_to_merged_loser": 0
+}

@@ -1,0 +1,341 @@
+{
+ "n_items": 151,
+ "n_eans": 127,
+ "n_upcs": 127,
+ "n_models": 128,
+ "master_any_identifier_loose": [
+  {
+   "n": 0
+  }
+ ],
+ "master_barcode_leading_zero_variant": [
+  {
+   "n": 0
+  }
+ ],
+ "catalog_product_by_sku": [
+  {
+   "n": 0
+  }
+ ],
+ "catalog_product_total": [
+  {
+   "n": 18157,
+   "linked": 18157
+  }
+ ],
+ "product_alias_by_value": [
+  {
+   "n": 0
+  }
+ ],
+ "customer_article_alias_total": [
+  {
+   "status": "confirmed",
+   "n": 605
+  },
+  {
+   "status": "proposed",
+   "n": 94
+  }
+ ],
+ "same_item_other_jobs": [
+  {
+   "resolved": false,
+   "lines": 2223,
+   "distinct_items": 149,
+   "jobs": 13
+  }
+ ],
+ "first_job_seen_unmatched": [
+  {
+   "min_job": 32,
+   "n_items": 23
+  },
+  {
+   "min_job": 34,
+   "n_items": 1
+  },
+  {
+   "min_job": 153,
+   "n_items": 6
+  },
+  {
+   "min_job": 601,
+   "n_items": 41
+  },
+  {
+   "min_job": 605,
+   "n_items": 6
+  },
+  {
+   "min_job": 1159,
+   "n_items": 3
+  },
+  {
+   "min_job": 1326,
+   "n_items": 21
+  },
+  {
+   "min_job": 1339,
+   "n_items": 10
+  },
+  {
+   "min_job": 1695,
+   "n_items": 16
+  },
+  {
+   "min_job": 1696,
+   "n_items": 22
+  },
+  {
+   "min_job": 1697,
+   "n_items": 2
+  }
+ ],
+ "dsi_mapping_candidates_product": [
+  {
+   "status": "ignored",
+   "n": 3,
+   "units": 178.0
+  },
+  {
+   "status": "needs_review",
+   "n": 34,
+   "units": 2583.0
+  }
+ ],
+ "mapping_candidate_entity_types": [
+  {
+   "entity_type": "shipment_customer_token",
+   "status": "resolved",
+   "n": 1539
+  },
+  {
+   "entity_type": "cst_location_token",
+   "status": "needs_review",
+   "n": 1119
+  },
+  {
+   "entity_type": "product_identifier",
+   "status": "needs_review",
+   "n": 989
+  },
+  {
+   "entity_type": "cst_location_token",
+   "status": "ignored",
+   "n": 725
+  },
+  {
+   "entity_type": "cst_product_token",
+   "status": "ignored",
+   "n": 684
+  },
+  {
+   "entity_type": "product_identifier",
+   "status": "ignored",
+   "n": 613
+  },
+  {
+   "entity_type": "cst_product_token",
+   "status": "needs_review",
+   "n": 531
+  },
+  {
+   "entity_type": "customer_dealer_token",
+   "status": "needs_review",
+   "n": 410
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "status": "needs_review",
+   "n": 163
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "status": "resolved",
+   "n": 55
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "status": "needs_review",
+   "n": 52
+  },
+  {
+   "entity_type": "customer_dealer_token",
+   "status": "ignored",
+   "n": 19
+  },
+  {
+   "entity_type": "cst_product_token",
+   "status": "resolved",
+   "n": 11
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "status": "ignored",
+   "n": 8
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "status": "steward_rejected",
+   "n": 7
+  }
+ ],
+ "master_created_by_month": [
+  {
+   "m": "2026-06",
+   "n": 1021
+  },
+  {
+   "m": "2026-05",
+   "n": 17136
+  }
+ ],
+ "master_max_dates": [
+  {
+   "max_created": "2026-06-18T20:05:18.683291+00:00",
+   "max_updated": "2026-06-18T20:05:18.683291+00:00",
+   "max_launch": "2031-01-13"
+  }
+ ],
+ "sku_prefix_presence": [
+  {
+   "prefixes": 60,
+   "prefix_in_master": 39
+  }
+ ],
+ "model_base_presence": [
+  {
+   "bases": 58,
+   "base_in_master": 37
+  }
+ ],
+ "resolved_same_job_distinct_products": [
+  {
+   "n": 997
+  }
+ ],
+ "inactive_only_lines": [
+  {
+   "item_code": "90NX0801-M01D00",
+   "sales_model_name": "B1503CVA-I516512BMX",
+   "quantity": 54.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "quantity": 48.0,
+   "line_state": "open_order",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "quantity": 48.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NX07N1-M00XX0",
+   "sales_model_name": "B3402FVA-I516512BMX",
+   "quantity": 40.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NX0631-M00A50",
+   "sales_model_name": "CM1402CM2A-NK0220",
+   "quantity": 34.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NX0881-M00VS0",
+   "sales_model_name": "P1503CVA-I716512BMW",
+   "quantity": 27.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NX0801-M01DE0",
+   "sales_model_name": "B1503CVA-I716512BMX",
+   "quantity": 27.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "quantity": 24.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "quantity": 24.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "quantity": 24.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "quantity": 14.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "quantity": 10.0,
+   "line_state": "shipped",
+   "sku": null,
+   "is_active": null,
+   "lifecycle_status": null,
+   "retired_date": null
+  }
+ ]
+}

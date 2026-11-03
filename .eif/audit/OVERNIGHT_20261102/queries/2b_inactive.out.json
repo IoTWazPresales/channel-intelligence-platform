@@ -1,0 +1,235 @@
+{
+ "lines": [
+  {
+   "item_code": "90NX0801-M01D00",
+   "sales_model_name": "B1503CVA-I516512BMX",
+   "ean_code": "4711387872505",
+   "quantity": 54.0,
+   "line_state": "shipped",
+   "tok": "90NX0801-M01D00"
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "ean_code": "4711636749985",
+   "quantity": 48.0,
+   "line_state": "open_order",
+   "tok": "90NR0JF7-M011W0"
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "ean_code": "4711636749985",
+   "quantity": 48.0,
+   "line_state": "shipped",
+   "tok": "90NR0JF7-M011W0"
+  },
+  {
+   "item_code": "90NX07N1-M00XX0",
+   "sales_model_name": "B3402FVA-I516512BMX",
+   "ean_code": "4711387872499",
+   "quantity": 40.0,
+   "line_state": "shipped",
+   "tok": "90NX07N1-M00XX0"
+  },
+  {
+   "item_code": "90NX0631-M00A50",
+   "sales_model_name": "CM1402CM2A-NK0220",
+   "ean_code": "4711636026871",
+   "quantity": 34.0,
+   "line_state": "shipped",
+   "tok": "90NX0631-M00A50"
+  },
+  {
+   "item_code": "90NX0801-M01DE0",
+   "sales_model_name": "B1503CVA-I716512BMX",
+   "ean_code": "4711387872512",
+   "quantity": 27.0,
+   "line_state": "shipped",
+   "tok": "90NX0801-M01DE0"
+  },
+  {
+   "item_code": "90NX0881-M00VS0",
+   "sales_model_name": "P1503CVA-I716512BMW",
+   "ean_code": "4711387872543",
+   "quantity": 27.0,
+   "line_state": "shipped",
+   "tok": "90NX0881-M00VS0"
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "ean_code": "4711636749985",
+   "quantity": 24.0,
+   "line_state": "shipped",
+   "tok": "90NR0JF7-M011W0"
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "ean_code": "4711636749985",
+   "quantity": 24.0,
+   "line_state": "shipped",
+   "tok": "90NR0JF7-M011W0"
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "ean_code": "4711636749985",
+   "quantity": 24.0,
+   "line_state": "shipped",
+   "tok": "90NR0JF7-M011W0"
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "ean_code": "4711636749985",
+   "quantity": 14.0,
+   "line_state": "shipped",
+   "tok": "90NR0JF7-M011W0"
+  },
+  {
+   "item_code": "90NR0JF7-M011W0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "ean_code": "4711636749985",
+   "quantity": 10.0,
+   "line_state": "shipped",
+   "tok": "90NR0JF7-M011W0"
+  }
+ ],
+ "masters_by_sales_model": [
+  {
+   "id": 813,
+   "sku": "90NX07N1-M00XV0",
+   "sales_model_name": "B3402FVA-I516512BMX",
+   "is_active": true,
+   "lifecycle_status": "Discarded",
+   "retired_date": "2025-12-26",
+   "launch_date": "2026-03-18"
+  },
+  {
+   "id": 4316,
+   "sku": "90NX0631-M008D0",
+   "sales_model_name": "CM1402CM2A-NK0220",
+   "is_active": true,
+   "lifecycle_status": "Disabled",
+   "retired_date": "1970-01-01",
+   "launch_date": "1970-01-01"
+  },
+  {
+   "id": 4477,
+   "sku": "90NX0881-M00VR0",
+   "sales_model_name": "P1503CVA-I716512BMW",
+   "is_active": true,
+   "lifecycle_status": "Discarded",
+   "retired_date": "2025-11-17",
+   "launch_date": "2026-01-19"
+  },
+  {
+   "id": 6918,
+   "sku": "90NX0801-M01BM0",
+   "sales_model_name": "B1503CVA-I516512BMX",
+   "is_active": true,
+   "lifecycle_status": "Disabled",
+   "retired_date": "2025-05-31",
+   "launch_date": "2026-01-19"
+  },
+  {
+   "id": 11327,
+   "sku": "90NX0801-M01BN0",
+   "sales_model_name": "B1503CVA-I716512BMX",
+   "is_active": true,
+   "lifecycle_status": "Disabled",
+   "retired_date": "2025-05-31",
+   "launch_date": "2026-01-19"
+  },
+  {
+   "id": 12382,
+   "sku": "90NR0JF7-M00JY0",
+   "sales_model_name": "FA506NCG-78512B5W",
+   "is_active": true,
+   "lifecycle_status": "Published",
+   "retired_date": "2026-04-10",
+   "launch_date": "2026-03-31"
+  }
+ ],
+ "lifecycle_values": [
+  {
+   "lifecycle_status": "Disabled",
+   "is_active": true,
+   "n": 8335
+  },
+  {
+   "lifecycle_status": "Published",
+   "is_active": true,
+   "n": 5063
+  },
+  {
+   "lifecycle_status": "Discarded",
+   "is_active": true,
+   "n": 3169
+  },
+  {
+   "lifecycle_status": "Standby",
+   "is_active": true,
+   "n": 1407
+  },
+  {
+   "lifecycle_status": null,
+   "is_active": true,
+   "n": 183
+  }
+ ],
+ "dist_cols": [
+  {
+   "has_distributor_id": true,
+   "has_resolved_distributor_id": true,
+   "has_customer_id": false,
+   "has_resolved_customer_id": false,
+   "lines": 12
+  },
+  {
+   "has_distributor_id": true,
+   "has_resolved_distributor_id": true,
+   "has_customer_id": true,
+   "has_resolved_customer_id": true,
+   "lines": 467
+  }
+ ],
+ "customer_status_of_unmatched": [
+  {
+   "customer_status": "active",
+   "lines": 437
+  },
+  {
+   "customer_status": "unverified",
+   "lines": 30
+  },
+  {
+   "customer_status": null,
+   "lines": 12
+  }
+ ],
+ "fact_vs_evidence_gap": [
+  {
+   "what": "evidence_shipped_no_match_without_fact",
+   "lines": 62,
+   "units": 4940.0
+  },
+  {
+   "what": "evidence_open_no_match_without_fact",
+   "lines": 0,
+   "units": null
+  },
+  {
+   "what": "fact_no_match_total_job",
+   "lines": 420,
+   "units": 41280.0
+  },
+  {
+   "what": "fact_no_match_open_or_shipped_job",
+   "lines": 417,
+   "units": 40695.0
+  }
+ ]
+}

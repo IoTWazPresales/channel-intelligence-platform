@@ -1,0 +1,246 @@
+{
+ "by_entity_matchreason_action": [
+  {
+   "entity_type": "shipment_customer_token",
+   "match_reason": "no_alias_or_exact_dim_match",
+   "suggested_action": "create_provisional_customer",
+   "has_suggested": false,
+   "n": 97
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "match_reason": "approved_customer_source_token_alias",
+   "suggested_action": "map_customer",
+   "has_suggested": true,
+   "n": 47
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "match_reason": "partial_customer_alias_coverage_across_source_tokens",
+   "suggested_action": "needs_review",
+   "has_suggested": false,
+   "n": 19
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "match_reason": "no_alias_or_exact_dim_match",
+   "suggested_action": "create_provisional_distributor",
+   "has_suggested": false,
+   "n": 52
+  }
+ ],
+ "by_job": [
+  {
+   "entity_type": "shipment_customer_token",
+   "import_job_id": 32,
+   "source_id": 6,
+   "file_name": "ACZA Shipped Unshipped 20260526.xlsx",
+   "status": "completed",
+   "stage": "loaded",
+   "import_mode": "validate",
+   "created_month": "2026-06",
+   "n": 93,
+   "rows_sum": 2514
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "import_job_id": 34,
+   "source_id": 6,
+   "file_name": "ACZA Shipped Unshipped 20260602.xlsx",
+   "status": "completed",
+   "stage": "loaded",
+   "import_mode": "apply",
+   "created_month": "2026-06",
+   "n": 7,
+   "rows_sum": 53
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "import_job_id": 605,
+   "source_id": 6,
+   "file_name": "ACZA Shipped Unshipped 20260728.xlsx",
+   "status": "completed",
+   "stage": "loaded",
+   "import_mode": "validate",
+   "created_month": "2026-07",
+   "n": 14,
+   "rows_sum": 78
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "import_job_id": 1159,
+   "source_id": 6,
+   "file_name": "ACZA Shipped Unshipped 20260818_P2.xlsx",
+   "status": "completed",
+   "stage": "loaded",
+   "import_mode": "validate",
+   "created_month": "2026-08",
+   "n": 15,
+   "rows_sum": 346
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "import_job_id": 1326,
+   "source_id": 6,
+   "file_name": "ACZA Shipped Unshipped 20260901.xlsx",
+   "status": "completed",
+   "stage": "loaded",
+   "import_mode": "validate",
+   "created_month": "2026-09",
+   "n": 17,
+   "rows_sum": 1419
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "import_job_id": 1339,
+   "source_id": 6,
+   "file_name": "ACZA Shipped Unshipped 20260911.xlsx",
+   "status": "completed",
+   "stage": "loaded",
+   "import_mode": "validate",
+   "created_month": "2026-09",
+   "n": 17,
+   "rows_sum": 1392
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "import_job_id": 32,
+   "source_id": 6,
+   "file_name": "ACZA Shipped Unshipped 20260526.xlsx",
+   "status": "completed",
+   "stage": "loaded",
+   "import_mode": "validate",
+   "created_month": "2026-06",
+   "n": 51,
+   "rows_sum": 9307
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "import_job_id": 605,
+   "source_id": 6,
+   "file_name": "ACZA Shipped Unshipped 20260728.xlsx",
+   "status": "completed",
+   "stage": "loaded",
+   "import_mode": "validate",
+   "created_month": "2026-07",
+   "n": 1,
+   "rows_sum": 25
+  }
+ ],
+ "job_candidate_status_all": [
+  {
+   "import_job_id": 32,
+   "entity_type": "shipment_customer_token",
+   "status": "ignored",
+   "n": 7
+  },
+  {
+   "import_job_id": 32,
+   "entity_type": "shipment_customer_token",
+   "status": "needs_review",
+   "n": 93
+  },
+  {
+   "import_job_id": 32,
+   "entity_type": "shipment_customer_token",
+   "status": "resolved",
+   "n": 41
+  },
+  {
+   "import_job_id": 32,
+   "entity_type": "shipment_distributor",
+   "status": "needs_review",
+   "n": 51
+  },
+  {
+   "import_job_id": 34,
+   "entity_type": "shipment_customer_token",
+   "status": "ignored",
+   "n": 1
+  },
+  {
+   "import_job_id": 34,
+   "entity_type": "shipment_customer_token",
+   "status": "needs_review",
+   "n": 7
+  },
+  {
+   "import_job_id": 34,
+   "entity_type": "shipment_customer_token",
+   "status": "resolved",
+   "n": 133
+  },
+  {
+   "import_job_id": 34,
+   "entity_type": "shipment_distributor",
+   "status": "resolved",
+   "n": 51
+  },
+  {
+   "import_job_id": 605,
+   "entity_type": "shipment_customer_token",
+   "status": "needs_review",
+   "n": 14
+  },
+  {
+   "import_job_id": 605,
+   "entity_type": "shipment_customer_token",
+   "status": "resolved",
+   "n": 108
+  },
+  {
+   "import_job_id": 605,
+   "entity_type": "shipment_distributor",
+   "status": "needs_review",
+   "n": 1
+  },
+  {
+   "import_job_id": 1159,
+   "entity_type": "shipment_customer_token",
+   "status": "needs_review",
+   "n": 15
+  },
+  {
+   "import_job_id": 1159,
+   "entity_type": "shipment_customer_token",
+   "status": "resolved",
+   "n": 110
+  },
+  {
+   "import_job_id": 1159,
+   "entity_type": "shipment_distributor",
+   "status": "resolved",
+   "n": 1
+  },
+  {
+   "import_job_id": 1326,
+   "entity_type": "shipment_customer_token",
+   "status": "needs_review",
+   "n": 17
+  },
+  {
+   "import_job_id": 1326,
+   "entity_type": "shipment_customer_token",
+   "status": "resolved",
+   "n": 116
+  },
+  {
+   "import_job_id": 1339,
+   "entity_type": "shipment_customer_token",
+   "status": "needs_review",
+   "n": 17
+  },
+  {
+   "import_job_id": 1339,
+   "entity_type": "shipment_customer_token",
+   "status": "resolved",
+   "n": 119
+  },
+  {
+   "import_job_id": 1339,
+   "entity_type": "shipment_distributor",
+   "status": "resolved",
+   "n": 1
+  }
+ ]
+}

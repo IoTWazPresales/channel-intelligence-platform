@@ -42,6 +42,7 @@ def jsonable(x):
 
 
 async def _prove_read_only(db) -> dict:
+    await db.execute(text("SET default_transaction_read_only = on"))
     await db.execute(text("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"))
     await db.execute(text("SET TRANSACTION READ ONLY"))
     proof = {"database": (await db.execute(text("select current_database()"))).scalar_one()}
@@ -55,6 +56,7 @@ async def _prove_read_only(db) -> dict:
     assert proof["write_probe"].startswith("refused")
     proof["default_transaction_read_only"] = (await db.execute(text("show default_transaction_read_only"))).scalar_one()
     proof["transaction_read_only"] = (await db.execute(text("show transaction_read_only"))).scalar_one()
+    assert proof["default_transaction_read_only"] == "on"
     assert proof["transaction_read_only"] == "on"
     return proof
 

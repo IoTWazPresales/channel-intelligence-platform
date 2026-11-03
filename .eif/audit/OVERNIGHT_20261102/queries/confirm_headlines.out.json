@@ -1,0 +1,40 @@
+{
+ "needs_review": [
+  {
+   "entity_type": "cst_location_token",
+   "n": 1119
+  },
+  {
+   "entity_type": "cst_product_token",
+   "n": 531
+  },
+  {
+   "entity_type": "customer_dealer_token",
+   "n": 410
+  },
+  {
+   "entity_type": "product_identifier",
+   "n": 989
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "n": 163
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "n": 52
+  }
+ ],
+ "job_1697_no_match": [
+  {
+   "lines": 479,
+   "units": 40695.0
+  }
+ ],
+ "store_level_customers": [
+  {
+   "customers_with_store_rows": 4,
+   "customers_with_staging": 8
+  }
+ ]
+}

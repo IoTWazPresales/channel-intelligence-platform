@@ -1,0 +1,1755 @@
+{
+ "raw_keys_unmatched": [
+  {
+   "k": "Bill To",
+   "with_value": 479,
+   "total": 479
+  },
+  {
+   "k": "Item",
+   "with_value": 479,
+   "total": 479
+  },
+  {
+   "k": "Payment Term",
+   "with_value": 479,
+   "total": 479
+  },
+  {
+   "k": "shipway",
+   "with_value": 479,
+   "total": 479
+  },
+  {
+   "k": "Unit Price",
+   "with_value": 479,
+   "total": 479
+  },
+  {
+   "k": "Amount",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Bill to Country Code",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Bill to Territory",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Business Type",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Category Segment2",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Create By",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Created Date",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Currency",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Deliver Port",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Description",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Excluded fm Rebate",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Line Type",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Major",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Order Line",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Order No.",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Order Source Reference",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Order Type",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Price List",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Price Term",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "PRICE_WITH_TAX",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Pricing Date",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Product Line",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Qty",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Quote Rate",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Reference Line",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Request Date",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Revenue Count",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Revenue Country",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Sales Model/Cust Item",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Sales Person",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Ship To",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Ship to Country",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Ship to Country Code",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Ship to Territory",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Ship Way",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Shipment  Priority",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Shipping Method",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Tax Code",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Warehouse",
+   "with_value": 477,
+   "total": 477
+  },
+  {
+   "k": "Schedule Ship Date",
+   "with_value": 472,
+   "total": 479
+  },
+  {
+   "k": "ERD (Est Revenue Date)",
+   "with_value": 470,
+   "total": 477
+  },
+  {
+   "k": "Est POD",
+   "with_value": 470,
+   "total": 477
+  },
+  {
+   "k": "Est POD(Week)",
+   "with_value": 470,
+   "total": 477
+  },
+  {
+   "k": "Subinventory",
+   "with_value": 470,
+   "total": 477
+  },
+  {
+   "k": "Subinventory Code",
+   "with_value": 470,
+   "total": 477
+  },
+  {
+   "k": "MEDIA_REVIEW_SAMPLE",
+   "with_value": 469,
+   "total": 477
+  },
+  {
+   "k": "Customer Remark",
+   "with_value": 467,
+   "total": 477
+  },
+  {
+   "k": "CRAD",
+   "with_value": 453,
+   "total": 479
+  },
+  {
+   "k": "EAN Code",
+   "with_value": 453,
+   "total": 477
+  },
+  {
+   "k": "Sales Model Name",
+   "with_value": 453,
+   "total": 477
+  },
+  {
+   "k": "UPC Code",
+   "with_value": 453,
+   "total": 477
+  },
+  {
+   "k": "Warranty",
+   "with_value": 449,
+   "total": 479
+  },
+  {
+   "k": "Cover A",
+   "with_value": 447,
+   "total": 477
+  },
+  {
+   "k": "CSID",
+   "with_value": 447,
+   "total": 477
+  },
+  {
+   "k": "Service Term",
+   "with_value": 445,
+   "total": 477
+  },
+  {
+   "k": "PL Price",
+   "with_value": 439,
+   "total": 477
+  },
+  {
+   "k": "PO No. to EMS",
+   "with_value": 430,
+   "total": 477
+  },
+  {
+   "k": "90 Config Code",
+   "with_value": 408,
+   "total": 477
+  },
+  {
+   "k": "Customer PO",
+   "with_value": 400,
+   "total": 477
+  },
+  {
+   "k": "Promise Date",
+   "with_value": 337,
+   "total": 477
+  },
+  {
+   "k": "Delivery No",
+   "with_value": 295,
+   "total": 477
+  },
+  {
+   "k": "Pick Release Date",
+   "with_value": 277,
+   "total": 477
+  },
+  {
+   "k": "Business Group",
+   "with_value": 254,
+   "total": 254
+  },
+  {
+   "k": "Quote Exchange Price",
+   "with_value": 254,
+   "total": 254
+  },
+  {
+   "k": "Secondary",
+   "with_value": 254,
+   "total": 254
+  },
+  {
+   "k": "Ship Region",
+   "with_value": 254,
+   "total": 254
+  },
+  {
+   "k": "UOM",
+   "with_value": 254,
+   "total": 254
+  },
+  {
+   "k": "Ship Confirm Date",
+   "with_value": 251,
+   "total": 477
+  },
+  {
+   "k": "VAT NO",
+   "with_value": 248,
+   "total": 254
+  },
+  {
+   "k": "Total Net Machine Weight",
+   "with_value": 238,
+   "total": 254
+  },
+  {
+   "k": "Weight/ctn",
+   "with_value": 238,
+   "total": 254
+  },
+  {
+   "k": "Total Battery Weight",
+   "with_value": 234,
+   "total": 254
+  },
+  {
+   "k": "Exwork Date",
+   "with_value": 230,
+   "total": 477
+  },
+  {
+   "k": "AATP",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Delivery Lead Time",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Exwork Flag",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Merge DN To Trip Flag",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Merge PO Flag",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Merge SO To DN Flag",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Order Line Status",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Pcs/PLT",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Pick Release Flag",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Quote Exchange  Amt",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Remarks",
+   "with_value": 223,
+   "total": 223
+  },
+  {
+   "k": "Gross Weight/Pcs",
+   "with_value": 222,
+   "total": 223
+  },
+  {
+   "k": "Net Machine Weight/Pcs",
+   "with_value": 222,
+   "total": 223
+  },
+  {
+   "k": "Departure Port",
+   "with_value": 221,
+   "total": 223
+  },
+  {
+   "k": "ETA Date(Est Port Arrival)",
+   "with_value": 221,
+   "total": 254
+  },
+  {
+   "k": "On-Board Date",
+   "with_value": 221,
+   "total": 254
+  },
+  {
+   "k": "Total PLTs",
+   "with_value": 221,
+   "total": 223
+  },
+  {
+   "k": "Carton Code",
+   "with_value": 220,
+   "total": 223
+  },
+  {
+   "k": "CARTON_HEIGHT",
+   "with_value": 220,
+   "total": 223
+  },
+  {
+   "k": "CARTON_LENGTH",
+   "with_value": 220,
+   "total": 223
+  },
+  {
+   "k": "CARTON_QTY",
+   "with_value": 220,
+   "total": 223
+  },
+  {
+   "k": "CARTON_WIDTH",
+   "with_value": 220,
+   "total": 223
+  },
+  {
+   "k": "Delivery Leadtime",
+   "with_value": 220,
+   "total": 254
+  },
+  {
+   "k": "GW(carton in plt)",
+   "with_value": 220,
+   "total": 223
+  },
+  {
+   "k": "Pcs/Carton",
+   "with_value": 220,
+   "total": 223
+  },
+  {
+   "k": "Total Volume Weight",
+   "with_value": 220,
+   "total": 223
+  },
+  {
+   "k": "Battery Weight/Pcs",
+   "with_value": 218,
+   "total": 223
+  },
+  {
+   "k": "Loading Type",
+   "with_value": 218,
+   "total": 223
+  },
+  {
+   "k": "Pallet Type",
+   "with_value": 218,
+   "total": 223
+  },
+  {
+   "k": "9N*",
+   "with_value": 217,
+   "total": 223
+  },
+  {
+   "k": "DN Detail",
+   "with_value": 216,
+   "total": 223
+  },
+  {
+   "k": "DN Line Status",
+   "with_value": 216,
+   "total": 223
+  },
+  {
+   "k": "1 PLT Height",
+   "with_value": 215,
+   "total": 223
+  },
+  {
+   "k": "Buy Mode",
+   "with_value": 215,
+   "total": 223
+  },
+  {
+   "k": "Layer/PLT",
+   "with_value": 215,
+   "total": 223
+  },
+  {
+   "k": "Occupancy % Per Pallet",
+   "with_value": 215,
+   "total": 223
+  },
+  {
+   "k": "Pcs/Layer",
+   "with_value": 215,
+   "total": 223
+  },
+  {
+   "k": "PLT Code",
+   "with_value": 215,
+   "total": 223
+  },
+  {
+   "k": "PO Status",
+   "with_value": 215,
+   "total": 223
+  },
+  {
+   "k": "Total Layers",
+   "with_value": 215,
+   "total": 223
+  },
+  {
+   "k": "Order Hold",
+   "with_value": 193,
+   "total": 223
+  },
+  {
+   "k": "Accepted_Qty",
+   "with_value": 178,
+   "total": 254
+  },
+  {
+   "k": "AR Line No.",
+   "with_value": 178,
+   "total": 254
+  },
+  {
+   "k": "AR No.",
+   "with_value": 178,
+   "total": 254
+  },
+  {
+   "k": "Booking Rate",
+   "with_value": 178,
+   "total": 254
+  },
+  {
+   "k": "Customer Acceptance Date(HQ Server Time)",
+   "with_value": 178,
+   "total": 254
+  },
+  {
+   "k": "GL_DATE",
+   "with_value": 178,
+   "total": 254
+  },
+  {
+   "k": "Invoice Line",
+   "with_value": 178,
+   "total": 254
+  },
+  {
+   "k": "POD",
+   "with_value": 178,
+   "total": 254
+  },
+  {
+   "k": "SA Comment",
+   "with_value": 175,
+   "total": 223
+  },
+  {
+   "k": "ATA Date(Actual Port Arrival)",
+   "with_value": 162,
+   "total": 254
+  },
+  {
+   "k": "Slot Time",
+   "with_value": 155,
+   "total": 254
+  },
+  {
+   "k": "Customer Line PO",
+   "with_value": 149,
+   "total": 223
+  },
+  {
+   "k": "China DC In Date",
+   "with_value": 137,
+   "total": 477
+  },
+  {
+   "k": "China DC Out Date",
+   "with_value": 137,
+   "total": 477
+  },
+  {
+   "k": "Container Number",
+   "with_value": 125,
+   "total": 477
+  },
+  {
+   "k": "Full Container Rate",
+   "with_value": 115,
+   "total": 477
+  },
+  {
+   "k": "CBM(full pallet)",
+   "with_value": 113,
+   "total": 223
+  },
+  {
+   "k": "CBM(non-full pallet)",
+   "with_value": 113,
+   "total": 223
+  },
+  {
+   "k": "Height(full pallet)",
+   "with_value": 113,
+   "total": 223
+  },
+  {
+   "k": "Height(non-full pallet)",
+   "with_value": 113,
+   "total": 223
+  },
+  {
+   "k": "Weight(full pallet)",
+   "with_value": 113,
+   "total": 223
+  },
+  {
+   "k": "Weight(non-full pallet)",
+   "with_value": 113,
+   "total": 223
+  },
+  {
+   "k": "PI status",
+   "with_value": 111,
+   "total": 223
+  },
+  {
+   "k": "OTW AGING",
+   "with_value": 73,
+   "total": 254
+  },
+  {
+   "k": "Old Promise date",
+   "with_value": 71,
+   "total": 223
+  },
+  {
+   "k": "NL FWD Central DC",
+   "with_value": 56,
+   "total": 254
+  },
+  {
+   "k": "DN Status",
+   "with_value": 41,
+   "total": 223
+  },
+  {
+   "k": "MPOR Item No.",
+   "with_value": 29,
+   "total": 477
+  },
+  {
+   "k": "MPOR No.",
+   "with_value": 29,
+   "total": 477
+  },
+  {
+   "k": "RET No",
+   "with_value": 28,
+   "total": 477
+  },
+  {
+   "k": "ODD Type",
+   "with_value": 23,
+   "total": 254
+  },
+  {
+   "k": "HUB Remark",
+   "with_value": 18,
+   "total": 477
+  },
+  {
+   "k": "Arranged ETD/ETA Durban",
+   "with_value": 9,
+   "total": 223
+  },
+  {
+   "k": "CBM (carton)",
+   "with_value": 5,
+   "total": 223
+  },
+  {
+   "k": "Gross Weight (carton)",
+   "with_value": 5,
+   "total": 223
+  },
+  {
+   "k": "Plan ETD/ETA Durban",
+   "with_value": 5,
+   "total": 223
+  },
+  {
+   "k": "9N",
+   "with_value": 2,
+   "total": 2
+  },
+  {
+   "k": "Channel",
+   "with_value": 2,
+   "total": 2
+  },
+  {
+   "k": "Model Name",
+   "with_value": 2,
+   "total": 2
+  },
+  {
+   "k": "PO",
+   "with_value": 2,
+   "total": 2
+  },
+  {
+   "k": "QTY",
+   "with_value": 2,
+   "total": 2
+  },
+  {
+   "k": "RET/AUT/QUOTE",
+   "with_value": 2,
+   "total": 2
+  },
+  {
+   "k": "Shipway",
+   "with_value": 2,
+   "total": 2
+  },
+  {
+   "k": "Contact & Tel",
+   "with_value": 1,
+   "total": 477
+  },
+  {
+   "k": "One time address",
+   "with_value": 1,
+   "total": 477
+  },
+  {
+   "k": "Qty reserved",
+   "with_value": 1,
+   "total": 477
+  },
+  {
+   "k": "Reserve_Date",
+   "with_value": 1,
+   "total": 223
+  },
+  {
+   "k": "Business Category",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "Comment",
+   "with_value": 0,
+   "total": 2
+  },
+  {
+   "k": "Country FWD DC",
+   "with_value": 0,
+   "total": 254
+  },
+  {
+   "k": "Customer Item",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "Customer Item (Material)",
+   "with_value": 0,
+   "total": 254
+  },
+  {
+   "k": "EMS Remark",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "Go Production Flag",
+   "with_value": 0,
+   "total": 223
+  },
+  {
+   "k": "GOC For ISO",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "GUI",
+   "with_value": 0,
+   "total": 254
+  },
+  {
+   "k": "HS CODE",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "IR Number",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "ITF14 Label",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "MRKT Sponsor",
+   "with_value": 0,
+   "total": 254
+  },
+  {
+   "k": "MRKT Sponsor Territory",
+   "with_value": 0,
+   "total": 254
+  },
+  {
+   "k": "Real BU",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "Reject/Resell Original DN Number",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "Reject/Resell Original EXW Date",
+   "with_value": 0,
+   "total": 254
+  },
+  {
+   "k": "Reject/Resell Original SO Number",
+   "with_value": 0,
+   "total": 223
+  },
+  {
+   "k": "Reject/Resell Original SO Number Line",
+   "with_value": 0,
+   "total": 223
+  },
+  {
+   "k": "Retailer",
+   "with_value": 0,
+   "total": 477
+  },
+  {
+   "k": "Send EDI850",
+   "with_value": 0,
+   "total": 223
+  },
+  {
+   "k": "Service Country",
+   "with_value": 0,
+   "total": 254
+  },
+  {
+   "k": "Shipping Mark",
+   "with_value": 0,
+   "total": 223
+  },
+  {
+   "k": "Slow Moving",
+   "with_value": 0,
+   "total": 223
+  },
+  {
+   "k": "SO#",
+   "with_value": 0,
+   "total": 2
+  },
+  {
+   "k": "VS MB Item",
+   "with_value": 0,
+   "total": 223
+  },
+  {
+   "k": "WIP_JOB_NO",
+   "with_value": 0,
+   "total": 477
+  }
+ ],
+ "raw_keys_resolved_sample_counts": [
+  {
+   "k": "Amount",
+   "with_value": 1500
+  },
+  {
+   "k": "Bill To",
+   "with_value": 1500
+  },
+  {
+   "k": "Bill to Country Code",
+   "with_value": 1500
+  },
+  {
+   "k": "Bill to Territory",
+   "with_value": 1500
+  },
+  {
+   "k": "Business Type",
+   "with_value": 1500
+  },
+  {
+   "k": "Category Segment2",
+   "with_value": 1500
+  },
+  {
+   "k": "Create By",
+   "with_value": 1500
+  },
+  {
+   "k": "Created Date",
+   "with_value": 1500
+  },
+  {
+   "k": "Currency",
+   "with_value": 1500
+  },
+  {
+   "k": "Customer Remark",
+   "with_value": 1500
+  },
+  {
+   "k": "Deliver Port",
+   "with_value": 1500
+  },
+  {
+   "k": "Description",
+   "with_value": 1500
+  },
+  {
+   "k": "EAN Code",
+   "with_value": 1500
+  },
+  {
+   "k": "Excluded fm Rebate",
+   "with_value": 1500
+  },
+  {
+   "k": "Item",
+   "with_value": 1500
+  },
+  {
+   "k": "Line Type",
+   "with_value": 1500
+  },
+  {
+   "k": "Major",
+   "with_value": 1500
+  },
+  {
+   "k": "Order Line",
+   "with_value": 1500
+  },
+  {
+   "k": "Order No.",
+   "with_value": 1500
+  },
+  {
+   "k": "Order Source Reference",
+   "with_value": 1500
+  },
+  {
+   "k": "Order Type",
+   "with_value": 1500
+  },
+  {
+   "k": "Payment Term",
+   "with_value": 1500
+  },
+  {
+   "k": "Price List",
+   "with_value": 1500
+  },
+  {
+   "k": "Price Term",
+   "with_value": 1500
+  },
+  {
+   "k": "PRICE_WITH_TAX",
+   "with_value": 1500
+  },
+  {
+   "k": "Pricing Date",
+   "with_value": 1500
+  },
+  {
+   "k": "Product Line",
+   "with_value": 1500
+  },
+  {
+   "k": "Qty",
+   "with_value": 1500
+  },
+  {
+   "k": "Quote Rate",
+   "with_value": 1500
+  },
+  {
+   "k": "Reference Line",
+   "with_value": 1500
+  },
+  {
+   "k": "Request Date",
+   "with_value": 1500
+  },
+  {
+   "k": "Revenue Count",
+   "with_value": 1500
+  },
+  {
+   "k": "Revenue Country",
+   "with_value": 1500
+  },
+  {
+   "k": "Sales Model Name",
+   "with_value": 1500
+  },
+  {
+   "k": "Sales Model/Cust Item",
+   "with_value": 1500
+  },
+  {
+   "k": "Sales Person",
+   "with_value": 1500
+  },
+  {
+   "k": "Ship To",
+   "with_value": 1500
+  },
+  {
+   "k": "Ship to Country",
+   "with_value": 1500
+  },
+  {
+   "k": "Ship to Country Code",
+   "with_value": 1500
+  },
+  {
+   "k": "Ship to Territory",
+   "with_value": 1500
+  },
+  {
+   "k": "Ship Way",
+   "with_value": 1500
+  },
+  {
+   "k": "Shipment  Priority",
+   "with_value": 1500
+  },
+  {
+   "k": "Shipping Method",
+   "with_value": 1500
+  },
+  {
+   "k": "shipway",
+   "with_value": 1500
+  },
+  {
+   "k": "Tax Code",
+   "with_value": 1500
+  },
+  {
+   "k": "Unit Price",
+   "with_value": 1500
+  },
+  {
+   "k": "UPC Code",
+   "with_value": 1500
+  },
+  {
+   "k": "Warehouse",
+   "with_value": 1500
+  },
+  {
+   "k": "CRAD",
+   "with_value": 1496
+  },
+  {
+   "k": "90 Config Code",
+   "with_value": 1493
+  },
+  {
+   "k": "PL Price",
+   "with_value": 1491
+  },
+  {
+   "k": "Cover A",
+   "with_value": 1484
+  },
+  {
+   "k": "CSID",
+   "with_value": 1484
+  },
+  {
+   "k": "Est POD",
+   "with_value": 1484
+  },
+  {
+   "k": "Est POD(Week)",
+   "with_value": 1484
+  },
+  {
+   "k": "Schedule Ship Date",
+   "with_value": 1484
+  },
+  {
+   "k": "Service Term",
+   "with_value": 1484
+  },
+  {
+   "k": "Subinventory",
+   "with_value": 1484
+  },
+  {
+   "k": "Subinventory Code",
+   "with_value": 1484
+  },
+  {
+   "k": "Warranty",
+   "with_value": 1484
+  },
+  {
+   "k": "ERD (Est Revenue Date)",
+   "with_value": 1483
+  },
+  {
+   "k": "PO No. to EMS",
+   "with_value": 1458
+  },
+  {
+   "k": "Promise Date",
+   "with_value": 1438
+  },
+  {
+   "k": "Customer PO",
+   "with_value": 1242
+  },
+  {
+   "k": "Delivery No",
+   "with_value": 1084
+  },
+  {
+   "k": "Pick Release Date",
+   "with_value": 1048
+  },
+  {
+   "k": "Accepted_Qty",
+   "with_value": 1001
+  },
+  {
+   "k": "AR Line No.",
+   "with_value": 1001
+  },
+  {
+   "k": "AR No.",
+   "with_value": 1001
+  },
+  {
+   "k": "Booking Rate",
+   "with_value": 1001
+  },
+  {
+   "k": "Business Group",
+   "with_value": 1001
+  },
+  {
+   "k": "Customer Acceptance Date(HQ Server Time)",
+   "with_value": 1001
+  },
+  {
+   "k": "Exwork Date",
+   "with_value": 1001
+  },
+  {
+   "k": "GL_DATE",
+   "with_value": 1001
+  },
+  {
+   "k": "Invoice Line",
+   "with_value": 1001
+  },
+  {
+   "k": "POD",
+   "with_value": 1001
+  },
+  {
+   "k": "Quote Exchange Price",
+   "with_value": 1001
+  },
+  {
+   "k": "Secondary",
+   "with_value": 1001
+  },
+  {
+   "k": "Ship Confirm Date",
+   "with_value": 1001
+  },
+  {
+   "k": "Ship Region",
+   "with_value": 1001
+  },
+  {
+   "k": "Total Battery Weight",
+   "with_value": 1001
+  },
+  {
+   "k": "Total Net Machine Weight",
+   "with_value": 1001
+  },
+  {
+   "k": "UOM",
+   "with_value": 1001
+  },
+  {
+   "k": "VAT NO",
+   "with_value": 1001
+  },
+  {
+   "k": "Weight/ctn",
+   "with_value": 1001
+  },
+  {
+   "k": "ATA Date(Actual Port Arrival)",
+   "with_value": 980
+  },
+  {
+   "k": "ETA Date(Est Port Arrival)",
+   "with_value": 980
+  },
+  {
+   "k": "On-Board Date",
+   "with_value": 980
+  },
+  {
+   "k": "Slot Time",
+   "with_value": 980
+  },
+  {
+   "k": "Delivery Leadtime",
+   "with_value": 828
+  },
+  {
+   "k": "China DC In Date",
+   "with_value": 681
+  },
+  {
+   "k": "China DC Out Date",
+   "with_value": 681
+  },
+  {
+   "k": "NL FWD Central DC",
+   "with_value": 580
+  },
+  {
+   "k": "MEDIA_REVIEW_SAMPLE",
+   "with_value": 573
+  },
+  {
+   "k": "9N*",
+   "with_value": 499
+  },
+  {
+   "k": "AATP",
+   "with_value": 499
+  },
+  {
+   "k": "Delivery Lead Time",
+   "with_value": 499
+  },
+  {
+   "k": "Exwork Flag",
+   "with_value": 499
+  },
+  {
+   "k": "Gross Weight/Pcs",
+   "with_value": 499
+  },
+  {
+   "k": "Net Machine Weight/Pcs",
+   "with_value": 499
+  },
+  {
+   "k": "Order Line Status",
+   "with_value": 499
+  },
+  {
+   "k": "Pcs/PLT",
+   "with_value": 499
+  },
+  {
+   "k": "Pick Release Flag",
+   "with_value": 499
+  },
+  {
+   "k": "Quote Exchange  Amt",
+   "with_value": 499
+  },
+  {
+   "k": "Remarks",
+   "with_value": 499
+  },
+  {
+   "k": "Loading Type",
+   "with_value": 498
+  },
+  {
+   "k": "Merge DN To Trip Flag",
+   "with_value": 498
+  },
+  {
+   "k": "Merge PO Flag",
+   "with_value": 498
+  },
+  {
+   "k": "Merge SO To DN Flag",
+   "with_value": 498
+  },
+  {
+   "k": "Pallet Type",
+   "with_value": 498
+  },
+  {
+   "k": "Battery Weight/Pcs",
+   "with_value": 496
+  },
+  {
+   "k": "Carton Code",
+   "with_value": 495
+  },
+  {
+   "k": "CARTON_HEIGHT",
+   "with_value": 495
+  },
+  {
+   "k": "CARTON_LENGTH",
+   "with_value": 495
+  },
+  {
+   "k": "CARTON_QTY",
+   "with_value": 495
+  },
+  {
+   "k": "CARTON_WIDTH",
+   "with_value": 495
+  },
+  {
+   "k": "GW(carton in plt)",
+   "with_value": 495
+  },
+  {
+   "k": "Pcs/Carton",
+   "with_value": 495
+  },
+  {
+   "k": "Total PLTs",
+   "with_value": 495
+  },
+  {
+   "k": "Total Volume Weight",
+   "with_value": 495
+  },
+  {
+   "k": "1 PLT Height",
+   "with_value": 494
+  },
+  {
+   "k": "Layer/PLT",
+   "with_value": 494
+  },
+  {
+   "k": "Occupancy % Per Pallet",
+   "with_value": 494
+  },
+  {
+   "k": "Pcs/Layer",
+   "with_value": 494
+  },
+  {
+   "k": "PLT Code",
+   "with_value": 494
+  },
+  {
+   "k": "Total Layers",
+   "with_value": 494
+  },
+  {
+   "k": "Departure Port",
+   "with_value": 492
+  },
+  {
+   "k": "SA Comment",
+   "with_value": 487
+  },
+  {
+   "k": "Buy Mode",
+   "with_value": 483
+  },
+  {
+   "k": "DN Detail",
+   "with_value": 482
+  },
+  {
+   "k": "DN Line Status",
+   "with_value": 482
+  },
+  {
+   "k": "PO Status",
+   "with_value": 482
+  },
+  {
+   "k": "Container Number",
+   "with_value": 447
+  },
+  {
+   "k": "Order Hold",
+   "with_value": 435
+  },
+  {
+   "k": "Full Container Rate",
+   "with_value": 427
+  },
+  {
+   "k": "CBM(non-full pallet)",
+   "with_value": 275
+  },
+  {
+   "k": "Height(non-full pallet)",
+   "with_value": 275
+  },
+  {
+   "k": "Weight(non-full pallet)",
+   "with_value": 275
+  },
+  {
+   "k": "Old Promise date",
+   "with_value": 261
+  },
+  {
+   "k": "Customer Line PO",
+   "with_value": 241
+  },
+  {
+   "k": "CBM(full pallet)",
+   "with_value": 231
+  },
+  {
+   "k": "Height(full pallet)",
+   "with_value": 231
+  },
+  {
+   "k": "Weight(full pallet)",
+   "with_value": 231
+  },
+  {
+   "k": "PI status",
+   "with_value": 180
+  },
+  {
+   "k": "RET No",
+   "with_value": 96
+  },
+  {
+   "k": "ODD Type",
+   "with_value": 86
+  },
+  {
+   "k": "DN Status",
+   "with_value": 83
+  },
+  {
+   "k": "HUB Remark",
+   "with_value": 50
+  },
+  {
+   "k": "Arranged ETD/ETA Durban",
+   "with_value": 13
+  },
+  {
+   "k": "Plan ETD/ETA Durban",
+   "with_value": 13
+  },
+  {
+   "k": "MPOR Item No.",
+   "with_value": 2
+  },
+  {
+   "k": "MPOR No.",
+   "with_value": 2
+  },
+  {
+   "k": "CBM (carton)",
+   "with_value": 1
+  },
+  {
+   "k": "Gross Weight (carton)",
+   "with_value": 1
+  },
+  {
+   "k": "Business Category",
+   "with_value": 0
+  },
+  {
+   "k": "Contact & Tel",
+   "with_value": 0
+  },
+  {
+   "k": "Country FWD DC",
+   "with_value": 0
+  },
+  {
+   "k": "Customer Item",
+   "with_value": 0
+  },
+  {
+   "k": "Customer Item (Material)",
+   "with_value": 0
+  },
+  {
+   "k": "EMS Remark",
+   "with_value": 0
+  },
+  {
+   "k": "Go Production Flag",
+   "with_value": 0
+  },
+  {
+   "k": "GOC For ISO",
+   "with_value": 0
+  },
+  {
+   "k": "GUI",
+   "with_value": 0
+  },
+  {
+   "k": "HS CODE",
+   "with_value": 0
+  },
+  {
+   "k": "IR Number",
+   "with_value": 0
+  },
+  {
+   "k": "ITF14 Label",
+   "with_value": 0
+  },
+  {
+   "k": "MRKT Sponsor",
+   "with_value": 0
+  },
+  {
+   "k": "MRKT Sponsor Territory",
+   "with_value": 0
+  },
+  {
+   "k": "One time address",
+   "with_value": 0
+  },
+  {
+   "k": "OTW AGING",
+   "with_value": 0
+  },
+  {
+   "k": "Qty reserved",
+   "with_value": 0
+  },
+  {
+   "k": "Real BU",
+   "with_value": 0
+  },
+  {
+   "k": "Reject/Resell Original DN Number",
+   "with_value": 0
+  },
+  {
+   "k": "Reject/Resell Original EXW Date",
+   "with_value": 0
+  },
+  {
+   "k": "Reject/Resell Original SO Number",
+   "with_value": 0
+  },
+  {
+   "k": "Reject/Resell Original SO Number Line",
+   "with_value": 0
+  },
+  {
+   "k": "Reserve_Date",
+   "with_value": 0
+  },
+  {
+   "k": "Retailer",
+   "with_value": 0
+  },
+  {
+   "k": "Send EDI850",
+   "with_value": 0
+  },
+  {
+   "k": "Service Country",
+   "with_value": 0
+  },
+  {
+   "k": "Shipping Mark",
+   "with_value": 0
+  },
+  {
+   "k": "Slow Moving",
+   "with_value": 0
+  },
+  {
+   "k": "VS MB Item",
+   "with_value": 0
+  },
+  {
+   "k": "WIP_JOB_NO",
+   "with_value": 0
+  }
+ ],
+ "master_name_or_specs_contains_token": [
+  {
+   "n": 0
+  }
+ ],
+ "master_specs_contains_ean": [
+  {
+   "n": 0
+  }
+ ],
+ "catalog_product_text_contains_token": [
+  {
+   "n": 0
+  }
+ ],
+ "shape": [
+  {
+   "len_item": 15,
+   "asus_like_item_shape": true,
+   "ean13": true,
+   "upc12": true,
+   "lines": 453
+  },
+  {
+   "len_item": 14,
+   "asus_like_item_shape": false,
+   "ean13": null,
+   "upc12": null,
+   "lines": 23
+  },
+  {
+   "len_item": 15,
+   "asus_like_item_shape": true,
+   "ean13": null,
+   "upc12": null,
+   "lines": 3
+  }
+ ],
+ "master_shape": [
+  {
+   "same_shape": false,
+   "n": 291
+  },
+  {
+   "same_shape": true,
+   "n": 17866
+  }
+ ]
+}

@@ -1,0 +1,314 @@
+{
+ "cols_import_job": [
+  "id",
+  "source_id",
+  "template_slug",
+  "import_mode",
+  "status",
+  "stage",
+  "file_name",
+  "content_type",
+  "inferred_schema",
+  "field_mapping",
+  "file_headers",
+  "mapping_decisions",
+  "staged_metadata",
+  "validation_passed",
+  "error_summary",
+  "pm_commit_meta",
+  "started_at",
+  "completed_at",
+  "archived_at",
+  "created_at",
+  "updated_at",
+  "tenant_id"
+ ],
+ "cand_by_entity_status": [
+  {
+   "entity_type": "cst_location_token",
+   "status": "ignored",
+   "n": 725,
+   "jobs": 14
+  },
+  {
+   "entity_type": "cst_location_token",
+   "status": "needs_review",
+   "n": 1119,
+   "jobs": 17
+  },
+  {
+   "entity_type": "cst_product_token",
+   "status": "ignored",
+   "n": 684,
+   "jobs": 44
+  },
+  {
+   "entity_type": "cst_product_token",
+   "status": "needs_review",
+   "n": 531,
+   "jobs": 38
+  },
+  {
+   "entity_type": "cst_product_token",
+   "status": "resolved",
+   "n": 11,
+   "jobs": 4
+  },
+  {
+   "entity_type": "customer_dealer_token",
+   "status": "ignored",
+   "n": 19,
+   "jobs": 1
+  },
+  {
+   "entity_type": "customer_dealer_token",
+   "status": "needs_review",
+   "n": 410,
+   "jobs": 3
+  },
+  {
+   "entity_type": "product_identifier",
+   "status": "ignored",
+   "n": 613,
+   "jobs": 2
+  },
+  {
+   "entity_type": "product_identifier",
+   "status": "needs_review",
+   "n": 989,
+   "jobs": 4
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "status": "ignored",
+   "n": 8,
+   "jobs": 2
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "status": "needs_review",
+   "n": 163,
+   "jobs": 6
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "status": "resolved",
+   "n": 1539,
+   "jobs": 14
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "status": "steward_rejected",
+   "n": 7,
+   "jobs": 2
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "status": "needs_review",
+   "n": 52,
+   "jobs": 2
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "status": "resolved",
+   "n": 55,
+   "jobs": 5
+  }
+ ],
+ "cand_needs_review_by_entity_jobstatus": [
+  {
+   "entity_type": "cst_location_token",
+   "job_status": "completed",
+   "job_stage": "loaded",
+   "archived": false,
+   "n": 329,
+   "jobs": 8
+  },
+  {
+   "entity_type": "cst_location_token",
+   "job_status": "completed",
+   "job_stage": "validated",
+   "archived": true,
+   "n": 790,
+   "jobs": 9
+  },
+  {
+   "entity_type": "cst_product_token",
+   "job_status": "completed",
+   "job_stage": "loaded",
+   "archived": false,
+   "n": 143,
+   "jobs": 18
+  },
+  {
+   "entity_type": "cst_product_token",
+   "job_status": "completed",
+   "job_stage": "validated",
+   "archived": true,
+   "n": 388,
+   "jobs": 20
+  },
+  {
+   "entity_type": "customer_dealer_token",
+   "job_status": "completed",
+   "job_stage": "loaded",
+   "archived": false,
+   "n": 1,
+   "jobs": 1
+  },
+  {
+   "entity_type": "customer_dealer_token",
+   "job_status": "completed_with_errors",
+   "job_stage": "validated",
+   "archived": false,
+   "n": 409,
+   "jobs": 2
+  },
+  {
+   "entity_type": "product_identifier",
+   "job_status": "completed",
+   "job_stage": "loaded",
+   "archived": false,
+   "n": 534,
+   "jobs": 1
+  },
+  {
+   "entity_type": "product_identifier",
+   "job_status": "completed_with_errors",
+   "job_stage": "validated",
+   "archived": false,
+   "n": 455,
+   "jobs": 3
+  },
+  {
+   "entity_type": "shipment_customer_token",
+   "job_status": "completed",
+   "job_stage": "loaded",
+   "archived": false,
+   "n": 163,
+   "jobs": 6
+  },
+  {
+   "entity_type": "shipment_distributor",
+   "job_status": "completed",
+   "job_stage": "loaded",
+   "archived": false,
+   "n": 52,
+   "jobs": 2
+  }
+ ],
+ "tables_with_status_needs_review_candidates": [
+  {
+   "table_name": "budget_justification_summary",
+   "column_name": "status"
+  },
+  {
+   "table_name": "buy_recommendation",
+   "column_name": "status"
+  },
+  {
+   "table_name": "channel_source_token_alias",
+   "column_name": "status"
+  },
+  {
+   "table_name": "commercial_plan",
+   "column_name": "status"
+  },
+  {
+   "table_name": "competitive_positioning",
+   "column_name": "status"
+  },
+  {
+   "table_name": "cpor_case",
+   "column_name": "status"
+  },
+  {
+   "table_name": "cst_listing_seed",
+   "column_name": "status"
+  },
+  {
+   "table_name": "customer_article_alias",
+   "column_name": "status"
+  },
+  {
+   "table_name": "customer_cst_report_slot",
+   "column_name": "status"
+  },
+  {
+   "table_name": "customer_listing",
+   "column_name": "status"
+  },
+  {
+   "table_name": "customer_source_token_alias",
+   "column_name": "status"
+  },
+  {
+   "table_name": "customer_stock_position",
+   "column_name": "status"
+  },
+  {
+   "table_name": "distributor_source_token_alias",
+   "column_name": "status"
+  },
+  {
+   "table_name": "entity_mapping_queue",
+   "column_name": "status"
+  },
+  {
+   "table_name": "exception_inbox_item",
+   "column_name": "status"
+  },
+  {
+   "table_name": "fact_budget_request",
+   "column_name": "status"
+  },
+  {
+   "table_name": "fact_inbound_shipment",
+   "column_name": "status"
+  },
+  {
+   "table_name": "import_customer_sellthrough_staging_line",
+   "column_name": "resolution_status"
+  },
+  {
+   "table_name": "import_distributor_si_staging_line",
+   "column_name": "resolution_status"
+  },
+  {
+   "table_name": "import_entity_mapping_candidate",
+   "column_name": "status"
+  },
+  {
+   "table_name": "import_job",
+   "column_name": "status"
+  },
+  {
+   "table_name": "lineup_gap_analysis",
+   "column_name": "status"
+  },
+  {
+   "table_name": "purchase_order",
+   "column_name": "status"
+  },
+  {
+   "table_name": "region_source_token_alias",
+   "column_name": "status"
+  },
+  {
+   "table_name": "report_delivery",
+   "column_name": "status"
+  },
+  {
+   "table_name": "roadmap_recommendation",
+   "column_name": "status"
+  },
+  {
+   "table_name": "sql_viewer_audit",
+   "column_name": "status"
+  },
+  {
+   "table_name": "stock_risk",
+   "column_name": "status"
+  }
+ ]
+}

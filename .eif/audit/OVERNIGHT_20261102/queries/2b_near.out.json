@@ -1,0 +1,2773 @@
+{
+ "family_depth_summary": {
+  "model_base_and_sku_prefix": {
+   "items": 85,
+   "lines": 305,
+   "units": 29351.0
+  },
+  "sku_prefix_only": {
+   "items": 17,
+   "lines": 51,
+   "units": 5716.0
+  },
+  "none": {
+   "items": 43,
+   "lines": 107,
+   "units": 5257.0
+  },
+  "model_base_only": {
+   "items": 6,
+   "lines": 16,
+   "units": 371.0
+  }
+ },
+ "nearness_summary": {
+  "edit_distance_le_2_on_sales_model_or_sku": {
+   "items": 101,
+   "lines": 364,
+   "units": 34427.0
+  },
+  "edit_distance_3_or_more_or_no_sibling": {
+   "items": 50,
+   "lines": 115,
+   "units": 6268.0
+  }
+ },
+ "items": [
+  {
+   "item_code": "90NX0801-M09DK0",
+   "sales_model_name": "B1502CVA-NJ3464W__",
+   "lines": 6,
+   "units": 7000.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 163,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    4,
+    "B1502CVA-NJ3264X",
+    "90NX06X1-M04130"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M09AK0",
+    "B1503CVA-C316512G0X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB1A01-M005S0",
+   "sales_model_name": "X1652DA-382S0W",
+   "lines": 58,
+   "units": 5440.0,
+   "n_distributors": 3,
+   "masters_same_model_base": 3,
+   "masters_same_sku_prefix": 3,
+   "nearest_by_sales_model": [
+    1,
+    "X1652DA-582S0W",
+    "90NB1A01-M000L0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB1A01-M00090",
+    "M1652DA-MB007W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB13Y1-M03TL0",
+   "sales_model_name": "X1504VAP-I382BL0W",
+   "lines": 40,
+   "units": 3456.0,
+   "n_distributors": 3,
+   "masters_same_model_base": 82,
+   "masters_same_sku_prefix": 54,
+   "nearest_by_sales_model": [
+    2,
+    "X1504VAP-I38512BL0W",
+    "90NB13Y1-M02520"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NB13Y1-M035L0",
+    "X1504VA-BQ5482W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X6-M0CT10",
+   "sales_model_name": "P440VA-BPD051X",
+   "lines": 9,
+   "units": 2032.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 274,
+   "masters_same_sku_prefix": 93,
+   "nearest_by_sales_model": [
+    1,
+    "P440VA-BPD031X",
+    "90PT03X5-M0C0C0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PT03X6-M01E10",
+    "P440VAK-BPC249X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB17I1-M028Z0",
+   "sales_model_name": "X1504MA-I582BL2W",
+   "lines": 17,
+   "units": 1692.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 25,
+   "masters_same_sku_prefix": 17,
+   "nearest_by_sales_model": [
+    2,
+    "X1504MA-I382BL0W",
+    "90NB17I1-M00W30"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90NB17I1-M00T90",
+    "X1504MA-I716512BL0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M03ST0",
+   "sales_model_name": "P1503CVAY-C716512G0W",
+   "lines": 8,
+   "units": 1392.0,
+   "n_distributors": 3,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    1,
+    "90NX0881-M031T0",
+    "P1503CVA-C38512G0W"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M04290",
+   "sales_model_name": "P1503CVAY-C516512G0W",
+   "lines": 7,
+   "units": 1254.0,
+   "n_distributors": 3,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M02890",
+    "P1503CVA-S71996W"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0460-P00030",
+   "sales_model_name": "SIMPRO DOCK2",
+   "lines": 4,
+   "units": 1120.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB1AT1-M008R0",
+   "sales_model_name": "M1502UA-516512BL0W",
+   "lines": 15,
+   "units": 1080.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB17I1-M02910",
+   "sales_model_name": "X1504MA-I582BL1W",
+   "lines": 14,
+   "units": 1080.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 25,
+   "masters_same_sku_prefix": 17,
+   "nearest_by_sales_model": [
+    2,
+    "X1504MA-I382BL0W",
+    "90NB17I1-M00W30"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB17I1-M01U10",
+    "X1504MA-I516512BL1W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X5-M0D1R0",
+   "sales_model_name": "P440VA-BPC397X",
+   "lines": 2,
+   "units": 825.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 274,
+   "masters_same_sku_prefix": 150,
+   "nearest_by_sales_model": [
+    2,
+    "P440VAT-BPD397X",
+    "90PT03X6-M08LS0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PT03X5-M0BKR0",
+    "P440VA-BPD017X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NR0N06-M01000",
+   "sales_model_name": "FX607VUA-I716512G0W",
+   "lines": 14,
+   "units": 816.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 14,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NR0N06-M00V00",
+    "FX607VU-TU315W"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NV00D0-P00030",
+   "sales_model_name": "ROG XBOX ALLY TRAVEL CASE",
+   "lines": 28,
+   "units": 660.0,
+   "n_distributors": 5,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB1A01-M005T0",
+   "sales_model_name": "X1652DA-516512S0W",
+   "lines": 6,
+   "units": 612.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 3,
+   "masters_same_sku_prefix": 3,
+   "nearest_by_sales_model": [
+    4,
+    "X1652DA-582S0W",
+    "90NB1A01-M000L0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB1A01-M00090",
+    "M1652DA-MB007W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0871-M02MY0",
+   "sales_model_name": "P1403CVAY-C58512G0W",
+   "lines": 3,
+   "units": 588.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 7,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0871-M02FX0",
+    "P1403CVA-S62160"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X6-M0D1S0",
+   "sales_model_name": "P440VA-BPD064X",
+   "lines": 1,
+   "units": 500.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 274,
+   "masters_same_sku_prefix": 93,
+   "nearest_by_sales_model": [
+    2,
+    "P440VAT-BPD069X",
+    "90PT03X6-M01YK0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PT03X6-M061T0",
+    "P440VAK-BPCC30X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90XB0B4N-MPW000",
+   "sales_model_name": "AC68-01(AD10820)/EU",
+   "lines": 3,
+   "units": 474.0,
+   "n_distributors": 3,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0881-M04F70",
+   "sales_model_name": "P1503CVAY-C516512GMU0W",
+   "lines": 3,
+   "units": 456.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M01FM0",
+    "P1503CVA-S71350X"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0AM2-M00N10",
+   "sales_model_name": "P3406CCA-U516512G0W",
+   "lines": 2,
+   "units": 400.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 12,
+   "masters_same_sku_prefix": 5,
+   "nearest_by_sales_model": [
+    1,
+    "P3406CCAP-U516512G0W",
+    "90NX0AM1-M00610"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0AM2-M00410",
+    "P3406CCA-LY0114W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB0TY1-M04BH0",
+   "sales_model_name": "P1511CEA-I382G2X",
+   "lines": 3,
+   "units": 360.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 47,
+   "masters_same_sku_prefix": 214,
+   "nearest_by_sales_model": [
+    1,
+    "P1511CEA-I382G0X",
+    "90NB0TY1-M03M50"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NB0TY1-M04AH0",
+    "X515EA-I38256G2W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M03V30",
+   "sales_model_name": "P1503CVAY-C38512G0W",
+   "lines": 3,
+   "units": 342.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    1,
+    "90NX0881-M03H30",
+    "P1503CVA-S73031"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M0B3B0",
+   "sales_model_name": "B1503CVA-C516512BMU1X",
+   "lines": 6,
+   "units": 341.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-C516512BMUX",
+    "90NX0801-M08VP0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M0A3B0",
+    "B1503CVA-S78804X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M0B4S0",
+   "sales_model_name": "B1503CVA-C516512BMU1W",
+   "lines": 4,
+   "units": 304.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    2,
+    "B1503CVA-C516512BMUX",
+    "90NX0801-M08VP0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX0801-M03410",
+    "B1503CVA-I71610B2X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX08F1-M01520",
+   "sales_model_name": "B5605CCA-PL1009X",
+   "lines": 1,
+   "units": 300.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 14,
+   "masters_same_sku_prefix": 14,
+   "nearest_by_sales_model": [
+    4,
+    "B5605CCA-PL0817X",
+    "90NX08F1-M00XU0"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90NX08F1-M00JA0",
+    "B5605CCA-U53210G1X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NR0MC1-M00E50",
+   "sales_model_name": "FA608PM-91610G1W",
+   "lines": 11,
+   "units": 252.0,
+   "n_distributors": 4,
+   "masters_same_model_base": 2,
+   "masters_same_sku_prefix": 2,
+   "nearest_by_sales_model": [
+    1,
+    "FA608PM-91610G0W",
+    "90NR0MC1-M00300"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NR0MC1-M00300",
+    "FA608PM-91610G0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF05N1-M04RJ0",
+   "sales_model_name": "D701SER-5144001510",
+   "lines": 1,
+   "units": 235.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 4,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    5,
+    "D701SER-514500435X",
+    "90PF05N1-M02750"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90PF05N1-M02750",
+    "D701SER-514500435X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0871-M030Z0",
+   "sales_model_name": "P1403CVAY-C516512G0W",
+   "lines": 2,
+   "units": 228.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 7,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    3,
+    "90NX0871-M01ZS0",
+    "P1403CVA-S61746X"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0801-M03440",
+   "sales_model_name": "B1503CVA-I58512BMUX",
+   "lines": 3,
+   "units": 228.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-I58512GMUX",
+    "90NX0801-M05XF0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M03410",
+    "B1503CVA-I71610B2X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB17I1-M021B0",
+   "sales_model_name": "X1504MA-I58512BL6W",
+   "lines": 2,
+   "units": 216.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 25,
+   "masters_same_sku_prefix": 17,
+   "nearest_by_sales_model": [
+    1,
+    "X1504MA-I58512BL0W",
+    "90NB17I1-M012H0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB17I1-M00TB0",
+    "X1504MA-I316512BL0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB17I1-M01YJ0",
+   "sales_model_name": "X1504MA-I582BL0W",
+   "lines": 2,
+   "units": 216.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 25,
+   "masters_same_sku_prefix": 17,
+   "nearest_by_sales_model": [
+    1,
+    "X1504MA-I382BL0W",
+    "90NB17I1-M00W30"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB17I1-M012H0",
+    "X1504MA-I58512BL0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX08N1-M03CC0",
+   "sales_model_name": "B3605CCA-MB2915X",
+   "lines": 2,
+   "units": 200.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 138,
+   "masters_same_sku_prefix": 138,
+   "nearest_by_sales_model": [
+    2,
+    "B3605CCA-MB2291X",
+    "90NX08N1-M02MD0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX08N1-M033C0",
+    "B3605CCA-MB2674X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M049L0",
+   "sales_model_name": "P1503CVAY-C38512G0X",
+   "lines": 2,
+   "units": 190.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M009F0",
+    "P1503CVA-I58512B0W"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB1992-M00HR0",
+   "sales_model_name": "S5452MA-I716512S0W",
+   "lines": 7,
+   "units": 183.0,
+   "n_distributors": 3,
+   "masters_same_model_base": 3,
+   "masters_same_sku_prefix": 3,
+   "nearest_by_sales_model": [
+    4,
+    "S5452MA-TM024W",
+    "90NB1992-M00230"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB1992-M00230",
+    "S5452MA-TM024W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90LC0011-B03371",
+   "sales_model_name": "C1241HG2",
+   "lines": 2,
+   "units": 160.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90PF06A1-M00CV0",
+   "sales_model_name": "P700ML-U7165123050G0X",
+   "lines": 4,
+   "units": 158.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 4,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    4,
+    "P700ML-5235HX028X",
+    "90PF06A1-M006Z0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF06A1-M006Z0",
+    "P700ML-5235HX028X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0AS3-M00UM0",
+   "sales_model_name": "A7406CMA-C516256W0NAW",
+   "lines": 3,
+   "units": 156.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0801-M09RW0",
+   "sales_model_name": "B1503CVA-C516512BMUW",
+   "lines": 2,
+   "units": 152.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-C516512BMUX",
+    "90NX0801-M08VP0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M03RW0",
+    "B1503CVA-NJ3397X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0AL2-M00H90",
+   "sales_model_name": "P3606CCA-U71610G0X",
+   "lines": 2,
+   "units": 150.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 9,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    2,
+    "P3606CCA-U716512G0X",
+    "90NX0AL2-M004X0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX0AL2-M004X0",
+    "P3606CCA-U716512G0X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB1945-M00LX0",
+   "sales_model_name": "UX3480AA-OU716512BG0W",
+   "lines": 5,
+   "units": 144.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 1,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": [
+    1,
+    "UX3480AA-OU716512BL0W",
+    "90NB1943-M00990"
+   ],
+   "nearest_by_sku": null,
+   "family_depth": "model_base_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB1942-M00LY0",
+   "sales_model_name": "UX3480AA-OU716512P0W",
+   "lines": 5,
+   "units": 144.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 1,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": [
+    2,
+    "UX3480AA-OU716512BL0W",
+    "90NB1943-M00990"
+   ],
+   "nearest_by_sku": null,
+   "family_depth": "model_base_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF05A1-M01YW0",
+   "sales_model_name": "P500SV-05210H124W",
+   "lines": 2,
+   "units": 140.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 60,
+   "masters_same_sku_prefix": 60,
+   "nearest_by_sales_model": [
+    3,
+    "P500SV-05210H010W",
+    "90PF05A1-M00VF0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF05A1-M018K0",
+    "P500SV-03100U013W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90LC0051-B04371",
+   "sales_model_name": "C1271HG2",
+   "lines": 3,
+   "units": 120.0,
+   "n_distributors": 3,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0881-M04P20",
+   "sales_model_name": "P1503CVAY-C58512GMG0D",
+   "lines": 1,
+   "units": 114.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M01920",
+    "P1503CVA-NJ1166W"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M04J30",
+   "sales_model_name": "P1503CVAY-C516512GMU0X",
+   "lines": 1,
+   "units": 114.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M00U30",
+    "P1503CVA-I716512B1W"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0621-M00TM0",
+   "sales_model_name": "B1502CGA-I382B9X",
+   "lines": 1,
+   "units": 114.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 64,
+   "masters_same_sku_prefix": 64,
+   "nearest_by_sales_model": [
+    1,
+    "B1502CGA-I382B9W",
+    "90NX0621-M00K40"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0621-M00RM0",
+    "B1502CGA-NJ0643W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX08Q1-M006F0",
+   "sales_model_name": "P1503CTA-I382GMG1W",
+   "lines": 1,
+   "units": 114.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 18,
+   "masters_same_sku_prefix": 40,
+   "nearest_by_sales_model": [
+    3,
+    "P1503CTA-I38512G1W",
+    "90NX08Q1-M006D0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX08Q1-M006K0",
+    "P1503CTA-C82G1W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M01BY0",
+   "sales_model_name": "P1503CVA-I58512GMU1W",
+   "lines": 3,
+   "units": 114.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 116,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": [
+    2,
+    "P1503CVA-I58512G1W",
+    "90NX0881-M01BV0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0881-M01BT0",
+    "P1503CVA-I516512G2W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF05A1-M029N0",
+   "sales_model_name": "P500SV-C58512GMU2W",
+   "lines": 2,
+   "units": 112.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 60,
+   "masters_same_sku_prefix": 60,
+   "nearest_by_sales_model": [
+    3,
+    "P500SV-C58512G0W",
+    "90PF05A1-M01640"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF05A1-M00RN0",
+    "P500SV-C716512G1X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90GI0010-BF2100",
+   "sales_model_name": "OMNI004",
+   "lines": 1,
+   "units": 108.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB17I1-M023X0",
+   "sales_model_name": "X1504MA-I58512BL1",
+   "lines": 1,
+   "units": 108.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 25,
+   "masters_same_sku_prefix": 17,
+   "nearest_by_sales_model": [
+    1,
+    "X1504MA-I58512BL1W",
+    "90NB17I1-M01JC0"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90NB17I1-M00T90",
+    "X1504MA-I716512BL0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X5-M0DDA0",
+   "sales_model_name": "P440VAT-C516512B1X",
+   "lines": 1,
+   "units": 100.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 63,
+   "masters_same_sku_prefix": 150,
+   "nearest_by_sales_model": [
+    1,
+    "P440VAT-C516512B0X",
+    "90PT03X6-M05WZ0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PT03X5-M07RA0",
+    "P440VAK-BPCG36X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "22GM0-02610000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 100.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-01XC0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 100.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-022K0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 100.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB1AR1-M006Y0",
+   "sales_model_name": "UX3480KA-O716512BL0W",
+   "lines": 5,
+   "units": 98.0,
+   "n_distributors": 3,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90PF05N1-M04RH0",
+   "sales_model_name": "D701SER-5144001500",
+   "lines": 1,
+   "units": 88.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 4,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    5,
+    "D701SER-514500435X",
+    "90PF05N1-M02750"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90PF05N1-M02750",
+    "D701SER-514500435X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0AS3-M00XY0",
+   "sales_model_name": "A7406CMA-C516256W0NAX",
+   "lines": 1,
+   "units": 78.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0AS3-M00UP0",
+   "sales_model_name": "A7406CMA-C716512W0NAW",
+   "lines": 2,
+   "units": 78.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0AS2-M01490",
+   "sales_model_name": "A7406CMA-C516512B0NAW",
+   "lines": 1,
+   "units": 78.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0AS3-M00UL0",
+   "sales_model_name": "A7406CMA-C516512W0NAW",
+   "lines": 1,
+   "units": 78.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX06X1-M01B50",
+   "sales_model_name": "B1502CVA-I382B0W",
+   "lines": 1,
+   "units": 76.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 163,
+   "masters_same_sku_prefix": 163,
+   "nearest_by_sales_model": [
+    2,
+    "B1502CVA-I582B0X",
+    "90NX06X1-M01UC0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX06X1-M01H50",
+    "B1502CVA-NJ1258X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX06X1-M03XM0",
+   "sales_model_name": "B1502CVA-NJ3183X",
+   "lines": 1,
+   "units": 76.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 163,
+   "masters_same_sku_prefix": 163,
+   "nearest_by_sales_model": [
+    2,
+    "B1502CVA-NJ2683X",
+    "90NX06X1-M037Y0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX06X1-M03CM0",
+    "B1502CVA-i71610B1X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX06X1-M049Z0",
+   "sales_model_name": "B1502CVA-NJ3183X",
+   "lines": 2,
+   "units": 76.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 163,
+   "masters_same_sku_prefix": 163,
+   "nearest_by_sales_model": [
+    2,
+    "B1502CVA-NJ2683X",
+    "90NX06X1-M037Y0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX06X1-M049E0",
+    "B1502CVA-BQ3445X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M03460",
+   "sales_model_name": "B1503CVA-I716512BMUX",
+   "lines": 2,
+   "units": 76.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-C716512BMUX",
+    "90NX0801-M082A0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M03410",
+    "B1503CVA-I71610B2X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M03330",
+   "sales_model_name": "B1503CVA-I58512BMGX",
+   "lines": 1,
+   "units": 76.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-I58512BMGD",
+    "90NX0801-M03320"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M033X0",
+    "B1503CVA-I516512B2X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M0B650",
+   "sales_model_name": "B1503CVA-C716512GMUW",
+   "lines": 2,
+   "units": 76.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-C716512GMUX",
+    "90NX0801-M08SL0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX0801-M046V0",
+    "B1503CVA-S73832X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF06D1-M00550",
+   "sales_model_name": "VM701MG-716512B1W",
+   "lines": 2,
+   "units": 74.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 2,
+   "masters_same_sku_prefix": 2,
+   "nearest_by_sales_model": [
+    1,
+    "VM701MG-716512B0W",
+    "90PF06D1-M001Z0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF06D1-M00170",
+    "VM701MG-516512B0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NR0KS1-M010M0",
+   "sales_model_name": "FA608UHI-71610G1W",
+   "lines": 3,
+   "units": 72.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 4,
+   "masters_same_sku_prefix": 10,
+   "nearest_by_sales_model": [
+    1,
+    "FA608UHI-71610G0W",
+    "90NR0KS1-M00EW0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NR0KS1-M007M0",
+    "FA608UH-71610G0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB0TY1-M04T90",
+   "sales_model_name": "P1511CEA-I58512G2X",
+   "lines": 1,
+   "units": 72.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 47,
+   "masters_same_sku_prefix": 214,
+   "nearest_by_sales_model": [
+    1,
+    "P1511CEA-I58512G1X",
+    "90NB0TY1-M03M60"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NB0TY1-M04U90",
+    "X515EA-EJ4357W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB17I3-M01YD0",
+   "sales_model_name": "X1504MA-I582P0W",
+   "lines": 2,
+   "units": 72.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 25,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    1,
+    "X1504MA-I382P0W",
+    "90NB17I3-M01W00"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB17I3-M01W00",
+    "X1504MA-I382P0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB17I2-M01YA0",
+   "sales_model_name": "X1504MA-I582S0W",
+   "lines": 2,
+   "units": 72.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 25,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    1,
+    "X1504MA-I382S0W",
+    "90NB17I2-M01W10"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB17I2-M01EP0",
+    "X1504MA-I58512S0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "22GM0-025V0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 72.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90PF05A1-M01YX0",
+   "sales_model_name": "P500SV-05210H232X",
+   "lines": 2,
+   "units": 60.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 60,
+   "masters_same_sku_prefix": 60,
+   "nearest_by_sales_model": [
+    3,
+    "P500SV-05210H051X",
+    "90PF05A1-M00VH0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF05A1-M018K0",
+    "P500SV-03100U013W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF05D1-M03250",
+   "sales_model_name": "D700MF-U51651203050B0X",
+   "lines": 1,
+   "units": 60.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 11,
+   "masters_same_sku_prefix": 11,
+   "nearest_by_sales_model": [
+    4,
+    "D700MF-005225042X",
+    "90PF05D1-M006U0"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90PF05D1-M006U0",
+    "D700MF-005225042X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90PF05D1-M03000",
+   "sales_model_name": "D700MF-U532103050B0X",
+   "lines": 1,
+   "units": 60.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 11,
+   "masters_same_sku_prefix": 11,
+   "nearest_by_sales_model": [
+    8,
+    "D700MF-005235013X",
+    "90PF05D1-M006V0"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90PF05D1-M006U0",
+    "D700MF-005225042X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90PF05A1-M029R0",
+   "sales_model_name": "P500SV-C58512GMU2X",
+   "lines": 2,
+   "units": 56.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 60,
+   "masters_same_sku_prefix": 60,
+   "nearest_by_sales_model": [
+    3,
+    "P500SV-C58512G0X",
+    "90PF05A1-M00PR0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF05A1-M00PR0",
+    "P500SV-C58512G0X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M00VP0",
+   "sales_model_name": "P1503CVA-I516512BMW",
+   "lines": 1,
+   "units": 54.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 116,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": [
+    1,
+    "P1503CVA-I516512B0W",
+    "90NX0881-M009C0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0881-M00VR0",
+    "P1503CVA-I716512BMW"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "22GM0-025T0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 50.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90PF05A1-M01YY0",
+   "sales_model_name": "P500SV-07240H054W",
+   "lines": 2,
+   "units": 50.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 60,
+   "masters_same_sku_prefix": 60,
+   "nearest_by_sales_model": [
+    2,
+    "P500SV-07240H006W",
+    "90PF05A1-M00ZA0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF05A1-M018K0",
+    "P500SV-03100U013W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF06A1-M007V0",
+   "sales_model_name": "P700ML-U516512G1W",
+   "lines": 2,
+   "units": 48.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 4,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    1,
+    "P700ML-U516512G1X",
+    "90PF06A1-M00700"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90PF06A1-M00710",
+    "P700ML-U716512G1X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF06A1-M00CU0",
+   "sales_model_name": "P700ML-U716512G0W",
+   "lines": 2,
+   "units": 48.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 4,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    2,
+    "P700ML-U716512G1X",
+    "90PF06A1-M00710"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF06A1-M006Z0",
+    "P700ML-5235HX028X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF06D1-M00540",
+   "sales_model_name": "VM701MG-516512B1W",
+   "lines": 1,
+   "units": 48.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 2,
+   "masters_same_sku_prefix": 2,
+   "nearest_by_sales_model": [
+    1,
+    "VM701MG-516512B0W",
+    "90PF06D1-M00170"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF06D1-M00170",
+    "VM701MG-516512B0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NR0KW7-M00FM0",
+   "sales_model_name": "G614PM-916512G0W",
+   "lines": 5,
+   "units": 45.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 4,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": [
+    2,
+    "G614PM-91610G0W",
+    "90NR0KW7-M004L0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NR0KW7-M00570",
+    "G614PM-93210G0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF05A1-M029P0",
+   "sales_model_name": "P500SV-C716512GMU2W",
+   "lines": 2,
+   "units": 42.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 60,
+   "masters_same_sku_prefix": 60,
+   "nearest_by_sales_model": [
+    3,
+    "P500SV-C716512G0W",
+    "90PF05A1-M00PN0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF05A1-M00UP0",
+    "P500SV-05210H008W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "22GM0-027P0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 42.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-027R0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 42.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-027S0000",
+   "sales_model_name": null,
+   "lines": 2,
+   "units": 42.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-027T0000",
+   "sales_model_name": null,
+   "lines": 2,
+   "units": 42.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NR0KV1-M018S0",
+   "sales_model_name": "FA608UM-716512G5W",
+   "lines": 1,
+   "units": 41.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 5,
+   "masters_same_sku_prefix": 5,
+   "nearest_by_sales_model": [
+    1,
+    "FA608UM-716512G0W",
+    "90NR0KV1-M005F0"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90NR0KV1-M005F0",
+    "FA608UM-716512G0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB16A1-M00P00",
+   "sales_model_name": "H7607BA-ON12810B0X",
+   "lines": 5,
+   "units": 41.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 2,
+   "masters_same_sku_prefix": 2,
+   "nearest_by_sales_model": [
+    2,
+    "H7607BA-ON3210B0X",
+    "90NB16A1-M00050"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB16A1-M00050",
+    "H7607BA-ON3210B0X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT04E1-M005F0",
+   "sales_model_name": "PM640GA-R516512W0W",
+   "lines": 2,
+   "units": 40.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 5,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": [
+    2,
+    "PM640GA-R516512B0X",
+    "90PT04E2-M00580"
+   ],
+   "nearest_by_sku": null,
+   "family_depth": "model_base_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT04E1-M005H0",
+   "sales_model_name": "PM640GA-R716512W0W",
+   "lines": 2,
+   "units": 40.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 5,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": [
+    2,
+    "PM640GA-R716512B0X",
+    "90PT04E2-M00590"
+   ],
+   "nearest_by_sku": null,
+   "family_depth": "model_base_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF05D1-M03100",
+   "sales_model_name": "D700MF-U516512B0W",
+   "lines": 1,
+   "units": 40.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 11,
+   "masters_same_sku_prefix": 11,
+   "nearest_by_sales_model": [
+    7,
+    "D700MF-007265145W",
+    "90PF05D1-M02MP0"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90PF05D1-M006U0",
+    "D700MF-005225042X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90XB0AWN-BDS010",
+   "sales_model_name": "DC320 11 IN 1 USB-C DOCK/EU",
+   "lines": 1,
+   "units": 40.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0AS2-M013U0",
+   "sales_model_name": "A7406CMA-C716512B0NAX",
+   "lines": 1,
+   "units": 39.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0AS2-M017V0",
+   "sales_model_name": "A7406CMA-C716512B0NAW",
+   "lines": 1,
+   "units": 39.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0881-M04P30",
+   "sales_model_name": "P1503CVAY-C516512GMG0D",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M00U30",
+    "P1503CVA-I716512B1W"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M04P10",
+   "sales_model_name": "P1503CVAY-C716512GMG0D",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M01S10",
+    "P1503CVA-I58512G0X"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M04F80",
+   "sales_model_name": "P1503CVAY-C716512GMU0W",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M01FM0",
+    "P1503CVA-S71350X"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M04J40",
+   "sales_model_name": "P1503CVAY-C716512GMU0X",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90NX0881-M004J0",
+    "P1503CVA-NJ0129X"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M0BWH0",
+   "sales_model_name": "B1503CVA-C73210G2X",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-C73210G0X",
+    "90NX0801-M09SD0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX0801-M04TH0",
+    "B1503CVA-S74342W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX06X1-M03XK0",
+   "sales_model_name": "B1502CVA-NJ3181X",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 163,
+   "masters_same_sku_prefix": 163,
+   "nearest_by_sales_model": [
+    2,
+    "B1502CVA-NJ2131X",
+    "90NX06X1-M02KU0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX06X1-M03FK0",
+    "B1502CVA-I582B4D"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M03350",
+   "sales_model_name": "B1503CVA-I716512BMGX",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-I716512GMGX",
+    "90NX0801-M05XM0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M033X0",
+    "B1503CVA-I516512B2X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M01CE0",
+   "sales_model_name": "P1503CVA-I58512GMUW",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 116,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": [
+    2,
+    "P1503CVA-I58512G0W",
+    "90NX0881-M01CN0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0881-M01CM0",
+    "P1503CVA-I516512G2W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0881-M01CH0",
+   "sales_model_name": "P1503CVA-I716512GMUW",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 116,
+   "masters_same_sku_prefix": 115,
+   "nearest_by_sales_model": [
+    1,
+    "P1503CVA-I716512GMU1W",
+    "90NX0881-M01BZ0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0881-M01CM0",
+    "P1503CVA-I516512G2W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M09RX0",
+   "sales_model_name": "B1503CVA-C716512BMUW",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-C716512BMUX",
+    "90NX0801-M082A0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M09YX0",
+    "B1503CVA-S78701W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0801-M0BBL0",
+   "sales_model_name": "B1503CVA-C716512GMGD",
+   "lines": 1,
+   "units": 38.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    1,
+    "B1503CVA-I716512GMGD",
+    "90NX0801-M05XL0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX0801-M09BJ0",
+    "B1503CVA-S78214X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90GI0010-BF1200",
+   "sales_model_name": "OMNI003",
+   "lines": 1,
+   "units": 36.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90PF05K1-M06RE0",
+   "sales_model_name": "D501MERES-5144000150",
+   "lines": 1,
+   "units": 35.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 172,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    2,
+    "90PF05K1-M03HE0",
+    "D501MER-514400116X"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB1961-M00HE0",
+   "sales_model_name": "S5652MA-I716512S0W",
+   "lines": 1,
+   "units": 32.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NV00K1-M003D0",
+   "sales_model_name": "RC74XA-Z2410B0W",
+   "lines": 7,
+   "units": 30.0,
+   "n_distributors": 4,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0801-M0A4M0",
+   "sales_model_name": "B1503CVA-S78832W",
+   "lines": 1,
+   "units": 30.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 395,
+   "masters_same_sku_prefix": 384,
+   "nearest_by_sales_model": [
+    2,
+    "B1503CVA-S73832X",
+    "90NX0801-M046V0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90NX0801-M0A440",
+    "B1503CVA-S78819W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "22GM0-025W0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 30.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-025Y0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 30.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90PF05A1-M029S0",
+   "sales_model_name": "P500SV-C716512GMU2X",
+   "lines": 2,
+   "units": 28.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 60,
+   "masters_same_sku_prefix": 60,
+   "nearest_by_sales_model": [
+    3,
+    "P500SV-C716512G1X",
+    "90PF05A1-M00RN0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PF05A1-M00ZS0",
+    "P500SV-07240H038X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB16A1-M00EZ0",
+   "sales_model_name": "H7607BA-ON4810B0X",
+   "lines": 3,
+   "units": 25.0,
+   "n_distributors": 2,
+   "masters_same_model_base": 2,
+   "masters_same_sku_prefix": 2,
+   "nearest_by_sales_model": [
+    2,
+    "H7607BA-ON3210B0X",
+    "90NB16A1-M00050"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB16A1-M00050",
+    "H7607BA-ON3210B0X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X5-M0CXT0",
+   "sales_model_name": "P440VA-BPC116W",
+   "lines": 2,
+   "units": 25.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 274,
+   "masters_same_sku_prefix": 150,
+   "nearest_by_sales_model": [
+    2,
+    "V440VA-BPC016W",
+    "90PT03X3-M0BCR0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90PT03X5-M02XT0",
+    "P440VAK-BPC278W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB16V1-M01490",
+   "sales_model_name": "UX8407AA-OU93210G2X",
+   "lines": 2,
+   "units": 24.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 12,
+   "masters_same_sku_prefix": 12,
+   "nearest_by_sales_model": [
+    1,
+    "UX8407AA-OU93220G2X",
+    "90NB16V1-M00YB0"
+   ],
+   "nearest_by_sku": [
+    3,
+    "90NB16V1-M002K0",
+    "UX8407AA-OU93220G0X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB16H1-M00A80",
+   "sales_model_name": "H7407BA-ON4810B0X",
+   "lines": 2,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 3,
+   "masters_same_sku_prefix": 3,
+   "nearest_by_sales_model": [
+    6,
+    "H7407BA-SM010X",
+    "90NB16H1-M000A0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB16H1-M000A0",
+    "H7407BA-SM010X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X5-M0CX10",
+   "sales_model_name": "P440VAK-C716512BMU0W",
+   "lines": 2,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 159,
+   "masters_same_sku_prefix": 150,
+   "nearest_by_sales_model": [
+    3,
+    "P440VAK-C716512W0W",
+    "90PT03X7-M09T30"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90PT03X5-M05X10",
+    "P440VAK-C732512B0X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X5-M0CX00",
+   "sales_model_name": "P440VAK-C516512BMU0W",
+   "lines": 2,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 159,
+   "masters_same_sku_prefix": 150,
+   "nearest_by_sales_model": [
+    3,
+    "P440VAK-C516512W0W",
+    "90PT03X7-M09SC0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PT03X5-M08CX0",
+    "P440VAK-BPCH83X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X5-M0CUK0",
+   "sales_model_name": "P440VAK-C516512BMU0X",
+   "lines": 2,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 159,
+   "masters_same_sku_prefix": 150,
+   "nearest_by_sales_model": [
+    2,
+    "P440VAK-C516512B0X",
+    "90PT03X5-M05WX0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PT03X5-M07HK0",
+    "P440VAT-BPD322X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X5-M0CWZ0",
+   "sales_model_name": "P440VAK-C716512BMU0X",
+   "lines": 2,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 159,
+   "masters_same_sku_prefix": 150,
+   "nearest_by_sales_model": [
+    2,
+    "P440VAK-C716512B0X",
+    "90PT03X5-M08AF0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PT03X5-M0ALZ0",
+    "P440VAK-BPCK86X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90XB0880-BKB0D0",
+   "sales_model_name": "KW100 KEYBOARD/GN/FR/81",
+   "lines": 1,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 4,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    1,
+    "90XB0880-BKB000",
+    "KW100 KEYBOARD/BG/US/80"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PF05A1-M01YZ0",
+   "sales_model_name": "P500SV-07240H155X",
+   "lines": 1,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 60,
+   "masters_same_sku_prefix": 60,
+   "nearest_by_sales_model": [
+    2,
+    "P500SV-07240H134X",
+    "90PF05A1-M01TL0"
+   ],
+   "nearest_by_sku": [
+    1,
+    "90PF05A1-M017Z0",
+    "P500SV-03100U010W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "22GM0-027H0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90XB0AIN-BDS010",
+   "sales_model_name": "DC110 4 IN 1 USB-C DOCK/BK/WW",
+   "lines": 1,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NX0AM1-M00KM0",
+   "sales_model_name": "P3406CCAP-U516512GMUW",
+   "lines": 2,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 7,
+   "masters_same_sku_prefix": 7,
+   "nearest_by_sales_model": [
+    2,
+    "P3406CCAP-U516512G0W",
+    "90NX0AM1-M00610"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX0AM1-M00620",
+    "P3406CCAP-U716512G0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0AM2-M00KR0",
+   "sales_model_name": "P3406CCA-U716512GMUX",
+   "lines": 2,
+   "units": 20.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 12,
+   "masters_same_sku_prefix": 5,
+   "nearest_by_sales_model": [
+    2,
+    "P3406CCA-U716512G0X",
+    "90NX0AM2-M00640"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX0AM2-M00600",
+    "P3406CCA-LY0168X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB1992-M00PT0",
+   "sales_model_name": "S5452MA-I716512S0X",
+   "lines": 1,
+   "units": 18.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 3,
+   "masters_same_sku_prefix": 3,
+   "nearest_by_sales_model": [
+    4,
+    "S5452MA-TM024W",
+    "90NB1992-M00230"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB1992-M00230",
+    "S5452MA-TM024W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NB19P1-M006H0",
+   "sales_model_name": "TP5408QA-OQ16512BL0X",
+   "lines": 1,
+   "units": 18.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 1,
+   "masters_same_sku_prefix": 1,
+   "nearest_by_sales_model": [
+    1,
+    "TP5408QA-OQ16512BL0W",
+    "90NB19P1-M000Z0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB19P1-M000Z0",
+    "TP5408QA-OQ16512BL0W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90XB09NN-BDS010",
+   "sales_model_name": "DC510 TBT5 DOCK/EU",
+   "lines": 1,
+   "units": 15.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 2,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": [
+    1,
+    "90XB09NN-BDS050",
+    "DC510 TBT5 DOCK/IL"
+   ],
+   "family_depth": "sku_prefix_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90PT03X5-M0CXU0",
+   "sales_model_name": "P440VA-BPC369X",
+   "lines": 2,
+   "units": 15.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 274,
+   "masters_same_sku_prefix": 150,
+   "nearest_by_sales_model": [
+    2,
+    "P440VA-BPC168X",
+    "90PT03X5-M0BYM0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90PT03X5-M08CX0",
+    "P440VAK-BPCH83X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "22GM0-01YE0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 13.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB17D1-M00410",
+   "sales_model_name": "H7606WR-O96420B0X",
+   "lines": 1,
+   "units": 10.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-027F0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 10.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-01UE0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 8.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB16A1-M00YY0",
+   "sales_model_name": "H7607BA-ON6410B0X",
+   "lines": 1,
+   "units": 5.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 2,
+   "masters_same_sku_prefix": 2,
+   "nearest_by_sales_model": [
+    2,
+    "H7607BA-ON3210B0X",
+    "90NB16A1-M00050"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB16A1-M00050",
+    "H7607BA-ON3210B0X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "22GM0-025K0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 5.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-01UF0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 4.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-027K0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 3.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-027L0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 3.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-027M0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 3.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "22GM0-027N0000",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 3.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB19K5-M00E70",
+   "sales_model_name": "UX3480QA-OQ16512BG0W",
+   "lines": 1,
+   "units": 2.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 4,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": [
+    1,
+    "UX3480QA-OQ16512BL0W",
+    "90NB19K1-M00620"
+   ],
+   "nearest_by_sku": null,
+   "family_depth": "model_base_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX09Z1-M00LY0",
+   "sales_model_name": "B5605CAA-T90584W",
+   "lines": 1,
+   "units": 1.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 8,
+   "masters_same_sku_prefix": 8,
+   "nearest_by_sales_model": [
+    4,
+    "B5605CAA-T90147X",
+    "90NX09Z1-M004X0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX09Z1-M004X0",
+    "B5605CAA-T90147X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX08T1-M00C50",
+   "sales_model_name": "BR1104CTA-N00366XA",
+   "lines": 1,
+   "units": 1.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 11,
+   "masters_same_sku_prefix": 11,
+   "nearest_by_sales_model": [
+    2,
+    "BR1104CTA-N00319XA",
+    "90NX08T1-M00AP0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX08T1-M006D0",
+    "BR1104CTA-NS0197W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX08T1-M00C60",
+   "sales_model_name": "BR1104CTA-N00367XA",
+   "lines": 1,
+   "units": 1.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 11,
+   "masters_same_sku_prefix": 11,
+   "nearest_by_sales_model": [
+    2,
+    "BR1104CTA-N00319XA",
+    "90NX08T1-M00AP0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NX08T1-M006D0",
+    "BR1104CTA-NS0197W"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NX0AS3-S00030",
+   "sales_model_name": null,
+   "lines": 1,
+   "units": 1.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 0,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": null,
+   "nearest_by_sku": null,
+   "family_depth": "none",
+   "nearness": "edit_distance_3_or_more_or_no_sibling"
+  },
+  {
+   "item_code": "90NB16H1-M00E50",
+   "sales_model_name": "H7407BA-ON12810B0X",
+   "lines": 1,
+   "units": 1.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 3,
+   "masters_same_sku_prefix": 3,
+   "nearest_by_sales_model": [
+    4,
+    "H7407BA-SM010X",
+    "90NB16H1-M000A0"
+   ],
+   "nearest_by_sku": [
+    2,
+    "90NB16H1-M000A0",
+    "H7407BA-SM010X"
+   ],
+   "family_depth": "model_base_and_sku_prefix",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  },
+  {
+   "item_code": "90NR0PE1-M006V0",
+   "sales_model_name": "GU606AX-U96420W0W",
+   "lines": 1,
+   "units": 1.0,
+   "n_distributors": 1,
+   "masters_same_model_base": 1,
+   "masters_same_sku_prefix": 0,
+   "nearest_by_sales_model": [
+    1,
+    "GU606AX-U96420G0W",
+    "90NR0PE2-M003B0"
+   ],
+   "nearest_by_sku": null,
+   "family_depth": "model_base_only",
+   "nearness": "edit_distance_le_2_on_sales_model_or_sku"
+  }
+ ]
+}
