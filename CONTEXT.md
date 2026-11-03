@@ -236,7 +236,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 - 2026-08-31 — **Pushed `main` to `origin/main` `46368f6`:** two docs commits (`dc70a51` VERIFY debt register closed at `12404bc`; `46368f6` NS-2 readiness report). Local and remote `main` in sync. EIF guard did not block.
 
-- 2026-08-31 — **VERIFY debt cleared on `main` `12404bc`:** Opus CONSULT fourth-pass PASS for units 6f, 7, 8, 11, 12, 15B, B4 (`docs/verify/VERIFY_VERDICTS.md`); charter v1.3 amendment 7 satisfied; `docs/BACKLOG.md` register empty — promotion no longer gated by VERIFY debt. Arc: 19 web tests fixed (RBAC `5b2a6a4`); HL mapping parity closed; shipment S2/S3/S4 fixed; S11 stall = worker/API binding mismatch. Deferred: CPOR #313 on `cip`, evidence-chip pass unproven, HL disposition backend gap. NS-2 readiness: `docs/design/NS2_READINESS.md`.
+- 2026-11-03 (Africa/Johannesburg) — **M5c tenant mapping scope** on `feat/tenant-mapping-scope`: migration `20261103_0052` adds `tenant_id` to `source_definition` and alias tables; import paths filter by job tenant (`50c40a85`, `47233c36`, `0129db79`, `3aad0298`).
 
 - 2026-08-30 — **Web test harness fix** on `fix/web-test-harness-authheaders` `6e96b9c`: RBAC commit `5b2a6a4` switched the imports upload path to `authHeaders()`; the `page.test.tsx` `@/lib/api` mock omitted that export and silently broke 19 historical_lineup vitest cases (undetected until VERIFY debt Session B). Fix is test-only (`importOriginal` partial mock + customers drawer wait for loaded locations). No product regression; operators could apply validated files throughout. Diagnosis: `docs/verify/WEB_TEST_FAILURE_DIAGNOSIS.md`.
 
