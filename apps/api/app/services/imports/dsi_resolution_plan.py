@@ -26,6 +26,7 @@ from app.services.imports.distributor_sales_inventory import (
     dsi_historical_workflow_from_import_job,
     effective_dsi_customer_primary_for_resolution,
 )
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.services.imports.dsi_plan_build_context import (
     DSIPlanBuildContext,
     build_dsi_plan_build_context,
@@ -109,15 +110,23 @@ def dsi_geo_region_alias_source_id(
     return dsi_geo_channel_alias_source_id(cand, import_job)
 
 
-def _alias_region_id_for_dsi(session: Session, source_id: int | None, normalized_token: str) -> tuple[int | None, str | None]:
+def _alias_region_id_for_dsi(
+    session: Session,
+    source_id: int | None,
+    normalized_token: str,
+    *,
+    tenant_id: str | None = None,
+) -> tuple[int | None, str | None]:
     """Approved region aliases: exact ``normalized_token`` match only (no fuzzy matching)."""
 
     nt = (normalized_token or "").strip()
     if not nt:
         return None, None
+    tid = effective_tenant_id(tenant_id)
     q = select(RegionSourceTokenAlias.region_id).where(
         RegionSourceTokenAlias.normalized_token == nt,
         RegionSourceTokenAlias.status == "approved",
+        tenant_scope_predicate(RegionSourceTokenAlias, tid),
     )
     if source_id is not None:
         q = q.where(
@@ -134,7 +143,13 @@ def _alias_region_id_for_dsi(session: Session, source_id: int | None, normalized
     return None, None
 
 
-def _alias_channel_id_for_dsi(session: Session, source_id: int | None, normalized_token: str) -> tuple[int | None, str | None]:
+def _alias_channel_id_for_dsi(
+    session: Session,
+    source_id: int | None,
+    normalized_token: str,
+    *,
+    tenant_id: str | None = None,
+) -> tuple[int | None, str | None]:
     """Approved channel aliases: exact ``normalized_token`` match only (no fuzzy matching).
 
     When ``source_id`` is set: match rows where ``source_definition_id`` is NULL (global) or equals
@@ -147,9 +162,11 @@ def _alias_channel_id_for_dsi(session: Session, source_id: int | None, normalize
     nt = (normalized_token or "").strip()
     if not nt:
         return None, None
+    tid = effective_tenant_id(tenant_id)
     q = select(ChannelSourceTokenAlias.channel_id).where(
         ChannelSourceTokenAlias.normalized_token == nt,
         ChannelSourceTokenAlias.status == "approved",
+        tenant_scope_predicate(ChannelSourceTokenAlias, tid),
     )
     if source_id is not None:
         q = q.where(
@@ -1681,7 +1698,7 @@ def collect_dsi_job_unresolved_geo_tokens_sync(session: Session, job_id: int) ->
         resolve_source_geo_from_ctx_cached,
     )
 
-    geo_cache = DSIGeoResolutionCache.build(session)
+    geo_cache = DSIGeoResolutionCache.build(session, tenant_id=job.tenant_id)
     geo_cache.preload_aliases(collect_geo_tokens_from_candidates(cands, job))
 
     for cand in cands:

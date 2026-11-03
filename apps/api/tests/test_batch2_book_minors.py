@@ -275,6 +275,6 @@ def test_remember_selected_sheets_stores_every_sheet_that_was_shown():
     src = SimpleNamespace(column_mapping_memory={})
     db = MagicMock()
     db.get = MagicMock(return_value=src)
-    remember_selected_sheets(db, source_id=1, sheet_names=["Shipped"], available_sheets=["Shipped", "Notes"])
+    remember_selected_sheets(db, source_id=1, tenant_id="default", sheet_names=["Shipped"], available_sheets=["Shipped", "Notes"])
     assert src.column_mapping_memory["selected_sheet_names"] == ["Shipped"]
     assert remembered_seen_sheet_names(src) == ["Shipped", "Notes"]

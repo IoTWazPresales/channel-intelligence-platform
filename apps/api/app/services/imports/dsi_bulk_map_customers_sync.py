@@ -17,6 +17,7 @@ from app.services.imports.dsi_customer_alias_scope import (
     scope_key_for_dsi_candidate,
 )
 from app.services.imports.dsi_steward_candidate_ops import StewardOpError
+from app.services.imports.tenant_mapping_scope import effective_tenant_id
 
 
 def _fail_results_on_rollback(results: list[dict[str, Any]], detail: str) -> None:
@@ -55,7 +56,9 @@ def run_dsi_bulk_map_customers_sync(
         meta = scope_key_for_dsi_candidate(cand)
         if meta is not None:
             scope_keys.add(meta[0])
-    approved_alias_by_scope = load_approved_customer_aliases_for_scopes(session, scope_keys)
+    approved_alias_by_scope = load_approved_customer_aliases_for_scopes(
+        session, scope_keys, tenant_id=effective_tenant_id(job.tenant_id)
+    )
     batch_scope_claimed: set[tuple[str, int, int]] = set()
 
     results: list[dict[str, Any]] = []

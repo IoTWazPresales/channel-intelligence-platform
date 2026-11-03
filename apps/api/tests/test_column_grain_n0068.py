@@ -46,6 +46,7 @@ def _stub_user(role: Role = Role.ADMIN):
 def _source(memory: dict | None) -> SimpleNamespace:
     return SimpleNamespace(
         id=1,
+        tenant_id="default",
         column_mapping_memory=memory,
         import_template=SimpleNamespace(expected_columns={}),
         expected_template=None,
@@ -62,6 +63,7 @@ def test_product_line_grain_writes_and_reads_by_product_line() -> None:
     merge_memory_from_pm_save(
         db,
         source_id=1,
+        tenant_id="default",
         mapping_decisions={"Chipset": {"target": "model_family"}},
         product_line="MB",
         grain="product_line",
@@ -89,6 +91,7 @@ def test_other_grain_writes_by_grain_and_leaves_product_line_sets_alone() -> Non
     merge_memory_from_pm_save(
         db,
         source_id=1,
+        tenant_id="default",
         mapping_decisions={"Panel": {"target": "series"}},
         product_line="NB",
         grain="feed",

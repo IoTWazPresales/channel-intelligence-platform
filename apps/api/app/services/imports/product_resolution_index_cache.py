@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, load_only
 
 from app.models.dimensions import DimProduct
 from app.models.mapping import ProductAlias
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 
 if TYPE_CHECKING:
     from app.services.imports.distributor_sales_inventory import ProductResolutionIndex
@@ -23,11 +24,12 @@ logger = logging.getLogger(__name__)
 _CACHE_TTL_SECONDS = 300.0
 
 _lock = threading.Lock()
-_cache_entry: tuple["ProductResolutionIndex", float] | None = None
+_cache_by_tenant: dict[str, tuple["ProductResolutionIndex", float]] = {}
 
 # Identity + eligibility columns only — excludes specs_json and other heavy JSONB.
 _PRODUCT_LOAD_COLUMNS = (
     DimProduct.id,
+    DimProduct.tenant_id,
     DimProduct.sku,
     DimProduct.part_number,
     DimProduct.sales_model_name,
@@ -45,34 +47,44 @@ _ALIAS_LOAD_COLUMNS = (
     ProductAlias.alias_value,
     ProductAlias.product_id,
     ProductAlias.confidence,
+    ProductAlias.tenant_id,
 )
 
 
-def invalidate_product_resolution_index_cache() -> None:
+def invalidate_product_resolution_index_cache(tenant_id: str | None = None) -> None:
     """Drop cached index after Product Master commit or steward alias writes."""
-    global _cache_entry
+    global _cache_by_tenant
     with _lock:
-        _cache_entry = None
+        if tenant_id is None:
+            _cache_by_tenant = {}
+        else:
+            _cache_by_tenant.pop(effective_tenant_id(tenant_id), None)
 
 
-def get_product_resolution_index(db: Session, *, force_refresh: bool = False) -> "ProductResolutionIndex":
+def get_product_resolution_index(
+    db: Session,
+    *,
+    tenant_id: str | None = None,
+    force_refresh: bool = False,
+) -> "ProductResolutionIndex":
     """Return a cached ProductResolutionIndex or load a fresh narrow index from the DB."""
-    global _cache_entry
+    tid = effective_tenant_id(tenant_id)
     now = time.monotonic()
     if not force_refresh:
         with _lock:
-            if _cache_entry is not None:
-                idx, loaded_at = _cache_entry
+            cached = _cache_by_tenant.get(tid)
+            if cached is not None:
+                idx, loaded_at = cached
                 if now - loaded_at < _CACHE_TTL_SECONDS:
                     return idx
 
-    idx = _load_product_resolution_index_narrow(db)
+    idx = _load_product_resolution_index_narrow(db, tenant_id=tid)
     with _lock:
-        _cache_entry = (idx, now)
+        _cache_by_tenant[tid] = (idx, now)
     return idx
 
 
-def _load_product_resolution_index_narrow(db: Session) -> "ProductResolutionIndex":
+def _load_product_resolution_index_narrow(db: Session, *, tenant_id: str) -> "ProductResolutionIndex":
     """Build ProductResolutionIndex without loading specs_json or other heavy columns."""
     from app.services.imports.distributor_sales_inventory import (
         ProductResolutionIndex,
@@ -81,10 +93,15 @@ def _load_product_resolution_index_narrow(db: Session) -> "ProductResolutionInde
         _product_token_key,
     )
 
+    tid = effective_tenant_id(tenant_id)
     products = list(
-        db.scalars(select(DimProduct).options(load_only(*_PRODUCT_LOAD_COLUMNS))).all()
+        db.scalars(
+            select(DimProduct)
+            .where(DimProduct.tenant_id == tid)
+            .options(load_only(*_PRODUCT_LOAD_COLUMNS))
+        ).all()
     )
-    products_by_id: dict[int, ProductResolutionProductRow] = {
+    products_by_id = {
         int(p.id): _product_resolution_row_from_dim(p) for p in products
     }
     sku_to_id: dict[str, int] = {}
@@ -119,7 +136,11 @@ def _load_product_resolution_index_narrow(db: Session) -> "ProductResolutionInde
 
     alias_pairs: list[tuple[str, int]] = []
     steward_alias_by_key: dict[str, int] = {}
-    for a in db.scalars(select(ProductAlias).options(load_only(*_ALIAS_LOAD_COLUMNS))).all():
+    for a in db.scalars(
+        select(ProductAlias)
+        .where(tenant_scope_predicate(ProductAlias, tid))
+        .options(load_only(*_ALIAS_LOAD_COLUMNS))
+    ).all():
         av = _product_token_key(a.alias_value)
         if av:
             alias_pairs.append((av, int(a.product_id)))

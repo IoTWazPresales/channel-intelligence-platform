@@ -28,6 +28,7 @@ from app.services.commercial_planner.lineup_customer_alias_resolution import (
 from app.services.commercial_planner.lineup_distributor_token import match_distributor_token
 from app.services.commercial_planner.open_channel_customer import get_open_channel_customer_id
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.services.imports.shipment_evidence_resolution_plan import (
     build_unique_approved_customer_alias_id_by_token,
 )
@@ -61,13 +62,17 @@ def _clear_unknown_customer(diag: list | None) -> list | None:
 
 
 async def _load_approved_alias_rows(
-    db: AsyncSession, *, norm_token: str | None = None
+    db: AsyncSession, *, norm_token: str | None = None, tenant_id: str | None = None
 ) -> list[tuple[str, int, int | None]]:
+    tid = effective_tenant_id(tenant_id)
     q = select(
         CustomerSourceTokenAlias.normalized_token,
         CustomerSourceTokenAlias.customer_id,
         CustomerSourceTokenAlias.source_definition_id,
-    ).where(CustomerSourceTokenAlias.status == "approved")
+    ).where(
+        CustomerSourceTokenAlias.status == "approved",
+        tenant_scope_predicate(CustomerSourceTokenAlias, tid),
+    )
     if norm_token is not None:
         q = q.where(CustomerSourceTokenAlias.normalized_token == norm_token)
     return list((await db.execute(q)).all())
@@ -349,6 +354,7 @@ async def preview_customer_token_stamp(
     *,
     norm_token: str,
     target_customer_id: int,
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Blast-radius preview — no writes. Includes candidate provenance (W5/W7)."""
     nt = _norm_key(norm_token)
@@ -362,6 +368,7 @@ async def preview_customer_token_stamp(
     target = await db.get(DimCustomer, int(target_customer_id))
     if target is None:
         raise CustomerTokenStampError(f"target customer {target_customer_id} does not exist")
+    alias_tid = effective_tenant_id(tenant_id or getattr(target, "tenant_id", None))
 
     lines = await _lines_for_norm_token(db, nt)
     stampable = [
@@ -381,6 +388,7 @@ async def preview_customer_token_stamp(
                 CustomerSourceTokenAlias.status == "approved",
                 CustomerSourceTokenAlias.source_definition_id.is_(None),
                 CustomerSourceTokenAlias.distributor_id.is_(None),
+                tenant_scope_predicate(CustomerSourceTokenAlias, alias_tid),
             )
         )
     ).scalars().first()
@@ -465,6 +473,7 @@ async def apply_customer_token_stamp(
     reason: str,
     commit: bool = True,
     allow_distributor_token: bool = True,
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """One txn: refuse conflict → upsert global alias → stamp lines (+ optional dist) → audit."""
     nt = _norm_key(norm_token)
@@ -482,6 +491,7 @@ async def apply_customer_token_stamp(
     target = await db.get(DimCustomer, int(target_customer_id))
     if target is None:
         raise CustomerTokenStampError(f"target customer {target_customer_id} does not exist")
+    alias_tid = effective_tenant_id(tenant_id or getattr(target, "tenant_id", None))
 
     oc_id = await get_open_channel_customer_id(db)
     lines = await _lines_for_norm_token(db, nt)
@@ -535,6 +545,7 @@ async def apply_customer_token_stamp(
                 CustomerSourceTokenAlias.status == "approved",
                 CustomerSourceTokenAlias.source_definition_id.is_(None),
                 CustomerSourceTokenAlias.distributor_id.is_(None),
+                tenant_scope_predicate(CustomerSourceTokenAlias, alias_tid),
             )
         )
     ).scalars().first()
@@ -545,6 +556,7 @@ async def apply_customer_token_stamp(
     )
     if existing is None:
         alias = CustomerSourceTokenAlias(
+            tenant_id=alias_tid,
             customer_id=int(target_customer_id),
             source_definition_id=None,
             distributor_id=None,
@@ -1155,7 +1167,10 @@ async def list_customer_token_worklist(
     }
 
 
-async def list_minted_global_aliases(db: AsyncSession, *, limit: int = 100) -> dict[str, Any]:
+async def list_minted_global_aliases(
+    db: AsyncSession, *, limit: int = 100, tenant_id: str | None = None
+) -> dict[str, Any]:
+    tid = effective_tenant_id(tenant_id)
     rows = list(
         (
             await db.execute(
@@ -1164,6 +1179,7 @@ async def list_minted_global_aliases(db: AsyncSession, *, limit: int = 100) -> d
                     CustomerSourceTokenAlias.source_definition_id.is_(None),
                     CustomerSourceTokenAlias.distributor_id.is_(None),
                     CustomerSourceTokenAlias.notes.ilike("lineup_customer_token_stamp:%"),
+                    tenant_scope_predicate(CustomerSourceTokenAlias, tid),
                 )
                 .order_by(CustomerSourceTokenAlias.id.desc())
                 .limit(max(1, min(int(limit), 500)))

@@ -22,6 +22,7 @@ class CustomerArticleAlias(Base, TimestampMixin):
     __tablename__ = "customer_article_alias"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False, index=True)
     article_no_normalized: Mapped[str] = mapped_column(String(256), nullable=False)
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False, index=True)

@@ -584,6 +584,7 @@ def save_mapping_sync(
     merge_memory_from_pm_save(
         db,
         source_id=job.source_id,
+        tenant_id=str(job.tenant_id),
         mapping_decisions=job.mapping_decisions or {},
         product_line=product_line,
         grain=grain_name,

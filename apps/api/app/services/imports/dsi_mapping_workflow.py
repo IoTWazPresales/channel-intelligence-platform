@@ -13,6 +13,7 @@ from app.ingestion.pipeline import default_field_mapping, effective_mapping_temp
 from app.models.ingestion import ImportJob, RawFileMetadata, SourceDefinition
 from app.services.imports.distributor_sales_inventory import CANONICAL as DSI_CANONICAL
 from app.services.imports.pm_mapping_memory import load_by_header_norm, norm_header_key
+from app.services.imports.tenant_mapping_scope import assert_source_tenant
 from app.services.imports.template_definitions import IMPORT_TEMPLATE_ROWS
 from app.storage.local import get_storage_backend
 from app.utils.json_safe import to_jsonable
@@ -780,10 +781,12 @@ def dsi_mapping_gate_errors(
     return errs
 
 
-def merge_dsi_mapping_memory(db: Session, *, source_id: int, field_mapping: dict[str, str]) -> None:
+def merge_dsi_mapping_memory(
+    db: Session, *, source_id: int, tenant_id: str, field_mapping: dict[str, str]
+) -> None:
     """Persist confirmed DSI column → canonical mappings on the source (by normalized header)."""
     src = db.get(SourceDefinition, source_id)
-    if src is None:
+    if not assert_source_tenant(src, tenant_id):
         return
     root: dict[str, Any] = dict(src.column_mapping_memory or {})
     bh: dict[str, Any] = dict(root.get("by_header_norm") or {})

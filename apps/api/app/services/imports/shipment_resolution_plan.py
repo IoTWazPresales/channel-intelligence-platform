@@ -374,7 +374,7 @@ def build_shipment_resolution_plan_sync(
             q.order_by(ImportEntityMappingCandidate.entity_type, ImportEntityMappingCandidate.id)
         ).all()
     )
-    refs = build_shipment_enrich_refs(session) if cands else None
+    refs = build_shipment_enrich_refs(session, effective_tenant_id(job.tenant_id)) if cands else None
     source_def_id = job.source.id if job.source else None
     historical_index = _load_historical_shipment_customer_resolutions(
         session, source_definition_id=source_def_id, current_job_id=job_id

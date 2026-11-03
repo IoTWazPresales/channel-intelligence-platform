@@ -60,7 +60,13 @@ def world():
             tpl = ImportTemplate(slug=f"m5-{tok}", display_name="m5", pipeline_handler="inbound_shipments")
             db.add(tpl)
             db.flush()
-            src = SourceDefinition(import_template_id=int(tpl.id), code=f"m5-{tok}", name="m5", source_kind="file")
+            src = SourceDefinition(
+                tenant_id=t,
+                import_template_id=int(tpl.id),
+                code=f"m5-{tok}",
+                name="m5",
+                source_kind="file",
+            )
             db.add(src)
             db.flush()
             j = ImportJob(tenant_id=t, source_id=int(src.id), template_slug="inbound_shipments", status="completed",
