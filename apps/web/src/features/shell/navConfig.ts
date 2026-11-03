@@ -156,6 +156,7 @@ export const navGroups: NavGroup[] = [
       { label: 'Cover', href: '/stock?lens=cover', roles: ALL, what: 'Derived SOH and weeks of cover per distributor × product; breaches and excess.' },
       { label: 'Movement', href: '/stock?lens=movement', roles: ALL, what: 'Weekly sell-out, shipments and stock trend by family and distributor.' },
       { label: 'Sell-through', href: '/channel-intelligence', roles: ALL, what: 'Retailer sell-through and customer inventory from retailer files.' },
+      { label: 'Stores and DCs', href: '/stock/replenishment', roles: ALL, what: 'Store and distribution-centre replenishment. A steward confirms a site once. Suggestions do not create a promotion, transfer, or return.' },
       { label: 'Execution vs plan', href: '/stock?lens=execution', roles: ALL, what: 'Shipped against lineup plan per customer and period.' },
       { label: 'Forecasts', href: '/forecasts', roles: ALL, what: 'Demand forecast rows by method; velocity and analogue projections labelled by method.' },
     ],

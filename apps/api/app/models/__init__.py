@@ -144,6 +144,7 @@ from app.models.saved_reports import Dashboard, DashboardWidget, OverviewReportP
 from app.models.report_delivery import ReportDelivery, ReportSchedule
 from app.models.sql_viewer_audit import SqlViewerAudit
 from app.models.shipping_mailer_recipient import ShippingMailerRecipient
+from app.models.store_dc import DcServedAccount, SiteCandidate, StoreDcTenantConfig
 
 __all__ = [
     "DimProduct",
@@ -282,4 +283,7 @@ __all__ = [
     "ReportSchedule",
     "SqlViewerAudit",
     "ShippingMailerRecipient",
+    "SiteCandidate",
+    "DcServedAccount",
+    "StoreDcTenantConfig",
 ]
