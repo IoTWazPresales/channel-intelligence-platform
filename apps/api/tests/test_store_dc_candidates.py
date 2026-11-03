@@ -70,15 +70,17 @@ def test_pattern_is_fullmatch_and_stock_behaviour_stays_a_candidate(world: World
     world.weeks(customer, product, [3, 3, 3, 3], soh=1, site=hub)
     world.weeks(customer, product, [3, 3, 3, 3], soh=1, site=almost)
     world.db.flush()
+    before = world.counts()[2]
     refresh_candidates(world.db, world.tenant)
     rows = {row.site_label: row for row in _open(world)}
     assert rows[hub].evidence_kind == "pattern"
     assert rows[quiet].evidence_kind == "stock_behaviour"
     assert almost not in rows
-    assert world.counts()[2] == 0
+    assert world.counts()[2] == before
 
 
 def test_distributor_warehouse_cannot_be_confirmed(world: World):
+    before = world.counts()[2]
     customer = world.customer("SDC-C")
     distributor = world.distributor()
     warehouse = world.distributor_location(distributor, "SDC-WH")
@@ -91,4 +93,4 @@ def test_distributor_warehouse_cannot_be_confirmed(world: World):
         decide_candidate(world.db, world.tenant, row.id, "confirm", "steward-test")
     world.db.refresh(row)
     assert row.status == "open"
-    assert world.counts()[2] == 0
+    assert world.counts()[2] == before

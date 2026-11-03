@@ -14,6 +14,7 @@ def test_steward_can_set_a_customer_location_level(world: World):
     customer = world.customer("SDC-C")
     from app.models.dimensions import CustomerLocation
 
+    before = world.counts()[2]
     row = CustomerLocation(
         customer_id=customer.id,
         location_code=world.code("SDC-LOC"),
@@ -33,10 +34,11 @@ def test_steward_can_set_a_customer_location_level(world: World):
     assert payload["site_level"] == "customer_dc"
     assert payload["site_owner"] == "customer"
     assert payload["confirmed_by"] == "steward-test"
-    assert world.counts()[2] == 1
+    assert world.counts()[2] == before + 1
 
 
 def test_service_rejects_distributor_owner_as_customer_dc(world: World):
+    before = world.counts()[2]
     distributor = world.distributor()
     row = world.distributor_location(distributor, "SDC-WH")
     with pytest.raises(SiteLevelRejected):
@@ -50,7 +52,7 @@ def test_service_rejects_distributor_owner_as_customer_dc(world: World):
         )
     world.db.refresh(row)
     assert row.site_level is None
-    assert world.counts()[2] == 0
+    assert world.counts()[2] == before
 
 
 def test_database_rejects_distributor_owner_as_customer_dc(world: World):

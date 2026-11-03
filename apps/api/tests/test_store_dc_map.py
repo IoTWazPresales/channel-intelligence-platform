@@ -79,6 +79,7 @@ def test_refresh_does_not_create_a_location_and_a_confirmed_dc_is_not_a_store_do
     product = world.product()
     hub = world.code("SDC-HUB-1")
     store = world.code("SDC-SITE-A")
+    locations_before = world.db.execute(select(func.count()).select_from(CustomerLocation)).scalar_one()
     world.weeks(customer, product, [0, 0], soh=9, site=hub)
     world.weeks(customer, product, [2, 2], soh=2, site=store)
     world.shipment(customer=customer, distributor=distributor, ship_to=hub)
@@ -91,4 +92,4 @@ def test_refresh_does_not_create_a_location_and_a_confirmed_dc_is_not_a_store_do
     decide_candidate(world.db, world.tenant, candidate.id, "confirm", "steward-test")
     payload = build_store_map(world.db, world.tenant, [customer.id])
     assert [row["site_label"] for row in payload["stores"]] == [store]
-    assert world.db.execute(select(func.count()).select_from(CustomerLocation)).scalar_one() == 0
+    assert world.db.execute(select(func.count()).select_from(CustomerLocation)).scalar_one() == locations_before
