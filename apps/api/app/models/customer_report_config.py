@@ -28,6 +28,10 @@ class CustomerReportConfig(Base, TimestampMixin):
     # Warren 2026-10-19: replenishment is judged per customer. Empty means the defaults below.
     replen_min_weeks_of_cover: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
     replen_target_weeks_of_cover: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+    # Empty means 2 × target cover. A steward may override per customer.
+    slow_cover_multiple: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    # Empty means the customer's min cover weeks. A steward may override per customer.
+    unsold_weeks: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
 
 
 DEFAULT_REPLEN_MIN_WEEKS_OF_COVER = 4.0

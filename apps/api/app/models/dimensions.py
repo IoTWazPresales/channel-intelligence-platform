@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,20 @@ class DimDistributor(Base, TimestampMixin):
 
 class DistributorLocation(Base, TimestampMixin):
     __tablename__ = "distributor_location"
+    __table_args__ = (
+        CheckConstraint(
+            "site_level IS NULL OR site_level IN ('distributor_stock', 'customer_dc', 'store', 'other')",
+            name="ck_distributor_location_site_level",
+        ),
+        CheckConstraint(
+            "site_owner IN ('customer', 'distributor')",
+            name="ck_distributor_location_site_owner",
+        ),
+        CheckConstraint(
+            "site_owner <> 'distributor' OR site_level IS DISTINCT FROM 'customer_dc'",
+            name="ck_distributor_location_owner_not_dc",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False, index=True)
@@ -57,6 +71,11 @@ class DistributorLocation(Base, TimestampMixin):
     address_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Level is separate from location_type. A distributor warehouse type is not a customer DC.
+    site_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    site_owner: Mapped[str] = mapped_column(String(32), nullable=False, default="distributor", server_default="distributor")
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    confirmed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     distributor: Mapped["DimDistributor"] = relationship()
 
@@ -111,6 +130,32 @@ class DimCustomer(Base, TimestampMixin):
 
 class CustomerLocation(Base, TimestampMixin):
     __tablename__ = "customer_location"
+    __table_args__ = (
+        CheckConstraint(
+            "site_level IS NULL OR site_level IN ('distributor_stock', 'customer_dc', 'store', 'other')",
+            name="ck_customer_location_site_level",
+        ),
+        CheckConstraint(
+            "site_owner IN ('customer', 'distributor')",
+            name="ck_customer_location_site_owner",
+        ),
+        CheckConstraint(
+            "site_owner <> 'distributor' OR site_level IS DISTINCT FROM 'customer_dc'",
+            name="ck_customer_location_owner_not_dc",
+        ),
+        CheckConstraint(
+            "latitude IS NULL OR (latitude >= -90 AND latitude <= 90)",
+            name="ck_customer_location_latitude",
+        ),
+        CheckConstraint(
+            "longitude IS NULL OR (longitude >= -180 AND longitude <= 180)",
+            name="ck_customer_location_longitude",
+        ),
+        CheckConstraint(
+            "(latitude IS NULL) = (longitude IS NULL)",
+            name="ck_customer_location_coords_pair",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False, index=True)
@@ -120,6 +165,14 @@ class CustomerLocation(Base, TimestampMixin):
     region_id: Mapped[int | None] = mapped_column(ForeignKey("dim_region.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notes_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Level is separate from location_type. Warehouse type alone is not a confirmed DC.
+    site_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    site_owner: Mapped[str] = mapped_column(String(32), nullable=False, default="customer", server_default="customer")
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    confirmed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Steward-dropped pin. Empty until a steward saves both. An import does not fill these.
+    latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
 
     customer: Mapped["DimCustomer"] = relationship()
     region: Mapped["DimRegion | None"] = relationship()

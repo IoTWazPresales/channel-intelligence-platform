@@ -57,6 +57,7 @@ def install_tenant_select_scope() -> None:
     from app.models.distributor_code_mint_setting import DistributorCodeMintSetting
     from app.models.fact_customer_sellthrough import FactCustomerSellthrough
     from app.models.fact_demand_forecast import FactDemandForecast
+    from app.models.store_dc import DcServedAccount, SiteCandidate, StoreDcTenantConfig
     from app.models.facts import (
         FactInboundShipment,
         FactInventoryCustomer,
@@ -98,6 +99,9 @@ def install_tenant_select_scope() -> None:
             SqlViewerAudit,
             StewardAuditEvent,
             WeeksOfCoverObservation,
+            SiteCandidate,
+            DcServedAccount,
+            StoreDcTenantConfig,
         ]
     )
 
