@@ -90,6 +90,7 @@ class CustomerSourceTokenAlias(Base, TimestampMixin):
     __tablename__ = "customer_source_token_alias"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id", ondelete="CASCADE"), nullable=False)
     source_definition_id: Mapped[int | None] = mapped_column(ForeignKey("source_definition.id"), nullable=True)
     distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True)
@@ -113,6 +114,7 @@ class DistributorSourceTokenAlias(Base, TimestampMixin):
     __tablename__ = "distributor_source_token_alias"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id", ondelete="CASCADE"), nullable=False)
     source_definition_id: Mapped[int | None] = mapped_column(ForeignKey("source_definition.id"), nullable=True)
     raw_token: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -130,6 +132,7 @@ class ChannelSourceTokenAlias(Base, TimestampMixin):
     __tablename__ = "channel_source_token_alias"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     channel_id: Mapped[int] = mapped_column(ForeignKey("dim_channel.id", ondelete="CASCADE"), nullable=False)
     source_definition_id: Mapped[int | None] = mapped_column(ForeignKey("source_definition.id"), nullable=True)
     raw_token: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -147,6 +150,7 @@ class RegionSourceTokenAlias(Base, TimestampMixin):
     __tablename__ = "region_source_token_alias"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     region_id: Mapped[int] = mapped_column(ForeignKey("dim_region.id", ondelete="CASCADE"), nullable=False)
     source_definition_id: Mapped[int | None] = mapped_column(ForeignKey("source_definition.id"), nullable=True)
     raw_token: Mapped[str] = mapped_column(String(512), nullable=False)

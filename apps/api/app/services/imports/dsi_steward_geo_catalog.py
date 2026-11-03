@@ -11,6 +11,7 @@ from app.models.import_distributor_si import ChannelSourceTokenAlias, RegionSour
 from app.models.ingestion import ImportJob
 from app.reference.iso3166_countries import alpha2_name_index, resolve_alpha2_from_token
 from app.services.imports.distributor_sales_inventory import _norm_key
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.services.imports.dsi_region_catalog import ensure_dim_region_from_iso_sync
 from app.services.imports.dsi_steward_candidate_ops import StewardOpError
 
@@ -36,11 +37,14 @@ def _channel_alias_exists(
     normalized_token: str,
     channel_id: int,
     source_definition_id: int | None,
+    tenant_id: str | None = None,
 ) -> ChannelSourceTokenAlias | None:
+    tid = effective_tenant_id(tenant_id)
     q = select(ChannelSourceTokenAlias).where(
         ChannelSourceTokenAlias.normalized_token == normalized_token,
         ChannelSourceTokenAlias.channel_id == int(channel_id),
         ChannelSourceTokenAlias.status == "approved",
+        tenant_scope_predicate(ChannelSourceTokenAlias, tid),
     )
     if source_definition_id is not None:
         q = q.where(
@@ -60,11 +64,14 @@ def _region_alias_exists(
     normalized_token: str,
     region_id: int,
     source_definition_id: int | None,
+    tenant_id: str | None = None,
 ) -> RegionSourceTokenAlias | None:
+    tid = effective_tenant_id(tenant_id)
     q = select(RegionSourceTokenAlias).where(
         RegionSourceTokenAlias.normalized_token == normalized_token,
         RegionSourceTokenAlias.region_id == int(region_id),
         RegionSourceTokenAlias.status == "approved",
+        tenant_scope_predicate(RegionSourceTokenAlias, tid),
     )
     if source_definition_id is not None:
         q = q.where(
@@ -99,6 +106,7 @@ def create_dim_channel_with_source_alias_sync(
         raise StewardOpError("channel_name is required (max 256 chars)", status_code=400)
 
     src_id = _source_definition_id_for_job(job)
+    tid = effective_tenant_id(job.tenant_id)
     nt = _norm_key(rt)
     if not nt:
         raise StewardOpError("raw_token normalizes to empty", status_code=400)
@@ -116,6 +124,7 @@ def create_dim_channel_with_source_alias_sync(
         raise StewardOpError("dim_channel code or name violates uniqueness", status_code=409) from exc
 
     alias = ChannelSourceTokenAlias(
+        tenant_id=tid,
         channel_id=int(ch.id),
         source_definition_id=src_id,
         raw_token=rt[:512],
@@ -153,11 +162,14 @@ def create_channel_source_token_alias_sync(
     if not rt:
         raise StewardOpError("raw_token is required", status_code=400)
     src_id = _source_definition_id_for_job(job)
+    tid = effective_tenant_id(job.tenant_id)
     nt = _norm_key(rt)
     if not nt:
         raise StewardOpError("raw_token normalizes to empty", status_code=400)
 
-    hit = _channel_alias_exists(sess, normalized_token=nt, channel_id=int(ch.id), source_definition_id=src_id)
+    hit = _channel_alias_exists(
+        sess, normalized_token=nt, channel_id=int(ch.id), source_definition_id=src_id, tenant_id=tid
+    )
     if hit is not None:
         return {
             "ok": True,
@@ -169,6 +181,7 @@ def create_channel_source_token_alias_sync(
         }
 
     alias = ChannelSourceTokenAlias(
+        tenant_id=tid,
         channel_id=int(ch.id),
         source_definition_id=src_id,
         raw_token=rt[:512],
@@ -210,6 +223,7 @@ def create_dim_region_with_source_alias_sync(
         raise StewardOpError("region_name is required (max 256 chars)", status_code=400)
 
     src_id = _source_definition_id_for_job(job)
+    tid = effective_tenant_id(job.tenant_id)
     nt = _norm_key(rt)
     if not nt:
         raise StewardOpError("raw_token normalizes to empty", status_code=400)
@@ -227,6 +241,7 @@ def create_dim_region_with_source_alias_sync(
         raise StewardOpError("dim_region code or name violates uniqueness", status_code=409) from exc
 
     alias = RegionSourceTokenAlias(
+        tenant_id=tid,
         region_id=int(reg.id),
         source_definition_id=src_id,
         raw_token=rt[:512],
@@ -264,11 +279,14 @@ def create_region_source_token_alias_sync(
     if not rt:
         raise StewardOpError("raw_token is required", status_code=400)
     src_id = _source_definition_id_for_job(job)
+    tid = effective_tenant_id(job.tenant_id)
     nt = _norm_key(rt)
     if not nt:
         raise StewardOpError("raw_token normalizes to empty", status_code=400)
 
-    hit = _region_alias_exists(sess, normalized_token=nt, region_id=int(reg.id), source_definition_id=src_id)
+    hit = _region_alias_exists(
+        sess, normalized_token=nt, region_id=int(reg.id), source_definition_id=src_id, tenant_id=tid
+    )
     if hit is not None:
         return {
             "ok": True,
@@ -280,6 +298,7 @@ def create_region_source_token_alias_sync(
         }
 
     alias = RegionSourceTokenAlias(
+        tenant_id=tid,
         region_id=int(reg.id),
         source_definition_id=src_id,
         raw_token=rt[:512],

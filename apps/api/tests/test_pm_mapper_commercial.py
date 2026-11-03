@@ -127,12 +127,14 @@ def test_merge_memory_updates_in_memory_object() -> None:
 
     src = MagicMock()
     src.id = 1
+    src.tenant_id = "default"
     src.column_mapping_memory = None
     db = MagicMock()
     db.get.return_value = src
     merge_memory_from_pm_save(
         db,
         source_id=1,
+        tenant_id="default",
         mapping_decisions={
             "Partner SKU": {"target": "market_sku"},
             "junk": {"disposition": "ignore"},
@@ -145,6 +147,7 @@ def test_merge_memory_updates_in_memory_object() -> None:
 def test_merge_memory_nests_product_line_under_mapping_profile() -> None:
     src = MagicMock()
     src.id = 1
+    src.tenant_id = "default"
     src.column_mapping_memory = {
         "by_header_norm": {"sku": {"target": "market_sku", "confirmations": 2}},
         "schema_version": "1",
@@ -154,6 +157,7 @@ def test_merge_memory_nests_product_line_under_mapping_profile() -> None:
     merge_memory_from_pm_save(
         db,
         source_id=1,
+        tenant_id="default",
         mapping_decisions={"Item": {"target": "technical_product_id"}},
         product_line="NB",
     )

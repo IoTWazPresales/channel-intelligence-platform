@@ -39,8 +39,9 @@ class SourceDefinition(Base, TimestampMixin):
     __tablename__ = "source_definition"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     import_template_id: Mapped[int] = mapped_column(ForeignKey("import_template.id"), nullable=False)
-    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     source_kind: Mapped[str] = mapped_column(String(64), nullable=False)
     expected_template: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

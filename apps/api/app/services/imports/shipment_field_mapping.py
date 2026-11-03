@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.ingestion import ImportJob, RawFileMetadata, SourceDefinition
 from app.services.imports.pm_mapping_memory import MEMORY_SCHEMA_VERSION, load_by_header_norm, norm_header_key
+from app.services.imports.tenant_mapping_scope import assert_source_tenant, source_memory_visible
 from app.storage.local import get_storage_backend
 
 
@@ -181,10 +182,12 @@ def extract_customer_po_from_raw_row(raw: dict | None) -> str | None:
     return None
 
 
-def merge_shipment_mapping_memory(db: Session, *, source_id: int, field_mapping: dict[str, str]) -> None:
+def merge_shipment_mapping_memory(
+    db: Session, *, source_id: int, tenant_id: str, field_mapping: dict[str, str]
+) -> None:
     """Persist confirmed shipment column → canonical mappings on the source (by normalized header)."""
     src = db.get(SourceDefinition, source_id)
-    if src is None:
+    if not assert_source_tenant(src, tenant_id):
         return
     allowed = set(SHIPMENT_CANONICAL_TARGETS)
     root: dict[str, Any] = dict(src.column_mapping_memory or {})
@@ -209,8 +212,9 @@ def merge_shipment_mapping_memory(db: Session, *, source_id: int, field_mapping:
     db.add(src)
 
 
-def remembered_sheet_names(source: SourceDefinition | None) -> list[str]:
+def remembered_sheet_names(source: SourceDefinition | None, *, tenant_id: str | None = None) -> list[str]:
     """Sheet names last confirmed for this source. Empty when nothing is stored."""
+    source = source_memory_visible(source, tenant_id)
     if source is None or not isinstance(source.column_mapping_memory, dict):
         return []
     raw = source.column_mapping_memory.get("selected_sheet_names")
@@ -219,8 +223,9 @@ def remembered_sheet_names(source: SourceDefinition | None) -> list[str]:
     return [str(name) for name in raw if isinstance(name, str) and str(name).strip()]
 
 
-def remembered_seen_sheet_names(source: SourceDefinition | None) -> list[str]:
+def remembered_seen_sheet_names(source: SourceDefinition | None, *, tenant_id: str | None = None) -> list[str]:
     """Every sheet the operator was shown when they last confirmed the choice (selected or not)."""
+    source = source_memory_visible(source, tenant_id)
     if source is None or not isinstance(source.column_mapping_memory, dict):
         return []
     raw = source.column_mapping_memory.get("seen_sheet_names")
@@ -229,14 +234,16 @@ def remembered_seen_sheet_names(source: SourceDefinition | None) -> list[str]:
     return [str(name) for name in raw if isinstance(name, str) and str(name).strip()]
 
 
-def sheet_changes_since_remembered(source: SourceDefinition | None, available: list[str]) -> dict[str, list[str]]:
+def sheet_changes_since_remembered(
+    source: SourceDefinition | None, available: list[str], *, tenant_id: str | None = None
+) -> dict[str, list[str]]:
     """New sheets (never shown to the operator) and missing sheets (remembered, absent now). A rename is one of each.
 
     Without a stored list of the sheets that were shown (memory from before this field), every sheet that was not
     selected counts as new once: the operator confirms again and the list is stored.
     """
-    selected = remembered_sheet_names(source)
-    seen = set(remembered_seen_sheet_names(source)) | set(selected)
+    selected = remembered_sheet_names(source, tenant_id=tenant_id)
+    seen = set(remembered_seen_sheet_names(source, tenant_id=tenant_id)) | set(selected)
     return {
         "new": [name for name in available if name not in seen],
         "missing": [name for name in selected if name not in set(available)],
@@ -244,7 +251,11 @@ def sheet_changes_since_remembered(source: SourceDefinition | None, available: l
 
 
 def initial_sheet_selection(
-    source: SourceDefinition | None, names: list[str], default_choice: list[str]
+    source: SourceDefinition | None,
+    names: list[str],
+    default_choice: list[str],
+    *,
+    tenant_id: str | None = None,
 ) -> tuple[list[str], bool, dict[str, list[str]]]:
     """(sheets to select, whether the dialog may be skipped, what changed since the remembered choice).
 
@@ -252,23 +263,28 @@ def initial_sheet_selection(
     or renamed, is never dropped silently. The dialog opens with it listed and unselected, and says what changed.
     Nothing remembered: the default choice, confirmed only for a one-sheet file.
     """
-    remembered = remembered_sheet_names(source)
+    remembered = remembered_sheet_names(source, tenant_id=tenant_id)
     present = [name for name in names if name in set(remembered)]
     if not present:
         return list(default_choice), len(names) <= 1, {"new": [], "missing": []}
-    changes = sheet_changes_since_remembered(source, names)
+    changes = sheet_changes_since_remembered(source, names, tenant_id=tenant_id)
     return present, not changes["new"], changes
 
 
 def remember_selected_sheets(
-    db: Session, *, source_id: int, sheet_names: list[str], available_sheets: list[str] | None = None
+    db: Session,
+    *,
+    source_id: int,
+    tenant_id: str,
+    sheet_names: list[str],
+    available_sheets: list[str] | None = None,
 ) -> None:
     """Store the operator's sheet choice on the source so the next file can skip the dialog.
 
     ``available_sheets`` is every sheet the operator was shown; a sheet outside it is new on the next file.
     """
     src = db.get(SourceDefinition, source_id)
-    if src is None:
+    if not assert_source_tenant(src, tenant_id):
         return
     root: dict[str, Any] = dict(src.column_mapping_memory or {})
     root["selected_sheet_names"] = [str(name) for name in sheet_names]
@@ -283,9 +299,12 @@ def headers_match_saved_shipment_mapping(
     headers: list[str],
     source: SourceDefinition | None,
     mapping: dict[str, str],
+    *,
+    tenant_id: str | None = None,
 ) -> bool:
     """True when every header already has the same saved target and the mapping can validate."""
-    memory = load_by_header_norm(source) if source else {}
+    scoped = source_memory_visible(source, tenant_id)
+    memory = load_by_header_norm(scoped) if scoped else {}
     if not memory:
         return False
     allowed = set(SHIPMENT_CANONICAL_TARGETS)
@@ -309,9 +328,12 @@ def headers_match_saved_shipment_mapping(
     return len(shipment_mapping_gate_errors(mapping)) == 0
 
 
-def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefinition | None) -> dict[str, str]:
+def build_initial_shipment_field_mapping(
+    headers: list[str], source: SourceDefinition | None, *, tenant_id: str | None = None
+) -> dict[str, str]:
     """Map file header -> canonical shipment field using saved source memory, template aliases, and heuristics."""
-    template = _effective_mapping_template(source)
+    scoped = source_memory_visible(source, tenant_id)
+    template = _effective_mapping_template(scoped)
     aliases: dict[str, str] = {}
     for canonical, meta in template.items():
         if canonical not in SHIPMENT_CANONICAL_TARGETS:
@@ -323,7 +345,7 @@ def build_initial_shipment_field_mapping(headers: list[str], source: SourceDefin
                 aliases[_norm_header(a)] = canonical
 
     allowed_targets = set(SHIPMENT_CANONICAL_TARGETS)
-    memory = load_by_header_norm(source) if source else {}
+    memory = load_by_header_norm(scoped) if scoped else {}
     mapping: dict[str, str] = {}
     for col in headers:
         if not isinstance(col, str) or not col.strip():

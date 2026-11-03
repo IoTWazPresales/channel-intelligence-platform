@@ -14,6 +14,7 @@ from typing import Any, Callable
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.models.dimensions import DimProduct
 from app.models.cpor import CporClaimEvidenceLine
 from app.models.import_distributor_si import ImportDistributorSiStagingLine, ImportEntityMappingCandidate
 from app.models.mapping import ProductAlias
@@ -24,6 +25,7 @@ from app.services.imports.product_resolution_index_cache import (
     invalidate_product_resolution_index_cache,
 )
 from app.services.imports.product_resolution_standard import resolve_product_id_single_match
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.utils.json_safe import to_jsonable
 
 _SHIPMENT_UNRESOLVED = frozenset({"no_match", "inactive_only", "ambiguous", "no_identifier"})
@@ -40,6 +42,8 @@ def _norm_token(raw: str | None) -> str:
 def match_token_to_product(
     session: Session,
     token: str,
+    *,
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Exact-tier match only. Never auto-creates dim_product."""
     display = _norm_token(token)
@@ -47,7 +51,7 @@ def match_token_to_product(
     if not key:
         return {"token": display or (token or ""), "matched": False, "reason": "blank_token"}
 
-    idx = get_product_resolution_index(session)
+    idx = get_product_resolution_index(session, tenant_id=tenant_id)
 
     steward = idx.steward_alias_by_key.get(key)
     if steward is not None:
@@ -413,12 +417,19 @@ def _repoint_cst_staging(session: Session, tok: str, product_id: int) -> int:
     return n
 
 
-def _ensure_product_alias(session: Session, tok: str, product_id: int) -> tuple[bool, bool]:
+def _ensure_product_alias(
+    session: Session, tok: str, product_id: int, *, tenant_id: str | None = None
+) -> tuple[bool, bool]:
     """Return (written, skipped_conflict). Never auto-creates dim_product."""
     alias_val = tok[:256]
     key = _product_token_key(alias_val)
+    prod = session.get(DimProduct, int(product_id))
+    tid = effective_tenant_id(tenant_id or (getattr(prod, "tenant_id", None) if prod else None))
     existing = session.scalar(
-        select(ProductAlias).where(func.lower(ProductAlias.alias_value) == key)
+        select(ProductAlias).where(
+            func.lower(ProductAlias.alias_value) == key,
+            tenant_scope_predicate(ProductAlias, tid),
+        )
     )
     if existing is not None:
         if int(existing.product_id) == int(product_id):
@@ -426,6 +437,7 @@ def _ensure_product_alias(session: Session, tok: str, product_id: int) -> tuple[
         return False, True
     session.add(
         ProductAlias(
+            tenant_id=tid,
             product_id=int(product_id),
             alias_value=alias_val,
             alias_kind="source_import_token",

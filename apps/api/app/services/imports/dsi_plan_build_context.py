@@ -12,6 +12,7 @@ from app.models.dimensions import DimChannel, DimRegion
 from app.models.import_distributor_si import ChannelSourceTokenAlias, RegionSourceTokenAlias
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.services.imports.dsi_customer_intelligence import (
     HistoricalCustomerResolution,
     JobCustomerSiblingMapping,
@@ -62,8 +63,13 @@ class DSIPlanBuildContext:
 
 
 def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None = None) -> DSIPlanBuildContext:
-    res_cache = _build_resolution_cache(session, None)
-    prod_idx = _load_product_resolution_index(session)
+    tenant_id = effective_tenant_id(None)
+    if current_job_id is not None:
+        job_row = session.get(ImportJob, int(current_job_id))
+        if job_row is not None:
+            tenant_id = effective_tenant_id(job_row.tenant_id)
+    res_cache = _build_resolution_cache(session, None, tenant_id=tenant_id)
+    prod_idx = _load_product_resolution_index(session, tenant_id=tenant_id)
 
     regions = list(session.scalars(select(DimRegion)).all())
     channels = list(session.scalars(select(DimChannel)).all())
@@ -91,10 +97,20 @@ def build_dsi_plan_build_context(session: Session, *, current_job_id: int | None
             channel_name_lower[nk] = int(c.id)
 
     region_aliases = tuple(
-        session.scalars(select(RegionSourceTokenAlias).where(RegionSourceTokenAlias.status == "approved")).all()
+        session.scalars(
+            select(RegionSourceTokenAlias).where(
+                RegionSourceTokenAlias.status == "approved",
+                tenant_scope_predicate(RegionSourceTokenAlias, tenant_id),
+            )
+        ).all()
     )
     channel_aliases = tuple(
-        session.scalars(select(ChannelSourceTokenAlias).where(ChannelSourceTokenAlias.status == "approved")).all()
+        session.scalars(
+            select(ChannelSourceTokenAlias).where(
+                ChannelSourceTokenAlias.status == "approved",
+                tenant_scope_predicate(ChannelSourceTokenAlias, tenant_id),
+            )
+        ).all()
     )
 
     source_def_id: int | None = None

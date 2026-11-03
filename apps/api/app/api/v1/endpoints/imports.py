@@ -1751,7 +1751,11 @@ async def post_shipment_sheets(job_id: int, body: dict[str, Any] = Body(...), db
     if job.source_id is not None:
         with SessionLocal() as sync_db:
             remember_selected_sheets(
-                sync_db, source_id=int(job.source_id), sheet_names=chosen, available_sheets=available or None
+                sync_db,
+                source_id=int(job.source_id),
+                tenant_id=str(job.tenant_id),
+                sheet_names=chosen,
+                available_sheets=available or None,
             )
             sync_db.commit()
     with SessionLocal() as sync_db:
@@ -1782,7 +1786,12 @@ async def put_shipment_field_mapping(job_id: int, body: dict[str, Any] = Body(..
     await db.refresh(job)
     if job.source_id is not None:
         with SessionLocal() as sync_db:
-            merge_shipment_mapping_memory(sync_db, source_id=int(job.source_id), field_mapping=cleaned)
+            merge_shipment_mapping_memory(
+                sync_db,
+                source_id=int(job.source_id),
+                tenant_id=str(job.tenant_id),
+                field_mapping=cleaned,
+            )
             sync_db.commit()
     return shipment_mapping_state_dict(job)
 
@@ -1904,7 +1913,12 @@ async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), d
         if job.source_id is not None and nested_clean:
             with SessionLocal() as sync_db:
                 first = next(iter(nested_clean.values()))
-                merge_dsi_mapping_memory(sync_db, source_id=job.source_id, field_mapping=first)
+                merge_dsi_mapping_memory(
+                    sync_db,
+                    source_id=job.source_id,
+                    tenant_id=str(job.tenant_id),
+                    field_mapping=first,
+                )
                 sync_db.commit()
     else:
         headers = list(job.file_headers or [])
@@ -1919,7 +1933,12 @@ async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), d
         job.field_mapping = cleaned
         if job.source_id is not None:
             with SessionLocal() as sync_db:
-                merge_dsi_mapping_memory(sync_db, source_id=job.source_id, field_mapping=cleaned)
+                merge_dsi_mapping_memory(
+                    sync_db,
+                    source_id=job.source_id,
+                    tenant_id=str(job.tenant_id),
+                    field_mapping=cleaned,
+                )
                 sync_db.commit()
     await db.commit()
     job = await _async_import_job_with_source(db, job_id)
