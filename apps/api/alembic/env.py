@@ -87,6 +87,9 @@ from app.models import (  # noqa: F401
     WeeksOfCoverObservation,
     WeeksOfStock,
     ShippingMailerRecipient,
+    SiteCandidate,
+    DcServedAccount,
+    StoreDcTenantConfig,
 )
 
 config = context.config
