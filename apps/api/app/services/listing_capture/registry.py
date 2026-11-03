@@ -16,8 +16,13 @@ from sqlalchemy.orm import Session, defer
 from app.models.cst_listing_seed import CstListingSeed
 from app.models.dimensions import DimProduct
 from app.models.listing_capture import CustomerListing, ListingObservation
+from app.services.listing_capture.adapters import (
+    SiteConfig,
+    adapter_module,
+    configured_adapter,
+    missing_fields,
+)
 from app.services.listing_capture.marketplace_vocab import (
-    LISTING_MARKETPLACE_SET,
     LISTING_SOURCE_SET,
     LISTING_STATUS_SET,
     PARSER_VERSION,
@@ -25,14 +30,10 @@ from app.services.listing_capture.marketplace_vocab import (
 from app.services.listing_capture.observation import (
     compress_snapshot,
     decompress_snapshot,
-    fetch_url_text,
     parse_snapshot_text,
     should_backoff_dead_link,
 )
-from app.services.listing_capture.takealot_fetch import extract_plid
-
-# Takealot fetch reasons meaning "the REST details call 404'd and EAN recovery failed".
-_TAKEALOT_UNRESOLVED_REASONS = frozenset({"plid_not_found", "ean_not_unique_or_missing"})
+from app.services.listing_capture.sites import site_for_customer, site_for_listing
 
 _log = logging.getLogger(__name__)
 
@@ -72,11 +73,17 @@ def create_listing(
     registered_by: str | None = None,
     external_id: str | None = None,
     notes: str | None = None,
+    site: SiteConfig | None = None,
 ) -> CustomerListing:
+    """A listing on a site the customer's tenant already has (``listing_site``); the site need not
+    have a page reader yet (it is not fetched until it does)."""
     mkt = marketplace.strip().lower()
     src = source.strip().lower()
-    if mkt not in LISTING_MARKETPLACE_SET:
-        raise ValueError(f"unknown marketplace: {marketplace}")
+    site = site if site is not None else site_for_customer(session, customer_id, mkt)
+    if site is None or site.site_key != mkt:
+        raise ValueError(f"unknown site: {marketplace} (add it under Sites & sellers first)")
+    if not site.is_active:
+        raise ValueError(f"site {mkt} is inactive")
     if src not in LISTING_SOURCE_SET:
         raise ValueError(f"unknown source: {source}")
     url_s = url.strip()
@@ -149,9 +156,21 @@ def import_listings_csv(
     return {"created": created, "row_flags": flags, "ok": True}
 
 
-def list_proposals(session: Session, *, status: str = "proposed") -> list[dict[str, Any]]:
-    from app.services.listing_capture.auto_finder import enrich_proposal_with_suggested_url
+def suggested_url_for_seed(session: Session, seed: CstListingSeed) -> str | None:
+    """A remembered confirmed product link. The report stock code is never a link."""
+    product_id = getattr(seed, "product_id", None)
+    if product_id is None:
+        return None
+    site = site_for_customer(session, getattr(seed, "customer_id", None), getattr(seed, "marketplace", None))
+    if site is None or site.id is None:
+        return None
+    from app.services.listing_capture.links import confirmed_link
 
+    row = confirmed_link(session, site.id, int(product_id))
+    return row.url if row is not None else None
+
+
+def list_proposals(session: Session, *, status: str = "proposed") -> list[dict[str, Any]]:
     q = (status or "proposed").strip().lower()
     stmt = select(CstListingSeed).order_by(CstListingSeed.id)
     if q not in {"all", "*"}:
@@ -162,20 +181,19 @@ def list_proposals(session: Session, *, status: str = "proposed") -> list[dict[s
     for r in rows:
         sku, name = labels.get(int(r.product_id), (None, None)) if r.product_id is not None else (None, None)
         out.append(
-            enrich_proposal_with_suggested_url(
-                {
-                    "id": r.id,
-                    "customer_id": r.customer_id,
-                    "marketplace": r.marketplace,
-                    "external_id": r.external_id,
-                    "product_id": r.product_id,
-                    "product_sku": sku,
-                    "product_name": name,
-                    "status": r.status,
-                    "source": "CST feed",
-                    "import_job_id": r.import_job_id,
-                }
-            )
+            {
+                "id": r.id,
+                "customer_id": r.customer_id,
+                "marketplace": r.marketplace,
+                "external_id": r.external_id,
+                "product_id": r.product_id,
+                "product_sku": sku,
+                "product_name": name,
+                "status": r.status,
+                "source": "CST feed",
+                "import_job_id": r.import_job_id,
+                "suggested_url": suggested_url_for_seed(session, r),
+            }
         )
     return out
 
@@ -215,13 +233,11 @@ def confirm_suggested_proposals(
     registered_by: str | None = None,
     limit: int | None = None,
 ) -> dict[str, Any]:
-    """Confirm proposed seeds that have an auto-finder URL — skip seeds without a suggestion.
+    """Confirm proposed seeds that have a suggested product link — skip seeds without one.
 
     Still steward-initiated (explicit call / UI button). Never invents a URL when
-    ``suggest_listing_url`` returns None.
+    ``suggested_url_for_seed`` returns None.
     """
-    from app.services.listing_capture.auto_finder import suggest_listing_url
-
     rows = list(
         session.scalars(
             select(CstListingSeed)
@@ -234,11 +250,8 @@ def confirm_suggested_proposals(
     for seed in rows:
         if limit is not None and confirmed >= int(limit):
             break
-        url = suggest_listing_url(str(seed.marketplace), str(seed.external_id))
+        url = suggested_url_for_seed(session, seed)
         reason = None if url else "no_suggested_url"
-        if url and str(seed.marketplace).strip().lower() == "takealot" and not extract_plid(url):
-            # Defence in depth: a Takealot seed is bulk-confirmed only with a real PLID.
-            reason = "takealot_plid_unresolved"
         if reason:
             skipped.append(
                 {
@@ -273,13 +286,6 @@ def reject_proposal(session: Session, *, seed_id: int) -> CstListingSeed:
     return seed
 
 
-def _takealot_url_for(plid: str, parse_flags: dict[str, Any] | None) -> str:
-    from app.services.listing_capture.auto_finder import takealot_product_url
-
-    canon = (parse_flags or {}).get("canonical_url")
-    return takealot_product_url(plid, canonical_url=str(canon) if canon else None)
-
-
 def _write_back_verified_url(
     session: Session,
     listing: CustomerListing,
@@ -291,7 +297,7 @@ def _write_back_verified_url(
 
     The first replaced value is kept in ``meta_json.original_url`` (never overwritten).
     If another listing of the same customer already holds the resolved URL (two report
-    SKUs resolving to one PLID; ``uq_customer_listing_customer_url``), nothing is
+    SKUs resolving to one page id; ``uq_customer_listing_customer_url``), nothing is
     rewritten or stamped: the id is recorded in ``meta_json.url_conflict_listing_id``
     and the URL stays unverified. Listings are never merged here.
     """
@@ -322,22 +328,24 @@ def listing_url_verified_at(
     listing: CustomerListing,
     *,
     last_ok_fetch_at: datetime | None = None,
+    site: SiteConfig | None = None,
 ) -> str | None:
     """When the stored URL was last verified to open the product page, else None.
 
     Definition ("verified"):
     - ``meta_json.url_verified_at`` is set (stamped by ``record_observation`` when the
-      stored URL was fetched/resolved successfully, or by the N-0039 repair); or
-    - non-Takealot only: an observation of this URL with HTTP 200 and parse ``ok``
-      (``last_ok_fetch_at``). Takealot prices come from the REST API / EAN search, not
-      the stored URL, so a Takealot price observation does NOT verify the URL.
+      stored URL was fetched/resolved successfully); or
+    - only when the site's reader fetches the stored URL itself: an observation with HTTP
+      200 and parse ``ok`` (``last_ok_fetch_at``). A reader that reads a data endpoint by
+      page id does not open the stored URL, so its price observation does NOT verify it.
     A ``dead_link`` status overrides this in the UI.
     """
     meta = listing.meta_json if isinstance(getattr(listing, "meta_json", None), dict) else {}
     stamped = meta.get("url_verified_at")
     if stamped:
         return str(stamped)
-    if (listing.marketplace or "").strip().lower() != "takealot" and last_ok_fetch_at is not None:
+    module = adapter_module(site.adapter_key) if site is not None else None
+    if module is not None and module.READS_STORED_URL and last_ok_fetch_at is not None:
         return last_ok_fetch_at.isoformat()
     return None
 
@@ -431,7 +439,7 @@ def extraction_unchanged(prev: ListingObservation | None, *, parsed: Any, parser
     """True when ``parsed`` extracts exactly what ``prev`` holds.
 
     Compared: parser version, price, availability, promo badge, and every key the parser
-    put in its own flags (method, VAT basis, Takealot PLID/TSIN/SKU, RRP, canonical URL,
+    put in its own flags (method, VAT basis, page id/variant id/SKU, RRP, canonical URL,
     SKU match, ...). Fetch-side flags, CPOR activation and status transitions are not
     extracted fields and are not compared.
     """
@@ -452,14 +460,100 @@ def extraction_unchanged(prev: ListingObservation | None, *, parsed: Any, parser
     return True
 
 
+def _attach_offers(session: Session, obs: ListingObservation, listing: Any, site: SiteConfig | None, parsed: Any, captured_at: datetime) -> None:
+    """Keep every offer. ``extracted_price`` is already the buy-box price (the shopper's price)."""
+    from app.models.listing_offer import ListingOffer
+
+    offers = list(getattr(parsed, "offers", None) or [])
+    if not offers and getattr(parsed, "price", None) is not None:
+        offers = [
+            {
+                "seller_name": site.first_party_seller if site is not None else None,
+                "seller_id": None,
+                "price": parsed.price,
+                "availability": parsed.availability,
+                "is_buy_box": True,
+                "offer_ref": None,
+                "condition": None,
+            }
+        ]
+    customer_id = getattr(listing, "customer_id", None)
+    buy = next((o for o in offers if o.get("is_buy_box")), None)
+    if buy is not None and not buy.get("seller_name") and site is not None and site.first_party_seller:
+        buy["seller_name"] = site.first_party_seller
+    tenant = site.tenant_id if site is not None else "default"
+    if getattr(obs, "id", None) is None:
+        return
+    for offer in offers:
+        own = (
+            site.is_own_seller(customer_id, name=offer.get("seller_name"), seller_id=offer.get("seller_id"))
+            if site is not None
+            else None
+        )
+        session.add(
+            ListingOffer(
+                tenant_id=tenant,
+                observation_id=int(obs.id),
+                listing_id=int(getattr(listing, "id")),
+                seller_name=offer.get("seller_name"),
+                seller_id=offer.get("seller_id"),
+                price=offer.get("price"),
+                availability=offer.get("availability"),
+                is_buy_box=bool(offer.get("is_buy_box")),
+                is_own_seller=own,
+                offer_ref=offer.get("offer_ref"),
+                condition=offer.get("condition"),
+                captured_at=captured_at,
+            )
+        )
+    obs.offer_count = len(offers)
+    if buy is not None:
+        obs.buy_box_seller = buy.get("seller_name")
+        obs.buy_box_own = (
+            site.is_own_seller(customer_id, name=buy.get("seller_name"), seller_id=buy.get("seller_id"))
+            if site is not None
+            else None
+        )
+    session.add(obs)
+
+
+def _skipped_observation(session: Session, listing: Any, flags: dict[str, Any]) -> ListingObservation:
+    obs = ListingObservation(
+        listing_id=listing.id,
+        fetched_at=_now(),
+        http_status=None,
+        raw_snapshot=None,
+        parser_version=PARSER_VERSION,
+        parse_status="skipped",
+        parse_flags=flags,
+    )
+    session.add(obs)
+    session.flush()
+    return obs
+
+
+def _with_headers(http_get, headers: dict[str, str]):
+    if not headers:
+        return http_get
+
+    def _get(url: str) -> tuple[int, str]:
+        return http_get(url, headers=headers)
+
+    return _get
+
+
 def record_observation(
     session: Session,
     listing: CustomerListing,
     *,
     http_get=None,
     consecutive_dead: int | None = None,
+    site: SiteConfig | None = None,
 ) -> ListingObservation:
-    """Fetch (mocked) + compress + parse. Parse failure retains snapshot.
+    """Fetch (mocked) + compress + parse with the site's page reader. Parse failure retains snapshot.
+
+    ``site`` defaults to the listing's site in its customer's tenant. A site without a
+    configured reader is not fetched: a ``skipped`` row says ``site_not_configured``.
 
     Snapshot policy (2026-10-08): the payload is kept on the first observation, when the
     fetch or parse failed, when the extracted fields changed versus the previous
@@ -476,53 +570,49 @@ def record_observation(
     else:
         backoff_from = listing.status_observed_at
     if should_backoff_dead_link(consecutive_dead=consecutive_dead, last_fetch_at=backoff_from):
-        obs = ListingObservation(
-            listing_id=listing.id,
-            fetched_at=_now(),
-            http_status=None,
-            raw_snapshot=None,
-            parser_version=PARSER_VERSION,
-            parse_status="skipped",
-            parse_flags={"reason": "dead_link_backoff"},
-        )
-        session.add(obs)
-        session.flush()
-        return obs
+        return _skipped_observation(session, listing, {"reason": "dead_link_backoff"})
 
-    fetch_flags: dict[str, Any] = {}
+    site = site if site is not None else site_for_listing(session, listing)
+    adapter = configured_adapter(site)
+    if adapter is None:
+        return _skipped_observation(
+            session,
+            listing,
+            {
+                "reason": "site_not_configured",
+                "marketplace": (listing.marketplace or "").strip().lower(),
+                "missing": missing_fields(site) if site is None or site.is_active else ["is_active"],
+            },
+        )
+    if http_get is None:
+        raise RuntimeError("Live HTTP disabled in LC-U1 — inject http_get mock")
+
     preferred_sku = getattr(listing, "external_id", None)
-    marketplace = (listing.marketplace or "").strip().lower()
-    if marketplace == "takealot":
-        from app.services.listing_capture.takealot_fetch import fetch_takealot_listing
+    meta = _listing_meta(listing)
+    ean = None
+    product = None
+    product_id = getattr(listing, "product_id", None)
+    if product_id is not None and not adapter.READS_STORED_URL:
+        product = session.get(DimProduct, product_id)
+        if product is not None:
+            ean = getattr(product, "ean", None) or getattr(product, "upc", None)
+    from app.services.listing_capture.identity import product_models
 
-        if http_get is None:
-            raise RuntimeError("Live HTTP disabled in LC-U1 — inject http_get mock")
-
-        ean = None
-        known_plid = None
-        meta = listing.meta_json if isinstance(listing.meta_json, dict) else {}
-        known_plid = str(meta.get("takealot_plid") or "") or None
-        if listing.product_id is not None:
-            product = session.get(DimProduct, listing.product_id)
-            if product is not None:
-                ean = getattr(product, "ean", None) or getattr(product, "upc", None)
-        status, body, fetch_flags = fetch_takealot_listing(
-            url=listing.url,
-            http_get=http_get,
-            external_id=preferred_sku,
-            ean=ean,
-            known_plid=known_plid,
-        )
-        resolved = fetch_flags.get("resolved_plid")
-        if resolved:
-            listing.meta_json = {**meta, "takealot_plid": resolved}
-            session.add(listing)
-    else:
-        status, body = fetch_url_text(listing.url, http_get=http_get)
-    blob = compress_snapshot(body)
-    parsed = parse_snapshot_text(
-        body, marketplace=listing.marketplace, preferred_sku=preferred_sku
+    status, body, fetch_flags = adapter.fetch(
+        site,
+        url=listing.url,
+        http_get=_with_headers(http_get, adapter.request_headers(site)),
+        external_id=preferred_sku,
+        ean=ean,
+        known_page_id=str(meta.get("page_id") or "") or None,
+        models=product_models(product) if product is not None else None,
     )
+    resolved = fetch_flags.get("resolved_page_id")
+    if resolved and meta.get("page_id") != resolved:
+        listing.meta_json = {**meta, "page_id": resolved}
+        session.add(listing)
+    blob = compress_snapshot(body)
+    parsed = adapter.parse(body, site=site, preferred_sku=preferred_sku, parser_version=PARSER_VERSION)
     flags = {**fetch_flags, **dict(parsed.flags or {})}
     if fetch_flags.get("reason"):
         # Parser flags overwrite ``reason``; keep the fetch-side reason for diagnosis.
@@ -571,30 +661,14 @@ def record_observation(
         parse_flags=flags,
     )
     session.add(obs)
-    if marketplace == "takealot":
-        if (
-            fetch_flags.get("plid_source")
-            and not fetch_flags.get("reason")
-            and parsed.parse_status == "ok"
-            and fetch_flags.get("resolved_plid")
-        ):
-            _write_back_verified_url(
-                session,
-                listing,
-                url=_takealot_url_for(fetch_flags["resolved_plid"], parsed.flags),
-                verified_at=fetched_at,
-            )
-        # Dead: the REST details call for the URL's PLID 404'd AND EAN recovery failed
-        # (no EAN, or the EAN search did not give exactly one hit) — or, as before,
-        # a resolved PLID itself 404s.
-        link_dead = (
-            fetch_flags.get("details_status") in (404, 410)
-            and fetch_flags.get("reason") in _TAKEALOT_UNRESOLVED_REASONS
-        ) or (status in (404, 410) and bool(fetch_flags.get("plid_source")))
-    else:
-        link_dead = status in (404, 410)
-        if status == 200 and parsed.parse_status == "ok":
+    if fetch_ok and parsed.parse_status == "ok":
+        if adapter.READS_STORED_URL:
             _write_back_verified_url(session, listing, url=None, verified_at=fetched_at)
+        else:
+            resolved_url = adapter.verified_url(site, fetch_flags, dict(parsed.flags or {}))
+            if resolved_url:
+                _write_back_verified_url(session, listing, url=resolved_url, verified_at=fetched_at)
+    link_dead = adapter.link_dead(fetch_flags, status)
     prev_status = (getattr(listing, "status", None) or "").strip().lower()
     new_status: str | None = None
     reason: str | None = None
@@ -641,11 +715,24 @@ def record_observation(
         meta.pop("last_failure_at", None)
         listing.meta_json = meta
     session.flush()
+    _attach_offers(session, obs, listing, site, parsed, fetched_at)
+    from app.services.listing_capture.links import note_fetch
+
+    note_fetch(session, listing, site, fetch_flags=fetch_flags, body=body)
+    session.flush()
     return obs
 
 
-def reparse_observation(session: Session, observation: ListingObservation, *, marketplace: str) -> ListingObservation:
-    """Re-run parser on stored snapshot — no re-fetch. Re-evaluate CPOR activation.
+def reparse_observation(
+    session: Session,
+    observation: ListingObservation,
+    *,
+    site: SiteConfig | None = None,
+) -> ListingObservation:
+    """Re-run the site's parser on the stored snapshot — no re-fetch. Re-evaluate CPOR activation.
+
+    ``site`` defaults to the observation's listing's site. A site without a reader is
+    re-parsed with the generic page parser.
 
     An observation without a payload (stored unchanged, or cleared after 90 days) is
     skipped: it is returned as it is, so its extracted fields are never overwritten by a
@@ -661,13 +748,15 @@ def reparse_observation(session: Session, observation: ListingObservation, *, ma
         return observation
     text = decompress_snapshot(observation.raw_snapshot)
     listing_id = getattr(observation, "listing_id", None)
-    listing_for_sku = session.get(CustomerListing, listing_id) if listing_id is not None else None
-    parsed = parse_snapshot_text(
-        text,
-        marketplace=marketplace,
-        preferred_sku=getattr(listing_for_sku, "external_id", None),
-    )
-    listing = listing_for_sku
+    listing = session.get(CustomerListing, listing_id) if listing_id is not None else None
+    if site is None and isinstance(listing, CustomerListing):
+        site = site_for_listing(session, listing)
+    module = adapter_module(site.adapter_key) if site is not None else None
+    preferred_sku = getattr(listing, "external_id", None)
+    if module is not None:
+        parsed = module.parse(text, site=site, preferred_sku=preferred_sku, parser_version=PARSER_VERSION)
+    else:
+        parsed = parse_snapshot_text(text, marketplace=(getattr(listing, "marketplace", None) or ""))
     flags = {**(parsed.flags or {}), "reparsed": True}
     if listing is not None:
         from app.services.listing_capture.cpor_activation import (
@@ -694,7 +783,9 @@ def reparse_observation(session: Session, observation: ListingObservation, *, ma
 
     flags["quality"] = evaluate_quality(
         text,
-        marketplace=marketplace,
+        site=site,
+        marketplace=getattr(listing, "marketplace", None) or "",
+        customer_id=getattr(listing, "customer_id", None),
         product=product_view,
         price=float(parsed.price) if parsed.price is not None else None,
         availability=parsed.availability,
@@ -731,6 +822,7 @@ def listing_to_dict(
     *,
     products: dict[int, tuple[str | None, str | None]] | None = None,
     last_ok_fetch: dict[int, datetime] | None = None,
+    site: SiteConfig | None = None,
 ) -> dict[str, Any]:
     sku: str | None = None
     name: str | None = None
@@ -738,6 +830,8 @@ def listing_to_dict(
         sku, name = products.get(int(row.product_id), (None, None))
     meta = row.meta_json if isinstance(getattr(row, "meta_json", None), dict) else {}
     return {
+        "site_name": site.display_name if site is not None else None,
+        "site_configured": configured_adapter(site) is not None,
         "id": row.id,
         "customer_id": row.customer_id,
         "product_id": row.product_id,
@@ -753,7 +847,9 @@ def listing_to_dict(
         "external_id": row.external_id,
         "notes": row.notes,
         "url_verified_at": listing_url_verified_at(
-            row, last_ok_fetch_at=(last_ok_fetch or {}).get(int(row.id)) if row.id is not None else None
+            row,
+            last_ok_fetch_at=(last_ok_fetch or {}).get(int(row.id)) if row.id is not None else None,
+            site=site,
         ),
         "original_url": meta.get("original_url"),
     }
@@ -769,6 +865,17 @@ def observation_to_dict(obs: ListingObservation, listing: CustomerListing | None
         "http_status": obs.http_status,
         "parse_status": obs.parse_status,
         "extracted_price": float(obs.extracted_price) if obs.extracted_price is not None else None,
+        "shoppers_price": float(obs.extracted_price) if obs.extracted_price is not None else None,
+        "buy_box_seller": getattr(obs, "buy_box_seller", None),
+        "buy_box_own": getattr(obs, "buy_box_own", None),
+        "buy_box_label": (
+            "Own"
+            if getattr(obs, "buy_box_own", None) is True
+            else "Competition"
+            if getattr(obs, "buy_box_own", None) is False
+            else None
+        ),
+        "offer_count": getattr(obs, "offer_count", None),
         "extracted_availability": obs.extracted_availability,
         "extracted_promo_badge": obs.extracted_promo_badge,
         "parser_version": obs.parser_version,
@@ -835,6 +942,7 @@ def poll_active_listings(
     now: datetime | None = None,
     exclude_ids: list[int] | None = None,
     log_result: bool = True,
+    site_for=None,
 ) -> dict[str, Any]:
     """Synchronous poll — used by API + Celery task.
 
@@ -842,7 +950,10 @@ def poll_active_listings(
       back-off are skipped without writing a row).
     - Oldest-due first (oldest last real observation, never-checked first), then
       round-robin across marketplaces.
-    - Spacing is per marketplace (time since that site's previous request).
+    - Spacing is per site (``listing_site.rate_limit_seconds``, default 5 s; time since that
+      site's previous request).
+    - A listing whose site has no configured page reader is skipped without a request or a
+      row (``skipped_not_configured``).
     - A 403/429 from a site pauses that site (``site_pause``): no more requests to it
       this run, and later runs skip it until the pause ends.
     - Stops starting new fetches after ``time_limit_seconds`` (default 10 min).
@@ -854,7 +965,6 @@ def poll_active_listings(
     from app.services.listing_capture.observation import (
         DEFAULT_RATE_LIMIT_SECONDS,
         POLL_RUN_TIME_LIMIT_SECONDS,
-        RATE_LIMIT_SECONDS,
         SITE_PAUSE_HTTP_STATUSES,
         default_http_get,
     )
@@ -887,7 +997,24 @@ def poll_active_listings(
             stmt = stmt.where(CustomerListing.marketplace.in_(want))
     if exclude_ids:
         stmt = stmt.where(CustomerListing.id.notin_([int(i) for i in exclude_ids]))
-    listings = _interleave_by_marketplace(list(session.scalars(stmt).all()))
+    due = list(session.scalars(stmt).all())
+    if site_for is None:
+        from app.services.listing_capture.sites import SiteResolver
+
+        site_for = SiteResolver.load(session, due).site_for
+    # A site without a configured reader is not fetched; its listings never take a batch slot.
+    sites: dict[int, SiteConfig] = {}
+    skipped_not_configured: dict[str, int] = {}
+    configured: list[CustomerListing] = []
+    for listing in due:
+        site = site_for(listing)
+        if configured_adapter(site) is None:
+            key = (listing.marketplace or "").strip().lower()
+            skipped_not_configured[key] = skipped_not_configured.get(key, 0) + 1
+            continue
+        sites[id(listing)] = site
+        configured.append(listing)
+    listings = _interleave_by_marketplace(configured)
     if limit is not None:
         listings = listings[: int(limit)]
 
@@ -909,6 +1036,7 @@ def poll_active_listings(
             break
         considered_ids.append(int(listing.id))
         mkt = (listing.marketplace or "").strip().lower()
+        site = sites[id(listing)]
         if mkt not in pause_checked:
             pause_checked.add(mkt)
             until = site_pause.paused_until(store, mkt, now=run_now)
@@ -923,7 +1051,9 @@ def poll_active_listings(
             skipped_backoff += 1
             continue
 
-        spacing = float(RATE_LIMIT_SECONDS.get(mkt, DEFAULT_RATE_LIMIT_SECONDS))
+        spacing = float(
+            site.rate_limit_seconds if site.rate_limit_seconds is not None else DEFAULT_RATE_LIMIT_SECONDS
+        )
         if mkt in last_fetch_at and spacing > 0:
             wait = spacing - (clock() - last_fetch_at[mkt])
             if wait > 0:
@@ -934,11 +1064,11 @@ def poll_active_listings(
 
         refused: list[int] = []
 
-        def guarded_get(url: str, _refused: list[int] = refused) -> tuple[int, str]:
-            # After a refusal, send nothing more to this site (a Takealot check makes 2-3 calls).
+        def guarded_get(url: str, headers=None, _refused: list[int] = refused) -> tuple[int, str]:
+            # After a refusal, send nothing more to this site (one check can make 2-3 calls).
             if _refused:
                 return _refused[0], ""
-            status, body = getter(url)
+            status, body = getter(url, headers=headers) if headers else getter(url)
             if status in SITE_PAUSE_HTTP_STATUSES:
                 # A refusal page is not a product page: never parse a price from it.
                 _refused.append(int(status))
@@ -948,7 +1078,7 @@ def poll_active_listings(
         obs = None
         try:
             # Back-off was decided above (consecutive_dead=0 stops a second, clock-skewed check).
-            obs = record_observation(session, listing, http_get=guarded_get, consecutive_dead=0)
+            obs = record_observation(session, listing, http_get=guarded_get, consecutive_dead=0, site=site)
             polled += 1
         except Exception:  # noqa: BLE001
             failed += 1
@@ -972,6 +1102,7 @@ def poll_active_listings(
         "listing_count": len(listings),
         "skipped_backoff": skipped_backoff,
         "skipped_paused": skipped_paused,
+        "skipped_not_configured": skipped_not_configured,
         "paused_sites": paused_sites,
         "stopped_reason": stopped_reason,
         "duration_seconds": round(clock() - started, 3),
@@ -994,6 +1125,7 @@ def fresh_listing_poll_run() -> dict[str, Any]:
         "listing_count": 0,
         "skipped_backoff": 0,
         "skipped_paused": {},
+        "skipped_not_configured": {},
         "paused_sites": {},
         "stopped_reason": None,
         "duration_seconds": 0.0,
@@ -1006,6 +1138,8 @@ def merge_listing_poll_batch(run: dict[str, Any], batch: dict[str, Any]) -> dict
     skipped_paused = dict(run.get("skipped_paused") or {})
     for mkt, count in (batch.get("skipped_paused") or {}).items():
         skipped_paused[mkt] = int(skipped_paused.get(mkt, 0)) + int(count)
+    # Every batch sees the same unconfigured listings (they are never visited): keep the latest count.
+    skipped_not_configured = dict(batch.get("skipped_not_configured") or run.get("skipped_not_configured") or {})
     paused_sites = dict(run.get("paused_sites") or {})
     for mkt, record in (batch.get("paused_sites") or {}).items():
         paused_sites.setdefault(mkt, record)
@@ -1018,6 +1152,7 @@ def merge_listing_poll_batch(run: dict[str, Any], batch: dict[str, Any]) -> dict
         "listing_count": int(run.get("listing_count") or 0) + int(batch.get("listing_count") or 0),
         "skipped_backoff": int(run.get("skipped_backoff") or 0) + int(batch.get("skipped_backoff") or 0),
         "skipped_paused": skipped_paused,
+        "skipped_not_configured": skipped_not_configured,
         "paused_sites": paused_sites,
         "stopped_reason": stopped,
         "duration_seconds": round(

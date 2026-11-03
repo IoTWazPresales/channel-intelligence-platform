@@ -24,13 +24,9 @@ LISTING_CAPTURE_USER_AGENT = (
 LISTING_CAPTURE_ACCEPT_LANGUAGE = "en-ZA,en;q=0.9"
 LISTING_CAPTURE_HTTP_TIMEOUT_SECONDS = 20
 
-# Polite defaults (seconds between fetches to the same marketplace).
-RATE_LIMIT_SECONDS: dict[str, float] = {
-    "takealot": 2.0,
-    "evetech": 2.0,
-    "amazon": 2.0,
-}
-DEFAULT_RATE_LIMIT_SECONDS = 5.0  # a retailer without its own entry (N-0085 design: 5 s)
+# Seconds between fetches to the same site when its ``listing_site.rate_limit_seconds`` is
+# empty (N-0085 design: 5 s).
+DEFAULT_RATE_LIMIT_SECONDS = 5.0
 
 # Dead-link backoff: after N consecutive 404/410, wait this many hours before retry.
 DEAD_LINK_BACKOFF_HOURS = 24
@@ -64,6 +60,7 @@ class ParseResult:
     availability: str | None = None
     promo_badge: str | None = None
     flags: dict[str, Any] | None = None
+    offers: list[dict[str, Any]] | None = None
 
 
 def parse_snapshot_text(
@@ -73,7 +70,11 @@ def parse_snapshot_text(
     parser_version: str = PARSER_VERSION,
     preferred_sku: str | None = None,
 ) -> ParseResult:
-    """JSON envelope, Takealot REST buybox, JSON-LD, then HTML price regex. FLAG on failure."""
+    """JSON envelope, JSON-LD, then HTML price regex. FLAG on failure.
+
+    The generic page parser (``html_page`` reader). Readers with their own document shape
+    parse in their adapter module.
+    """
     flags: dict[str, Any] = {"parser_version": parser_version, "marketplace": marketplace}
     if not text.strip():
         return ParseResult(parse_status="parse_failed", flags={**flags, "reason": "empty_snapshot"})
@@ -81,15 +82,6 @@ def parse_snapshot_text(
     # Try JSON envelope first
     try:
         data = json.loads(text)
-        if isinstance(data, dict) and isinstance(data.get("buybox"), dict):
-            from app.services.listing_capture.takealot_fetch import parse_takealot_product_json
-
-            return parse_takealot_product_json(
-                data,
-                preferred_sku=preferred_sku,
-                parser_version=parser_version,
-                marketplace=marketplace,
-            )
         if isinstance(data, dict) and "price" in data:
             price = data.get("price")
             return ParseResult(
@@ -107,7 +99,7 @@ def parse_snapshot_text(
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
 
-    # JSON-LD / embedded schema.org Offer price (common on Evetech / many PDPs).
+    # JSON-LD / embedded schema.org Offer price (common on product pages).
     # Prefer currency-tagged Offer blocks; ignore tiny noise values (< 50).
     offer_m = re.search(
         r'"priceCurrency"\s*:\s*"ZAR"\s*,\s*"price"\s*:\s*(\d+(?:\.\d+)?)',
@@ -157,7 +149,7 @@ def parse_snapshot_text(
         raw_num = m.group(1).replace(" ", "").replace(",", "")
         try:
             price_val = float(raw_num)
-            # Bare first-digit matches on SPA shells (Takealot Next.js loader) are noise.
+            # Bare first-digit matches on single-page-app shells are noise.
             if price_val < 50:
                 return ParseResult(
                     parse_status="parse_failed",
@@ -189,21 +181,20 @@ def should_backoff_dead_link(
     return now < last_fetch_at + timedelta(hours=DEAD_LINK_BACKOFF_HOURS)
 
 
-def default_http_get(url: str) -> tuple[int, str]:
+def default_http_get(url: str, *, headers: dict[str, str] | None = None) -> tuple[int, str]:
     """Live HTTP fetch — only invoked when the caller explicitly enables live fetch (P5).
 
     Uses urllib (stdlib, no new dependency) with an ordinary browser User-Agent (D-0063)
-    and a bounded timeout so a slow/unreachable marketplace host cannot hang the beat task.
+    and a bounded timeout so a slow/unreachable site cannot hang the beat task.
+    ``headers`` come from the site's page reader (e.g. a JSON ``Accept``).
     """
-    headers = {
+    sent = {
         "User-Agent": LISTING_CAPTURE_USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": LISTING_CAPTURE_ACCEPT_LANGUAGE,
+        **(headers or {}),
     }
-    if "api.takealot.com" in url:
-        headers["Accept"] = "application/json"
-        headers["Referer"] = "https://www.takealot.com/"
-    request = urllib.request.Request(url, headers=headers)
+    request = urllib.request.Request(url, headers=sent)
     try:
         with urllib.request.urlopen(request, timeout=LISTING_CAPTURE_HTTP_TIMEOUT_SECONDS) as response:
             status = int(getattr(response, "status", None) or response.getcode())

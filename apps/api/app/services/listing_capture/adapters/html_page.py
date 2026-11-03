@@ -1,0 +1,103 @@
+"""Page reader for sites whose product page is ordinary HTML (JSON-LD offer or a shown price).
+
+Fetches the stored listing URL itself. The seller is the site's ``first_party_seller`` (a single
+seller site); a page that lists several sellers needs a reader that keeps each offer.
+"""
+
+from __future__ import annotations
+
+import re
+from html import unescape
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from app.services.listing_capture.adapters import SiteConfig
+    from app.services.listing_capture.observation import ParseResult
+
+ADAPTER_KEY = "html_page"
+REQUIRED_FIELDS: tuple[str, ...] = ()
+READS_STORED_URL = True
+_HttpGet = Callable[[str], tuple[int, str]]
+
+
+def request_headers(site: "SiteConfig") -> dict[str, str]:
+    return {}
+
+
+def fetch(
+    site: "SiteConfig",
+    *,
+    url: str,
+    http_get: _HttpGet,
+    external_id: str | None = None,
+    ean: str | None = None,
+    known_page_id: str | None = None,
+    models: list[str] | None = None,
+) -> tuple[int, str, dict[str, Any]]:
+    del models
+    status, body = http_get(url)
+    return status, body, {}
+
+
+def parse(
+    body: str,
+    *,
+    site: "SiteConfig",
+    preferred_sku: str | None = None,
+    parser_version: str,
+) -> "ParseResult":
+    from app.services.listing_capture.observation import parse_snapshot_text
+
+    parsed = parse_snapshot_text(body, marketplace=site.site_key, parser_version=parser_version)
+    if parsed.parse_status == "ok":
+        parsed.offers = [
+            {
+                "seller_name": (site.first_party_seller or None),
+                "seller_id": None,
+                "price": parsed.price,
+                "availability": parsed.availability,
+                "is_buy_box": True,
+                "offer_ref": None,
+                "condition": None,
+            }
+        ]
+    return parsed
+
+
+def link_dead(fetch_flags: dict[str, Any], status: int) -> bool:
+    return status in (404, 410)
+
+
+def verified_url(site: "SiteConfig", fetch_flags: dict[str, Any], parse_flags: dict[str, Any]) -> str | None:
+    return None
+
+
+def _embedded_field(text: str, key: str) -> str | None:
+    match = re.search(rf'\\?"{key}\\?"\s*:\s*\\?"(.*?)\\?"', text)
+    if not match:
+        return None
+    return match.group(1).encode("utf-8").decode("unicode_escape", errors="replace")
+
+
+def quality_fields(text: str, *, site: "SiteConfig") -> dict[str, Any]:
+    title = ""
+    og = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]*)"', text, flags=re.I)
+    if og:
+        title = unescape(og.group(1))
+    image_urls = set(re.findall(r"https?:\\?/\\?/[^\"'\s>]+\.(?:jpg|jpeg|png|webp)", text, flags=re.I))
+    review_raw = _embedded_field(text, "reviewCount") or _embedded_field(text, "ratingCount")
+    seller = (site.first_party_seller or "").strip()
+    return {
+        "title": title,
+        "brand": _embedded_field(text, "brand") or "",
+        "image_count": len(image_urls) if image_urls else None,
+        "description_html": _embedded_field(text, "description"),
+        "spec_text": text,
+        "spec_names": None,
+        "review_count": int(review_raw) if review_raw and review_raw.isdigit() else None,
+        "seller_name": seller or None,
+        "seller_id": None,
+        "seller_known": bool(seller),
+        "price": None,
+        "availability": None,
+    }

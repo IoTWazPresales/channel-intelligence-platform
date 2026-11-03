@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -58,5 +58,9 @@ class ListingObservation(Base, TimestampMixin):
     extracted_promo_badge: Mapped[str | None] = mapped_column(String(128), nullable=True)
     parse_status: Mapped[str] = mapped_column(String(32), nullable=False, default="ok")
     parse_flags: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Shopper's price stays ``extracted_price`` (the buy-box price). These say who holds it.
+    buy_box_seller: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    buy_box_own: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    offer_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     listing: Mapped["CustomerListing"] = relationship("CustomerListing", back_populates="observations")

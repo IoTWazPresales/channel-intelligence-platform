@@ -30,6 +30,9 @@ from app.services.listing_capture.registry import (
     reparse_observation,
 )
 from app.services.listing_capture.snapshot_retention import clear_expired_snapshots
+from tests.listing_site_fixtures import REST_HOST, html_site, rest_site
+
+SITES = {"shop-a": html_site("shop-a"), "market-b": rest_site("market-b")}
 
 
 def _page(price: float = 999.0, availability: str = "in_stock", promo: str | None = None) -> str:
@@ -76,7 +79,7 @@ class MemorySession:
         return result
 
 
-def _listing(lid: int = 7, marketplace: str = "evetech", status: str = "active", **kw):
+def _listing(lid: int = 7, marketplace: str = "shop-a", status: str = "active", **kw):
     return SimpleNamespace(
         id=lid,
         url=kw.pop("url", f"https://example.test/{marketplace}/{lid}"),
@@ -90,7 +93,9 @@ def _listing(lid: int = 7, marketplace: str = "evetech", status: str = "active",
 
 
 def _observe(session, listing, status: int, body: str):
-    return record_observation(session, listing, http_get=lambda _u: (status, body))
+    return record_observation(
+        session, listing, http_get=lambda _u, headers=None: (status, body), site=SITES[listing.marketplace]
+    )
 
 
 # ---------------------------------------------------------------- store / skip
@@ -208,7 +213,7 @@ def test_status_transition_keeps_snapshot_even_when_fields_match() -> None:
 def _tkl_details(*, price: float = 1799, sku: int = 222547542) -> str:
     return json.dumps(
         {
-            "desktop_href": "https://www.takealot.com/x/PLID98174082",
+            "desktop_href": f"{REST_HOST}/x/ID98174082",
             "buybox": {
                 "plid": 98174082,
                 "tsin": 99510999,
@@ -228,10 +233,10 @@ def _tkl_details(*, price: float = 1799, sku: int = 222547542) -> str:
     )
 
 
-def test_takealot_parser_flag_change_counts_as_changed() -> None:
+def test_reader_flag_change_counts_as_changed() -> None:
     """Any field the parser extracts (here the buybox SKU) counts, not only price."""
     session = MemorySession()
-    listing = _listing(9, marketplace="takealot", url="https://www.takealot.com/x/PLID98174082")
+    listing = _listing(9, marketplace="market-b", url=f"{REST_HOST}/x/ID98174082")
     first = _observe(session, listing, 200, _tkl_details())
     same = _observe(session, listing, 200, _tkl_details())
     other_seller = _observe(session, listing, 200, _tkl_details(sku=111))
@@ -242,7 +247,7 @@ def test_takealot_parser_flag_change_counts_as_changed() -> None:
 
 
 def test_mocked_session_without_previous_keeps_snapshot() -> None:
-    obs = record_observation(MagicMock(), _listing(), http_get=lambda _u: (200, _page()))
+    obs = record_observation(MagicMock(), _listing(), http_get=lambda _u: (200, _page()), site=SITES["shop-a"])
     assert obs.raw_snapshot is not None
 
 
@@ -276,7 +281,7 @@ def test_reparse_skips_observation_without_snapshot() -> None:
         parse_status="ok",
         parse_flags={"snapshot_skipped": "unchanged"},
     )
-    out = reparse_observation(session, obs, marketplace="evetech")
+    out = reparse_observation(session, obs, site=SITES["shop-a"])
     assert out is obs
     assert obs.parse_status == "ok"
     assert obs.extracted_price == Decimal("999.0000")
@@ -284,7 +289,7 @@ def test_reparse_skips_observation_without_snapshot() -> None:
     assert obs.parse_flags == {"snapshot_skipped": "unchanged"}
     session.add.assert_not_called()
     cleared = SimpleNamespace(**{**obs.__dict__, "raw_snapshot": b"", "parse_flags": {"snapshot_cleared": {}}})
-    assert reparse_observation(session, cleared, marketplace="evetech").parse_status == "ok"
+    assert reparse_observation(session, cleared, site=SITES["shop-a"]).parse_status == "ok"
 
 
 def test_reparse_with_snapshot_still_reparses() -> None:
@@ -297,7 +302,7 @@ def test_reparse_with_snapshot_still_reparses() -> None:
         parse_status="parse_failed",
         parse_flags={},
     )
-    reparse_observation(MagicMock(), obs, marketplace="evetech")
+    reparse_observation(MagicMock(), obs, site=SITES["shop-a"])
     assert obs.parse_status == "ok" and float(obs.extracted_price) == 10.0
 
 

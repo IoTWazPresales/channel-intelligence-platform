@@ -11,6 +11,7 @@ import {
   DialogTitle,
   LinearProgress,
   Link,
+  MenuItem,
   Snackbar,
   Stack,
   Table,
@@ -31,7 +32,10 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { COMPETITION_CAPABILITIES, LISTING_CAPABILITIES } from '@/features/market-listings/capabilities';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
+import { ListingLinksLens } from '@/features/market-listings/ListingLinksLens';
+import { ListingOffersSupply } from '@/features/market-listings/ListingOffersSupply';
 import { ListingQualityLens } from '@/features/market-listings/ListingQualityLens';
+import { ListingSitesLens } from '@/features/market-listings/ListingSitesLens';
 import { SubstrateOrPlanned } from '@/features/market-listings/SubstrateOrPlanned';
 import { fmtMoney } from '@/features/promotions-funding/format';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
@@ -97,6 +101,8 @@ type IntelligenceRow = {
   last_availability?: string | null;
   last_promo_badge?: string | null;
   last_fetched?: string | null;
+  buy_box_label?: string | null;
+  buy_box_seller?: string | null;
   worklist: boolean;
 };
 
@@ -201,9 +207,9 @@ export type ListingUrlState = 'verified' | 'unverified' | 'dead';
  * - `dead`: status is `dead_link` (the fetcher observed the link not resolving).
  * - `verified`: the API returned `url_verified_at`. The API sets it when
  *   `meta_json.url_verified_at` is stamped (a fetch of, or resolution to, this URL
- *   succeeded), or, for non-Takealot marketplaces only, when an observation of this
- *   URL returned HTTP 200 with a successful parse. Takealot prices come from its
- *   REST API, so a Takealot price never verifies the stored URL by itself.
+ *   succeeded), or, when the site's reader fetches the stored URL itself, when an
+ *   observation of this URL returned HTTP 200 with a successful parse. A reader that
+ *   calls a data endpoint by page id does not verify the stored URL by a price alone.
  * - `unverified`: everything else.
  */
 export function listingUrlState(l: Pick<Listing, 'status' | 'url_verified_at'>): ListingUrlState {
@@ -285,7 +291,7 @@ export function MarketSurface() {
   const [addOpen, setAddOpen] = useState(false);
   const [customerId, setCustomerId] = useState('1');
   const [url, setUrl] = useState('');
-  const [marketplace, setMarketplace] = useState('takealot');
+  const [marketplace, setMarketplace] = useState('');
   const [productId, setProductId] = useState('');
   const [confirmUrl, setConfirmUrl] = useState('');
   const [confirmSeed, setConfirmSeed] = useState<Proposal | null>(null);
@@ -331,6 +337,16 @@ export function MarketSurface() {
         { signal },
       ),
   });
+  const { data: listingMeta } = useQuery({
+    queryKey: ['listing-capture', 'meta'],
+    queryFn: ({ signal }) =>
+      apiGet<{ sites?: { site_key: string; display_name: string; configured: boolean }[] }>(
+        '/api/v1/listing-capture/meta',
+        { signal },
+      ),
+    enabled: addOpen,
+  });
+  const siteChoices = listingMeta?.sites ?? [];
   const { data: customersPage } = useQuery({
     queryKey: ['customers', 'market-names'],
     queryFn: ({ signal }) => apiGet<CustomerList>('/api/v1/customers?page=1&page_size=200', { signal }),
@@ -576,11 +592,21 @@ export function MarketSurface() {
           ) : null,
       },
       {
-        headerName: 'Last price',
+        headerName: "Shopper's price",
         type: 'rightAligned',
         width: 115,
         valueGetter: (p) => p.data?.intel?.last_price ?? null,
         valueFormatter: (p) => (p.value == null ? '—' : fmtMoney(Number(p.value))),
+      },
+      {
+        headerName: 'Buy box',
+        width: 200,
+        valueGetter: (p) => {
+          const label = p.data?.intel?.buy_box_label;
+          const seller = p.data?.intel?.buy_box_seller;
+          if (!label) return '';
+          return label === 'Competition' && seller ? `${label} · ${seller}` : label;
+        },
       },
       {
         headerName: 'Δ since first',
@@ -1450,6 +1476,8 @@ export function MarketSurface() {
         ) : null}
 
         {lens === 'quality' ? <ListingQualityLens /> : null}
+        {lens === 'sites' ? <ListingSitesLens /> : null}
+        {lens === 'links' ? <ListingLinksLens /> : null}
       </MarketChrome>
 
       <EntityContextPanel
@@ -1463,7 +1491,7 @@ export function MarketSurface() {
           selected ? (
             <HeadlineStrip columns={3}>
               <HeadlineFigure
-                label="Last price"
+                label="Shopper's price"
                 value={selected.intel?.last_price == null ? '—' : fmtMoney(selected.intel.last_price)}
                 dense
               />
@@ -1550,6 +1578,11 @@ export function MarketSurface() {
                 Price history for this listing renders from its {selected.intel?.observation_count ?? 0} observations.
               </Typography>
             )}
+            <ListingOffersSupply
+              listingId={selected.id}
+              customerId={selected.customer_id}
+              productId={selected.product_id}
+            />
             <KeyValueList
               items={[
                 { k: 'URL', v: <ListingUrl listing={selected} /> },
@@ -1643,12 +1676,20 @@ export function MarketSurface() {
             <TextField size="small" label="Customer id" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
             <TextField size="small" label="URL" value={url} onChange={(e) => setUrl(e.target.value)} fullWidth />
             <TextField
+              select
               size="small"
-              label="Marketplace"
+              label="Site"
               value={marketplace}
               onChange={(e) => setMarketplace(e.target.value)}
-              helperText="takealot | amazon | evetech"
-            />
+              helperText={siteChoices.length ? 'Sites configured for this tenant' : 'Add a site under Sites & sellers'}
+              data-testid="listing-add-site"
+            >
+              {siteChoices.map((site) => (
+                <MenuItem key={site.site_key} value={site.site_key}>
+                  {site.display_name}
+                </MenuItem>
+              ))}
+            </TextField>
             <TextField
               size="small"
               label="Product id (optional)"
@@ -1660,7 +1701,11 @@ export function MarketSurface() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddOpen(false)}>Cancel</Button>
-          <Button variant="contained" disabled={!url.trim() || createMut.isPending} onClick={() => createMut.mutate()}>
+          <Button
+            variant="contained"
+            disabled={!url.trim() || !marketplace || createMut.isPending}
+            onClick={() => createMut.mutate()}
+          >
             Save
           </Button>
         </DialogActions>

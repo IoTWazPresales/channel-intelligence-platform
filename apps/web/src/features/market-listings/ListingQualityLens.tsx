@@ -79,8 +79,9 @@ export function ListingQualityLens() {
   return (
     <Stack spacing={1.5} sx={{ mt: 2 }}>
       <Typography variant="body2" color="text.secondary">
-        Checks use the last stored snapshot for Takealot and Evetech. A flag is amber and does not block anything.
-        Missing fields say No data. Amazon is not checked. Search position is deferred.
+        Checks use the last stored snapshot. A site is checked when it has a page reader, and the buy box
+        is checked when that customer&apos;s own seller on the site is configured. A flag is amber and does not
+        block anything. Missing fields say No data. Search position is deferred.
       </Typography>
       <ModuleDataSection
         isLoading={query.isLoading}

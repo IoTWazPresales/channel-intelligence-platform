@@ -592,6 +592,7 @@ def load_promotion_line_evidence(
                     .limit(1)
                 ).all()
                 if obs and obs[0][0] is not None:
+                    # Shopper's price: the buy-box price stored on extracted_price.
                     listing["last_observed_price"] = float(obs[0][0])
         count = session.execute(select(func.count()).select_from(FactCompetitorPrice)).scalar()
         row_count = int(count or 0)

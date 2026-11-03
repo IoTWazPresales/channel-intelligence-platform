@@ -15,9 +15,10 @@ import pytest
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import Session
 
-from app.models.ingestion import ImportJob
+from app.models.dimensions import DimCustomer
+from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 from app.models.listing_capture import CustomerListing, ListingObservation
-from app.services.listing_capture import observation as obs_mod
+from app.models.listing_site import ListingSite
 from app.services.listing_capture.registry import poll_active_listings
 from app.worker.tasks import listing_capture_poll_listings_task, process_import_job_task
 
@@ -51,13 +52,31 @@ def db_session():
 
 
 def test_import_starts_within_10s_while_poll_batches(db_session: Session, monkeypatch, caplog) -> None:
-    customer_id = db_session.execute(text("select min(id) from dim_customer")).scalar_one()
-    source_id = db_session.execute(text("select min(id) from source_definition")).scalar_one()
-    if customer_id is None or source_id is None:
-        pytest.skip("cip_test is missing a customer or source")
-
-    marketplace = "pb" + uuid.uuid4().hex[:8]
-    monkeypatch.setitem(obs_mod.RATE_LIMIT_SECONDS, marketplace, 1.0)
+    # Fictional customer, site and import source in a fresh tenant (rolled back).
+    tag = uuid.uuid4().hex[:8]
+    tenant = f"t-poll-{tag}"
+    customer = DimCustomer(
+        code=f"PB-{tag}", name=f"Poll Batch {tag}", customer_status="active", is_key_account=False, tenant_id=tenant
+    )
+    template = ImportTemplate(slug=f"pb-{tag}", display_name="Poll batch proof", pipeline_handler="inbound_shipments")
+    db_session.add_all([customer, template])
+    db_session.flush()
+    source = SourceDefinition(
+        import_template_id=int(template.id), code=f"pb-{tag}", name="Poll batch proof", source_kind="file"
+    )
+    db_session.add(source)
+    marketplace = "pb" + tag
+    db_session.add(
+        ListingSite(
+            tenant_id=tenant,
+            site_key=marketplace,
+            display_name="Poll batch site",
+            adapter_key="html_page",
+            rate_limit_seconds=1.0,
+        )
+    )
+    db_session.flush()
+    customer_id, source_id = int(customer.id), int(source.id)
     listings = []
     for i in range(50):
         row = CustomerListing(
@@ -108,7 +127,7 @@ def test_import_starts_within_10s_while_poll_batches(db_session: Session, monkey
     submitted: dict[str, float] = {}
     batch_q: list[int] = []
 
-    def http_get(_url: str):
+    def http_get(_url: str, headers=None):
         calls.append(time.monotonic())
         if len(calls) == 1:
             submitted["t"] = calls[0]

@@ -2,21 +2,25 @@
 
 Accepted checks (D-0050): price and stock, title brand and model, six images,
 150 words, five key specs, expected seller, review count. A missing field is
-"no_data". A failed check is a flag. Search position is deferred. Amazon is
-not checked.
+"no_data". A failed check is a flag. Search position is deferred.
+
+The site's reader (``adapters``) extracts the page fields; the expected seller is the
+customer's own seller identity on that site (``listing_site_seller``). A site without a
+configured reader, or a customer without a configured seller identity, is "no_data".
 """
 
 from __future__ import annotations
 
-import json
 import re
 from html import unescape
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-RULES_VERSION = "n0078-2026-10-12"
+if TYPE_CHECKING:
+    from app.services.listing_capture.adapters import SiteConfig
+
+RULES_VERSION = "n0078-2026-11-03-sites"
 IMAGE_FLOOR = 6
 WORD_FLOOR = 150
-EXPECTED_SELLER = {"takealot": "Takealot", "evetech": "Evetech"}
 SPEC_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("CPU", ("cpu", "processor")),
     ("RAM", ("ram", "memory")),
@@ -52,14 +56,6 @@ def _contains(hay: str, needle: str) -> bool:
     left = re.sub(r"\s+", " ", (hay or "")).strip().lower()
     right = re.sub(r"\s+", " ", (needle or "")).strip().lower()
     return bool(right) and right in left
-
-
-def _spec_names(items: list[Any]) -> list[str]:
-    names: list[str] = []
-    for row in items:
-        if isinstance(row, dict):
-            names.append(str(row.get("display_name") or ""))
-    return names
 
 
 def _specs_present(names: list[str]) -> tuple[list[str], list[str]]:
@@ -126,25 +122,36 @@ def _description(html: str | None) -> dict[str, str]:
     return _check("flag", f"{count} words, below {WORD_FLOOR}")
 
 
-def _key_specs(names: list[str] | None) -> dict[str, str]:
+def _key_specs(names: list[str] | None, text: str | None) -> dict[str, str]:
+    if names is None and text:
+        lowered = text.lower()
+        found = [label for label, needles in SPEC_GROUPS if any(n.strip() in lowered for n in needles)]
+        names = found or None
     if names is None:
         return _no_data("No specification list on the snapshot")
-    found, missing = _specs_present(names)
+    _found, missing = _specs_present(names)
     if not missing:
         return _check("pass", "CPU, RAM, storage, screen and OS are present")
     return _check("flag", "Missing " + ", ".join(missing))
 
 
-def _buy_box(marketplace: str, seller: str | None, seller_known: bool) -> dict[str, str]:
-    expected = EXPECTED_SELLER.get(marketplace)
-    if expected is None:
-        return _no_data("This marketplace is not checked")
+def _buy_box(
+    site: "SiteConfig",
+    customer_id: int | None,
+    seller: str | None,
+    seller_id: str | None,
+    seller_known: bool,
+) -> dict[str, str]:
+    own = site.own_seller(customer_id)
+    if own is None or (not own.names and not own.ids):
+        return _no_data("The customer's own seller on this site is not configured")
     if not seller_known:
         return _no_data("Seller was not on the snapshot")
-    seen = (seller or expected).strip() or expected
-    if seen.lower() == expected.lower():
-        return _check("pass", expected)
-    return _check("flag", f"{seen}, not {expected}")
+    shown = (seller or seller_id or "").strip()
+    if site.is_own_seller(customer_id, name=seller, seller_id=seller_id):
+        return _check("pass", shown)
+    expected = ", ".join(own.names) or ", ".join(own.ids)
+    return _check("flag", f"{shown}, not {expected}")
 
 
 def _reviews(count: int | None) -> dict[str, str]:
@@ -155,86 +162,34 @@ def _reviews(count: int | None) -> dict[str, str]:
     return _check("pass", f"{count} reviews")
 
 
-def _takealot(data: dict[str, Any], product: dict[str, Any] | None, price: float | None, availability: str | None) -> dict[str, Any]:
-    core = data.get("core") if isinstance(data.get("core"), dict) else {}
-    gallery = data.get("gallery") if isinstance(data.get("gallery"), dict) else {}
-    images = gallery.get("images") if isinstance(gallery.get("images"), list) else None
-    info = data.get("product_information") if isinstance(data.get("product_information"), dict) else None
-    spec_items = info.get("items") if isinstance(info, dict) and isinstance(info.get("items"), list) else None
-    description = data.get("description") if isinstance(data.get("description"), dict) else {}
-    reviews = data.get("reviews") if isinstance(data.get("reviews"), dict) else None
-    seller = data.get("seller_detail") if isinstance(data.get("seller_detail"), dict) else None
-    item = None
-    buybox = data.get("buybox") if isinstance(data.get("buybox"), dict) else {}
-    items = buybox.get("items") if isinstance(buybox.get("items"), list) else []
-    if items and isinstance(items[0], dict):
-        item = items[0]
-    if price is None and item is not None:
-        try:
-            price = float(item.get("price")) if item.get("price") is not None else None
-        except (TypeError, ValueError):
-            price = None
-    if availability is None and item is not None:
-        stock = item.get("stock_availability") if isinstance(item.get("stock_availability"), dict) else {}
-        if item.get("is_add_to_cart_available") or "in stock" in str(stock.get("status") or "").lower():
-            availability = "in_stock"
-        elif stock:
-            availability = "out_of_stock"
-    review_count = None
-    if isinstance(reviews, dict) and reviews.get("count") is not None:
-        try:
-            review_count = int(reviews.get("count"))
-        except (TypeError, ValueError):
-            review_count = None
-    seller_name = str(seller.get("display_name") or "").strip() if seller else ""
-    checks = {
+def _checks_from_fields(
+    fields: dict[str, Any],
+    *,
+    site: "SiteConfig",
+    customer_id: int | None,
+    product: dict[str, Any] | None,
+    price: float | None,
+    availability: str | None,
+) -> dict[str, Any]:
+    if price is None:
+        price = fields.get("price")
+    if availability is None:
+        availability = fields.get("availability")
+    return {
         "price_and_stock": _price_stock(price, availability),
-        "title": _title_check(str(core.get("title") or ""), str(core.get("brand") or ""), product),
-        "images": _images(len(images) if images is not None else None),
-        "description": _description(description.get("html") if isinstance(description, dict) else None),
-        "key_specs": _key_specs(_spec_names(spec_items) if spec_items is not None else None),
-        "buy_box": _buy_box("takealot", seller_name or None, True),
-        "reviews": _reviews(review_count),
+        "title": _title_check(str(fields.get("title") or ""), str(fields.get("brand") or ""), product),
+        "images": _images(fields.get("image_count")),
+        "description": _description(fields.get("description_html")),
+        "key_specs": _key_specs(fields.get("spec_names"), fields.get("spec_text")),
+        "buy_box": _buy_box(
+            site,
+            customer_id,
+            fields.get("seller_name"),
+            fields.get("seller_id"),
+            bool(fields.get("seller_known")),
+        ),
+        "reviews": _reviews(fields.get("review_count")),
     }
-    return checks
-
-
-def _evetech_field(text: str, key: str) -> str | None:
-    match = re.search(rf'\\?"{key}\\?"\s*:\s*\\?"(.*?)\\?"', text)
-    if not match:
-        return None
-    return match.group(1).encode("utf-8").decode("unicode_escape", errors="replace")
-
-
-def _evetech(text: str, product: dict[str, Any] | None, price: float | None, availability: str | None) -> dict[str, Any]:
-    title = ""
-    og = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]*)"', text, flags=re.I)
-    if og:
-        title = unescape(og.group(1))
-    brand = _evetech_field(text, "brand") or ""
-    description = _evetech_field(text, "description")
-    image_urls = set(re.findall(r"https?:\\?/\\?/[^\"'\s>]+\.(?:jpg|jpeg|png|webp)", text, flags=re.I))
-    review_raw = _evetech_field(text, "reviewCount") or _evetech_field(text, "ratingCount")
-    review_count = None
-    if review_raw and review_raw.isdigit():
-        review_count = int(review_raw)
-    names = [label for label, _needles in SPEC_GROUPS if any(needle.strip() in text.lower() for needle in _needles)]
-    spec_list: list[str] | None = names if names else None
-    checks = {
-        "price_and_stock": _price_stock(price, availability),
-        "title": _title_check(title, brand, product),
-        "images": _images(len(image_urls) if image_urls else None),
-        "description": _description(description),
-        "key_specs": _key_specs(spec_list),
-        "buy_box": _buy_box("evetech", "Evetech", "evetech" in text.lower()),
-        "reviews": _reviews(review_count),
-    }
-    return checks
-
-
-def _amazon() -> dict[str, Any]:
-    reason = "Amazon is not checked. No listing is linked to a product."
-    return {key: _no_data(reason) for key in CHECK_KEYS}
 
 
 def backfill_stored_snapshots(session: Any, *, only_missing: bool = False) -> dict[str, int]:
@@ -244,11 +199,13 @@ def backfill_stored_snapshots(session: Any, *, only_missing: bool = False) -> di
     from app.models.dimensions import DimProduct
     from app.models.listing_capture import CustomerListing, ListingObservation
     from app.services.listing_capture.observation import decompress_snapshot
+    from app.services.listing_capture.sites import SiteResolver
 
     listings = {
         int(row.id): row
         for row in session.scalars(select(CustomerListing)).all()
     }
+    resolver = SiteResolver.load(session, listings.values())
     products = {
         int(row.id): {
             "model_name": row.model_name,
@@ -278,14 +235,15 @@ def backfill_stored_snapshots(session: Any, *, only_missing: bool = False) -> di
                 skipped += 1
                 continue
             listing = listings.get(int(obs.listing_id))
-            market = listing.marketplace if listing is not None else ""
             product = None
             if listing is not None and listing.product_id is not None:
                 product = products.get(int(listing.product_id))
             flags = dict(obs.parse_flags) if isinstance(obs.parse_flags, dict) else {}
             flags["quality"] = evaluate_quality(
                 decompress_snapshot(obs.raw_snapshot),
-                marketplace=market,
+                site=resolver.site_for(listing) if listing is not None else None,
+                marketplace=listing.marketplace if listing is not None else "",
+                customer_id=listing.customer_id if listing is not None else None,
                 product=product,
                 price=float(obs.extracted_price) if obs.extracted_price is not None else None,
                 availability=obs.extracted_availability,
@@ -301,31 +259,36 @@ def backfill_stored_snapshots(session: Any, *, only_missing: bool = False) -> di
 def evaluate_quality(
     snapshot_text: str,
     *,
-    marketplace: str,
+    site: "SiteConfig | None",
+    marketplace: str = "",
+    customer_id: int | None = None,
     product: dict[str, Any] | None = None,
     price: float | None = None,
     availability: str | None = None,
     parse_status: str | None = None,
 ) -> dict[str, Any]:
     """One result per accepted check. Search position is not included."""
-    market = (marketplace or "").strip().lower()
-    if market == "amazon":
-        checks = _amazon()
+    from app.services.listing_capture.adapters import adapter_module
+
+    market = (site.site_key if site is not None else marketplace or "").strip().lower()
+    module = adapter_module(site.adapter_key) if site is not None else None
+    if module is None:
+        checks = {key: _no_data("This site has no page reader configured") for key in CHECK_KEYS}
     elif parse_status == "parse_failed" or not (snapshot_text or "").strip():
         checks = {key: _no_data("No parsed snapshot") for key in CHECK_KEYS}
-    elif market == "takealot":
-        try:
-            data = json.loads(snapshot_text)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            data = None
-        if not isinstance(data, dict) or "core" not in data:
-            checks = {key: _no_data("Snapshot is not Takealot product data") for key in CHECK_KEYS}
-        else:
-            checks = _takealot(data, product, price, availability)
-    elif market == "evetech":
-        checks = _evetech(snapshot_text, product, price, availability)
     else:
-        checks = {key: _no_data("This retailer is not covered yet") for key in CHECK_KEYS}
+        fields = module.quality_fields(snapshot_text, site=site)
+        if fields.get("unreadable"):
+            checks = {key: _no_data(str(fields["unreadable"])) for key in CHECK_KEYS}
+        else:
+            checks = _checks_from_fields(
+                fields,
+                site=site,
+                customer_id=customer_id,
+                product=product,
+                price=price,
+                availability=availability,
+            )
     flags = [key for key, row in checks.items() if row["status"] == "flag"]
     return {
         "rules_version": RULES_VERSION,
