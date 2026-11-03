@@ -344,7 +344,7 @@ def run_dsi_bulk_provisional_customers_sync(
         ).all()
     }
 
-    geo_cache = DSIGeoResolutionCache.build(session)
+    geo_cache = DSIGeoResolutionCache.build(session, tenant_id=job.tenant_id)
     geo_cache.preload_aliases(collect_geo_tokens_from_candidates(list(found.values()), job))
 
     scope_keys: set[tuple[str, int, int]] = set()
@@ -354,7 +354,9 @@ def run_dsi_bulk_provisional_customers_sync(
         meta = scope_key_for_dsi_candidate(cand)
         if meta is not None:
             scope_keys.add(meta[0])
-    approved_alias_by_scope = load_approved_customer_aliases_for_scopes(session, scope_keys)
+    approved_alias_by_scope = load_approved_customer_aliases_for_scopes(
+        session, scope_keys, tenant_id=job.tenant_id
+    )
     batch_customer_id_by_scope: dict[tuple[str, int, int], int] = {}
 
     results: list[dict[str, Any]] = []

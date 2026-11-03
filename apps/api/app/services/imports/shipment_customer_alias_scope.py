@@ -10,6 +10,7 @@ from app.services.imports.dsi_customer_alias_scope import (
     load_approved_customer_aliases_for_scopes,
     lookup_approved_customer_alias_for_scope,
 )
+from app.services.imports.tenant_mapping_scope import effective_tenant_id
 
 
 class ShipmentCustomerAliasScopeError(Exception):
@@ -72,6 +73,10 @@ def append_shipment_customer_aliases_scoped(
     notes: str,
 ) -> list[int]:
     """Batch-safe alias append using ON CONFLICT DO NOTHING (0048 scope)."""
+    from app.models.ingestion import ImportJob
+
+    job = session.get(ImportJob, int(cand.import_job_id)) if cand.import_job_id else None
+    alias_tid = effective_tenant_id(getattr(job, "tenant_id", None) if job else None)
     alias_ids: list[int] = []
     scope_keys: set[tuple[str, int, int]] = set()
     token_pairs: list[tuple[str, str]] = []
@@ -87,7 +92,7 @@ def append_shipment_customer_aliases_scoped(
         scope_keys.add(customer_alias_scope_key(nt, cand.source_definition_id, None))
         token_pairs.append((raw_s, nt))
 
-    existing = load_approved_customer_aliases_for_scopes(session, scope_keys)
+    existing = load_approved_customer_aliases_for_scopes(session, scope_keys, tenant_id=alias_tid)
     for raw_s, nt in token_pairs:
         scope = customer_alias_scope_key(nt, cand.source_definition_id, None)
         row = existing.get(scope)
@@ -110,6 +115,7 @@ def append_shipment_customer_aliases_scoped(
             notes=notes,
             created_from_import_job_id=int(cand.import_job_id),
             import_entity_mapping_candidate_id=int(cand.id),
+            tenant_id=alias_tid,
         )
         if new_id is not None:
             alias_ids.append(int(new_id))
@@ -118,6 +124,7 @@ def append_shipment_customer_aliases_scoped(
                 normalized_token=nt,
                 source_definition_id=cand.source_definition_id,
                 distributor_id=None,
+                tenant_id=alias_tid,
             )  # type: ignore[assignment]
         else:
             conflict = lookup_approved_customer_alias_for_scope(
@@ -125,6 +132,7 @@ def append_shipment_customer_aliases_scoped(
                 normalized_token=nt,
                 source_definition_id=cand.source_definition_id,
                 distributor_id=None,
+                tenant_id=alias_tid,
             )
             if conflict is not None:
                 from app.services.merge_redirect import follow_customer_merge_redirect_sync
