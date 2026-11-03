@@ -65,6 +65,9 @@ def install_tenant_select_scope() -> None:
     )
     from app.models.iam import AppUser
     from app.models.ingestion import ImportJob
+    from app.models.listing_link import ListingLink, ListingLinkQueue
+    from app.models.listing_offer import ListingOffer
+    from app.models.listing_site import ListingSite, ListingSiteSeller
     from app.models.report_delivery import ReportDelivery, ReportSchedule
     from app.models.saved_reports import Dashboard, DashboardWidget, SavedReport
     from app.models.shipping_mailer_recipient import ShippingMailerRecipient
@@ -91,6 +94,11 @@ def install_tenant_select_scope() -> None:
             FactInventoryDistributor,
             FactSalesSellout,
             ImportJob,
+            ListingLink,
+            ListingLinkQueue,
+            ListingOffer,
+            ListingSite,
+            ListingSiteSeller,
             ReportDelivery,
             ReportSchedule,
             SavedReport,

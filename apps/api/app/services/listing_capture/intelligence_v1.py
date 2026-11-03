@@ -55,9 +55,11 @@ def build_listing_intelligence(session: Session) -> dict[str, Any]:
         if first_ts is not None and last_ts is not None:
             span_days = max(0, (last_ts - first_ts).days)
         ready = bool(span_days is not None and span_days >= MIN_SPAN_DAYS and len(obs) >= 2)
+        # Prices are the shopper's buy-box price (``extracted_price``). Needs do not read them.
         first_price = float(priced[0].extracted_price) if priced else None
         last_price = float(priced[-1].extracted_price) if priced else None
         last_obs = obs[-1] if obs else None
+        own = getattr(last_obs, "buy_box_own", None) if last_obs is not None else None
         act = _activation(last_obs)
         last_fetched = getattr(last_obs, "fetched_at", None) if last_obs is not None else None
         row = {
@@ -73,6 +75,10 @@ def build_listing_intelligence(session: Session) -> dict[str, Any]:
             "history_status": "ready" if ready else "accumulating",
             "first_price": first_price,
             "last_price": last_price,
+            "shoppers_price": last_price,
+            "buy_box_seller": getattr(last_obs, "buy_box_seller", None) if last_obs is not None else None,
+            "buy_box_own": own,
+            "buy_box_label": "Own" if own is True else "Competition" if own is False else None,
             "price_drift_pct": _drift(first_price, last_price),
             "activation_status": act.get("status"),
             "activation_message": act.get("message"),

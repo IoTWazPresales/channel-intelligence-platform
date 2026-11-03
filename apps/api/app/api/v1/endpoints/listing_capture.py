@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
+from app.core.security import Role, get_current_user, require_roles
+from app.core.tenant_scope import tenant_id_from_user
 from app.db.session_sync import SessionLocal
 from app.models.listing_capture import CustomerListing, ListingObservation
+from app.services.listing_capture import sites as site_service
+from app.services.listing_capture.adapters import adapter_keys, configured_adapter
 from app.services.listing_capture.marketplace_vocab import (
-    LISTING_MARKETPLACES,
     LISTING_SOURCES,
     LISTING_STATUSES,
 )
@@ -63,11 +66,142 @@ class PollBody(BaseModel):
 
 @router.get("/meta")
 def listing_meta():
-    return {
-        "marketplaces": list(LISTING_MARKETPLACES),
-        "statuses": list(LISTING_STATUSES),
-        "sources": list(LISTING_SOURCES),
-    }
+    """Vocabulary for the listing forms. ``marketplaces`` are the tenant's active sites."""
+    with SessionLocal() as session:
+        try:
+            rows = [r for r in site_service.list_sites(session) if r.is_active]
+        except Exception:
+            rows = []
+        return {
+            "marketplaces": [r.site_key for r in rows],
+            "sites": [
+                {
+                    "site_key": r.site_key,
+                    "display_name": r.display_name,
+                    "configured": configured_adapter(site_service.site_config_from_row(r)) is not None,
+                }
+                for r in rows
+            ],
+            "adapter_keys": list(adapter_keys()),
+            "statuses": list(LISTING_STATUSES),
+            "sources": list(LISTING_SOURCES),
+        }
+
+
+class SiteFields(BaseModel):
+    display_name: str | None = Field(default=None, max_length=128)
+    adapter_key: str | None = Field(default=None, max_length=32)
+    product_url_pattern: str | None = Field(default=None, max_length=1024)
+    page_id_pattern: str | None = Field(default=None, max_length=256)
+    search_url_pattern: str | None = Field(default=None, max_length=1024)
+    details_url_pattern: str | None = Field(default=None, max_length=1024)
+    first_party_seller: str | None = Field(default=None, max_length=256)
+    rate_limit_seconds: float | None = None
+    is_active: bool | None = None
+
+
+class SiteCreate(SiteFields):
+    site_key: str = Field(min_length=1, max_length=32)
+
+
+class SiteSellerBody(BaseModel):
+    seller_names: list[str] = Field(default_factory=list, max_length=20)
+    seller_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
+def _user_actor(user: dict) -> str:
+    return str(user.get("email") or user.get("id") or "unknown")
+
+
+def _site_payload(session, row) -> dict:
+    customers = customer_labels_sync(session, [s.customer_id for s in row.sellers or []])
+    return site_service.site_to_dict(row, customers=customers)
+
+
+@router.get("/sites")
+def get_sites():
+    """The tenant's listing sites, their page reader and link patterns, and each customer's sellers."""
+    with SessionLocal() as session:
+        try:
+            rows = site_service.list_sites(session)
+        except Exception:
+            return {"items": [], "adapter_keys": list(adapter_keys()), "data_unavailable": True}
+        customers = customer_labels_sync(session, [s.customer_id for r in rows for s in r.sellers or []])
+        return {
+            "items": [site_service.site_to_dict(r, customers=customers) for r in rows],
+            "adapter_keys": list(adapter_keys()),
+            "data_unavailable": False,
+        }
+
+
+@router.post("/sites")
+def post_site(body: SiteCreate, user: dict = Depends(require_roles(Role.STEWARD))):
+    with SessionLocal() as session:
+        try:
+            row = site_service.create_site(
+                session,
+                tenant_id=tenant_id_from_user(user),
+                site_key=body.site_key,
+                fields=body.model_dump(exclude={"site_key"}, exclude_unset=True),
+                actor=_user_actor(user),
+            )
+            session.commit()
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _site_payload(session, site_service.get_site(session, row.id))
+
+
+@router.patch("/sites/{site_id}")
+def patch_site(site_id: int, body: SiteFields, user: dict = Depends(require_roles(Role.STEWARD))):
+    with SessionLocal() as session:
+        row = site_service.get_site(session, site_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="site not found")
+        try:
+            site_service.update_site(session, row, fields=body.model_dump(exclude_unset=True), actor=_user_actor(user))
+            session.commit()
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _site_payload(session, site_service.get_site(session, site_id))
+
+
+@router.put("/sites/{site_id}/sellers/{customer_id}")
+def put_site_seller(
+    site_id: int,
+    customer_id: int,
+    body: SiteSellerBody,
+    user: dict = Depends(require_roles(Role.STEWARD)),
+):
+    """Set a customer's own seller names / ids on a site (the buy box is theirs when it matches)."""
+    with SessionLocal() as session:
+        row = site_service.get_site(session, site_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="site not found")
+        try:
+            site_service.set_site_seller(
+                session,
+                row,
+                customer_id=customer_id,
+                seller_names=body.seller_names,
+                seller_ids=body.seller_ids,
+                actor=_user_actor(user),
+            )
+            session.commit()
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _site_payload(session, site_service.get_site(session, site_id))
+
+
+@router.delete("/sites/{site_id}/sellers/{customer_id}")
+def delete_site_seller(site_id: int, customer_id: int, user: dict = Depends(require_roles(Role.STEWARD))):
+    with SessionLocal() as session:
+        row = site_service.get_site(session, site_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="site not found")
+        if not site_service.delete_site_seller(session, row, customer_id=customer_id):
+            raise HTTPException(status_code=404, detail="seller not found for this customer")
+        session.commit()
+        return _site_payload(session, site_service.get_site(session, site_id))
 
 
 def listing_grid_row_dict(
@@ -76,11 +210,12 @@ def listing_grid_row_dict(
     products: dict[int, tuple[str | None, str | None]],
     last_ok_fetch: dict,
     customers: dict[int, tuple[str, str]],
+    site=None,
 ) -> dict:
     """Listings grid row (grid ``listings``): registry columns under ``listing_to_dict``, plus customer name and code."""
     return {
         **fact_row_dict(row, "listings"),
-        **listing_to_dict(row, products=products, last_ok_fetch=last_ok_fetch),
+        **listing_to_dict(row, products=products, last_ok_fetch=last_ok_fetch, site=site),
         **reference_fields(customer_id=row.customer_id, customers=customers),
     }
 
@@ -111,9 +246,16 @@ def list_listings(
         products = product_labels(session, [r.product_id for r in page_rows])
         last_ok = last_ok_fetch_by_listing(session, [r.id for r in page_rows])
         customers = customer_labels_sync(session, [r.customer_id for r in page_rows])
+        resolver = site_service.SiteResolver.load(session, page_rows)
         return {
             "items": [
-                listing_grid_row_dict(r, products=products, last_ok_fetch=last_ok, customers=customers)
+                listing_grid_row_dict(
+                    r,
+                    products=products,
+                    last_ok_fetch=last_ok,
+                    customers=customers,
+                    site=resolver.site_for(r),
+                )
                 for r in page_rows
             ],
             "total": total,
@@ -143,7 +285,11 @@ def post_listing(
             )
             session.commit()
             session.refresh(row)
-            return listing_to_dict(row, products=product_labels(session, [row.product_id]))
+            return listing_to_dict(
+                row,
+                products=product_labels(session, [row.product_id]),
+                site=site_service.site_for_listing(session, row),
+            )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
@@ -170,6 +316,7 @@ def patch_status(
                 row,
                 products=product_labels(session, [row.product_id]),
                 last_ok_fetch=last_ok_fetch_by_listing(session, [row.id]),
+                site=site_service.site_for_listing(session, row),
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -236,7 +383,11 @@ def post_confirm_proposal(
             )
             session.commit()
             session.refresh(listing)
-            return listing_to_dict(listing, products=product_labels(session, [listing.product_id]))
+            return listing_to_dict(
+                listing,
+                products=product_labels(session, [listing.product_id]),
+                site=site_service.site_for_listing(session, listing),
+            )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -360,7 +511,12 @@ def get_listing_quality():
                 item[key] = cell["status"] if cell else "no_data"
                 item[f"{key}_evidence"] = cell["evidence"] if cell else "No data"
             items.append(item)
-        return {"items": items, "retailers_checked": ["takealot", "evetech"], "search_position": "deferred"}
+        configured = [
+            row.site_key
+            for row in site_service.list_sites(session)
+            if configured_adapter(site_service.site_config_from_row(row)) is not None
+        ]
+        return {"items": items, "retailers_checked": configured, "search_position": "deferred"}
 
 
 @router.post("/observations/{observation_id}/reparse")
@@ -370,8 +526,144 @@ def post_reparse(observation_id: int):
         if obs is None:
             raise HTTPException(status_code=404, detail="observation not found")
         listing = session.get(CustomerListing, obs.listing_id)
-        mkt = listing.marketplace if listing else "takealot"
-        reparse_observation(session, obs, marketplace=mkt)
+        reparse_observation(session, obs)
         session.commit()
         session.refresh(obs)
         return observation_to_dict(obs, listing)
+
+
+class QueueDecision(BaseModel):
+    action: str
+    url: str | None = None
+
+
+def _queue_dict(row) -> dict:
+    return {
+        "id": int(row.id),
+        "site_id": int(row.site_id),
+        "product_id": int(row.product_id),
+        "customer_id": row.customer_id,
+        "listing_id": row.listing_id,
+        "reason": row.reason,
+        "candidates": row.candidates or [],
+        "status": row.status,
+        "evidence": row.evidence or {},
+    }
+
+
+@router.get("/link-queue")
+def get_link_queue():
+    """Product pages a steward still has to confirm, reject, or mark not on this site."""
+    from app.services.listing_capture.links import list_open_queue
+
+    with SessionLocal() as session:
+        try:
+            rows = list_open_queue(session)
+        except Exception:
+            return {"items": [], "data_unavailable": True}
+        return {"items": [_queue_dict(r) for r in rows], "data_unavailable": False}
+
+
+@router.post("/link-queue/{queue_id}")
+def post_link_queue(queue_id: int, body: QueueDecision, user: dict = Depends(require_roles(Role.STEWARD))):
+    from app.models.listing_link import ListingLinkQueue
+    from app.services.listing_capture.links import decide_queue
+
+    with SessionLocal() as session:
+        row = session.get(ListingLinkQueue, queue_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="queue item not found")
+        try:
+            decide_queue(session, row, action=body.action.strip().lower(), url=body.url, actor=_user_actor(user))
+            session.commit()
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _queue_dict(row)
+
+
+@router.post("/listings/{listing_id}/learn")
+def post_learn_link(listing_id: int, user: dict = Depends(require_roles(Role.STEWARD))):
+    """Search the site for this product's page. A single corroborated match is remembered."""
+    import os
+
+    from app.services.listing_capture.adapters import adapter_module
+    from app.services.listing_capture.links import learn_link
+    from app.services.listing_capture.observation import default_http_get
+
+    live = os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on")
+    if not live:
+        raise HTTPException(status_code=503, detail="CIP_LISTING_LIVE_FETCH is not enabled")
+    with SessionLocal() as session:
+        listing = session.get(CustomerListing, listing_id)
+        if listing is None:
+            raise HTTPException(status_code=404, detail="listing not found")
+        site = site_service.site_for_listing(session, listing)
+        if site is None:
+            raise HTTPException(status_code=422, detail="site is not configured")
+        module = adapter_module(site.adapter_key)
+        headers = module.request_headers(site) if module is not None else {}
+
+        def http_get(url: str, _headers=None):
+            return default_http_get(url, headers=headers)
+
+        result = learn_link(session, listing, site, http_get=http_get, actor=_user_actor(user))
+        session.commit()
+        return result
+
+
+@router.get("/listings/{listing_id}/offers")
+def get_listing_offers(listing_id: int):
+    """Offers on the latest observation. The buy-box row is the shopper's price."""
+    from app.models.listing_offer import ListingOffer
+
+    with SessionLocal() as session:
+        obs_id = session.scalar(
+            select(ListingObservation.id)
+            .where(ListingObservation.listing_id == listing_id)
+            .order_by(ListingObservation.fetched_at.desc(), ListingObservation.id.desc())
+            .limit(1)
+        )
+        if obs_id is None:
+            return {"items": [], "shoppers_price": None, "buy_box_label": None}
+        rows = list(session.scalars(select(ListingOffer).where(ListingOffer.observation_id == int(obs_id))).all())
+        items = [
+            {
+                "seller_name": r.seller_name,
+                "seller_id": r.seller_id,
+                "price": float(r.price) if r.price is not None else None,
+                "availability": r.availability,
+                "is_buy_box": bool(r.is_buy_box),
+                "is_own_seller": r.is_own_seller,
+                "label": "Own" if r.is_own_seller is True else "Competition" if r.is_own_seller is False else None,
+                "condition": r.condition,
+            }
+            for r in rows
+        ]
+        buy = next((i for i in items if i["is_buy_box"]), None)
+        return {
+            "items": items,
+            "shoppers_price": buy["price"] if buy else None,
+            "buy_box_seller": buy["seller_name"] if buy else None,
+            "buy_box_label": buy["label"] if buy else None,
+        }
+
+
+@router.get("/supply")
+def get_supply(
+    customer_id: int = Query(),
+    product_id: int = Query(),
+    user: dict = Depends(get_current_user),
+):
+    """Distributor sell-out that supplied this customer with this product, or "not linked"."""
+    from app.services.listing_capture.supply import sellout_supply
+
+    with SessionLocal() as session:
+        try:
+            return sellout_supply(
+                session,
+                customer_id=customer_id,
+                product_id=product_id,
+                tenant_id=tenant_id_from_user(user),
+            )
+        except Exception:
+            return {"status": "not linked", "rows": [], "data_unavailable": True}

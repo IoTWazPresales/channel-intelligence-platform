@@ -15,7 +15,9 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from app.models.dimensions import DimCustomer
 from app.models.listing_capture import CustomerListing, ListingObservation
+from app.models.listing_site import ListingSite
 from app.services.listing_capture.marketplace_vocab import PARSER_VERSION
 from app.services.listing_capture.observation import compress_snapshot
 from app.services.listing_capture.registry import record_observation, reparse_observation
@@ -50,13 +52,19 @@ def db_session():
 
 
 def _fixture_listing(session: Session) -> CustomerListing:
-    customer_id = session.execute(text("select min(id) from dim_customer")).scalar_one()
-    if customer_id is None:
-        pytest.skip("cip_test has no dim_customer row")
+    """A fictional customer and site (``html_page`` reader) in a fresh tenant, rolled back."""
+    tag = uuid.uuid4().hex[:8]
+    tenant = f"t-snap-{tag}"
+    customer = DimCustomer(
+        code=f"SNAP-{tag}", name=f"Snapshot Test {tag}", customer_status="active", is_key_account=False, tenant_id=tenant
+    )
+    session.add(customer)
+    session.add(ListingSite(tenant_id=tenant, site_key="shop-a", display_name="Shop A", adapter_key="html_page"))
+    session.flush()
     listing = CustomerListing(
-        customer_id=int(customer_id),
+        customer_id=int(customer.id),
         url=f"https://example.test/n0101-r3/{uuid.uuid4().hex}",
-        marketplace="evetech",
+        marketplace="shop-a",
         status="active",
         source="manual",
     )
@@ -97,7 +105,7 @@ def test_record_observation_unchanged_stores_no_snapshot_in_postgres(db_session:
     assert r4.raw_snapshot is not None and r4.parse_flags["snapshot_stored"] == "parse_failed"
 
     # Re-parse of the payload-less row is a no-op, not a failure.
-    reparse_observation(db_session, second, marketplace="evetech")
+    reparse_observation(db_session, second)
     db_session.flush()
     again = _row(db_session, second.id)
     assert float(again.extracted_price) == 999.0

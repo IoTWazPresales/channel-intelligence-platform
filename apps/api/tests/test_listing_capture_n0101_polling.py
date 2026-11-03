@@ -1,7 +1,10 @@
 """N-0101 (N-0085 U1): restock, out_of_stock polled, dead-link back-off, per-site
 403/429 pause, run time limit, per-site spacing, ordinary browser User-Agent.
+Sites are data: spacing and the page reader come from the site config; a site without a
+reader is not fetched.
 
-No DB and no network: MagicMock session, injected http_get / clock / sleep / store.
+No DB and no network: MagicMock session, injected http_get / clock / sleep / store / sites.
+Fictional sites only.
 """
 
 from __future__ import annotations
@@ -27,12 +30,21 @@ from app.services.listing_capture.site_pause import (
     pause_site,
     paused_until,
 )
+from tests.listing_site_fixtures import html_site, rest_site, unconfigured_site
+
+SITES = {
+    "shop-a": html_site("shop-a"),
+    "shop-b": html_site("shop-b", rate=None),
+    "market-b": rest_site("market-b"),
+    "shop-c": unconfigured_site("shop-c"),
+}
+SITE = SITES["shop-a"]
 
 IN_STOCK = '{"price": 999.0, "availability": "in_stock"}'
 OUT_OF_STOCK = '{"price": 999.0, "availability": "out_of_stock"}'
 
 
-def _listing(lid: int, marketplace: str = "evetech", status: str = "active", **kw):
+def _listing(lid: int, marketplace: str = "shop-a", status: str = "active", **kw):
     return SimpleNamespace(
         id=lid,
         url=kw.pop("url", f"https://example.test/{marketplace}/{lid}"),
@@ -42,6 +54,7 @@ def _listing(lid: int, marketplace: str = "evetech", status: str = "active", **k
         meta_json=kw.pop("meta_json", None),
         product_id=kw.pop("product_id", None),
         external_id=kw.pop("external_id", None),
+        customer_id=kw.pop("customer_id", 1),
     )
 
 
@@ -72,6 +85,7 @@ def _poll(session, http_get, *, store=None, clock=None, **kw):
         pause_store=store if store is not None else MemorySitePauseStore(),
         clock=clock,
         sleep=clock.sleep,
+        site_for=lambda listing: SITES.get(listing.marketplace),
         **kw,
     )
 
@@ -81,7 +95,7 @@ def _poll(session, http_get, *, store=None, clock=None, **kw):
 
 def test_out_of_stock_seen_in_stock_returns_to_active_as_restocked() -> None:
     listing = _listing(1, status="out_of_stock")
-    obs = record_observation(MagicMock(), listing, http_get=lambda _u: (200, IN_STOCK))
+    obs = record_observation(MagicMock(), listing, site=SITE, http_get=lambda _u: (200, IN_STOCK))
     assert listing.status == "active"
     assert obs.parse_flags["status_transition"] == {
         "from": "out_of_stock",
@@ -94,7 +108,7 @@ def test_out_of_stock_seen_in_stock_returns_to_active_as_restocked() -> None:
 def test_out_of_stock_unknown_availability_is_not_a_restock() -> None:
     listing = _listing(1, status="out_of_stock")
     obs = record_observation(
-        MagicMock(), listing, http_get=lambda _u: (200, '{"price": 999.0, "availability": "unknown"}')
+        MagicMock(), listing, site=SITE, http_get=lambda _u: (200, '{"price": 999.0, "availability": "unknown"}')
     )
     assert listing.status == "out_of_stock"
     assert "status_transition" not in obs.parse_flags
@@ -102,11 +116,11 @@ def test_out_of_stock_unknown_availability_is_not_a_restock() -> None:
 
 def test_active_going_out_of_stock_records_transition_and_staying_active_does_not() -> None:
     listing = _listing(1)
-    obs = record_observation(MagicMock(), listing, http_get=lambda _u: (200, OUT_OF_STOCK))
+    obs = record_observation(MagicMock(), listing, site=SITE, http_get=lambda _u: (200, OUT_OF_STOCK))
     assert listing.status == "out_of_stock"
     assert obs.parse_flags["status_transition"]["reason"] == "out_of_stock"
     listing2 = _listing(2)
-    obs2 = record_observation(MagicMock(), listing2, http_get=lambda _u: (200, IN_STOCK))
+    obs2 = record_observation(MagicMock(), listing2, site=SITE, http_get=lambda _u: (200, IN_STOCK))
     assert listing2.status == "active"
     assert "status_transition" not in obs2.parse_flags
 
@@ -144,7 +158,7 @@ def test_poller_polls_out_of_stock_listing() -> None:
 def test_consecutive_dead_results_drive_backoff_and_a_good_parse_resets() -> None:
     listing = _listing(7)
     for n in (1, 2, 3):
-        record_observation(MagicMock(), listing, http_get=lambda _u: (404, ""))
+        record_observation(MagicMock(), listing, site=SITE, http_get=lambda _u: (404, ""))
         assert listing.status == "dead_link"
         assert listing_consecutive_failures(listing) == n
     now = datetime.now(timezone.utc)
@@ -168,10 +182,10 @@ def test_consecutive_dead_results_drive_backoff_and_a_good_parse_resets() -> Non
 
 def test_dead_link_with_two_failures_is_still_polled() -> None:
     listing = _listing(8, status="dead_link")
-    record_observation(MagicMock(), listing, http_get=lambda _u: (404, ""))
-    record_observation(MagicMock(), listing, http_get=lambda _u: (404, ""))
+    record_observation(MagicMock(), listing, site=SITE, http_get=lambda _u: (404, ""))
+    record_observation(MagicMock(), listing, site=SITE, http_get=lambda _u: (404, ""))
     assert listing_in_dead_link_backoff(listing) is False
-    obs = record_observation(MagicMock(), listing, http_get=lambda _u: (200, IN_STOCK))
+    obs = record_observation(MagicMock(), listing, site=SITE, http_get=lambda _u: (200, IN_STOCK))
     assert listing.status == "active"
     assert obs.parse_flags["status_transition"]["reason"] == "link_recovered"
 
@@ -180,13 +194,13 @@ def test_dead_link_with_two_failures_is_still_polled() -> None:
 
 
 def test_429_pauses_only_that_site_and_is_recorded() -> None:
-    a1, a2, a3 = (_listing(i, "amazon") for i in (1, 2, 3))
-    e1, e2 = (_listing(i, "evetech") for i in (11, 12))
+    a1, a2, a3 = (_listing(i, "shop-b") for i in (1, 2, 3))
+    e1, e2 = (_listing(i, "shop-a") for i in (11, 12))
     calls: list[str] = []
 
     def http_get(url):
         calls.append(url)
-        if "/amazon/" in url:
+        if "/shop-b/" in url:
             return 429, "<html>Too many requests R 12 999</html>"
         return 200, IN_STOCK
 
@@ -196,24 +210,24 @@ def test_429_pauses_only_that_site_and_is_recorded() -> None:
     session.add.side_effect = added.append
     out = _poll(session, http_get, store=store)
 
-    assert sum("/amazon/" in c for c in calls) == 1  # no more requests to amazon this run
-    assert sum("/evetech/" in c for c in calls) == 2  # evetech unaffected
-    assert out["skipped_paused"] == {"amazon": 2}
-    assert out["paused_sites"]["amazon"]["hours"] == 1
-    assert out["paused_sites"]["amazon"]["http_status"] == 429
-    assert "evetech" not in out["paused_sites"]
+    assert sum("/shop-b/" in c for c in calls) == 1  # no more requests to shop-b this run
+    assert sum("/shop-a/" in c for c in calls) == 2  # shop-a unaffected
+    assert out["skipped_paused"] == {"shop-b": 2}
+    assert out["paused_sites"]["shop-b"]["hours"] == 1
+    assert out["paused_sites"]["shop-b"]["http_status"] == 429
+    assert "shop-a" not in out["paused_sites"]
     refused_obs = [o for o in added if getattr(o, "http_status", None) == 429]
     assert len(refused_obs) == 1
     assert refused_obs[0].parse_flags["site_paused"]["hours"] == 1
     assert refused_obs[0].extracted_price is None  # never a price from a refusal page
     assert a1.status == "active"  # a refusal is not a dead link
 
-    # Next run inside the pause: amazon is not contacted at all.
+    # Next run inside the pause: shop-b is not contacted at all.
     calls.clear()
     out2 = _poll(_session([a1, e1]), http_get, store=store)
-    assert [c for c in calls if "/amazon/" in c] == []
-    assert out2["skipped_paused"] == {"amazon": 1}
-    assert out2["paused_sites"]["amazon"]["paused_this_run"] is False
+    assert [c for c in calls if "/shop-b/" in c] == []
+    assert out2["skipped_paused"] == {"shop-b": 1}
+    assert out2["paused_sites"]["shop-b"]["paused_this_run"] is False
 
 
 def test_403_pause_doubles_up_to_24h_and_clears_on_success() -> None:
@@ -221,42 +235,70 @@ def test_403_pause_doubles_up_to_24h_and_clears_on_success() -> None:
     now = datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc)
     hours = []
     for _ in range(7):
-        rec = pause_site(store, "evetech", http_status=403, now=now)
+        rec = pause_site(store, "shop-a", http_status=403, now=now)
         hours.append(rec["hours"])
     assert hours == [1, 2, 4, 8, 16, 24, 24]
-    assert paused_until(store, "evetech", now=now) is not None
-    assert paused_until(store, "evetech", now=now + timedelta(hours=25)) is None
+    assert paused_until(store, "shop-a", now=now) is not None
+    assert paused_until(store, "shop-a", now=now + timedelta(hours=25)) is None
 
     # After the pause ends, a 200 from the site clears the memory (next refusal is 1 h again).
-    listing = _listing(1, "evetech")
+    listing = _listing(1, "shop-a")
     _poll(_session([listing]), lambda _u: (200, IN_STOCK), store=store, now=now + timedelta(hours=25))
-    assert store.get("evetech") is None
-    assert pause_site(store, "evetech", http_status=403, now=now)["hours"] == 1
+    assert store.get("shop-a") is None
+    assert pause_site(store, "shop-a", http_status=403, now=now)["hours"] == 1
 
 
-def test_takealot_refusal_sends_no_follow_up_requests() -> None:
+def test_rest_reader_refusal_sends_no_follow_up_requests() -> None:
     session = _session([])
     session.get.return_value = SimpleNamespace(ean="6001234567890", upc=None)
     listing = _listing(
-        3, "takealot", url="https://www.takealot.com/x/PLID12345678", product_id=99, meta_json={}
+        3, "market-b", url="https://market-b.example.test/x/ID12345678", product_id=99, meta_json={}
     )
     session.scalars.return_value.all.return_value = [listing]
-    calls: list[str] = []
+    calls: list[tuple[str, dict | None]] = []
 
-    def http_get(url):
-        calls.append(url)
+    def http_get(url, headers=None):
+        calls.append((url, headers))
         return 429, ""
 
     out = _poll(session, http_get)
-    assert len(calls) == 1  # details call only; the EAN search is not sent
-    assert out["paused_sites"]["takealot"]["http_status"] == 429
+    assert len(calls) == 1  # details call only; the barcode search is not sent
+    assert calls[0][0] == "https://api.market-b.example.test/rest/details/ID12345678?platform=desktop"
+    assert calls[0][1]["Accept"] == "application/json"  # reader headers reach the getter
+    assert out["paused_sites"]["market-b"]["http_status"] == 429
+
+
+def test_site_without_reader_is_not_fetched_and_takes_no_batch_slot() -> None:
+    waiting = [_listing(i, "shop-c") for i in (1, 2, 3)]
+    ready = _listing(4, "shop-a")
+    calls: list[str] = []
+    session = _session([*waiting, ready])
+    out = _poll(session, lambda u: calls.append(u) or (200, IN_STOCK), limit=1)
+    assert calls == [ready.url]
+    assert out["polled"] == 1
+    assert out["skipped_not_configured"] == {"shop-c": 3}
+    assert out["considered_ids"] == [4]
+    session.add.assert_called()  # the one real observation
+    assert all(getattr(c.args[0], "listing_id", None) == 4 for c in session.add.call_args_list if c.args)
+
+
+def test_record_observation_on_unconfigured_site_writes_a_skipped_row_without_a_request() -> None:
+    listing = _listing(9, "shop-c")
+    calls: list[str] = []
+    obs = record_observation(
+        MagicMock(), listing, site=SITES["shop-c"], http_get=lambda u: calls.append(u) or (200, IN_STOCK)
+    )
+    assert calls == []
+    assert obs.parse_status == "skipped"
+    assert obs.parse_flags["reason"] == "site_not_configured"
+    assert obs.parse_flags["missing"] == ["adapter_key"]
 
 
 # ---------------------------------------------------------------- run limit, mix, spacing
 
 
 def test_run_stops_at_time_limit() -> None:
-    listings = [_listing(i, "evetech" if i % 2 else "amazon") for i in range(10)]
+    listings = [_listing(i, "shop-a" if i % 2 else "shop-b") for i in range(10)]
     clock = FakeClock()
 
     def http_get(_url):
@@ -274,24 +316,34 @@ def test_default_time_limit_is_ten_minutes() -> None:
 
 
 def test_interleave_mixes_retailers_keeping_oldest_due_order() -> None:
-    t1, t2, t3 = (_listing(i, "takealot") for i in (1, 2, 3))
-    e1, e2 = (_listing(i, "evetech") for i in (4, 5))
-    a1 = _listing(6, "amazon")
+    t1, t2, t3 = (_listing(i, "market-b") for i in (1, 2, 3))
+    e1, e2 = (_listing(i, "shop-a") for i in (4, 5))
+    a1 = _listing(6, "shop-b")
     got = [x.id for x in _interleave_by_marketplace([t1, t2, t3, e1, e2, a1])]
     assert got == [1, 4, 6, 2, 5, 3]
 
 
 def test_spacing_is_per_site() -> None:
     clock = FakeClock()
-    listings = [_listing(1, "evetech"), _listing(2, "evetech")]
+    listings = [_listing(1, "shop-a"), _listing(2, "shop-a")]
 
     def http_get(_url):
         clock.t += 0.5
         return 200, IN_STOCK
 
     _poll(_session(listings), http_get, clock=clock)
-    # Spacing runs from the end of the previous request to the same site.
-    assert clock.sleeps == [obs_mod.RATE_LIMIT_SECONDS["evetech"]]
+    # Spacing runs from the end of the previous request to the same site (site data: 2 s).
+    assert clock.sleeps == [SITE.rate_limit_seconds]
+
+    # A site with no spacing of its own uses the default.
+    clock3 = FakeClock()
+
+    def get3(_url):
+        clock3.t += 0.5
+        return 200, IN_STOCK
+
+    _poll(_session([_listing(1, "shop-b"), _listing(2, "shop-b")]), get3, clock=clock3)
+    assert clock3.sleeps == [obs_mod.DEFAULT_RATE_LIMIT_SECONDS]
 
     # Alternating sites that each took longer than their spacing: no sleep.
     clock2 = FakeClock()
@@ -300,7 +352,7 @@ def test_spacing_is_per_site() -> None:
         clock2.t += 2.5
         return 200, IN_STOCK
 
-    _poll(_session([_listing(1, "evetech"), _listing(2, "amazon"), _listing(3, "evetech")]), slow_get, clock=clock2)
+    _poll(_session([_listing(1, "shop-a"), _listing(2, "shop-b"), _listing(3, "shop-a")]), slow_get, clock=clock2)
     assert clock2.sleeps == []
 
 
@@ -333,9 +385,20 @@ def test_default_http_get_sends_browser_user_agent(monkeypatch) -> None:
     def fake_urlopen(request, timeout=None):
         seen["ua"] = request.get_header("User-agent")
         seen["lang"] = request.get_header("Accept-language")
+        seen["accept"] = request.get_header("Accept")
+        seen["referer"] = request.get_header("Referer")
         return _Resp()
 
     monkeypatch.setattr(obs_mod.urllib.request, "urlopen", fake_urlopen)
-    assert obs_mod.default_http_get("https://www.evetech.co.za/x") == (200, "ok")
+    assert obs_mod.default_http_get("https://shop-a.example.test/x") == (200, "ok")
     assert seen["ua"] == LISTING_CAPTURE_USER_AGENT
     assert seen["lang"]
+    assert seen["accept"].startswith("text/html")
+    assert seen["referer"] is None
+
+    # Reader headers are added; the browser User-Agent stays.
+    headers = {"Accept": "application/json", "Referer": "https://market-b.example.test/"}
+    assert obs_mod.default_http_get("https://api.market-b.example.test/d", headers=headers) == (200, "ok")
+    assert seen["accept"] == "application/json"
+    assert seen["referer"] == "https://market-b.example.test/"
+    assert seen["ua"] == LISTING_CAPTURE_USER_AGENT

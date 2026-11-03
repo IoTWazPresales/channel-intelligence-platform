@@ -57,7 +57,7 @@ describe('MarketSurface', () => {
 });
 
 describe('ListingUrl (N-0039)', () => {
-  const url = 'https://www.takealot.com/asus-zenscreen/PLID98174082';
+  const url = 'https://shop-a.example.test/glide/ID98174082';
 
   it('derives state: dead_link wins, then url_verified_at', () => {
     expect(listingUrlState({ status: 'dead_link', url_verified_at: '2026-09-24T00:00:00Z' })).toBe('dead');
@@ -76,7 +76,7 @@ describe('ListingUrl (N-0039)', () => {
   });
 
   it('renders an unverified URL as plain text with an Unverified link marker', () => {
-    const sku = 'https://www.takealot.com/PLID222547542';
+    const sku = 'https://shop-a.example.test/ID222547542';
     renderWithProviders(<ListingUrl listing={{ url: sku, status: 'active', url_verified_at: null }} />);
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByText(sku)).toBeInTheDocument();

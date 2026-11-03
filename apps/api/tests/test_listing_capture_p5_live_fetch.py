@@ -97,9 +97,14 @@ def test_poll_task_polls_active_listings_when_fully_enabled(monkeypatch) -> None
     monkeypatch.setattr("app.worker.celery_queues.dev_beat_disabled", lambda: False)
     session = MagicMock()
     session.scalar.return_value = 1
-    listing = MagicMock(id=1, url="https://example.com/p", marketplace="takealot", status="active")
+    listing = MagicMock(id=1, url="https://example.com/p", marketplace="shop-a", status="active", meta_json={})
     session.scalars.return_value.all.return_value = [listing]
     monkeypatch.setattr("app.db.session_sync.SessionLocal", _fake_session_local(session))
+    from app.services.listing_capture.sites import SiteResolver
+    from tests.listing_site_fixtures import html_site
+
+    monkeypatch.setattr(SiteResolver, "load", classmethod(lambda cls, _s, _l: cls({("default", "shop-a"): html_site()}, {})))
+    monkeypatch.setattr(SiteResolver, "site_for", lambda self, _listing: html_site())
     monkeypatch.setenv("CIP_LISTING_CAPTURE_SCHEDULE", "1")
     monkeypatch.setenv("CIP_LISTING_LIVE_FETCH", "1")
     monkeypatch.setattr("time.sleep", lambda _s: None)
