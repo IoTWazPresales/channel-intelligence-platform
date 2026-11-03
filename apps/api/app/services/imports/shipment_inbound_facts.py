@@ -1,4 +1,8 @@
-"""Upsert ``fact_inbound_shipment`` from ``ShipmentEvidenceLine`` (inbound apply truth layer)."""
+"""Upsert ``fact_inbound_shipment`` from shipment evidence (inbound apply truth layer).
+
+D4: each evidence line is read as an ``EvidenceRow``: job scope and steward state from ``shipment_evidence_line``, the
+parsed payload from the line's newest observation. A line with no observation fails the apply loudly.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +19,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.facts import FactInboundShipment
-from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_rows import EvidenceRow, MissingEvidencePayload, load_evidence_rows
 from app.models.shipment_water import WATER_FIELDS
 from app.services.imports.shipment_apply_failure import ShipmentApplyRowError
 from app.services.imports.shipment_evidence_line_identity import fact_upsert_key_for_evidence_values
@@ -99,7 +103,7 @@ _UPSERT_CHUNK_SIZE = 500
 _FACT_UPSERT_CONSTRAINT = "uq_fact_inbound_shipment_fact_upsert_key"
 
 
-def _coalesce_shipment_dates(line: ShipmentEvidenceLine) -> date | None:
+def _coalesce_shipment_dates(line: EvidenceRow) -> date | None:
     for d in (
         line.pod_date,
         line.est_pod_date,
@@ -114,11 +118,11 @@ def _coalesce_shipment_dates(line: ShipmentEvidenceLine) -> date | None:
     return None
 
 
-def _derive_inbound_status(line: ShipmentEvidenceLine) -> str:
+def _derive_inbound_status(line: EvidenceRow) -> str:
     return _status_for_pod(line.pod_date)
 
 
-def _row_values_from_evidence(line: ShipmentEvidenceLine, *, tenant_id: str = "default") -> dict[str, Any]:
+def _row_values_from_evidence(line: EvidenceRow, *, tenant_id: str = "default") -> dict[str, Any]:
     eta = _coalesce_shipment_dates(line)
     raw = line.raw_source_row if isinstance(line.raw_source_row, dict) else {}
     base = {
@@ -245,7 +249,7 @@ def _upsert_open_order_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) 
 
 
 def _upsert_single_evidence_row(
-    db: Session, tbl: Any, line: ShipmentEvidenceLine, *, tenant_id: str = "default"
+    db: Session, tbl: Any, line: EvidenceRow, *, tenant_id: str = "default"
 ) -> None:
     row_values = _row_values_from_evidence(line, tenant_id=tenant_id)
     line_state = (row_values.get("line_state") or "").strip().lower()
@@ -258,7 +262,7 @@ def _upsert_single_evidence_row(
 def _upsert_evidence_chunk(
     db: Session,
     tbl: Any,
-    chunk: list[ShipmentEvidenceLine],
+    chunk: list[EvidenceRow],
     row_values: list[dict[str, Any]],
     *,
     tenant_id: str = "default",
@@ -415,11 +419,11 @@ def _apply_closed_and_duplicate_guard(
     *,
     tenant_id: str,
     import_job_id: int,
-    lines: list[ShipmentEvidenceLine],
+    lines: list[EvidenceRow],
     values: list[dict[str, Any]],
     guard_report_types: frozenset[str],
     report: dict[str, Any],
-) -> tuple[list[ShipmentEvidenceLine], list[dict[str, Any]]]:
+) -> tuple[list[EvidenceRow], list[dict[str, Any]]]:
     """Drop the rows an undated complete-book file must not write (GOV-008 M2).
 
     1. A row whose fact key is a closed fact is not written: a closed fact stays closed. Without a report date the
@@ -481,13 +485,13 @@ def upsert_inbound_shipment_facts_for_job(
     started = time.perf_counter()
     job = db.get(ImportJob, int(import_job_id))
     tid = (getattr(job, "tenant_id", None) or "default").strip() or "default" if job else "default"
-    lines = list(
-        db.scalars(
-            select(ShipmentEvidenceLine)
-            .where(ShipmentEvidenceLine.import_job_id == int(import_job_id))
-            .order_by(ShipmentEvidenceLine.id)
-        ).all()
-    )
+    lines = load_evidence_rows(db, job_id=int(import_job_id))
+    without_payload = [r.id for r in lines if not r.has_payload]
+    if without_payload:
+        raise MissingEvidencePayload(
+            f"job {int(import_job_id)}: {len(without_payload)} evidence line(s) have no observation "
+            f"(first ids {without_payload[:5]}); re-validate the job before applying"
+        )
     tbl = FactInboundShipment.__table__
     n = 0
     # Rows that share a fact key (invoice lines of one delivery + item + PO) add up inside one chunk, and a later chunk

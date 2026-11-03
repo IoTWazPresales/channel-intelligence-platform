@@ -15,8 +15,11 @@ from app.models.shipment_water import ShipmentWaterColumns
 class ShipmentEvidenceLine(ShipmentWaterColumns, Base, TimestampMixin):
     """One logical shipment or order line from an OEM / logistics extract.
 
-    ``line_state`` distinguishes executed shipments vs open-order / pipeline rows.
-    ``report_type`` records which extractor produced the row (source audit).
+    D4: the payload columns (``report_type``, ``line_state``, ``raw_source_row``, the item/quantity/date/token
+    columns and the voyage fields) are no longer written; the payload is the line's newest
+    ``shipment_evidence_observation`` (see ``shipment_evidence_rows``). Rows loaded before D4 keep their old values.
+    The line keeps the job scope and the steward state. D5 drops the payload columns.
+
     ``source_key`` is a stable per-job identifier from the row's business fields (see
     ``shipment_evidence_source_keys``); re-import upserts on ``(import_job_id, source_key)``.
     """
@@ -46,11 +49,11 @@ class ShipmentEvidenceLine(ShipmentWaterColumns, Base, TimestampMixin):
     source_sheet: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source_row_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    report_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    line_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    report_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    line_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
     source_key: Mapped[str] = mapped_column(String(256), nullable=False)
 
-    raw_source_row: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    raw_source_row: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     operating_unit: Mapped[str | None] = mapped_column(String(128), nullable=True)
     bill_to_raw: Mapped[str | None] = mapped_column(String(512), nullable=True)

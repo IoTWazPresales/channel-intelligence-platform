@@ -5,13 +5,12 @@ Uses the same alias resolvers as validate/steward — no second resolver or fuzz
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.distributor_sales_inventory import (
     _norm_key,
     _resolve_distributor_strict,
@@ -19,6 +18,7 @@ from app.services.imports.distributor_sales_inventory import (
 )
 from app.services.imports.shipment_customer_alias_scope import lookup_approved_customer_alias_for_scope
 from app.services.imports.shipment_evidence_import import _parse_date
+from app.services.imports.shipment_evidence_rows import EvidenceRow, load_evidence_rows
 
 if TYPE_CHECKING:
     from app.models.ingestion import ImportJob
@@ -89,13 +89,17 @@ def resolve_shipment_distributor_id_from_line(
 
 
 def apply_resolved_entities_to_line(
-    line: ShipmentEvidenceLine,
+    line: EvidenceRow,
     db: Session,
     source_definition_id: int | None,
     *,
     res_cache: "DSIResolutionCache | None" = None,
 ) -> None:
-    """Set ``resolved_*`` on one line; keep in sync with stamped ``customer_id`` / ``distributor_id``."""
+    """Set ``resolved_*`` on one line; keep in sync with stamped ``customer_id`` / ``distributor_id``.
+
+    ``line`` is an ``EvidenceRow``: the payload (bill-to/ship-to, dealer token, raw row) is read from the observation, and
+    the ``resolved_*`` / ``crad_date`` state is written to the evidence line.
+    """
     if line.distributor_id is not None:
         line.resolved_distributor_id = int(line.distributor_id)
     elif line.resolved_distributor_id is None:
@@ -130,15 +134,14 @@ def populate_resolved_entities_for_job(
     job: "ImportJob",
     *,
     res_cache: "DSIResolutionCache | None" = None,
+    staged: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> int:
-    """Populate ``resolved_*`` + ``crad_date`` for every evidence line on the job."""
+    """Populate ``resolved_*`` + ``crad_date`` for every evidence line on the job that has a payload."""
     jid = int(job.id)
     sid = int(job.source_id) if job.source_id else None
-    lines = list(
-        db.scalars(select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == jid)).all()
-    )
-    for line in lines:
-        apply_resolved_entities_to_line(line, db, sid, res_cache=res_cache)
-        db.add(line)
+    rows = [r for r in load_evidence_rows(db, job_id=jid, staged=staged) if r.has_payload]
+    for row in rows:
+        apply_resolved_entities_to_line(row, db, sid, res_cache=res_cache)
+        db.add(row.line)
     db.flush()
-    return len(lines)
+    return len(rows)

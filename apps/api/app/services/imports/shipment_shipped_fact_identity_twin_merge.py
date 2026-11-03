@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models.facts import FactInboundShipment
 from app.models.purchase_order import PurchaseOrder
+from app.services.imports.shipment_evidence_rows import EVIDENCE_LINES_WITH_PAYLOAD_SQL
 from app.services.imports.shipment_evidence_line_identity import (
     stable_shipped_fact_upsert_key_from_fields,
 )
@@ -513,7 +514,7 @@ WITH old AS (
 SELECT o.id AS old_id, o.fact_upsert_key AS old_key, o.import_job_id AS old_job, o.delivery_no, o.item_code,
        coalesce(o.quantity, 0) AS old_qty, t.twins, t.twin_qty, t.keeper_id, t.keeper_key, t.keeper_job,
        (round(coalesce(o.quantity, 0), 4) = round(t.twin_qty, 4)) AS qty_match,
-       (SELECT coalesce(sum(l.quantity), 0) FROM shipment_evidence_line l JOIN fact_inbound_shipment k ON k.id = t.keeper_id
+       (SELECT coalesce(sum(l.quantity), 0) FROM {evidence_lines} l JOIN fact_inbound_shipment k ON k.id = t.keeper_id
          WHERE l.import_job_id = k.import_job_id AND l.line_state = 'shipped' AND l.delivery_no = o.delivery_no
            AND l.item_code = o.item_code AND l.purchase_order_id = k.purchase_order_id) AS evidence_qty
 FROM old o JOIN twin t ON t.old_id = o.id
@@ -551,7 +552,10 @@ def plan_po_less_shipped_twins(db: Session, *, written_by_job: int | None = None
 
     ``written_by_job`` limits the twins to those that job wrote (the load-time call); ``None`` plans the whole table.
     """
-    sql = _PO_LESS_TWINS_SQL.format(job_scope="AND s.import_job_id = :job" if written_by_job is not None else "")
+    sql = _PO_LESS_TWINS_SQL.format(
+        job_scope="AND s.import_job_id = :job" if written_by_job is not None else "",
+        evidence_lines=EVIDENCE_LINES_WITH_PAYLOAD_SQL,
+    )
     params = {"job": int(written_by_job)} if written_by_job is not None else {}
     return [
         PoLessTwin(

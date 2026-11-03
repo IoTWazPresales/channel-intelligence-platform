@@ -796,10 +796,9 @@ class JobDataRemoval:
 
     # ------------------------------------------------------------------ shipments
     def _shipments(self) -> None:
-        from sqlalchemy import select
-
         from app.models.facts import FactInboundShipment
         from app.models.shipment_evidence import ShipmentEvidenceLine
+        from app.services.imports.shipment_evidence_rows import EVIDENCE_LINES_WITH_PAYLOAD_SQL, load_evidence_rows
         from app.services.imports.shipment_inbound_facts import _row_values_from_evidence, _upsert_shipped_chunk
 
         db = self.db
@@ -828,8 +827,8 @@ class JobDataRemoval:
                 int(x[0])
                 for x in db.execute(
                     text(
-                        """
-                        SELECT l.id FROM shipment_evidence_line l
+                        f"""
+                        SELECT l.id FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l
                         JOIN unnest(CAST(:deliveries AS text[]), CAST(:items AS text[])) AS q(dn, it)
                           ON l.delivery_no = q.dn AND l.item_code = q.it
                         WHERE NOT (l.import_job_id = ANY(:d))
@@ -843,9 +842,11 @@ class JobDataRemoval:
                 ).all()
             ]
             for start in range(0, len(line_ids), 1000):
-                for line in db.scalars(
-                    select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.id.in_(line_ids[start : start + 1000]))
-                ).all():
+                for line in load_evidence_rows(
+                    db, where=(ShipmentEvidenceLine.id.in_(line_ids[start : start + 1000]),)
+                ):
+                    if not line.has_payload:
+                        continue
                     values = _row_values_from_evidence(line)
                     if values["fact_upsert_key"] in keys:
                         candidates[values["fact_upsert_key"]][int(line.import_job_id)].append(values)

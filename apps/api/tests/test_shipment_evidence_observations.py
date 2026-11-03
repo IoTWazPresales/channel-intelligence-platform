@@ -16,6 +16,7 @@ from app.services.imports.shipment_evidence_observations import (
     append_observations_for_job_lines,
     corroboration_evidence_relation,
 )
+from app.services.imports.shipment_evidence_rows import EvidenceRow
 
 
 def _sqlalchemy_db_name(url: str) -> str:
@@ -66,22 +67,24 @@ def test_observation_append_idempotent() -> None:
             import_job_id=int(job.id),
             source_key="test:order:OU|PO|1|SKU",
             source_row_number=2,
-            report_type="xxomrpt0027_order",
-            line_state="open_order",
-            raw_source_row={"order_no": "PO"},
             product_resolution_status="no_match",
             distributor_resolution_status="unresolved",
-            order_no="PO",
-            order_line="1",
-            item_code="SKU",
-            operating_unit="OU",
-            promise_date=date(2026, 1, 15),
         )
         db.add(line)
         db.flush()
+        payload = {
+            "report_type": "xxomrpt0027_order",
+            "line_state": "open_order",
+            "raw_source_row": {"order_no": "PO"},
+            "order_no": "PO",
+            "order_line": "1",
+            "item_code": "SKU",
+            "operating_unit": "OU",
+            "promise_date": date(2026, 1, 15),
+        }
 
-        n1 = append_observations_for_job_lines(db, job, [line])
-        n2 = append_observations_for_job_lines(db, job, [line])
+        n1 = append_observations_for_job_lines(db, job, [EvidenceRow(line, payload)])
+        n2 = append_observations_for_job_lines(db, job, [EvidenceRow(line, payload)])
         db.commit()
 
         assert n1 == 1

@@ -36,6 +36,7 @@ from app.services.imports.shipment_evidence_line_identity import (
     stable_line_identity_key_from_fields,
 )
 from app.services.imports.shipment_evidence_observations import _observation_insert_statement
+from app.services.imports.shipment_evidence_rows import EVIDENCE_LINES_WITH_PAYLOAD_SQL
 from app.services.imports.shipment_evidence_report_detect import (
     LINE_CLOSED_DISAPPEARED,
     LINE_CLOSED_MOVED,
@@ -105,13 +106,13 @@ def superseded_scopes(db: Session, job: ImportJob) -> tuple[list[tuple[str, str]
             SELECT l.report_type AS report_type, coalesce(l.operating_unit, '') AS operating_unit,
                    max({_FILE_DATE_SQL}) AS report_date
             FROM import_job j
-            JOIN shipment_evidence_line l ON l.import_job_id = j.id
+            JOIN {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l ON l.import_job_id = j.id
             WHERE j.status = 'completed'
               AND j.template_slug = 'inbound_shipments'
               AND j.id <> :job_id
               AND j.tenant_id = :tenant
               AND l.report_type IN (
-                    SELECT DISTINCT report_type FROM shipment_evidence_line WHERE import_job_id = :job_id
+                    SELECT DISTINCT e.report_type FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} e WHERE e.import_job_id = :job_id
                   )
             GROUP BY 1, 2
             """
@@ -499,15 +500,15 @@ def _latest_other_report_date(db: Session, job: ImportJob) -> date | None:
             f"""
             SELECT max({_FILE_DATE_SQL}) AS report_date
             FROM import_job j
-            JOIN shipment_evidence_line l ON l.import_job_id = j.id
+            JOIN {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l ON l.import_job_id = j.id
             WHERE j.status = 'completed'
               AND j.template_slug = 'inbound_shipments'
               AND j.id <> :job_id
               AND j.tenant_id = :tenant
               AND l.report_type IN (
-                    SELECT DISTINCT report_type
-                    FROM shipment_evidence_line
-                    WHERE import_job_id = :job_id
+                    SELECT DISTINCT e.report_type
+                    FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} e
+                    WHERE e.import_job_id = :job_id
                   )
             """
         ),
@@ -520,11 +521,11 @@ def _latest_other_report_date(db: Session, job: ImportJob) -> date | None:
 def _scopes_for_job(db: Session, job_id: int) -> list[dict[str, str]]:
     rows = db.execute(
         text(
-            """
+            f"""
             SELECT DISTINCT j.tenant_id AS tenant_id,
                    l.report_type AS report_type,
                    coalesce(l.operating_unit, '') AS operating_unit
-            FROM shipment_evidence_line l
+            FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l
             JOIN import_job j ON j.id = l.import_job_id
             WHERE l.import_job_id = :job_id
             """
@@ -545,7 +546,7 @@ def _newest_scopes(db: Session) -> list[dict[str, Any]]:
                        coalesce(l.operating_unit, '') AS operating_unit,
                        {_FILE_DATE_SQL} AS report_date,
                        j.completed_at
-                FROM shipment_evidence_line l
+                FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l
                 JOIN import_job j ON j.id = l.import_job_id
                 WHERE j.status = 'completed'
                   AND j.template_slug = 'inbound_shipments'
@@ -573,7 +574,7 @@ _SHIPPED_QTY_SQL = """(
       AND t.item_key = lower(trim(f.item_code))
 )"""
 
-_CLASSIFY_SQL = """
+_CLASSIFY_SQL = f"""
 CASE
     WHEN f.report_type = 'acza_workbook_bom_not_ready'
      AND f.customer_po IS NOT NULL
@@ -581,7 +582,7 @@ CASE
      AND trim(f.customer_po) <> ''
      AND trim(f.item_code) <> ''
      AND EXISTS (
-        SELECT 1 FROM shipment_evidence_line u
+        SELECT 1 FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} u
         WHERE u.import_job_id = :closing_job_id
           AND u.report_type = 'acza_workbook_unship'
           AND u.customer_po IS NOT NULL

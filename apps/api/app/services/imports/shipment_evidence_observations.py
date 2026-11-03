@@ -1,25 +1,37 @@
-"""Dual-write and read-source helpers for bitemporal shipment evidence (Plan D)."""
+"""Observation writer for bitemporal shipment evidence (Plan D).
+
+D4: the observation is the only place the parsed payload is written. The payload comes from the validate pass
+(``staged``, keyed by ``source_key``) or, when an observation is re-appended later, from the line's newest observation;
+the steward state (resolution ids, ``purchase_order_id``) comes from the line.
+"""
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
-from app.core.feature_flags import shipment_bitemporal_dual_write_enabled
-from app.services.imports.shipment_evidence_read import shipment_evidence_read_relation
 from app.models.ingestion import ImportJob
-from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
-from app.models.shipment_water import WATER_FIELDS
+from app.models.shipment_water import WATER_DATE_FIELDS, WATER_FIELDS
 from app.services.imports.shipment_evidence_line_identity import (
     observation_payload_hash,
     stable_line_identity_key_from_mapping,
 )
+from app.services.imports.shipment_evidence_read import shipment_evidence_read_relation
+from app.services.imports.shipment_evidence_rows import EvidenceRow, load_evidence_rows
+
+try:  # psycopg 3 raises its own DataError type through SQLAlchemy's DBAPIError wrapper
+    from psycopg.errors import DataError as PsycopgDataError
+except ImportError:  # pragma: no cover
+    PsycopgDataError = ()  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -90,16 +102,39 @@ def _job_transaction_times(job: ImportJob) -> tuple[datetime, datetime]:
     return valid_from, observed_at
 
 
-def _line_to_observation_values(
-    line: ShipmentEvidenceLine,
+_NUMERIC_COLS = ("quantity", "unit_price", "amount")
+_OBSERVATION_DATE_COLS = (
+    "ship_confirm_date",
+    "schedule_ship_date",
+    "promise_date",
+    "exwork_date",
+    "erd_date",
+    "est_pod_date",
+    "pod_date",
+    *WATER_DATE_FIELDS,
+)
+_FOUR_PLACES = Decimal("0.0001")
+
+
+def _as_numeric_4(value: Any) -> Any:
+    """The Numeric(18,4) a stored row would read back as, so the payload hash is the same from a staged float."""
+    if value is None or isinstance(value, Decimal):
+        return value
+    return Decimal(str(value)).quantize(_FOUR_PLACES)
+
+
+def _row_to_observation_values(
+    row: EvidenceRow,
     *,
     valid_from: datetime,
     observed_at: datetime,
 ) -> dict[str, Any]:
     # A stub line without the voyage attributes reads as empty there (the columns are new and nullable).
-    base = {col: getattr(line, col, None) if col in WATER_FIELDS else getattr(line, col) for col in _LINE_TO_OBSERVATION_COLS}
-    base["import_job_id"] = int(line.import_job_id)
-    base["evidence_line_id"] = int(line.id)
+    base = {col: getattr(row, col, None) if col in WATER_FIELDS else getattr(row, col) for col in _LINE_TO_OBSERVATION_COLS}
+    for col in _NUMERIC_COLS:
+        base[col] = _as_numeric_4(base[col])
+    base["import_job_id"] = int(row.import_job_id)
+    base["evidence_line_id"] = int(row.id)
     base["line_identity_key"] = stable_line_identity_key_from_mapping(base)
     base["valid_from"] = valid_from
     base["observed_at"] = observed_at
@@ -107,10 +142,33 @@ def _line_to_observation_values(
     return base
 
 
+# Written on the observation but not part of ``source_row_hash``. A re-validate of the same commercial row used to
+# refresh these on the line (ON CONFLICT DO UPDATE). The hash stays stable for rows already on cip; these columns
+# refresh in place so a corrected PO, raw row or voyage is what the fact reads.
+_REFRESH_ON_SAME_HASH = (
+    "customer_po",
+    "raw_source_row",
+    "purchase_order_id",
+    "evidence_line_id",
+    *WATER_FIELDS,
+)
+
+
 def _observation_insert_statement(rows: list[dict[str, Any]]):
     t = ShipmentEvidenceObservation.__table__
     ins = pg_insert(t).values(rows)
-    return ins.on_conflict_do_nothing(constraint="uq_shipment_ev_obs_job_row_hash")
+    excluded = ins.excluded
+    return ins.on_conflict_do_update(
+        constraint="uq_shipment_ev_obs_job_row_hash",
+        set_={col: getattr(excluded, col) for col in _REFRESH_ON_SAME_HASH},
+    )
+
+
+def _expire_loaded_observations(db: Session) -> None:
+    """The upsert writes through Core. Observations already in this session would otherwise keep the pre-update payload."""
+    for obj in list(db.identity_map.values()):
+        if isinstance(obj, ShipmentEvidenceObservation):
+            db.expire(obj)
 
 
 def _prior_pod_by_identity_keys(db: Session, identity_keys: list[str]) -> dict[str, date]:
@@ -145,37 +203,70 @@ def _apply_sticky_observation_pods(db: Session, values: list[dict[str, Any]]) ->
             v["pod_date"] = prior[key]
 
 
+def _is_data_error(exc: BaseException) -> bool:
+    if PsycopgDataError and isinstance(exc, PsycopgDataError):
+        return True
+    return bool(PsycopgDataError) and isinstance(exc, DBAPIError) and isinstance(getattr(exc, "orig", None), PsycopgDataError)
+
+
+def _insert_observation_chunk(db: Session, chunk: list[dict[str, Any]]) -> None:
+    """One multi-row insert; on a Postgres DataError (an out-of-range date) retry row by row with the dates cleared.
+
+    A chunk is de-duplicated on ``(import_job_id, source_row_hash)`` (last wins). Postgres rejects an
+    ``ON CONFLICT DO UPDATE`` that touches one key twice.
+    """
+    deduped: dict[tuple[Any, Any], dict[str, Any]] = {}
+    for values in chunk:
+        deduped[(values.get("import_job_id"), values.get("source_row_hash"))] = values
+    chunk = list(deduped.values())
+    try:
+        with db.begin_nested():
+            db.execute(_observation_insert_statement(chunk))
+    except Exception as exc:
+        if not _is_data_error(exc):
+            raise
+        for values in chunk:
+            cleared = {**values, **{c: None for c in _OBSERVATION_DATE_COLS}}
+            with db.begin_nested():
+                db.execute(_observation_insert_statement([cleared]))
+
+
 def append_observations_for_job_lines(
     db: Session,
     job: ImportJob,
-    lines: list[ShipmentEvidenceLine] | None = None,
+    rows: list[EvidenceRow] | None = None,
+    *,
+    staged: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> int:
-    """Append observations for job lines (idempotent per source_row_hash).
+    """Append one observation per job line (idempotent per source_row_hash).
 
-    Sticky POD: if the job line omits ``pod_date`` but a prior observation for the same
+    Payload: ``staged[source_key]`` when the validate pass supplies it, else the line's newest observation. A line with
+    neither is skipped (logged): there is nothing to observe.
+
+    Sticky POD: if the payload omits ``pod_date`` but a prior observation for the same
     ``line_identity_key`` had one, carry it forward (P1-D004 / BACKLOG-088).
     """
-    if not lines:
-        lines = list(
-            db.scalars(
-                select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == int(job.id))
-            ).all()
+    if rows is None:
+        rows = load_evidence_rows(db, job_id=int(job.id), staged=staged)
+    observable = [r for r in rows if r.has_payload]
+    if len(observable) != len(rows):
+        logger.warning(
+            "shipment observations: job_id=%s skipped %d line(s) with no payload", job.id, len(rows) - len(observable)
         )
-    if not lines:
+    if not observable:
         return 0
 
     valid_from, observed_at = _job_transaction_times(job)
-    values = [
-        _line_to_observation_values(line, valid_from=valid_from, observed_at=observed_at) for line in lines
-    ]
+    values = [_row_to_observation_values(r, valid_from=valid_from, observed_at=observed_at) for r in observable]
     _apply_sticky_observation_pods(db, values)
 
     attempted = 0
     for i in range(0, len(values), _OBSERVATION_UPSERT_CHUNK):
         chunk = values[i : i + _OBSERVATION_UPSERT_CHUNK]
         attempted += len(chunk)
-        db.execute(_observation_insert_statement(chunk))
+        _insert_observation_chunk(db, chunk)
     db.flush()
+    _expire_loaded_observations(db)
     logger.info(
         "shipment observations: appended up to %d rows for job_id=%s",
         attempted,
@@ -184,11 +275,14 @@ def append_observations_for_job_lines(
     return attempted
 
 
-def sync_job_observations_after_validate(db: Session, job: ImportJob) -> int:
-    """When dual-write flag is on, append observations after legacy lines are final."""
-    if not shipment_bitemporal_dual_write_enabled():
-        return 0
-    appended = append_observations_for_job_lines(db, job)
+def sync_job_observations_after_validate(
+    db: Session,
+    job: ImportJob,
+    *,
+    staged: Mapping[str, Mapping[str, Any]] | None = None,
+) -> int:
+    """Append the job's observations once the lines are final, then run invoice graduation."""
+    appended = append_observations_for_job_lines(db, job, staged=staged)
     if appended:
         from app.services.imports.shipment_invoice_graduation import process_invoice_graduation_after_job
 

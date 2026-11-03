@@ -20,6 +20,7 @@ from app.models.import_distributor_si import ImportDistributorSiStagingLine, Imp
 from app.models.mapping import ProductAlias
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.distributor_sales_inventory import _product_token_key
+from app.services.imports.shipment_evidence_rows import EvidenceRow, load_evidence_rows
 from app.services.imports.product_resolution_index_cache import (
     get_product_resolution_index,
     invalidate_product_resolution_index_cache,
@@ -131,12 +132,7 @@ def preview_gap_resolve(
 def _count_shipment(session: Session, tok: str) -> tuple[int, set[int]]:
     jobs: set[int] = set()
     n = 0
-    lines = session.scalars(
-        select(ShipmentEvidenceLine).where(
-            ShipmentEvidenceLine.product_id.is_(None),
-            ShipmentEvidenceLine.product_resolution_status.in_(tuple(_SHIPMENT_UNRESOLVED)),
-        )
-    ).all()
+    lines = _unresolved_shipment_rows(session)
     for line in lines:
         if _line_token_match(line, tok):
             n += 1
@@ -145,19 +141,29 @@ def _count_shipment(session: Session, tok: str) -> tuple[int, set[int]]:
     return n, jobs
 
 
-def _line_token_match(line: ShipmentEvidenceLine, tok: str) -> bool:
-    for field in (
-        line.product_resolution_token,
-        line.item_code,
-        line.ean_code,
-        line.upc_code,
-        line.sales_model_name,
-        line.customer_item,
-        line.mpor_item_no,
-    ):
-        if _norm_token(field) == tok:
-            return True
-    return False
+def _unresolved_shipment_rows(session: Session) -> list[EvidenceRow]:
+    """Product-unresolved lines (state on the line) with their payload (observation) for token matching."""
+    return load_evidence_rows(
+        session,
+        where=(
+            ShipmentEvidenceLine.product_id.is_(None),
+            ShipmentEvidenceLine.product_resolution_status.in_(tuple(_SHIPMENT_UNRESOLVED)),
+        ),
+        order_by_id=False,
+    )
+
+
+def _line_tokens(line: EvidenceRow) -> tuple[Any, ...]:
+    payload = (
+        (line.item_code, line.ean_code, line.upc_code, line.sales_model_name, line.customer_item, line.mpor_item_no)
+        if line.has_payload
+        else ()
+    )
+    return (line.product_resolution_token, *payload)
+
+
+def _line_token_match(line: EvidenceRow, tok: str) -> bool:
+    return any(_norm_token(field) == tok for field in _line_tokens(line))
 
 
 def _count_dsi_staging(session: Session, tok: str) -> tuple[int, set[int]]:
@@ -279,12 +285,7 @@ def apply_gap_resolve(
 
 
 def _repoint_shipment(session: Session, tok: str, product_id: int) -> int:
-    lines = session.scalars(
-        select(ShipmentEvidenceLine).where(
-            ShipmentEvidenceLine.product_id.is_(None),
-            ShipmentEvidenceLine.product_resolution_status.in_(tuple(_SHIPMENT_UNRESOLVED)),
-        )
-    ).all()
+    lines = _unresolved_shipment_rows(session)
     ids: list[int] = []
     for line in lines:
         if _line_token_match(line, tok):
@@ -450,21 +451,8 @@ def _ensure_product_alias(
 def scan_open_gaps_for_matches(session: Session, *, limit: int = 500) -> dict[str, Any]:
     """On-demand / post-PM: worklist unresolved tokens that now match PM."""
     tokens: set[str] = set()
-    for line in session.scalars(
-        select(ShipmentEvidenceLine).where(
-            ShipmentEvidenceLine.product_id.is_(None),
-            ShipmentEvidenceLine.product_resolution_status.in_(tuple(_SHIPMENT_UNRESOLVED)),
-        )
-    ).all():
-        for field in (
-            line.product_resolution_token,
-            line.item_code,
-            line.ean_code,
-            line.upc_code,
-            line.sales_model_name,
-            line.customer_item,
-            line.mpor_item_no,
-        ):
+    for line in _unresolved_shipment_rows(session):
+        for field in _line_tokens(line):
             t = _norm_token(field)
             if t:
                 tokens.add(t)

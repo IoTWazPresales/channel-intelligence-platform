@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from collections.abc import Mapping
+from typing import Any
+
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.purchase_order import PurchaseOrder
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.imports.shipment_evidence_rows import EvidenceRow, load_evidence_rows
 from app.services.imports.shipment_po_normalization import normalize_po_number
 
 
@@ -41,28 +45,26 @@ def upsert_observed_purchase_order(
     return int(rid)
 
 
-def _resolved_distributor_for_materialize(line: ShipmentEvidenceLine) -> int | None:
+def _resolved_distributor_for_materialize(line: EvidenceRow | ShipmentEvidenceLine) -> int | None:
     """Distributor key for PO upsert — alias-collapsed ``resolved_distributor_id`` only."""
     if line.resolved_distributor_id is not None:
         return int(line.resolved_distributor_id)
     return None
 
 
-def materialize_purchase_orders_for_shipment_job(db: Session, import_job_id: int) -> int:
+def materialize_purchase_orders_for_shipment_job(
+    db: Session,
+    import_job_id: int,
+    *,
+    staged: Mapping[str, Mapping[str, Any]] | None = None,
+) -> int:
     """Link ``customer_po`` lines to ``purchase_order``; returns lines updated.
 
     Uses ``resolved_distributor_id`` (not raw ``distributor_id``). When distributor is still
     unresolved, **defers** materialization — no NULL-keyed ``purchase_order`` rows are minted.
     """
     jid = int(import_job_id)
-    lines = list(
-        db.scalars(
-            select(ShipmentEvidenceLine).where(
-                ShipmentEvidenceLine.import_job_id == jid,
-                ShipmentEvidenceLine.customer_po.is_not(None),
-            )
-        ).all()
-    )
+    lines = [r for r in load_evidence_rows(db, job_id=jid, staged=staged) if r.has_payload and r.customer_po is not None]
     updated = 0
     deferred = 0
     for line in lines:
@@ -84,7 +86,7 @@ def materialize_purchase_orders_for_shipment_job(db: Session, import_job_id: int
         )
         if line.purchase_order_id != po_id:
             line.purchase_order_id = po_id
-            db.add(line)
+            db.add(line.line)
             updated += 1
     db.flush()
     return updated

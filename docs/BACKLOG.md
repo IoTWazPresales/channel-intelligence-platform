@@ -1870,8 +1870,8 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-07-02 |
-| **Source** | `docs/SHIPMENT_BITEMPORAL_PLAN_D.md` D4; Plan D cutover complete |
+| **Status / parked** | Implemented on `feat/shipment-single-write` (2026-11-03). Columns kept. Clone proof script is `apps/api/scripts/ops/prove_shipment_single_write_clone.py` and has not been run. D5 stays parked. |
+| **Source** | `docs/SHIPMENT_BITEMPORAL_PLAN_D.md` D4; `docs/SHIPMENT_EVIDENCE_D4_PATH_MAP.md` |
 | **Idea** | Dual-write still populates `shipment_evidence_line` for steward job scope; stop persisting columns that mirror observation payload once all write paths read observations for history. |
 | **TRIGGER** | 30-day soak after Plan D cutover with zero steward regressions; Warren approves D4 start. |
 

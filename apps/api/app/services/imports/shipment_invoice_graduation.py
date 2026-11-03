@@ -71,7 +71,6 @@ SELECT DISTINCT ON (o.line_identity_key)
     o.est_pod_date,
     COALESCE(
         o.pod_date,
-        sel.pod_date,
         (
             SELECT p.pod_date
             FROM shipment_evidence_observation p

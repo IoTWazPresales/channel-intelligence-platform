@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-03 - **Shipment evidence D4:** the loader writes the row payload once, on `shipment_evidence_observation`. `shipment_evidence_line` keeps job scope and steward state. On `feat/integrate-20261103` the migration is `20261103_0056` revising `20261103_0055`. It drops NOT NULL on `report_type`, `line_state` and `raw_source_row`, indexes the latest observation per line, and re-issues `shipment_evidence_current` without the line `pod_date` term. Not applied to cip. D5 is not done. Commit `1943e3d5`.
+
 - 2026-11-03 - **M5c tenant mapping scope:** `tenant_id` on `source_definition` and the alias tables; import paths filter by the job tenant. On `feat/integrate-20261103` the migration is `20261103_0055` revising `20261103_0054`. Not applied to cip. Commits `50c40a85`, `47233c36`, `0129db79`, `3aad0298`.
 
 - 2026-11-03 - **N-0117 store and DC replenishment:** site level with a distributor-owned customer DC rejected, one question per site with confirm and reject remembered, cover from the customer settings (4 and 6 week fallback), inbound and onward lead-time distributions (onward stays no history; a need uses a median only at 5 deliveries), slow and unsold labels that do not create a promotion, transfer, or return, and a store map on sell-through with a steward drop pin. On `feat/integrate-20261103` the migration is `20261103_0054` revising `20261103_0053`. Not applied to cip. Commits `e9c33679`, `9c3d7ae6`, `287ef6cc`, `8e2df83a`, `a3406edb`, `37086358`.

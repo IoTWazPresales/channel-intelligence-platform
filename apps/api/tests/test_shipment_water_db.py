@@ -19,8 +19,9 @@ from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 from app.models.shipment_water import WATER_FIELDS, PortCondition
-from app.services.imports.shipment_evidence_observations import _line_to_observation_values
+from app.services.imports.shipment_evidence_rows import EvidenceRow, load_evidence_rows
 from app.services.imports.shipment_inbound_facts import _upsert_single_evidence_row
+from tests.shipment_evidence_fixtures import add_evidence_line, reobserve
 
 UNSHIP = "acza_workbook_unship"
 
@@ -57,15 +58,17 @@ def _job(db) -> ImportJob:
 
 
 def _line(db, job: ImportJob, **water) -> ShipmentEvidenceLine:
+    """A line whose observation carries the voyage fields (the loader writes the payload to the observation only)."""
     base = dict(
         import_job_id=int(job.id), source_sheet="Unship", source_row_number=1, report_type=UNSHIP, line_state="open_order",
         source_key=f"{UNSHIP}:{uuid.uuid4().hex}", raw_source_row={}, order_no=f"SO{uuid.uuid4().hex[:6]}", order_line="1",
         item_code="ITEM-1", quantity=10, product_resolution_status="unresolved", distributor_resolution_status="unresolved",
     )
-    row = ShipmentEvidenceLine(**{**base, **water})
-    db.add(row)
-    db.flush()
-    return row
+    return add_evidence_line(db, **{**base, **water})
+
+
+def _row(db, line: ShipmentEvidenceLine) -> EvidenceRow:
+    return load_evidence_rows(db, where=(ShipmentEvidenceLine.id == int(line.id),))[0]
 
 
 VOYAGE = dict(
@@ -74,31 +77,28 @@ VOYAGE = dict(
 )
 
 
-def test_the_voyage_columns_travel_from_evidence_to_observation_and_fact(db):
+def test_the_voyage_columns_travel_from_observation_to_fact(db):
     job = _job(db)
     line = _line(db, job, **VOYAGE)
 
-    obs_values = _line_to_observation_values(
-        line, valid_from=datetime(2026, 10, 28, tzinfo=timezone.utc), observed_at=datetime(2026, 10, 28, tzinfo=timezone.utc)
-    )
+    row = _row(db, line)
+    obs = db.scalar(select(ShipmentEvidenceObservation).where(ShipmentEvidenceObservation.evidence_line_id == line.id))
     for name in WATER_FIELDS:
-        assert obs_values[name] == getattr(line, name), name
-    db.add(ShipmentEvidenceObservation(**obs_values))
-    db.flush()
+        assert getattr(obs, name) == VOYAGE.get(name), name
+        assert getattr(row, name) == VOYAGE.get(name), name
+        assert getattr(line, name) is None, f"{name}: D4 does not write the voyage fields on the line"
 
     tbl = FactInboundShipment.__table__
-    _upsert_single_evidence_row(db, tbl, line, tenant_id="default")
+    _upsert_single_evidence_row(db, tbl, row, tenant_id="default")
     fact = db.scalar(select(FactInboundShipment).where(FactInboundShipment.shipment_evidence_line_id == line.id))
     assert fact is not None
     for name in WATER_FIELDS:
-        assert getattr(fact, name) == getattr(line, name), name
+        assert getattr(fact, name) == VOYAGE.get(name), name
     assert fact.eta_date is None  # the coalesced delivery date is a different field: port ETA never lands in it
 
-    # The next report moves the vessel: the fact follows the line, and there is still one fact.
-    line.port_eta_date = date(2026, 11, 3)
-    line.port_ata_date = date(2026, 11, 2)
-    db.flush()
-    _upsert_single_evidence_row(db, tbl, line, tenant_id="default")
+    # The next report moves the vessel: the fact follows the line's newest observation, and there is still one fact.
+    reobserve(db, line, port_eta_date=date(2026, 11, 3), port_ata_date=date(2026, 11, 2))
+    _upsert_single_evidence_row(db, tbl, _row(db, line), tenant_id="default")
     db.expire_all()
     facts = db.scalars(select(FactInboundShipment).where(FactInboundShipment.shipment_evidence_line_id == line.id)).all()
     assert len(facts) == 1
@@ -107,8 +107,9 @@ def test_the_voyage_columns_travel_from_evidence_to_observation_and_fact(db):
 
 def test_a_line_without_voyage_headers_leaves_the_columns_empty(db):
     line = _line(db, _job(db))
-    assert all(getattr(line, name) is None for name in WATER_FIELDS)
-    _upsert_single_evidence_row(db, FactInboundShipment.__table__, line, tenant_id="default")
+    row = _row(db, line)
+    assert all(getattr(row, name) is None for name in WATER_FIELDS)
+    _upsert_single_evidence_row(db, FactInboundShipment.__table__, row, tenant_id="default")
     fact = db.scalar(select(FactInboundShipment).where(FactInboundShipment.shipment_evidence_line_id == line.id))
     assert all(getattr(fact, name) is None for name in WATER_FIELDS)
 

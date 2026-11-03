@@ -14,6 +14,7 @@ import logging
 import re
 import time
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -30,7 +31,7 @@ from app.core.config import get_settings
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.models.shipment_evidence import ShipmentEvidenceLine
-from app.models.shipment_water import WATER_DATE_FIELDS, WATER_FIELDS
+from app.models.shipment_water import WATER_FIELDS
 from app.services.imports.distributor_sales_inventory import (
     DSIResolutionCache,
     ProductResolutionIndex,
@@ -63,6 +64,7 @@ from app.services.imports.shipment_evidence_source_keys import (
     ShipmentEvidenceSourceKeyError,
     stable_source_key_for_row,
 )
+from app.services.imports.shipment_evidence_rows import PAYLOAD_COLUMNS, EvidenceRow, load_evidence_rows
 from app.services.imports.shipment_evidence_report_detect import (
     LINE_OPEN_ORDER,
     LINE_SHIPPED,
@@ -515,7 +517,7 @@ def _rebuild_shipment_distributor_candidates(db: Session, job: ImportJob) -> int
     )
     db.flush()
 
-    lines = list(db.scalars(select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == jid)).all())
+    lines = [r for r in load_evidence_rows(db, job_id=jid) if r.has_payload]
     buckets: dict[str, dict[str, Any]] = {}
 
     for line in lines:
@@ -733,8 +735,8 @@ def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> int:
     )
     db.flush()
 
-    lines = list(db.scalars(select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == jid)).all())
-    line_refs: list[tuple[ShipmentEvidenceLine, str]] = []
+    lines = [r for r in load_evidence_rows(db, job_id=jid) if r.has_payload]
+    line_refs: list[tuple[EvidenceRow, str]] = []
     for line in lines:
         if (line.customer_resolution_status or "").strip() == "resolved":
             continue
@@ -892,16 +894,27 @@ def _rebuild_shipment_customer_candidates(db: Session, job: ImportJob) -> int:
 # (1000 × 41 ≈ 41k) while cutting round-trips ~5× vs small batches against a remote DB.
 _SHIPMENT_UPSERT_CHUNK = 1000
 
-_SHIPMENT_LINE_DATE_COLS = (
-    "ship_confirm_date",
-    "schedule_ship_date",
-    "promise_date",
-    "exwork_date",
-    "erd_date",
-    "est_pod_date",
-    "pod_date",
+_SHIPMENT_LINE_DATE_COLS = ("crad_date",)
+
+# Columns the loader writes on the line (D4): job scope and steward state. Everything else in the parsed row is payload
+# and goes to the observation only.
+_SHIPMENT_LINE_COLUMNS = (
+    "import_job_id",
+    "source_key",
+    "source_sheet",
+    "source_row_number",
     "crad_date",
-    *WATER_DATE_FIELDS,
+    "customer_resolution_status",
+    "customer_id",
+    "resolved_customer_id",
+    "resolved_distributor_id",
+    "product_id",
+    "product_resolution_status",
+    "product_resolution_token",
+    "product_resolution_detail",
+    "distributor_id",
+    "distributor_resolution_status",
+    "distributor_resolution_token",
 )
 
 
@@ -912,46 +925,16 @@ def _is_psycopg_data_error(exc: BaseException) -> bool:
 
 
 def _shipment_line_conflict_set(ex: Any) -> dict[str, Any]:
-    """ON CONFLICT DO UPDATE assignments (source-derived columns only).
+    """ON CONFLICT DO UPDATE assignments: the job scope the row came from, and ``crad_date``.
 
-    ``id``, ``created_at`` and all product/distributor/customer resolution columns on the
-    existing row are intentionally preserved; post-loop ``_resolve_unresolved_shipment_lines_for_job``
-    fills unresolved ids. Shared by the single-row and bulk upsert paths.
+    D4: the line carries no payload. ``id``, ``created_at`` and every resolution column on the existing row are
+    intentionally preserved; post-loop ``_resolve_unresolved_shipment_lines_for_job`` fills unresolved ids. The payload of
+    this pass is written to the observation. Shared by the single-row and bulk upsert paths.
     """
     return {
         "source_sheet": ex.source_sheet,
         "source_row_number": ex.source_row_number,
-        "report_type": ex.report_type,
-        "line_state": ex.line_state,
-        "raw_source_row": ex.raw_source_row,
-        "operating_unit": ex.operating_unit,
-        "bill_to_raw": ex.bill_to_raw,
-        "ship_to_raw": ex.ship_to_raw,
-        "order_no": ex.order_no,
-        "customer_po": ex.customer_po,
-        "order_line": ex.order_line,
-        "delivery_no": ex.delivery_no,
-        "invoice_line": ex.invoice_line,
-        "item_code": ex.item_code,
-        "sales_model_name": ex.sales_model_name,
-        "customer_item": ex.customer_item,
-        "ean_code": ex.ean_code,
-        "upc_code": ex.upc_code,
-        "mpor_item_no": ex.mpor_item_no,
-        "quantity": ex.quantity,
-        "unit_price": ex.unit_price,
-        "amount": ex.amount,
-        "currency_code": ex.currency_code,
-        "ship_confirm_date": ex.ship_confirm_date,
-        "schedule_ship_date": ex.schedule_ship_date,
-        "promise_date": ex.promise_date,
-        "exwork_date": ex.exwork_date,
-        "erd_date": ex.erd_date,
-        "est_pod_date": ex.est_pod_date,
-        "pod_date": ex.pod_date,
         "crad_date": ex.crad_date,
-        "customer_dealer_token": ex.customer_dealer_token,
-        **{name: getattr(ex, name) for name in WATER_FIELDS},
         "updated_at": func.now(),
     }
 
@@ -977,12 +960,12 @@ def _shipment_evidence_line_bulk_upsert_statement(rows: list[dict[str, Any]]):
 def _execute_shipment_line_upsert(db: Session, values: dict[str, Any]) -> None:
     """Insert or update one line keyed by (import_job_id, source_key).
 
-    On conflict, refreshes source-derived columns only; ``id``, ``created_at``, and all
+    On conflict, refreshes the job scope and ``crad_date`` only; ``id``, ``created_at``, and all
     product/distributor/customer resolution columns on the existing row are left unchanged (see
     post-loop ``_resolve_unresolved_shipment_lines_for_job`` for unresolved ids).
 
-    If PostgreSQL rejects a bound date (e.g. year > 9999 from Excel artifacts), clears
-    date columns and retries once inside a savepoint so the outer import transaction survives.
+    If PostgreSQL rejects the bound ``crad_date``, clears it and retries once inside a savepoint
+    so the outer import transaction survives.
     """
     stmt = _shipment_evidence_line_upsert_statement(values)
     try:
@@ -1046,19 +1029,24 @@ def _resolve_unresolved_shipment_lines_for_job(
     idx: ProductResolutionIndex,
     source_id: int | None,
     res_cache: "DSIResolutionCache | None" = None,
+    staged: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
-    """Re-run product and/or distributor resolution only where the corresponding id is still null."""
+    """Re-run product and/or distributor resolution only where the corresponding id is still null.
+
+    The payload (item codes, dates, bill-to/ship-to) is the validate pass's ``staged`` row, else the line's observation.
+    """
     ai_enabled = bool(get_settings().ai_assist_enabled)
     jid = int(job.id)
-    lines = list(
-        db.scalars(
-            select(ShipmentEvidenceLine).where(
-                ShipmentEvidenceLine.import_job_id == jid,
-                or_(ShipmentEvidenceLine.product_id.is_(None), ShipmentEvidenceLine.distributor_id.is_(None)),
-            )
-        ).all()
+    lines = load_evidence_rows(
+        db,
+        job_id=jid,
+        where=(or_(ShipmentEvidenceLine.product_id.is_(None), ShipmentEvidenceLine.distributor_id.is_(None)),),
+        staged=staged,
     )
     for line in lines:
+        if not line.has_payload:
+            logger.warning("shipment resolve: line %s has no payload (no observation); skipped", line.id)
+            continue
         if line.product_id is None:
             evidence_date = coalesce_shipment_evidence_date(
                 pod_date=line.pod_date,
@@ -1102,7 +1090,7 @@ def _resolve_unresolved_shipment_lines_for_job(
             line.product_resolution_status = pstatus
             line.product_resolution_token = ptoken
             line.product_resolution_detail = pdetail
-            db.add(line)
+            db.add(line.line)
         if line.distributor_id is None:
             did, dstatus, dtoken = resolve_distributor_for_evidence(
                 db,
@@ -1136,11 +1124,11 @@ def _resolve_unresolved_shipment_lines_for_job(
             line.distributor_resolution_token = dtoken
             if did is not None:
                 line.resolved_distributor_id = int(did)
-            db.add(line)
+            db.add(line.line)
     db.flush()
     from app.services.imports.shipment_resolved_entities import populate_resolved_entities_for_job
 
-    populate_resolved_entities_for_job(db, job, res_cache=res_cache)
+    populate_resolved_entities_for_job(db, job, res_cache=res_cache, staged=staged)
 
 
 def _openpyxl_sheet_to_dataframe(ws: Any) -> pd.DataFrame:
@@ -1274,7 +1262,7 @@ def process_shipment_evidence_import(
     mapping: dict[str, str],
     on_progress: Any = None,
 ) -> int:
-    """Parse file(s), write ``ShipmentEvidenceLine`` rows. Returns blocking error count."""
+    """Parse file(s): line rows (job scope + steward state) and one observation per line (payload). Returns blocking error count."""
     effective_src_to_canon: dict[str, Any] = dict(job.field_mapping or mapping or {})
     header_by_canonical = _src_to_canonical_rev(effective_src_to_canon)
     raw_meta = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job.id)).first()
@@ -1312,6 +1300,9 @@ def process_shipment_evidence_import(
 
     line_buffer: list[dict[str, Any]] = []
     seen_source_keys: set[str] = set()
+    # The parsed payload of this pass by source_key (last occurrence wins, like the line upsert). It is written once, to the
+    # observation; the line only carries the job scope and the steward state.
+    staged_payloads: dict[str, dict[str, Any]] = {}
 
     def _flush_buffer() -> None:
         if line_buffer:
@@ -1508,7 +1499,8 @@ def process_shipment_evidence_import(
                     "distributor_resolution_status": dstatus,
                     "distributor_resolution_token": dtoken,
                 }
-                line_buffer.append(row_values)
+                staged_payloads[source_key] = {col: row_values[col] for col in PAYLOAD_COLUMNS}
+                line_buffer.append({col: row_values[col] for col in _SHIPMENT_LINE_COLUMNS})
             except ShipmentEvidenceSourceKeyError as exc:
                 blocking += 1
                 db.add(
@@ -1558,7 +1550,9 @@ def process_shipment_evidence_import(
 
     db.flush()
     stage_started = time.perf_counter()
-    _resolve_unresolved_shipment_lines_for_job(db, job, idx, source_id, res_cache=res_cache)
+    _resolve_unresolved_shipment_lines_for_job(
+        db, job, idx, source_id, res_cache=res_cache, staged=staged_payloads
+    )
     _log_shipment_stage(int(job.id), "resolve_unresolved_lines", stage_started)
 
     if unknown_reports == len(frames) and global_row == 0:
@@ -1580,12 +1574,12 @@ def process_shipment_evidence_import(
     from app.services.imports.shipment_purchase_order_materialize import materialize_purchase_orders_for_shipment_job
 
     stage_started = time.perf_counter()
-    materialize_purchase_orders_for_shipment_job(db, int(job.id))
+    materialize_purchase_orders_for_shipment_job(db, int(job.id), staged=staged_payloads)
     _log_shipment_stage(int(job.id), "materialize_purchase_orders", stage_started)
     from app.services.imports.shipment_evidence_observations import sync_job_observations_after_validate
 
     stage_started = time.perf_counter()
-    sync_job_observations_after_validate(db, job)
+    sync_job_observations_after_validate(db, job, staged=staged_payloads)
     _log_shipment_stage(int(job.id), "sync_observations", stage_started)
     stage_started = time.perf_counter()
     dist_reused = _rebuild_shipment_distributor_candidates(db, job)

@@ -853,9 +853,10 @@ def _remember_special_case_clear(db: Session, cand: ImportEntityMappingCandidate
     line_ids = _line_ids_from_context(cand)
     item_codes: set[str] = set()
     if line_ids:
-        for code in db.scalars(
-            select(ShipmentEvidenceLine.item_code).where(ShipmentEvidenceLine.id.in_(line_ids))
-        ).all():
+        from app.services.imports.shipment_evidence_rows import latest_observation_payload_for_line_ids
+
+        for payload in latest_observation_payload_for_line_ids(db, line_ids).values():
+            code = payload.get("item_code")
             if code and str(code).strip():
                 item_codes.add(str(code).strip())
     root: dict[str, Any] = dict(src.column_mapping_memory or {})

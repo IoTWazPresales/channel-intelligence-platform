@@ -13,6 +13,7 @@ from app.models.facts import FactInboundShipment
 from app.models.ingestion import ImportJob
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.cip_db_identity import is_cip_application_database
+from app.services.imports.shipment_evidence_rows import EVIDENCE_LINES_WITH_PAYLOAD_SQL, load_evidence_rows
 from app.services.imports.shipment_resolved_entities import (
     apply_resolved_entities_to_line,
     parse_crad_from_raw_row,
@@ -120,8 +121,8 @@ def run(*, dry_run: bool, job_id: int | None) -> dict[str, int]:
             raw_crad = int(
                 db.scalar(
                     text(
-                        "SELECT count(*) FROM shipment_evidence_line "
-                        "WHERE NULLIF(TRIM(raw_source_row->>'CRAD'), '') IS NOT NULL"
+                        f"SELECT count(*) FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l "
+                        "WHERE NULLIF(TRIM(l.raw_source_row->>'CRAD'), '') IS NOT NULL"
                     )
                 )
                 or 0
@@ -129,10 +130,7 @@ def run(*, dry_run: bool, job_id: int | None) -> dict[str, int]:
             stats["dry_run_crad_in_raw_source_row"] = raw_crad
             return stats
 
-        q = select(ShipmentEvidenceLine).order_by(ShipmentEvidenceLine.id)
-        if job_id is not None:
-            q = q.where(ShipmentEvidenceLine.import_job_id == int(job_id))
-        lines = list(db.scalars(q).all())
+        lines = [r for r in load_evidence_rows(db, job_id=job_id) if r.has_payload]
         stats["lines_processed"] = len(lines)
 
         job_source: dict[int, int | None] = {}
@@ -146,7 +144,7 @@ def run(*, dry_run: bool, job_id: int | None) -> dict[str, int]:
                 raw = line.raw_source_row if isinstance(line.raw_source_row, dict) else {}
                 line.crad_date = parse_crad_from_raw_row(raw)
             apply_resolved_entities_to_line(line, db, sid)
-            db.add(line)
+            db.add(line.line)
 
         db.flush()
         stats["facts_rows_synced"] = _sync_facts_from_evidence(db)
