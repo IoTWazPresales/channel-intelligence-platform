@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2858
+**Snapshot revision:** 2868
 
 ## Outcome (verbatim)
 
@@ -121,7 +121,7 @@ _none_
 | N-0097 | Lineup follow-ons: PF quantity columns, workbench identifier split, supersession hardening, margin amounts | feature | proposed | proposed | yes |  | full loop |
 | N-0098 | Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5) | feature | proposed | proposed | yes |  | full loop |
 | N-0099 | Independent second-look verification of self-verified closed nodes before the branch goes to main | feature | proposed | proposed | yes |  | full loop |
-| N-0100 | CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136) | feature | in_progress | in_progress | yes |  | full loop |
+| N-0100 | CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136) | feature | blocked | blocked | yes |  | full loop |
 | N-0101 | N-0085 U1: listing polling on under the supervisor, restock seen again, dead-link back-off, per-site 403/429 pause, run time limit | feature | complete | complete | yes |  | full loop |
 | N-0102 | N-0085 U2: per-retailer page reader framework (Takealot, Evetech, Amazon), N-0078 fields, registry migrations, discovery for Takealot and Evetech | feature | proposed | proposed | yes |  | full loop |
 | N-0103 | N-0085 U6: Proposed listings steward worklist with bulk confirm, and a per-customer Coverage lens | feature | proposed | proposed | yes |  | full loop |
@@ -138,6 +138,6 @@ _none_
 | N-0114 | Chart fixes: axis titles with units, legends, full names, horizontal bars for long labels, top N and sort, unit formatting on every dashboard and report chart | feature | in_progress | in_progress | yes |  | full loop |
 | N-0115 | Data model under the builder: fact models with measures, shared breakdowns, declared walls, calculated measures and one query compiler replacing one hand-written query per metric | inception | in_progress | in_progress | yes |  | full loop |
 | N-0116 | Dashboard builder on the new data model: dashboard and widget filters, full visual set, click to filter, view rows, widget tools, migration of saved dashboards and reports, three starter dashboards | feature | in_progress | in_progress | yes |  | full loop |
-| N-0117 | Store and DC replenishment | inception | proposed | proposed | yes |  | full loop |
+| N-0117 | Store and DC replenishment | inception | blocked | blocked | yes |  | full loop |
 | N-0118 | Load staged-but-unloaded store-level sell-through | feature | proposed | proposed | yes |  | full loop |
 | N-0119 | On the water: voyage fields, port conditions and the Shipments map (retroactive record) | feature | proposed | proposed | yes | yes | full loop |
