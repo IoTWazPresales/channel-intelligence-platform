@@ -18,6 +18,7 @@ import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
+import { StoreMap } from '@/features/store-dc/StoreMap';
 import { PairedBars, RankedBars, TrendChart } from '@/features/workbench-ui/charts';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel } from '@/features/workbench-ui/Panel';
@@ -340,6 +341,7 @@ export function SellThroughOverview() {
               compact
             />
           </HeadlineStrip>
+          <StoreMap />
 
           <SellThroughReportsStrip coverage={data.coverage} />
 

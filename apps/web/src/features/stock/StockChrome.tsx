@@ -16,18 +16,20 @@ export const STOCK_TITLE = 'Stock & Sell-through';
 export const STOCK_DESCRIPTION =
   'Distributor and retailer stock, weeks of cover, sell-out velocity and execution against plan — all derived from imported sell-out, SOH and shipment files.';
 
-export type StockDomainLens = 'cover' | 'movement' | 'sellthrough' | 'execution' | 'forecast';
+export type StockDomainLens = 'cover' | 'movement' | 'sellthrough' | 'execution' | 'forecast' | 'replenishment';
 
 const LENSES: { value: StockDomainLens; label: string; href: string }[] = [
   { value: 'cover', label: 'Cover', href: '/stock?lens=cover' },
   { value: 'movement', label: 'Movement', href: '/stock?lens=movement' },
   { value: 'sellthrough', label: 'Sell-through', href: '/channel-intelligence' },
+  { value: 'replenishment', label: 'Stores and DCs', href: '/stock/replenishment' },
   { value: 'execution', label: 'Execution vs plan', href: '/stock?lens=execution' },
   { value: 'forecast', label: 'Forecasts', href: '/forecasts' },
 ];
 
 export function stockLensFromLocation(pathname: string, search: URLSearchParams): StockDomainLens {
   if (pathname.startsWith('/channel-intelligence')) return 'sellthrough';
+  if (pathname.startsWith('/stock/replenishment')) return 'replenishment';
   if (pathname.startsWith('/forecasts')) return 'forecast';
   const lens = (search.get('lens') || '').toLowerCase();
   if (lens === 'movement') return 'movement';
