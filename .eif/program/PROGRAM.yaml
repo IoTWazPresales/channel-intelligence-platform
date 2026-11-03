@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2858
-  log_sha256: 835206bc70f5f883ff7714b34bc04672e2cf12b845162c8e75c0e37c0f5f27f3
+  snapshot_revision: 2868
+  log_sha256: 18f9bbcb3a4f48ae1f9282754bcd6946b9ad0dd5deb440d74c60bdcbc20a029a
   acceptance_policy:
     milestone: operator
     root: operator
@@ -12060,9 +12060,9 @@ nodes:
     title: 'CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136)'
     class: feature
     origin: operator
-    status: in_progress
+    status: blocked
     stage: discovery
-    revision: 6
+    revision: 7
     lease: null
     depends_on:
     - N-0065
@@ -12138,7 +12138,14 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0020
+      type: decision
+      ref: D-0141
+      opened: '2026-11-03T09:46:32Z'
+      note: First screen and whether My accounts starts on, per job, including an empty assignment. Blocks the filter and
+        the starter. The assignment table does not need this answer. The engine blocks the whole node; Warren says if the
+        assignment unit may start while this is open.
     conservation_tags: []
     fingerprint: null
     stage_note: 'Scope extended on 2 Nov 2026 (decision D-0133 priority order item 2; D-0138 My accounts default, no database
@@ -13934,9 +13941,9 @@ nodes:
     title: Store and DC replenishment
     class: inception
     origin: operator
-    status: proposed
+    status: blocked
     stage: null
-    revision: 1
+    revision: 3
     lease: null
     depends_on:
     - N-0110
@@ -13971,7 +13978,19 @@ nodes:
     quality: {}
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0021
+      type: decision
+      ref: D-0142
+      opened: '2026-11-03T09:47:03Z'
+      note: Planning numbers for a need and for slow or unsold stock. Blocks those units. Site level, confirmation, the read
+        model, the serves-account link, and the lead-time distribution do not need this. The engine blocks the whole node.
+    - id: BL-0022
+      type: decision
+      ref: D-0143
+      opened: '2026-11-03T09:47:33Z'
+      note: Store map when a site has no coordinates. Blocks the map unit. Site level and the read model do not need this.
+        The engine blocks the whole node while any blocker is open.
     conservation_tags: []
     fingerprint: null
     stage_note: 'Inception chartered 2 Nov 2026 (D-0133 item 4; D-0134 to D-0137 and D-0139 accepted). Evidence EV-0204: .eif/audit/STORE_DC_CENSUS_20261030/REPORT.md.
@@ -15535,6 +15554,83 @@ decisions:
       directly to a customer''s receiving site is sufficient evidence of a DC on its own.'
     origin: operator
     status: accepted
+    supersedes: null
+  D-0140:
+    id: D-0140
+    scope: N-0117
+    statement: 'Warren, 3 November 2026: a shipment from the OEM directly to a customer''s receiving site is evidence for
+      a distribution-centre candidate. It is not sufficient on its own to set the site level to customer DC. The steward is
+      asked once, and the answer is remembered. This closes the open question left in D-0139. The rest of D-0139 stands: a
+      distributor warehouse or business-unit account is distributor-level stock and is never a customer DC; a candidate is
+      not a DC until confirmed; with no confirmed DC there is no DC level. D-0139 is not superseded. Marker TASK4-SHIPMENT.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0141:
+    id: D-0141
+    scope: N-0100
+    statement: 'Question: for each job, what is the first screen, and does My accounts start on? Options: (1) only an account
+      manager with a non-empty assignment lands on the My accounts starter with the filter on; every other job, a user with
+      no job, admin, and an empty assignment land on Brief with the filter off; (2) any job with a non-empty assignment, including
+      admin, starts with the filter on, and an empty assignment starts off; (3) a matrix Warren writes. Evidence: D-0138 names
+      account managers only; the node criterion names dashboards, Brief and Attention without a job; the five jobs have no
+      screens today; product-line restriction already exists and is not an account filter. Assumptions: Brief stays the home
+      unless a job is sent to the starter; an empty assignment must not look like a ban. Impact: (1) matches D-0138; (2) hides
+      other accounts from admin until Clear; (3) waits. Reversibility: high, the filter is a query flag, not a stored permission.
+      Recommendation, not a decision: (1). A clear is not written to the database and lasts for the sign-in session. Blocks
+      the filter and starter units. Does not by itself block the assignment table. Marker TASK4-FIRST-SCREEN.'
+    origin: gov-001
+    status: proposed
+    supersedes: null
+  D-0142:
+    id: D-0142
+    scope: N-0117
+    statement: 'Question: what number may a store or DC need, or a slow-stock label, use? Options: (1) reuse the customer''s
+      existing cover settings, including the account-level fallback of 4 and 6 weeks when empty; slow and unsold stay unconfigured
+      until the tenant stores a threshold; lead time is shown as a distribution and is not subtracted inside a need; (2) the
+      same cover reuse, and Warren names the slow threshold, the unsold threshold, and the lead-time statistic before those
+      labels ship; (3) no fallback: cover, slow, unsold, and any lead-time statistic stay empty until the tenant sets them,
+      and needs say not configured. Evidence: 4 and 6 weeks are already the account-level fallback in customer_report_config;
+      the 30 Oct census has ship-confirm and proof-of-delivery pairs and no DC-to-store date pair. Assumptions: account cover
+      and store cover are the same idea until Warren says a site can differ. Impact: (1) extends 4 and 6 to stores; (3) ships
+      no buy number until configuration exists. Reversibility: high if the number is read at request time and not stored on
+      the fact. Recommendation, not a decision: (3) for any new threshold, and do not extend 4 and 6 until Warren says so.
+      Blocks needs and slow-stock units. The lead-time distribution panel does not need this. Marker TASK4-PLANNING.'
+    origin: gov-001
+    status: proposed
+    supersedes: null
+  D-0143:
+    id: D-0143
+    scope: N-0117
+    statement: 'Question: what does the store map show when a site has no coordinates? The 30 Oct census filled site name
+      and site code only. Options: (1) a site list in the shipment map''s selection pattern, and no dots until a steward stores
+      a coordinate; no geocoding; (2) geocode the site label through an external service and store the result; (3) the steward
+      drops a pin, no external call. Evidence: no coordinate key was filled; the shipment map''s coordinates are hardcoded
+      place names, which this module must not copy. Assumptions: a site label is not a reliable address; an external geocoder
+      sends labels off the machine. Impact: (1) is an honest empty map; (2) needs a vendor and a retention rule; (3) is accurate
+      and slow to fill. Reversibility: (1) is a screen; (2) stores derived coordinates; (3) is steward data and can be cleared.
+      Recommendation, not a decision: (1), then (3) if dots are wanted. Not (2) in this inception. Blocks the map unit. Marker
+      TASK4-MAP.'
+    origin: gov-001
+    status: proposed
+    supersedes: null
+  D-0144:
+    id: D-0144
+    scope: null
+    statement: 'Question: how should header mappings, remembered sheets, cleared tokens, and approved aliases be scoped to
+      a tenant? Options: (1) tenant_id on source_definition and on customer_source_token_alias, distributor_source_token_alias,
+      channel_source_token_alias, region_source_token_alias, product_alias, and customer_article_alias, backfill from the
+      related master''s tenant or default, and filter every read and write; (2) namespace column_mapping_memory JSON by tenant
+      and keep un-namespaced keys for default, which does not cover alias tables; (3) do nothing until a second tenant exists.
+      Evidence: source_definition has column_mapping_memory and no tenant_id; import_job has tenant_id; shipment_field_mapping
+      reads memory by source; lineup_customer_token_stamp loads approved customer aliases by token and status with no tenant;
+      BATCH2 Needs Warren item 1; one tenant stated there, not re-queried. Assumptions: backfill to default is safe only while
+      one tenant uses each source. Impact: (1) stops a cross-tenant alias; (2) leaves aliases global; (3) is safe only while
+      a single tenant is a hard rule. Reversibility: high while one tenant holds the rows; low after two tenants diverge.
+      Recommendation, not a decision: (1). Do not implement until Warren picks. Does not block N-0100 or N-0117. Does not
+      confirm D-0132. Does not depend on migration 20261102_0051. Marker TASK4-M5C.'
+    origin: gov-001
+    status: proposed
     supersedes: null
 evidence:
   EV-GOV008-REVIEW:
@@ -17633,6 +17729,19 @@ evidence:
     tree_hash: null
     note: 'Evidence for N-0119 (retroactive): deploy of 2 November 2026, migration 20261102_0051, web rebuild and restart,
       figures after.'
+  EV-0212:
+    id: EV-0212
+    provenance: design-direction
+    path: .eif/audit/OVERNIGHT_20261102/N0100_DEFINITION.md
+    tree_hash: null
+    note: N-0100 job and My accounts definition. Not an acceptance. D-0141 is the open first-screen decision.
+  EV-0213:
+    id: EV-0213
+    provenance: design-direction
+    path: .eif/audit/OVERNIGHT_20261102/STORE_DC_MODULE_DEFINITION.md
+    tree_hash: null
+    note: N-0117 store and DC definition, plus M5c options. Not an acceptance. D-0140 accepted. D-0142, D-0143 and D-0144
+      proposed.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -19752,7 +19861,7 @@ deferred_findings:
   status: deferred
 ids:
   node: 5
-  decision: 139
-  blocker: 19
-  evidence: 211
+  decision: 144
+  blocker: 22
+  evidence: 213
   baseline: 18
