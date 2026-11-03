@@ -4,15 +4,15 @@
 
 **Branch:** `feat/integrate-20261103`. My accounts, listing, store and DC, tenant mapping, and shipment D4 are on this branch. Do not push to main.
 
-**Alembic code head:** `20261103_0056`. Chain: `20261103_0052` user accounts (already on cip) -> `20261103_0053` listing sites -> `20261103_0054` store and DC -> `20261103_0055` tenant mapping -> `20261103_0056` shipment single-write. `cip` is still `20261103_0052`. This session did not upgrade cip.
+**Alembic code head:** `20261103_0056`. Chain: `20261103_0052` user accounts -> `20261103_0053` listing sites -> `20261103_0054` store and DC -> `20261103_0055` tenant mapping -> `20261103_0056` shipment single-write. Applied to `cip` and `cip_test` on 3 Nov 2026 as the table owner. `current_database()` was `cip` for the cip upgrade. Role `cip` has SELECT, INSERT, UPDATE, DELETE on the new listing and store tables, and USAGE, SELECT on their sequences.
 
-**Proven:** the five revision ids are unique and linear. An upgrade of local `cip_test` ran `0051` through `0054`, then `0055` failed because 64 approved copies of one test alias share the new unique key. The upgrade rolled back. `cip_test` is still `20261101_0050`. On `cip`, that same approved-alias key has 0 duplicate groups.
+**Proven:** `cip` and `cip_test` are at `20261103_0056`. `source_definition.tenant_id` exists. `ix_shipment_ev_obs_evidence_line` exists. Before the `cip_test` upgrade, 63 older customer-alias copies and 94 older distributor-alias copies were set to `superseded`; the newest approved row in each group was kept. `cip` had no duplicate approved groups, so its aliases were not changed.
 
-**Not proven:** `20261103_0056` has not been applied anywhere by this session. The browser checks for My accounts, the store map, and listings are still the ones reported by their own chats. D5 (drop the old shipment payload columns) is not done. Listing nodes N-0076, N-0077, and N-0085 are not closed.
+**Not proven:** the browser checks. The running web is still the previous build until it is rebuilt from this branch and the API and worker are restarted. D5 is not done. Listing nodes are not closed.
 
-**Next:** say "run the migration" before anything upgrades `cip`. Local `cip_test` needs the duplicate test alias removed before it can reach `0056`.
+**Next:** rebuild the web from this branch, restart the API and worker, then sign in and check My accounts, the store map, replenishment, and listings.
 
-**Blockers requiring Warren:** the cip upgrade. Do not push to main.
+**Blockers requiring Warren:** none for the schema. Do not push to main.
 
 The paragraphs below are older checkpoints. Where they disagree with this block on branch or on cip's Alembic revision, this block wins.
 

@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-03 - **Integration migrated:** `cip` and `cip_test` are at `20261103_0056` on `feat/integrate-20261103`. `cip_test` kept the newest approved alias in each duplicate group and marked the older copies `superseded` (63 customer, 94 distributor). `cip` aliases were not changed. Role `cip` was granted the new tables and sequences. No main.
+
 - 2026-11-03 - **Integration branch:** `feat/integrate-20261103` holds My accounts, listing (`20261103_0053`), store and DC (`20261103_0054`), tenant mapping (`20261103_0055`), and shipment D4 (`20261103_0056`). `cip` stays `20261103_0052`. Local `cip_test` upgrade rolled back on one duplicated test alias. No main. Commit 7fbf54b6.
 
 - 2026-11-03 - **Shipment evidence D4:** the loader writes the row payload once, on `shipment_evidence_observation`. `shipment_evidence_line` keeps job scope and steward state. On `feat/integrate-20261103` the migration is `20261103_0056` revising `20261103_0055`. It drops NOT NULL on `report_type`, `line_state` and `raw_source_row`, indexes the latest observation per line, and re-issues `shipment_evidence_current` without the line `pod_date` term. Not applied to cip. D5 is not done. Commit `1943e3d5`.
