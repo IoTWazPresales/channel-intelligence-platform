@@ -1,0 +1,574 @@
+PRODUCT	apps/api/app/api/v1/endpoints/channel_ops.py:145	Johannesburg	# CIP sessions run Africa/Johannesburg (UTC+2, no DST). date_trunc('week', date)
+PRODUCT	apps/api/app/api/v1/endpoints/cst_steward.py:367	Takealot	Admin-only. Idempotent; never touches Takealot (customer_id=20) or any row that
+PRODUCT	apps/api/app/api/v1/endpoints/listing_capture.py:363	takealot	return {"items": items, "retailers_checked": ["takealot", "evetech"], "search_position": "deferred"}
+PRODUCT	apps/api/app/api/v1/endpoints/listing_capture.py:373	takealot	mkt = listing.marketplace if listing else "takealot"
+PRODUCT	apps/api/app/ingestion/infer.py:26	Makro	# headers (e.g. Makro Dispo column ``0``). ``df.columns.astype(str)`` then
+PRODUCT	apps/api/app/models/shipment_water.py:7	ACZA	in the ACZA reports is an internal number and is not mapped to it.
+PRODUCT	apps/api/app/services/commercial_tenant_profile.py:144	Johannesburg	REPORTING_TIMEZONE = "Africa/Johannesburg"
+PRODUCT	apps/api/app/services/customer_leftover_repair.py:27	COMPUSPEED	COMPUSPEED_LOSER_ID = 1152
+PRODUCT	apps/api/app/services/customer_leftover_repair.py:30	Esquire	(788, "Esquire"),
+PRODUCT	apps/api/app/services/customer_leftover_repair.py:31	Amazon	(299, "Amazon"),
+PRODUCT	apps/api/app/services/customer_leftover_repair.py:100	compuspeed	"compuspeed_unexplained": lid == COMPUSPEED_LOSER_ID,
+PRODUCT	apps/api/app/services/customer_leftover_repair.py:189	compuspeed	"compuspeed_unexplained": bool(item["compuspeed_unexplained"]),
+PRODUCT	apps/api/app/services/customer_related_master_groups.py:5	Amazon	("Amazon" -> "Amazon Commercial Services (South Africa)") or shares its root identity. The steward
+TEST_FIXTURE	apps/api/app/services/customer_test_fixtures.py:19	Amazon	r"^(RelAmazon\b|Acme Retail [0-9a-f]{8}\b|Abort Merge|Merge Test|Term Dedup|Bulk Preview|Alias Customer )",
+TEST_FIXTURE	apps/api/app/services/seed_demo.py:172	DIST-01	DimDistributor(code="DIST-01", name="Summit Supply Co."),
+TEST_FIXTURE	apps/api/app/services/seed_demo.py:186	CUST-1001	DimCustomer(code="CUST-1001", name="Metro Market Group", region_id=regions[0].id, channel_id=channels[0].id),
+PRODUCT	apps/api/app/services/stock_leaves_honesty.py:4	Johannesburg	Africa/Johannesburg, same as Movement. Do not copy lab fixture W36 / TechMart.
+PRODUCT	apps/api/app/services/stock_leaves_honesty.py:23	Johannesburg	(now() AT TIME ZONE 'Africa/Johannesburg')::date AS today_sast,
+PRODUCT	apps/api/app/services/stock_leaves_honesty.py:25	Johannesburg	(now() AT TIME ZONE 'Africa/Johannesburg')::date
+PRODUCT	apps/api/app/services/stock_leaves_honesty.py:26	Johannesburg	- (EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Africa/Johannesburg')::date)::int - 1)
+PRODUCT	apps/api/app/services/stock_leaves_honesty.py:160	Johannesburg	"Sell-through comes from retailer files, by week (Africa/Johannesburg).",
+PRODUCT	apps/api/app/services/supply_overview.py:21	Johannesburg	# ISO Monday in Africa/Johannesburg — same grain as Movement / Data stewardship week keys.
+PRODUCT	apps/api/app/services/supply_overview.py:23	Johannesburg	((now() AT TIME ZONE 'Africa/Johannesburg')::date
+PRODUCT	apps/api/app/services/supply_overview.py:24	Johannesburg	- EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Africa/Johannesburg')::date)::int
+PRODUCT	apps/api/app/services/supply_overview.py:28	Johannesburg	_TODAY_SAST = "(now() AT TIME ZONE 'Africa/Johannesburg')::date"
+PRODUCT	apps/api/app/services/commercial_planner/lineup_backfill_archive_config.py:4	ACZA	not hardcoded in detection logic. Default factory targets the ACZA Consumer archive.
+PRODUCT	apps/api/app/services/commercial_planner/lineup_backfill_archive_config.py:23	ACZA	Example ACZA tree: ``{BU}/{year}/{quarter}/file.xlsx``.
+PRODUCT	apps/api/app/services/commercial_planner/lineup_backfill_archive_config.py:73	ACZA	/ "ACZA Consumer - Sales"
+PRODUCT	apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:302	makro	makro_id = db.scalar(select(DimCustomer.id).where(func.lower(DimCustomer.name).like("%makro%")).limit(1))
+PRODUCT	apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:303	makro	makro_planned_before = _planned_for_customer(lines, int(makro_id)) if makro_id else None
+PRODUCT	apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:304	makro	makro_planned_after_q1 = None
+PRODUCT	apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:305	makro	if makro_planned_before is not None and before_total:
+PRODUCT	apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:306	makro	makro_planned_after_q1 = float(alloc["q1_allocated_units"]) * (makro_planned_before / before_total)
+PRODUCT	apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:330	makro	"makro_planned_before": makro_planned_before,
+PRODUCT	apps/api/app/services/commercial_planner/lineup_bulk_rederivation.py:331	makro	"makro_planned_after_q1": makro_planned_after_q1,
+PRODUCT	apps/api/app/services/commercial_planner/lineup_commercial_month_split.py:21	ACZA	# ACZA workbooks pair unit months (Feb) with revenue companions (Feb2). Historical path
+PRODUCT	apps/api/app/services/commercial_planner/lineup_customer_alias_resolution.py:29	syntech	"syntech",
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:4	Syntech	- Syntech = distributor 51; customer-column Syntech → OPEN_CHANNEL + dist 51
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:5	Syntech	- Channel Syntech = OPEN_CHANNEL + Syntech (already correct)
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:6	Compuspeed	- Compuspeed as customer = OPEN_CHANNEL (ship: dist 12 → OC majority; no Compuspeed-named ship customer)
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:39	Syntech	_ABSORB_LOSER_IDS = (4145, 1152)  # Syntech DISTRIBUTION; Compuspeed LTD
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:181	syntech	"stamp_tokens": ["syntech", "sadc - superdisti"],
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:192	Syntech	"""Revoke bad customer aliases, mint superdisti→50, restamp Syntech + sadc - superdisti."""
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:211	syntech	syntech = await apply_customer_token_stamp(
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:214	syntech	norm_token="syntech",
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:237	syntech	"syntech_stamp": {
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:238	syntech	"stamped_count": syntech.get("stamped_count"),
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:239	syntech	"alias_id": syntech.get("alias_id"),
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:240	syntech	"line_distributor_id": syntech.get("line_distributor_id"),
+PRODUCT	apps/api/app/services/commercial_planner/lineup_distributor_as_customer_remediation.py:241	syntech	"distributor_token_match": syntech.get("distributor_token_match"),
+PRODUCT	apps/api/app/services/commercial_planner/lineup_open_channel.py:3	Rectron	Values like "Channel - Rectron" describe Open Channel stock routed via a distributor,
+PRODUCT	apps/api/app/services/commercial_planner/lineup_open_channel.py:13	Rectron	# "Channel - Rectron", "channel- Mustek", etc.
+PRODUCT	apps/api/app/services/commercial_planner/lineup_po_auto_link.py:38	ACZA	``version_prefix`` is the leading ``N.`` when present (e.g. ``2. ACZA…xlsx`` → ``2``).
+PRODUCT	apps/api/app/services/commercial_planner/lineup_pricing.py:7	ACZA	Chain (per unit, local currency unless noted), validated against the ACZA Consumer Lineup
+PRODUCT	apps/api/app/services/cpor/cost_suggestion.py:82	Takealot	"""Prefer unit_mac when present (Takealot MAC), else unit_cost. Tier order unchanged."""
+PRODUCT	apps/api/app/services/imports/cst_article_alias_import.py:32	amazon	"amazon": "Amazon",
+PRODUCT	apps/api/app/services/imports/cst_article_alias_import.py:33	computer mania	"computer mania": "Computer Mania",
+PRODUCT	apps/api/app/services/imports/cst_article_alias_import.py:34	game	"game": "Game",
+PRODUCT	apps/api/app/services/imports/cst_article_alias_import.py:35	game	"game online": "Game",
+PRODUCT	apps/api/app/services/imports/cst_article_alias_import.py:36	hifi	"hifi": "Hifi",
+PRODUCT	apps/api/app/services/imports/cst_article_alias_import.py:37	incredible connection	"incredible connection": "Incredible Connection",
+PRODUCT	apps/api/app/services/imports/cst_article_alias_import.py:38	makro	"makro": "Makro",
+PRODUCT	apps/api/app/services/imports/cst_batch.py:21	Takealot	# Header tokens that indicate a Takealot-style / flat CST sales sheet (case-insensitive).
+PRODUCT	apps/api/app/services/imports/cst_batch.py:122	Takealot	multi-week Takealot-style batches. Unmappable files are listed separately.
+PRODUCT	apps/api/app/services/imports/cst_d1.py:27	amazon	"amazon_asin_sourcing": {"marketplace": "amazon", "external_id_from": "raw_product_token"},
+PRODUCT	apps/api/app/services/imports/cst_d1.py:28	takealot	"takealot_week": {"marketplace": "takealot", "external_id_from": "raw_product_token"},
+PRODUCT	apps/api/app/services/imports/cst_d1.py:29	evetech	"evetech_sales_report": {"marketplace": "evetech", "external_id_from": "raw_product_token"},
+PRODUCT	apps/api/app/services/imports/cst_d1.py:107	Game	many sell-through lines (e.g. Game site fan-out); naive add() × N hits
+PRODUCT	apps/api/app/services/imports/cst_d1.py:149	amazon	"marketplace": "amazon",                 # required constant when column absent
+PRODUCT	apps/api/app/services/imports/cst_d1.py:183	Takealot	# Takealot Product IDs often arrive with spaces ("222 547 542").
+PRODUCT	apps/api/app/services/imports/cst_d1.py:184	takealot	if (row.get("listing_marketplace") or "").strip().lower() == "takealot":
+PRODUCT	apps/api/app/services/imports/cst_d1.py:205	Takealot	De-dupes within the current Session flush (Takealot week files repeat Product ID
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:3	Evetech	Canonical customer_ids fixed by Warren (Q-004): Evetech, Computer Mania, Incredible
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:4	Amazon	Connection, Amazon, Hifi, Makro, Game. Verified against `cip` on 2026-08-08 —
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:7	Takealot	Never touches Takealot (`customer_id=20`) — that customer already has a
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:9	takealot	`feed_profile_json.vat_basis` set — see `.tmp/apply_takealot_cst_config_db.py`)
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:26	TAKEALOT	TAKEALOT_CUSTOMER_ID = 20
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:29	Evetech	52: "Evetech",
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:30	Computer Mania	18: "Computer Mania",
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:31	Incredible Connection	12: "Incredible Connection",
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:32	Amazon	26: "Amazon",
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:33	Hifi	11: "Hifi",
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:34	Makro	15: "Makro",
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:35	Game	57: "Game",
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:65	TAKEALOT	if customer_id == TAKEALOT_CUSTOMER_ID:
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:66	Takealot	# Defensive — Takealot is never in P4_CUSTOMER_IDS, but this guard stays
+PRODUCT	apps/api/app/services/imports/cst_p4_customer_bootstrap.py:68	takealot	skipped.append({"customer_id": customer_id, "reason": "takealot_never_touched"})
+PRODUCT	apps/api/app/services/imports/customer_sell_through.py:88	Game	Unmapped Game (and similar) site codes must not share loc=0 — that last-write-wins
+PRODUCT	apps/api/app/services/imports/customer_sell_through.py:115	Amazon	Siteless reports (Amazon ASIN) stay ``…:0:…``. Site-named reports (Game G007)
+PRODUCT	apps/api/app/services/imports/distributor_sales_inventory.py:152	amazon	"amazon",
+PRODUCT	apps/api/app/services/imports/distributor_sales_inventory.py:153	takealot	"takealot",
+PRODUCT	apps/api/app/services/imports/distributor_sales_inventory.py:154	makro	"makro",
+PRODUCT	apps/api/app/services/imports/distributor_sales_inventory.py:155	massmart	"massmart",
+PRODUCT	apps/api/app/services/imports/distributor_sales_inventory.py:156	game	"game ",
+PRODUCT	apps/api/app/services/imports/distributor_sales_inventory.py:157	game	" game",
+PRODUCT	apps/api/app/services/imports/distributor_sales_inventory.py:158	incredible connection	"incredible connection",
+PRODUCT	apps/api/app/services/imports/dsi_customer_name_normalization.py:59	EVETECH	``EVETECH (PROPRIETARY) LIMITED`` normalize to ``evetech`` (not ``evetech proprietary``).
+PRODUCT	apps/api/app/services/imports/dsi_product_token_identity.py:37	Computer Mania	# -CM = Computer Mania, -E = Evetech (and similar), -DEMO/-DEM = demo units of the base model.
+PRODUCT	apps/api/app/services/imports/shipment_evidence_candidate_names.py:15	MUSTEK	# Strip ISO-style region segment and trailing branch codes (e.g. MUSTEK-ZA-BB → Mustek).
+PRODUCT	apps/api/app/services/imports/shipment_evidence_customer_token_naming.py:61	Compuspeed	# Trailing fiscal quarter token after the customer name (e.g. "Compuspeed Q1").
+PRODUCT	apps/api/app/services/imports/shipment_evidence_customer_token_naming.py:471	Makro	"""True if two names differ only by swapping one adjacent character (e.g. Marko / Makro)."""
+PRODUCT	apps/api/app/services/imports/shipment_evidence_import.py:1	ACZA	"""Import processor: shipment / order evidence (XXOMRPT0025/0027, ACZA-style workbooks).
+PRODUCT	apps/api/app/services/imports/shipment_evidence_report_detect.py:43	durban	if sn == "unship" or ("pi status" in c and "plan etd/eta durban" in c):
+PRODUCT	apps/api/app/services/imports/shipment_evidence_resolution_plan.py:246	RECTRON	"""Human label derived at candidate build time (e.g. RECTRON-ZA-EDU → Rectron)."""
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:63	ACZA	# On the water (20261101_0049): voyage fields. Aliases for the ACZA headers live in the heuristics below
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:112	ACZA	"on_board_date": "Date the cargo went on board the vessel (ACZA: On-Board Date). Not the ship confirm date.",
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:114	ACZA	"Vessel's estimated arrival at the discharge port (ACZA: ETA Date(Est Port Arrival)). "
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:117	ACZA	"port_ata_date": "Vessel's actual arrival at the discharge port (ACZA: ATA Date(Actual Port Arrival)).",
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:119	ACZA	"Forwarder and origin hub as printed, e.g. COSCOckg-WWP-Truck-Sea (ACZA: Shipping Method). "
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:124	ACZA	"ship_way": "Sea, air or express (ACZA: Ship Way). Only sea shipments are drawn on the On the water map.",
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:125	ACZA	"deliver_port": "Discharge port as a UN LOCODE (ACZA: Deliver Port), for example ZADUR.",
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:126	ACZA	"vessel_name": "Vessel name, when a forwarder supplies it. Empty in the ACZA files.",
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:127	ACZA	"voyage_no": "Voyage number, when a forwarder supplies it. Empty in the ACZA files.",
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:128	ACZA	"bill_of_lading_no": "Bill of lading number, when a forwarder supplies it. Empty in the ACZA files.",
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:131	ACZA	"ACZA's Container Number column is a 5-digit internal number and is not this field."
+PRODUCT	apps/api/app/services/imports/shipment_field_mapping.py:470	ACZA	# ACZA's "Container Number" is a 5-digit internal number, so it is not matched here.
+PRODUCT	apps/api/app/services/imports/shipment_open_book.py:3	ACZA	An ACZA Shipped/Unshipped workbook is the whole open book at its report date.
+PRODUCT	apps/api/app/services/imports/shipment_report_date.py:1	ACZA	"""Report date for an ACZA Shipped/Unshipped workbook.
+PRODUCT	apps/api/app/services/imports/shipment_report_date.py:3	ACZA	The date is the single ``YYYYMMDD`` token in the file name (``ACZA Shipped Unshipped
+PRODUCT	apps/api/app/services/imports/shipment_shipped_fact_identity_twin_merge.py:425	amazon	def amazon_po_shipped_stats(db: Session, po_norm: str, customer_id: int) -> dict[str, Any]:
+PRODUCT	apps/api/app/services/imports/stewardship_summary.py:11	Johannesburg	# ISO Monday in Africa/Johannesburg — same grain as Movement week keys.
+PRODUCT	apps/api/app/services/imports/stewardship_summary.py:13	Johannesburg	((now() AT TIME ZONE 'Africa/Johannesburg')::date
+PRODUCT	apps/api/app/services/imports/stewardship_summary.py:14	Johannesburg	- EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Africa/Johannesburg')::date)::int
+PRODUCT	apps/api/app/services/imports/stewardship_summary.py:29	Johannesburg	WHERE (created_at AT TIME ZONE 'Africa/Johannesburg')::date >= {_ISO_WEEK_START_SAST}
+PRODUCT	apps/api/app/services/imports/stewardship_summary.py:185	Johannesburg	"jobs_last_7d": f"{jobs_iso} started since Monday (Johannesburg)",
+PRODUCT	apps/api/app/services/imports/template_definitions.py:611	ACZA	"OEM shipment and open-order files, including ACZA shipped and unshipped workbooks. "
+PRODUCT	apps/api/app/services/imports/template_definitions.py:705	ACZA	# On the water (20261101_0049). "Container Number" is ACZA's 5-digit internal number: not container_no.
+PRODUCT	apps/api/app/services/imports/parsers/customer_sell_through_flat.py:207	Takealot	# Takealot / ZA currency cells: "R  1 486.00", "R1,999.00"
+PRODUCT	apps/api/app/services/imports/parsers/customer_sell_through_flat.py:305	Game	# Identity canons outweigh repeated measure hits (Game 2026 week band = 6× "Sales U TY").
+PRODUCT	apps/api/app/services/imports/parsers/customer_sell_through_flat.py:401	Game	"""Fill blank/weak header cells from prior rows (Game WEEK dual-/triple-header).
+PRODUCT	apps/api/app/services/imports/parsers/customer_sell_through_flat.py:601	Takealot	Takealot WEEK workbooks carry qty on the sales sheet and prices/SOH on ``soh``.
+PRODUCT	apps/api/app/services/imports/parsers/customer_sell_through_period.py:28	Game	# SAP / Game Fiscal Week band codes: ``027.2026`` (week.year).
+PRODUCT	apps/api/app/services/imports/parsers/customer_sell_through_period.py:180	Game	"""Detect dual-header week-band unit columns (Game multi-week wide files).
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:14	amazon	"amazon": "https://www.amazon.co.za/dp/{external_id}",
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:15	Takealot	# Takealot WEEK "Product ID" is a SKU, never a PLID. A URL is suggested only for an
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:17	Takealot	# PLID: bare ``/PLID<n>`` routes to Takealot's seo-landing page, not the product.
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:18	takealot	"takealot": "https://www.takealot.com/x/PLID{external_id}",
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:19	Evetech	# Evetech Web IDs resolve via a category mid-path; site rewrites to canonical slug.
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:21	evetech	"evetech": "https://www.evetech.co.za/asus-laptops/laptops-for-sale/{external_id}",
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:26	EVETECH	_EVETECH_WEB_ID_RE = re.compile(r"^\d{4,8}$")
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:29	takealot	def takealot_product_url(plid: str | int, *, canonical_url: str | None = None) -> str:
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:30	Takealot	"""Takealot product-page URL for a known real PLID.
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:32	takealot	Uses the canonical slug URL when it is a takealot.com URL ending in this PLID,
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:33	takealot	else ``https://www.takealot.com/x/PLID<n>``. Never pass a report SKU here.
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:40	takealot	canon.startswith("https://www.takealot.com/")
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:42	takealot	and not re.match(r"^https://www\.takealot\.com/PLID\d+", canon, re.IGNORECASE)
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:45	takealot	return f"https://www.takealot.com/x/PLID{digits}"
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:58	amazon	if mkt == "amazon":
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:64	takealot	if mkt == "takealot":
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:70	takealot	return takealot_product_url(m.group(1))
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:72	evetech	if mkt == "evetech":
+PRODUCT	apps/api/app/services/listing_capture/auto_finder.py:74	EVETECH	if not _EVETECH_WEB_ID_RE.match(digits):
+PRODUCT	apps/api/app/services/listing_capture/marketplace_vocab.py:8	takealot	LISTING_MARKETPLACES: tuple[str, ...] = ("takealot", "evetech", "amazon")
+PRODUCT	apps/api/app/services/listing_capture/observation.py:29	takealot	"takealot": 2.0,
+PRODUCT	apps/api/app/services/listing_capture/observation.py:30	evetech	"evetech": 2.0,
+PRODUCT	apps/api/app/services/listing_capture/observation.py:31	amazon	"amazon": 2.0,
+PRODUCT	apps/api/app/services/listing_capture/observation.py:76	Takealot	"""JSON envelope, Takealot REST buybox, JSON-LD, then HTML price regex. FLAG on failure."""
+PRODUCT	apps/api/app/services/listing_capture/observation.py:85	takealot	from app.services.listing_capture.takealot_fetch import parse_takealot_product_json
+PRODUCT	apps/api/app/services/listing_capture/observation.py:87	takealot	return parse_takealot_product_json(
+PRODUCT	apps/api/app/services/listing_capture/observation.py:110	Evetech	# JSON-LD / embedded schema.org Offer price (common on Evetech / many PDPs).
+PRODUCT	apps/api/app/services/listing_capture/observation.py:160	Takealot	# Bare first-digit matches on SPA shells (Takealot Next.js loader) are noise.
+PRODUCT	apps/api/app/services/listing_capture/observation.py:203	takealot	if "api.takealot.com" in url:
+PRODUCT	apps/api/app/services/listing_capture/observation.py:205	takealot	headers["Referer"] = "https://www.takealot.com/"
+PRODUCT	apps/api/app/services/listing_capture/quality.py:5	Amazon	"no_data". A failed check is a flag. Search position is deferred. Amazon is
+PRODUCT	apps/api/app/services/listing_capture/quality.py:19	takealot	EXPECTED_SELLER = {"takealot": "Takealot", "evetech": "Evetech"}
+PRODUCT	apps/api/app/services/listing_capture/quality.py:158	takealot	def _takealot(data: dict[str, Any], product: dict[str, Any] | None, price: float | None, availability: str | None) -> dict[str, Any]:
+PRODUCT	apps/api/app/services/listing_capture/quality.py:196	takealot	"buy_box": _buy_box("takealot", seller_name or None, True),
+PRODUCT	apps/api/app/services/listing_capture/quality.py:202	evetech	def _evetech_field(text: str, key: str) -> str | None:
+PRODUCT	apps/api/app/services/listing_capture/quality.py:209	evetech	def _evetech(text: str, product: dict[str, Any] | None, price: float | None, availability: str | None) -> dict[str, Any]:
+PRODUCT	apps/api/app/services/listing_capture/quality.py:214	evetech	brand = _evetech_field(text, "brand") or ""
+PRODUCT	apps/api/app/services/listing_capture/quality.py:215	evetech	description = _evetech_field(text, "description")
+PRODUCT	apps/api/app/services/listing_capture/quality.py:217	evetech	review_raw = _evetech_field(text, "reviewCount") or _evetech_field(text, "ratingCount")
+PRODUCT	apps/api/app/services/listing_capture/quality.py:229	evetech	"buy_box": _buy_box("evetech", "Evetech", "evetech" in text.lower()),
+PRODUCT	apps/api/app/services/listing_capture/quality.py:235	amazon	def _amazon() -> dict[str, Any]:
+PRODUCT	apps/api/app/services/listing_capture/quality.py:236	Amazon	reason = "Amazon is not checked. No listing is linked to a product."
+PRODUCT	apps/api/app/services/listing_capture/quality.py:312	amazon	if market == "amazon":
+PRODUCT	apps/api/app/services/listing_capture/quality.py:313	amazon	checks = _amazon()
+PRODUCT	apps/api/app/services/listing_capture/quality.py:316	takealot	elif market == "takealot":
+PRODUCT	apps/api/app/services/listing_capture/quality.py:322	Takealot	checks = {key: _no_data("Snapshot is not Takealot product data") for key in CHECK_KEYS}
+PRODUCT	apps/api/app/services/listing_capture/quality.py:324	takealot	checks = _takealot(data, product, price, availability)
+PRODUCT	apps/api/app/services/listing_capture/quality.py:325	evetech	elif market == "evetech":
+PRODUCT	apps/api/app/services/listing_capture/quality.py:326	evetech	checks = _evetech(snapshot_text, product, price, availability)
+PRODUCT	apps/api/app/services/listing_capture/registry.py:32	takealot	from app.services.listing_capture.takealot_fetch import extract_plid
+PRODUCT	apps/api/app/services/listing_capture/registry.py:34	Takealot	# Takealot fetch reasons meaning "the REST details call 404'd and EAN recovery failed".
+PRODUCT	apps/api/app/services/listing_capture/registry.py:35	TAKEALOT	_TAKEALOT_UNRESOLVED_REASONS = frozenset({"plid_not_found", "ean_not_unique_or_missing"})
+PRODUCT	apps/api/app/services/listing_capture/registry.py:239	takealot	if url and str(seed.marketplace).strip().lower() == "takealot" and not extract_plid(url):
+PRODUCT	apps/api/app/services/listing_capture/registry.py:240	Takealot	# Defence in depth: a Takealot seed is bulk-confirmed only with a real PLID.
+PRODUCT	apps/api/app/services/listing_capture/registry.py:241	takealot	reason = "takealot_plid_unresolved"
+PRODUCT	apps/api/app/services/listing_capture/registry.py:276	takealot	def _takealot_url_for(plid: str, parse_flags: dict[str, Any] | None) -> str:
+PRODUCT	apps/api/app/services/listing_capture/registry.py:277	takealot	from app.services.listing_capture.auto_finder import takealot_product_url
+PRODUCT	apps/api/app/services/listing_capture/registry.py:280	takealot	return takealot_product_url(plid, canonical_url=str(canon) if canon else None)
+PRODUCT	apps/api/app/services/listing_capture/registry.py:331	Takealot	- non-Takealot only: an observation of this URL with HTTP 200 and parse ``ok``
+PRODUCT	apps/api/app/services/listing_capture/registry.py:332	Takealot	(``last_ok_fetch_at``). Takealot prices come from the REST API / EAN search, not
+PRODUCT	apps/api/app/services/listing_capture/registry.py:333	Takealot	the stored URL, so a Takealot price observation does NOT verify the URL.
+PRODUCT	apps/api/app/services/listing_capture/registry.py:340	takealot	if (listing.marketplace or "").strip().lower() != "takealot" and last_ok_fetch_at is not None:
+PRODUCT	apps/api/app/services/listing_capture/registry.py:434	Takealot	put in its own flags (method, VAT basis, Takealot PLID/TSIN/SKU, RRP, canonical URL,
+PRODUCT	apps/api/app/services/listing_capture/registry.py:495	takealot	if marketplace == "takealot":
+PRODUCT	apps/api/app/services/listing_capture/registry.py:496	takealot	from app.services.listing_capture.takealot_fetch import fetch_takealot_listing
+PRODUCT	apps/api/app/services/listing_capture/registry.py:504	takealot	known_plid = str(meta.get("takealot_plid") or "") or None
+PRODUCT	apps/api/app/services/listing_capture/registry.py:509	takealot	status, body, fetch_flags = fetch_takealot_listing(
+PRODUCT	apps/api/app/services/listing_capture/registry.py:518	takealot	listing.meta_json = {**meta, "takealot_plid": resolved}
+PRODUCT	apps/api/app/services/listing_capture/registry.py:574	takealot	if marketplace == "takealot":
+PRODUCT	apps/api/app/services/listing_capture/registry.py:584	takealot	url=_takealot_url_for(fetch_flags["resolved_plid"], parsed.flags),
+PRODUCT	apps/api/app/services/listing_capture/registry.py:592	TAKEALOT	and fetch_flags.get("reason") in _TAKEALOT_UNRESOLVED_REASONS
+PRODUCT	apps/api/app/services/listing_capture/registry.py:938	Takealot	# After a refusal, send nothing more to this site (a Takealot check makes 2-3 calls).
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:1	Takealot	"""Takealot live fetch — REST product-details, not the Next.js SPA shell.
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:8	Takealot	Takealot WEEK "Product ID" is a SKU, not a PLID.
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:24	TAKEALOT	TAKEALOT_REST_VERSION = "v-1-16-0"
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:25	TAKEALOT	TAKEALOT_API_ORIGIN = "https://api.takealot.com"
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:56	TAKEALOT	f"{TAKEALOT_API_ORIGIN}/rest/{TAKEALOT_REST_VERSION}"
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:63	TAKEALOT	f"{TAKEALOT_API_ORIGIN}/rest/{TAKEALOT_REST_VERSION}"
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:102	takealot	def parse_takealot_product_json(
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:107	takealot	marketplace: str = "takealot",
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:114	takealot	"method": "takealot_rest_buybox",
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:116	TAKEALOT	"api_version": TAKEALOT_REST_VERSION,
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:189	takealot	def fetch_takealot_listing(
+PRODUCT	apps/api/app/services/listing_capture/takealot_fetch.py:198	takealot	flags: dict[str, Any] = {"fetch": "takealot_rest"}
+PRODUCT	apps/api/app/services/shipping/on_the_water.py:57	DURBAN	"CITY DEEP": (28.1, -26.2), "DURBAN": (31.0, -29.9),
+PRODUCT	apps/api/app/services/shipping/on_the_water.py:59	Durban	# UN/LOCODE -> label, and where the cargo is drawn on the sea map (City Deep is a rail leg from Durban).
+PRODUCT	apps/api/app/services/shipping/on_the_water.py:60	Durban	PORT_LABEL = {"ZADUR": "Durban", "ZAJNB": "City Deep", "MUPLU": "Port Louis", "ZACPT": "Cape Town"}
+PRODUCT	apps/api/app/services/shipping/on_the_water.py:61	DURBAN	PORT_DRAW = {"ZAJNB": "DURBAN", "ZADUR": "DURBAN", "MUPLU": "PORT LOUIS"}
+PRODUCT	apps/api/app/services/shipping/on_the_water.py:62	Durban	# Lane waypoints kept before turning for a port that is not Durban (index is exclusive end).
+PRODUCT	apps/api/app/services/shipping/on_the_water.py:123	Durban	"""(polyline, port_known). A port that is not Durban turns off the lane before it."""
+PRODUCT	apps/api/app/services/shipping/on_the_water.py:129	DURBAN	if draw == "DURBAN":
+PRODUCT	apps/api/app/services/shipping/on_the_water.py:255	Durban	dest = {"ZAJNB": "Durban → City Deep", "ZADUR": "Durban"}.get(port) or PORT_LABEL.get(port) or (port or "Durban")
+MIGRATION	apps/api/alembic/versions/20261101_0050_fact_superseded.py:39	ACZA	#   2. otherwise (ACZA Shipped sheet, which holds both): the superseding fact is an open order -> the row was open;
+PRODUCT	apps/api/scripts/bootstrap_p4_cst_configs.py:4	Takealot	--confirm to commit. Idempotent — safe to re-run; never touches Takealot
+PRODUCT	apps/api/scripts/merge_shipped_fact_identity_twins.py:16	amazon	amazon_po_shipped_stats,
+PRODUCT	apps/api/scripts/merge_shipped_fact_identity_twins.py:35	amazon	out["amazon_before"] = amazon_po_shipped_stats(db, "PURMIDR26009978", 26)
+PRODUCT	apps/api/scripts/merge_shipped_fact_identity_twins.py:67	amazon	amazon_po_id = out["amazon_before"].get("purchase_order_id")
+PRODUCT	apps/api/scripts/merge_shipped_fact_identity_twins.py:71	amazon	if g.purchase_order_id == amazon_po_id
+PRODUCT	apps/api/scripts/merge_shipped_fact_identity_twins.py:73	amazon	out["amazon_after_estimated"] = {
+PRODUCT	apps/api/scripts/merge_shipped_fact_identity_twins.py:74	amazon	**out["amazon_before"],
+PRODUCT	apps/api/scripts/merge_shipped_fact_identity_twins.py:75	amazon	"shipped_units": out["amazon_before"]["shipped_units"] - stale,
+PRODUCT	apps/api/scripts/merge_shipped_fact_identity_twins.py:84	amazon	out["amazon_after"] = amazon_po_shipped_stats(db, "PURMIDR26009978", 26)
+PRODUCT	apps/api/scripts/ops/cip_test_leak_census.py:46	CUST-1001	FIXTURE_CUSTOMER_CODES = ("CUST-1001",)
+PRODUCT	apps/api/scripts/ops/cip_test_leak_census.py:55	DIST-01	FIXTURE_DISTRIBUTOR_CODES = ("DIST-01",)
+PRODUCT	apps/api/scripts/ops/cip_test_leak_census.py:439	Johannesburg	today = conn.execute(text("SELECT (now() AT TIME ZONE 'Africa/Johannesburg')::date")).scalar()
+PRODUCT	apps/api/scripts/ops/cip_test_leak_census.py:440	Johannesburg	print(f"\n== Loaded figures dated after today ({today}, Africa/Johannesburg)")
+PRODUCT	apps/api/scripts/ops/cleanup_test_masters.py:53	CUST-1001	TEST_CUSTOMER_CODES = ("CUST-1001",)
+PRODUCT	apps/api/scripts/ops/cleanup_test_masters.py:61	DIST-01	TEST_DISTRIBUTOR_CODE_RE = re.compile(r"^(DIST-01|DIST-(FULL|PO|T|HL)-.+)$")
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:2	Makro	"""READ-ONLY diagnosis: 1H split quantities, Makro planned inflation, reconciliation grain."""
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:112	Makro	# (b) Makro 2026 Q1 planned inflation + duplicate active slots
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:113	makro	makro = db.scalar(
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:114	makro	select(DimCustomer.id).where(func.lower(DimCustomer.name).like("%makro%")).limit(1)
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:116	makro	makro_cases = []
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:117	makro	if makro:
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:118	makro	makro_cases = list(
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:128	makro	CommercialLineupLine.customer_id == int(makro)
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:135	makro	makro_planned = []
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:136	makro	for c in makro_cases:
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:140	makro	CommercialLineupLine.customer_id == int(makro) if makro else True,
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:143	makro	makro_planned.append(
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:168	makro	report["b_makro_q1_planned"] = {
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:169	makro	"makro_customer_id": int(makro) if makro else None,
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:170	makro	"active_cases": makro_planned,
+PRODUCT	apps/api/scripts/ops/diagnose_lineup_quantity_supersession.py:171	makro	"makro_planned_total": sum(x["planned_units"] for x in makro_planned),
+PRODUCT	apps/api/scripts/ops/probe_cip_test_shipment.py:32	ACZA	"where file_name = 'ACZA Shipped Unshipped 20260929.xlsx' "
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:61	Evetech	if row.get("customer_token") == "Evetech" and "UX3405CA" in str(row.get("model_raw") or "")
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:65	Evetech	print("Evetech preview:", json.dumps(ev, indent=2))
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:67	Evetech	raise SystemExit(f"GATE FAIL: Evetech Q1 expected 36, got {ev}")
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:114	Evetech	where l.case_id=35 and l.customer_token='Evetech'
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:121	Evetech	print("Evetech after:", dict(ev_line or {}))
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:123	Evetech	raise SystemExit(f"GATE FAIL: Evetech quantity_units={qty}, expected 36")
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:130	Evetech	where l.case_id=35 and l.customer_token='Evetech'
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:135	Evetech	print("Evetech PO reconciliation planned (line sum):", planned)
+PRODUCT	apps/api/scripts/ops/prove_1h_month_rederivation_clone.py:137	Evetech	raise SystemExit(f"GATE FAIL: Evetech planned={planned}, expected 36")
+PRODUCT	apps/api/scripts/ops/prove_loader_order_grain_clone.py:35	ACZA	RAW = API_ROOT / "storage" / "uploads" / "imports" / "f8a61716696045269dce5769323418eb" / "ACZA Shipped Unshipped 20261027.xlsx"
+PRODUCT	apps/api/scripts/ops/prove_on_the_water_clone.py:141	ACZA	# The ACZA "Container Number" is an internal 5-digit number, never an ISO container number.
+PRODUCT	apps/api/scripts/ops/prove_on_the_water_clone.py:144	ACZA	problems.append(f"{t}.container_no: {bad} rows hold a value (the ACZA headers must leave it empty)")
+PRODUCT	apps/api/scripts/ops/repair_merged_customer_leftovers.py:29	COMPUSPEED	COMPUSPEED_LOSER_ID,
+PRODUCT	apps/api/scripts/ops/repair_merged_customer_leftovers.py:85	COMPUSPEED	flag = "  [COMPUSPEED unexplained pre-absorb rows]" if item["compuspeed_unexplained"] else ""
+PRODUCT	apps/api/scripts/ops/repair_merged_customer_leftovers.py:152	COMPUSPEED	flag = " COMPUSPEED" if row["compuspeed_unexplained"] else ""
+PRODUCT	apps/api/scripts/ops/repair_merged_customer_leftovers.py:223	COMPUSPEED	_ = COMPUSPEED_LOSER_ID
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:1	Takealot	"""N-0039 repair: Takealot listing URLs built from the report SKU (RC1/RC2/RC3).
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:3	Takealot	R-a  Takealot rows with a resolved PLID (``meta_json ? 'takealot_plid'``):
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:5	takealot	``https://www.takealot.com/x/PLID<plid>``. The replaced value is kept in
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:13	Takealot	R-b  Takealot rows with no resolved PLID: flagged unverified
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:20	Amazon	Idempotent: a second run changes 0 rows. Amazon and Evetech rows are not touched.
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:26	takealot	.venv/Scripts/python.exe scripts/ops/repair_n0039_takealot_listing_urls.py --expect-db cip
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:27	takealot	.venv/Scripts/python.exe scripts/ops/repair_n0039_takealot_listing_urls.py --expect-db cip --apply
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:46	takealot	from app.services.listing_capture.auto_finder import takealot_product_url  # noqa: E402
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:52	takealot	count(*) FILTER (WHERE marketplace = 'takealot') AS takealot_rows,
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:53	takealot	count(*) FILTER (WHERE marketplace = 'takealot' AND meta_json ? 'takealot_plid') AS takealot_resolved_plid,
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:54	takealot	count(*) FILTER (WHERE marketplace = 'takealot' AND url ~ '^https://www\\.takealot\\.com/PLID[0-9]+$') AS takealot_bare_plid_url,
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:55	takealot	count(*) FILTER (WHERE marketplace = 'takealot' AND url LIKE 'https://www.takealot.com/x/PLID%') AS takealot_x_plid_url,
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:56	takealot	count(*) FILTER (WHERE marketplace = 'takealot' AND url ~ '^https://www\\.takealot\\.com/[^/]+/PLID[0-9]+$'
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:57	takealot	AND url NOT LIKE 'https://www.takealot.com/x/PLID%') AS takealot_slug_url,
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:64	takealot	count(*) FILTER (WHERE marketplace <> 'takealot') AS non_takealot_rows,
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:66	takealot	FILTER (WHERE marketplace <> 'takealot'), '')) AS non_takealot_fingerprint
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:73	takealot	SELECT l.id, l.customer_id, l.url, l.meta_json, l.meta_json->>'takealot_plid' AS plid, v.canonical_url, v.fetched_at
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:81	takealot	AND o.parse_flags->>'resolved_plid' = l.meta_json->>'takealot_plid'
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:88	takealot	WHERE l.marketplace = 'takealot' AND l.meta_json ? 'takealot_plid'
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:105	takealot	WHERE l.marketplace = 'takealot' AND NOT coalesce(l.meta_json ? 'takealot_plid', FALSE)
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:130	takealot	text("SELECT id, status_observed_at FROM customer_listing WHERE marketplace = 'takealot'")
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:143	takealot	new_url = takealot_product_url(r["plid"], canonical_url=r["canonical_url"])
+PRODUCT	apps/api/scripts/ops/repair_n0039_takealot_listing_urls.py:214	takealot	for r in conn.execute(text("SELECT id, status, status_observed_at FROM customer_listing WHERE marketplace = 'takealot'"))
+PRODUCT	apps/api/scripts/ops/w1_pve_recon_audit.py:3	ACZA	Sections: 1a SHIPPED (job 310 ACZA), 1b PLANNED 26Q2, 1c CATEGORY tie-out, 1d PO MGMT.
+PRODUCT	apps/api/scripts/ops/w1_pve_recon_audit.py:47	ACZA	r"\ACZA Shipped Unshipped 20260703.xlsx"
+PRODUCT	apps/api/scripts/ops/w1_pve_recon_audit.py:70	ACZA	x for x in ["ACZA", _norm(d.get("Delivery No")), _norm(d.get("Invoice Line")), _norm(d.get("Item"))] if x
+PRODUCT	apps/api/scripts/ops/w1_pve_recon_audit.py:76	ACZA	x for x in ["ACZA", _norm(d.get("Order No.")), _norm(d.get("Order Line")), _norm(d.get("Item"))] if x
+PRODUCT	apps/api/scripts/ops/w1_pve_recon_audit.py:106	ACZA	if k and k != "ACZA":
+PRODUCT	apps/api/scripts/ops/w1_pve_recon_audit.py:110	ACZA	if k and k != "ACZA":
+PRODUCT	apps/api/scripts/ops/w1_pve_recon_audit.py:143	ACZA	raise FileNotFoundError(f"ACZA workbook not found at {ACZA_FILE} or raw_file_metadata for job {JOB_ID}")
+TEST_FIXTURE	apps/web/src/app/(app)/admin/cst-steward/CstArticleAliasesSection.test.tsx:24	Amazon	customer_name: 'Amazon',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/cst-steward/CstArticleAliasesSection.test.tsx:50	Amazon	customers: [{ id: 7, customer_code: 'AMZ', customer_name: 'Amazon' }],
+PRODUCT	apps/web/src/app/(app)/admin/cst-steward/CstArticleAliasesSection.tsx:625	Amazon	<strong>Article</strong> is the retailer key (ASIN on Amazon). <strong>Sales model</strong> comes
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/page.test.tsx:31	DIST-01	preferred_distributor_code: 'DIST-01',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/page.test.tsx:150	DIST-01	if (url === '/api/v1/distributors') return [{ id: 30, code: 'DIST-01', name: 'Summit Supply' }];
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/page.test.tsx:196	DIST-01	preferred_distributor_code: 'DIST-01',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/page.test.tsx:357	DIST-01	return { items: [{ id: 30, code: 'DIST-01', name: 'Summit Supply' }], page: 1, page_size: 25, total: 1 };
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:41	AMAZON	customer_name: 'AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:48	Amazon	aliases: ['Amazon', 'Q1 Amazon'],
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:53	Amazon	customer_name: 'Amazon',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:64	amazon	<PastMergesSection q="amazon" page={1} pageSize={25} onPageChange={() => undefined} />
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:90	Amazon	expect(within(keeperRow).getByText(/6: Amazon, Q1 Amazon, …/)).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:95	amazon	expect(apiGet.mock.calls[0][0]).toContain('q=amazon');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:102	AMAZON	current_keeper: { id: 299, code: 'CUST-000260', name: 'AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)', status: 'active' },
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:103	Amazon	new_keeper: { id: 26, code: 'TMP-CUST-20260603154522-BD28', name: 'Amazon', status: 'merged' },
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:110	Amazon	kept: 'TMP-CUST-20260603154522-BD28 — Amazon keeps its code and name.',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:124	AMAZON	(_text, el) => el?.tagName === 'LI' && /rows move from AMAZON/.test(el.textContent ?? '')
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:126	AMAZON	expect(moveLine.textContent).toMatch(/^9\D?500 rows move from AMAZON COMMERCIAL SERVICES \(SOUTH AFRICA\) to Amazon\.$/);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx:134	Amazon	await waitFor(() => expect(screen.getByText(/Amazon is now the keeper/)).toBeInTheDocument());
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:24	Takealot	{ id: 20, name: 'Takealot', layout_count: 2 },
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:25	AMAZON	{ id: 299, name: 'AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)', layout_count: 0 },
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:85	Takealot	expect(await screen.findByRole('option', { name: 'Takealot' })).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:86	AMAZON	expect(screen.getByRole('option', { name: 'AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)' })).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:92	Takealot	apiPatchMock.mockResolvedValue({ ...LAYOUT, name: 'Takealot weekly' });
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:94	Takealot	await pickCustomer(user, 'Takealot');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:100	Takealot	await user.type(input, 'Takealot weekly');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:103	Takealot	expect(apiPatchMock).toHaveBeenCalledWith('/api/v1/imports/cst/layouts/7', { name: 'Takealot weekly' }),
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:131	Takealot	await pickCustomer(user, 'Takealot');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:158	amazon	filename: 'amazon w1.csv',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:170	amazon	return { group_count: 1, jobs: [{ outcome: 'created', import_job_id: 56, filenames: ['amazon w1.csv'] }] };
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:173	AMAZON	await pickCustomer(user, 'AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:174	amazon	await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, file('amazon w1.csv'));
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:203	amazon	name: 'amazon w1 layout',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:238	Takealot	await pickCustomer(user, 'Takealot');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:281	amazon	filename: 'amazon.csv',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:287	Amazon	name: 'Amazon daily',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:297	amazon	return { group_count: 1, jobs: [{ outcome: 'created', import_job_id: 58, filenames: ['amazon.csv'] }] };
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:300	Takealot	await pickCustomer(user, 'Takealot');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:344	Takealot	await pickCustomer(user, 'Takealot');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx:377	Takealot	await pickCustomer(user, 'Takealot');
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/CstUploadOptions.test.tsx:60	Amazon	expect(suggestYearFromNames(['Amazon W12.xlsx', 'History/2024/Amazon W12.xlsx'])).toBe(2024);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/DsiHeaderRowStrip.test.tsx:20	pinnacle	const pinnacle = {
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/DsiHeaderRowStrip.test.tsx:34	pinnacle	renderStrip(<DsiHeaderRowStrip jobId={7} sheets={[pinnacle]} />);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/DsiHeaderRowStrip.test.tsx:39	pinnacle	renderStrip(<DsiHeaderRowStrip jobId={7} sheets={[{ ...pinnacle, sheet_key: 'Sell Out', header_row: 19 }]} />);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/DsiHeaderRowStrip.test.tsx:45	pinnacle	renderStrip(<DsiHeaderRowStrip jobId={7} sheets={[pinnacle]} onChanged={onChanged} />);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/DsiHeaderRowStrip.test.tsx:68	pinnacle	<DsiHeaderRowStrip jobId={7} sheets={[{ ...pinnacle, header_row_user_set: true }]} locked />
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/DsiHeaderRowStrip.test.tsx:75	pinnacle	renderStrip(<DsiHeaderRowStrip jobId={7} sheets={[pinnacle]} />);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:238	MUSTEK	'MUSTEK_SELLOUT.xlsx::__single__': {
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:243	MUSTEK	'MUSTEK_Inventory.xls::SOH': {
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:247	PINNACLE	'PINNACLE.xlsx::SOH': {
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:253	MUSTEK	expect(dsiFileNeedsInventoryPeriod(draft, 'MUSTEK_SELLOUT.xlsx')).toBe(false);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:254	MUSTEK	expect(dsiFileNeedsInventoryPeriod(draft, 'MUSTEK_Inventory.xls')).toBe(true);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:255	PINNACLE	expect(dsiFileNeedsInventoryPeriod(draft, 'PINNACLE.xlsx')).toBe(false);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:260	MUSTEK	'MUSTEK_Inventory WK28.xlsx::__single__': {
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:266	MUSTEK	'MUSTEK_SELLOUT WK28.xlsx::__single__': {
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:274	MUSTEK	expect(dsiFileNeedsInventoryPeriod({}, 'MUSTEK_Inventory WK28.xlsx', server)).toBe(true);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsiStepUtils.test.ts:275	MUSTEK	expect(dsiFileNeedsInventoryPeriod({}, 'MUSTEK_SELLOUT WK28.xlsx', server)).toBe(false);
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/page.test.tsx:1452	amazon	file_name: 'amazon.xlsx',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/page.test.tsx:1519	amazon	file_name: 'amazon.xlsx',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsi/dsiDuplicateSameEntityDialogLogic.test.ts:68	Rectron	dupDisplayName: 'Rectron',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsi/dsiDuplicateSameEntityDialogLogic.test.ts:97	Rectron	dupDisplayName: 'Rectron Cape Town',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsi/dsiDuplicateSameEntityDialogLogic.test.ts:102	Rectron	display_name: 'Rectron Cape Town',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsi/dsiDuplicateSameEntityDialogLogic.test.ts:122	rectron	resolveDupDisplayName('primary', 'rectron blm', 'rectron dbn', 'Rectron Group', '')
+TEST_FIXTURE	apps/web/src/app/(app)/admin/imports/dsi/dsiDuplicateSameEntityDialogLogic.test.ts:123	Rectron	).toBe('Rectron Group');
+PRODUCT	apps/web/src/app/(app)/admin/port-conditions/page.tsx:17	ACZA	/** Ports the ACZA reports deliver to. Any other UN/LOCODE can be typed. */
+PRODUCT	apps/web/src/app/(app)/admin/port-conditions/page.tsx:19	Durban	{ code: 'ZADUR', label: 'Durban' },
+PRODUCT	apps/web/src/app/(app)/admin/port-conditions/page.tsx:22	Cape Town	{ code: 'ZACPT', label: 'Cape Town' },
+TEST_FIXTURE	apps/web/src/app/(app)/admin/shipment-evidence/ShipmentMappingStewardPanel.test.tsx:35	takealot	normalized_key: 'takealot',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/shipment-evidence/ShipmentMappingStewardPanel.test.tsx:39	Takealot	sample_raw_values: ['Q2 Takealot'],
+TEST_FIXTURE	apps/web/src/app/(app)/admin/shipment-evidence/ShipmentMappingStewardPanel.test.tsx:51	Takealot	suggested_name: 'Takealot',
+TEST_FIXTURE	apps/web/src/app/(app)/admin/shipment-evidence/ShipmentMappingStewardPanel.test.tsx:52	takealot	possible_duplicate_of: ['takealot-marketplace'],
+TEST_FIXTURE	apps/web/src/app/(app)/admin/shipment-evidence/ShipmentMappingStewardPanel.test.tsx:86	takealot	expect(apiPost.mock.calls[0][1]).toEqual({ peer_normalized_key: 'takealot-marketplace' });
+TEST_FIXTURE	apps/web/src/app/(app)/admin/shipment-evidence/ShipmentMappingStewardPanel.test.tsx:113	takealot	possible_duplicate_of: ['takealot-marketplace'],
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:21	Amazon	{ id: 299, name: 'Amazon', code: 'AMZ', reports_expected: true, has_data: true, first_period: '2026-01-01', last_period: '2026-10-12' },
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:22	Pinnacle	{ id: 7, name: 'Pinnacle', code: 'PIN', reports_expected: true, has_data: false, first_period: null, last_period: null },
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:79	Amazon	customer_split: [{ customer_id: 299, name: 'Amazon', units: 7650 }],
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:84	Amazon	{ customer_id: 299, name: 'Amazon', code: 'AMZ', reports_expected: true, cadence: 'daily', last_reported_day: '2026-10-18', days_since_last: 1, cells: [{ start: '2026-10-12', status: 'received', ratio: 1 }], missing: 0, 
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:85	Pinnacle	{ customer_id: 7, name: 'Pinnacle', code: 'PIN', reports_expected: true, cadence: 'weekly', last_reported_day: null, days_since_last: null, cells: [{ start: '2026-10-12', status: 'missing', ratio: 0 }], missing: 1, parti
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:88	Pinnacle	customers_missing: ['Pinnacle'],
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:95	Amazon	customer_id: 299, customer_name: 'Amazon', product_id: 2, product: 'Model B (SKU-B)', sku: 'SKU-B', business_unit: 'NB',
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:101	Amazon	customer_id: 299, customer_name: 'Amazon', product_id: 1, product: 'Model A (SKU-A)', sku: 'SKU-A', business_unit: 'NB',
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:112	Pinnacle	summary: ['Units sold up 28% on the same period last year (7,650 vs 6,000).', 'Reports missing in this window: Pinnacle.'],
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:129	Amazon	customer_id: 299, customer_name: 'Amazon', weekly_units: [10, 10], units_26w: 20, rate_4w: 10,
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:134	Amazon	lowest_price_customer: { customer_name: 'Amazon', price: 999 },
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:166	Pinnacle	expect(within(strip).getByText('Pinnacle · nothing loaded').closest('a')).toHaveAttribute(
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:171	Pinnacle	expect(within(coverage).getByText('Pinnacle')).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/app/(app)/channel-intelligence/page.test.tsx:218	Amazon	expect(panel).toHaveTextContent('Needs replenishing at Amazon');
+TEST_FIXTURE	apps/web/src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx:15	Takealot	customer_name: 'Takealot',
+TEST_FIXTURE	apps/web/src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx:82	Takealot	customer_name: 'Takealot',
+TEST_FIXTURE	apps/web/src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx:126	Takealot	await waitFor(() => expect(screen.getByText(/C26C00003 · Takealot/)).toBeInTheDocument());
+TEST_FIXTURE	apps/web/src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx:165	Takealot	await waitFor(() => expect(screen.getByText(/C26C00003 · Takealot/)).toBeInTheDocument());
+PRODUCT	apps/web/src/app/(app)/inventory/page.tsx:207	CUST-1001	<code>on_order_units</code> (defaults to 0). Example: <code>SKU-001,CUST-1001,2026-04-12,180,60</code>
+PRODUCT	apps/web/src/app/(app)/pricing/page.tsx:249	CUST-1001	<code>SKU-001,169.99,199.99,2026-04-12,USD,CUST-1001,RET</code>
+TEST_FIXTURE	apps/web/src/app/(app)/shipping/shippingDistributorDisplay.test.ts:12	Mustek	distributor_display: 'Mustek Limited',
+TEST_FIXTURE	apps/web/src/app/(app)/shipping/shippingDistributorDisplay.test.ts:13	Mustek	distributor_name: 'Mustek Limited',
+TEST_FIXTURE	apps/web/src/app/(app)/shipping/shippingDistributorDisplay.test.ts:14	MUSTEK	distributor_code: 'DIST-MUSTEK',
+TEST_FIXTURE	apps/web/src/app/(app)/shipping/shippingDistributorDisplay.test.ts:17	Mustek	).toBe('Mustek Limited');
+TEST_FIXTURE	apps/web/src/app/case-approval/page.test.tsx:22	Takealot	customer_name: 'Takealot',
+TEST_FIXTURE	apps/web/src/app/case-approval/page.test.tsx:46	Takealot	expect(await screen.findByText(/C24 · April · Takealot/)).toBeTruthy();
+TEST_FIXTURE	apps/web/src/app/case-approval/page.test.tsx:66	Takealot	await screen.findByText(/C24 · April · Takealot/);
+TEST_FIXTURE	apps/web/src/components/bulkTable/ImportJobArchiveDialog.test.tsx:14	ACZA	file_name: 'ACZA Shipped Unshipped.xlsx',
+TEST_FIXTURE	apps/web/src/components/bulkTable/ImportJobArchiveDialog.test.tsx:70	ACZA	expect(screen.getByText('Job 40 — ACZA Shipped Unshipped.xlsx')).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/commercial.ts:94	HiFi	{ id: 'CPR-26-1201', name: 'HiFi House curved monitor launch', customerId: 103, customer: c(103).name, promotionType: 'Stock PP (In-Direct)', windowStart: '2026-09-14', windowEnd: '2026-10-04', period: 'FY26 P09–P10', st
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/commercial.ts:96	Game	{ id: 'CPR-26-1195', name: 'Game Zone dock + keyboard weekend', customerId: 105, customer: c(105).name, promotionType: 'Sell out PP', windowStart: '2026-07-24', windowEnd: '2026-07-27', period: 'FY26 P07', stage: 'settle
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/commercial.ts:270	Game	{ id: 60, customerId: 105, customer: 'Game Zone', productId: null, sku: null, product: null, marketplace: 'gamezone', url: 'gamezone.example/keris-ii-origin', status: 'active', source: 'feed_proposal', observations: 12, 
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/commercial.ts:271	HiFi	{ id: 61, customerId: 103, customer: 'HiFi House', productId: 62, sku: 'UX3440W', product: p(62).name, marketplace: 'hifihouse', url: 'hifihouse.example/ux3440w', status: 'dead_link', source: 'csv', observations: 22, spa
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/commercial.ts:295	Game	{ id: 903, customer: 'Game Zone', marketplace: 'gamezone', externalId: 'GZ-PLID-77120', suggestedUrl: null, productMatch: null, source: 'CST feed W35 (PLID)', status: 'proposed' },
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/entities.ts:21	HiFi	{ id: 103, code: 'HFH', name: 'HiFi House', group: 'Independent', strategic: false },
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/entities.ts:23	Game	{ id: 105, code: 'GZN', name: 'Game Zone', group: 'Metro Retail', strategic: false },
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/operations.ts:62	Game	{ id: 6, entity: 'customer', token: 'GAMEZONE MENLYN', jobs: 1, rows: 88, bestCandidate: 'Game Zone — Menlyn', candidateScore: 0.71, corroborated: false },
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/operations.ts:106	HiFi	{ customer: 'HiFi House', plan: 9_800, shipped: 6_900 },
+TEST_FIXTURE	apps/web/src/design-lab/fixtures/operations.ts:107	Game	{ customer: 'Game Zone', plan: 8_600, shipped: 5_100 },
+TEST_FIXTURE	apps/web/src/design-lab/surfaces/DataSurface.tsx:420	Game	<PanelRow severity="neutral" primary="Provisional customer created: Game Zone — Menlyn" secondary="T. Naidoo · Mon 11:04 · pending enrichment (group, terms)" />
+TEST_FIXTURE	apps/web/src/design-lab/surfaces/DensitySurface.tsx:38	Pinnacle	const DISTRIBUTORS = ['Pinnacle', 'Rectron', 'Mustek', 'Firsttech', 'DCC', 'Pepkor'];
+TEST_FIXTURE	apps/web/src/design-lab/surfaces/DensitySurface.tsx:39	Evetech	const CUSTOMERS = ['Channel partner', 'Open Channel', 'Evetech', 'Eshop', 'Incredible Connection', 'Takealot'];
+PRODUCT	apps/web/src/features/admin/DistributorBulkPromoteDialog.tsx:355	MUSTEK	placeholder={'tmp_code,new_code,note\nTMP-DIST-ABC,MUSTEK-ZA,steward ok'}
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:139	Rectron	channel_route_uploaded_cell: 'Channel - Rectron',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:205	Rectron	expect(await screen.findByText(/Open Channel · Channel - Rectron \(end customer unassigned\)/)).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:873	amazon	file_name: 'amazon.xlsx',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:898	MUSTEK	distributor_code: 'MUSTEK',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:899	Mustek	distributor_name: 'Mustek',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:946	amazon	file_name: 'amazon.xlsx',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:971	PINNACLE	distributor_code: 'PINNACLE',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:972	Pinnacle	distributor_name: 'Pinnacle',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:980	MUSTEK	distributor_code: 'MUSTEK',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:981	Mustek	distributor_name: 'Mustek',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:1028	amazon	file_name: 'amazon.xlsx',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:1078	Amazon	await user.type(screen.getByTestId('assign-dist-new-name').querySelector('input')!, 'Amazon Direct');
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CurrentLineupSection.test.tsx:1087	Amazon	{ new_code: 'AMZ', new_name: 'Amazon Direct', confirm_create: true },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:31	compuspeed	item_key: 'sadc - compuspeed',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:32	compuspeed	norm_token: 'sadc - compuspeed',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:33	Compuspeed	sample_token: 'sadc - Compuspeed',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:67	Amazon	{ targetKey: '299', label: 'Amazon (id 299)', meta: { is_open_channel: false } },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:82	Compuspeed	await screen.findByText(/sadc - Compuspeed/i);
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:83	Compuspeed	await userEvent.click(screen.getByText(/sadc - Compuspeed/i));
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:101	compuspeed	return { alias_id: 9, stamped_count: 3, norm_token: 'sadc - compuspeed', target_customer_id: body.target_customer_id };
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:107	compuspeed	await screen.findByTestId('customer-token-stamp-sadc - compuspeed');
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:108	compuspeed	await userEvent.click(screen.getByTestId('customer-token-stamp-sadc - compuspeed'));
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:116	compuspeed	norm_token: 'sadc - compuspeed',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:146	Amazon	label: 'Amazon (id 299)',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx:161	Amazon	target_customer_label: 'Amazon (id 299)',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:35	Mustek	distributor_name: 'Mustek',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:176	Makro	{ ...sampleProposal, proposal_key: 'a', customer_id: 1, customer_label: 'PROV — Makro South Africa' },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:177	Makro	{ ...sampleProposal, proposal_key: 'b', customer_id: 2, customer_label: 'PROV — Makro Wholesale' },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:186	Makro	expect(screen.getByText('PROV — Makro South Africa')).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:187	Makro	expect(screen.getByText('PROV — Makro Wholesale')).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:195	Makro	{ ...sampleProposal, proposal_key: 'a', customer_id: 1, customer_label: 'Makro', confidence: 'high' as const },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:196	Game	{ ...sampleProposal, proposal_key: 'b', customer_id: 2, customer_label: 'Game', confidence: 'high' as const },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:197	Pepkor	{ ...sampleProposal, proposal_key: 'c', customer_id: 3, customer_label: 'Pepkor', confidence: 'medium' as const },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:198	Shoprite	{ ...sampleProposal, proposal_key: 'd', customer_id: 4, customer_label: 'Shoprite', confidence: 'high' as const },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:222	Makro	{ ...sampleProposal, proposal_key: 'a', customer_id: 1, customer_label: 'Makro', purchase_order_id: 1, po_number: 'PO-1' },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:223	Makro	{ ...sampleProposal, proposal_key: 'b', customer_id: 1, customer_label: 'Makro', purchase_order_id: 2, po_number: 'PO-2' },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:224	Game	{ ...sampleProposal, proposal_key: 'c', customer_id: 2, customer_label: 'Game', purchase_order_id: 3, po_number: 'PO-3' },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:237	Game	expect(summary).toHaveTextContent('Game 1');
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:238	Makro	expect(summary).toHaveTextContent('Makro 2');
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:245	Makro	{ ...sampleProposal, proposal_key: 'a', customer_id: 1, customer_label: 'Makro', purchase_order_id: 1, po_number: 'PO-1' },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:246	Makro	{ ...sampleProposal, proposal_key: 'b', customer_id: 1, customer_label: 'Makro', purchase_order_id: 2, po_number: 'PO-2' },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:247	Game	{ ...sampleProposal, proposal_key: 'c', customer_id: 2, customer_label: 'Game', purchase_order_id: 3, po_number: 'PO-3' },
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:256	makro	const makroCard = screen.getByTestId('po-auto-link-group-card-26Q1|1');
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:257	makro	await user.click(within(makroCard).getByTestId('po-auto-link-card-select-all-26Q1|1'));
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:258	makro	await user.click(within(makroCard).getByTestId('po-auto-link-card-link-26Q1|1'));
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:422	ACZA	file_name: '2. ACZA Q1 2026 NR Gaming Lineup.xlsx',
+TEST_FIXTURE	apps/web/src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx:423	ACZA	file_base: 'ACZA Q1 2026 NR Gaming Lineup',
+TEST_FIXTURE	apps/web/src/features/dashboards/WidgetEditorDialog.test.tsx:34	Takealot	rows: [{ customer_id: 3, customer_name: 'Takealot', value: 1234 }],
+TEST_FIXTURE	apps/web/src/features/dashboards/widgetModel.test.ts:18	Amazon	expect(categoryLabel({ customer_id: 11, customer_name: 'Amazon SA', product_id: 21, product_name: 'X1407VA', value: 3 })).toBe(
+TEST_FIXTURE	apps/web/src/features/dashboards/widgetModel.test.ts:19	Amazon	'Amazon SA · X1407VA',
+TEST_FIXTURE	apps/web/src/features/dashboards/widgetModel.test.ts:21	Hifi	expect(rowLabel({ bucket_key: '2026-W42', customer_name: 'Hifi', value: 1 })).toBe('Hifi · 2026-W42');
+PRODUCT	apps/web/src/features/dashboards/builder/fit.ts:50	Makro	// Ranked bars by one category; two categories read as joined names ("Makro · X1407").
+PRODUCT	apps/web/src/features/dashboards/builder/runContext.ts:26	Makro	/** One line for exports: "Customer: Makro · 2026-07-01 to 2026-10-09". */
+PRODUCT	apps/web/src/features/dashboards/builder/runContext.ts:28	Makro	/** Empty state: "in the last 13 weeks" / "for Makro in the last 13 weeks". */
+TEST_FIXTURE	apps/web/src/features/dashboards/builder/table.test.ts:60	Makro	expect(guardCell('Makro')).toBe('Makro');
+TEST_FIXTURE	apps/web/src/features/dashboards/builder/table.test.ts:65	Takealot	const out = v1Csv([{ customer_id: 3, customer_name: '-Takealot', value: 12 }]);
+TEST_FIXTURE	apps/web/src/features/dashboards/builder/table.test.ts:67	Takealot	expect(out).toContain("'-Takealot");
+TEST_FIXTURE	apps/web/src/features/dashboards/builder/table.test.ts:72	Makro	expect(exportFileName('Channel stock board', 'Units / week: Makro', 'csv', new Date(2026, 9, 23))).toBe('Channel-stock-board-Units-week-Makro-2026-10-23.csv');
+TEST_FIXTURE	apps/web/src/features/dashboards/builder/table.test.ts:123	makro	{ product_id: 2, product_name: '=SUM(A1)', customer_id: 8, customer_name: 'makro (pty) ltd', bu: 'AIO', 'cpor.delivery_rate': 0.57, 'cst_sellthrough.units': 3 },
+TEST_FIXTURE	apps/web/src/features/dashboards/builder/table.test.ts:135	makro	expect(lines[2].split(',')[1]).toBe('makro (pty) ltd');
+PRODUCT	apps/web/src/features/dashboards/builder/V2WidgetBody.tsx:67	Makro	/** Shown in the empty state: "for Makro in the last 13 weeks". */
+PRODUCT	apps/web/src/features/market-listings/ListingQualityLens.tsx:82	Takealot	Checks use the last stored snapshot for Takealot and Evetech. A flag is amber and does not block anything.
+PRODUCT	apps/web/src/features/market-listings/ListingQualityLens.tsx:83	Amazon	Missing fields say No data. Amazon is not checked. Search position is deferred.
+TEST_FIXTURE	apps/web/src/features/market-listings/MarketSurface.test.tsx:60	takealot	const url = 'https://www.takealot.com/asus-zenscreen/PLID98174082';
+TEST_FIXTURE	apps/web/src/features/market-listings/MarketSurface.test.tsx:79	takealot	const sku = 'https://www.takealot.com/PLID222547542';
+PRODUCT	apps/web/src/features/market-listings/MarketSurface.tsx:204	Takealot	*   succeeded), or, for non-Takealot marketplaces only, when an observation of this
+PRODUCT	apps/web/src/features/market-listings/MarketSurface.tsx:205	Takealot	*   URL returned HTTP 200 with a successful parse. Takealot prices come from its
+PRODUCT	apps/web/src/features/market-listings/MarketSurface.tsx:206	Takealot	*   REST API, so a Takealot price never verifies the stored URL by itself.
+PRODUCT	apps/web/src/features/market-listings/MarketSurface.tsx:288	takealot	const [marketplace, setMarketplace] = useState('takealot');
+PRODUCT	apps/web/src/features/market-listings/MarketSurface.tsx:1650	takealot	helperText="takealot | amazon | evetech"
+TEST_FIXTURE	apps/web/src/features/promotions-funding/CaseBookSurface.test.tsx:147	Takealot	customer_name: 'Takealot',
+TEST_FIXTURE	apps/web/src/features/promotions-funding/CaseBookSurface.test.tsx:221	Takealot	expect(screen.getByText('Takealot')).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/features/promotions-funding/PlanWorkspace.test.tsx:32	Takealot	customer_name: 'Takealot',
+TEST_FIXTURE	apps/web/src/features/settlement/customerDisplay.test.ts:7	Takealot	expect(customerPrimaryName('Takealot', 'CUST-000012')).toBe('Takealot');
+TEST_FIXTURE	apps/web/src/features/settlement/customerDisplay.test.ts:8	Takealot	expect(customerPrimaryName('Takealot', 'CUST-000012')).not.toContain('CUST-000012');
+TEST_FIXTURE	apps/web/src/features/settlement/mapSettlementDeskView.test.ts:9	Takealot	customer_name: 'Takealot',
+TEST_FIXTURE	apps/web/src/features/settlement/mapSettlementDeskView.test.ts:10	Pinnacle	promotion_type: 'Pinnacle',
+TEST_FIXTURE	apps/web/src/features/settlement/mapSettlementDeskView.test.ts:34	Pinnacle	distributor_name: 'Pinnacle',
+TEST_FIXTURE	apps/web/src/features/settlement/mapSettlementDeskView.test.ts:60	Takealot	expect(view.customerName).toBe('Takealot');
+TEST_FIXTURE	apps/web/src/features/settlement/SettlementConfirmDialog.test.tsx:13	Takealot	customerLabel: 'Takealot',
+TEST_FIXTURE	apps/web/src/features/settlement/SettlementDesk.test.tsx:39	Takealot	customerName: 'Takealot',
+TEST_FIXTURE	apps/web/src/features/settlement/SettlementDesk.test.tsx:41	Pinnacle	programme: 'Pinnacle',
+TEST_FIXTURE	apps/web/src/features/settlement/SettlementDesk.test.tsx:43	Pinnacle	distributorName: 'Pinnacle',
+TEST_FIXTURE	apps/web/src/features/settlement/SettlementDesk.test.tsx:66	Pinnacle	distributor: 'Pinnacle',
+TEST_FIXTURE	apps/web/src/features/settlement/SettlementDesk.test.tsx:80	Pinnacle	distributor: 'Pinnacle',
+TEST_FIXTURE	apps/web/src/features/settlement/SettlementDesk.test.tsx:109	Takealot	expect(screen.getByText(/C26760971 · Takealot/)).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/features/settlement/SettlementDesk.test.tsx:110	Takealot	expect(screen.queryByText(/CUST-000012 — Takealot/)).not.toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/features/steward-worklist/fixtures/mergePromoteFixture.ts:40	ACZA	{ targetKey: 'code:CUST-ACZA-0042', label: 'Promote as CUST-ACZA-0042' },
+TEST_FIXTURE	apps/web/src/features/steward-worklist/fixtures/mergePromoteFixture.ts:41	ACZA	{ targetKey: 'code:CUST-ACZA-0042B', label: 'Promote as CUST-ACZA-0042B (alt)' },
+PRODUCT	apps/web/src/features/stock/ForecastsWorkspace.tsx:313	CUST-1001	(1/true for override). Example: <code>SKU-001,2026-04-01,95,medium,CUST-1001,0</code>
+TEST_FIXTURE	apps/web/src/features/stock/sellThroughFilters.test.ts:68	HiFi	{ label: 'W42', incomplete_customers: ['HiFi Corp', 'Incredible'] },
+TEST_FIXTURE	apps/web/src/features/stock/sellThroughFilters.test.ts:70	HiFi	).toBe('W42 not complete: HiFi Corp, Incredible not reported yet.');
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/layout.ts:34	DURBAN	const DELIVER_PORT_IDS: Record<string, string[]> = { ZADUR: ['DURBAN'], ZAJNB: ['DURBAN', 'CITY DEEP'], MUPLU: ['PORT LOUIS'] };
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/layout.ts:37	Durban	* Ports a vessel is heading to or coming from: the origins and stops in its lane label ("Chongqing / Shenzhen → Durban →
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/layout.ts:38	Durban	* City Deep") and its discharge port, as upper-case map labels. A phone-width map names only these ports and Durban.
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/layout.ts:42	DURBAN	const used = new Set<string>(['DURBAN']);
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/layout.ts:60	Durban	/** Chip for a cluster: "3 vessels at or near Durban" / "4,013 u · ETA 27–30 Oct". */
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/layout.ts:89	Durban	* border. The label is `nowrap`, so it is as wide as its text whatever box the placement reserved: "4 vessels at or near Durban" with
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:11	Durban	id: 'v1', key: 'i:x', inferred: true, vessel_name: null, forwarder: 'COSCO', lane_id: 'asia_durban', lane_label: 'Chongqing → Durban',
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:13	Mustek	units: 100, lines: 2, deliveries: 1, amount: [{ currency: 'USD', amount: 1000 }], distributors: [{ name: 'Mustek', units: 100 }], products: [{ name: 'P1503', units: 100 }],
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:44	Pepkor	expect(nameUnits([{ name: 'Pepkor', units: 523 }, { name: 'DCC', units: 130 }, { name: 'Mustek', units: 57 }], 2)).toBe('Pepkor 523 · DCC 130');
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:50	Durban	// The three vessels at or near Durban in the approved mock-up.
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:60	DURBAN	const ports = [{ label: 'DURBAN', x: 33.54, y: 86.18 }, { label: 'SHANGHAI', x: 90, y: 26 }];
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:62	Durban	expect(clusterChip(c, ports)).toEqual({ title: '2 vessels at or near Durban', sub: '4,013 u · ETA at port 27–30 Oct' });
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:119	DURBAN	const ports = ['SHANGHAI', 'SHENZHEN', 'CHONGQING', 'SINGAPORE', 'ROTTERDAM', 'PORT LOUIS', 'CITY DEEP', 'DURBAN'].map((l) => ({ id: l, label: l }));
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:121	Durban	it('is Durban alone with no vessels', () => {
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:122	DURBAN	expect([...portsInUse([], ports)]).toEqual(['DURBAN']);
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:128	Durban	vessel({ lane_label: 'Chongqing / Shenzhen → Durban → City Deep', deliver_port: 'ZAJNB' }),
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:129	Durban	vessel({ id: 'v2', lane_label: 'Rotterdam → Durban', deliver_port: 'MUPLU' }),
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:133	DURBAN	expect([...used].sort()).toEqual(['CHONGQING', 'CITY DEEP', 'DURBAN', 'PORT LOUIS', 'ROTTERDAM', 'SHENZHEN']);
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:139	Durban	const used = portsInUse([vessel({ lane_label: 'China → Durban', deliver_port: 'ZADUR' }), vessel({ id: 'v2', lane_label: 'Origin not on the report → Durban', deliver_port: 'ZADUR' })], ports);
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:140	DURBAN	expect([...used]).toEqual(['DURBAN']);
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:172	durban	const anchor = { id: 'c:durban', x: 10, y: 50, priority: 1 };
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:188	Durban	it('is as wide as the label draws: the render of "4 vessels at or near Durban" was 201 px, the old reserved box 160 px', () => {
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:189	Durban	expect(labelWidthPx('4 vessels at or near Durban', '3,494 u · ETA at port 31 Oct–5 Nov')).toBeGreaterThanOrEqual(201);
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:190	Durban	expect(labelWidthPx('WWP · 25 u', '2 days overdue')).toBeLessThan(labelWidthPx('4 vessels at or near Durban', '3,494 u · ETA at port 31 Oct–5 Nov'));
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:191	Durban	// The reserved height covers the two drawn lines (measured 48.5 px in the render): a label placed flush above the Durban note touched it.
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/onTheWater.rules.test.ts:198	durban	const anchor = { id: 'c:durban', x: 30, y: 45, priority: 1 };
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:32	Durban	lane_label: 'Chongqing / Shenzhen → Durban → City Deep', route_assumed: false, deliver_port: 'ZAJNB', on_board: '2026-09-19', eta: '2026-11-05', days_to_eta: 9, overdue: false,
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:34	Rectron	distributors: [{ name: 'Rectron', units: 1498 }, { name: 'Mustek', units: 1350 }, { name: 'Pepkor', units: 972 }],
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:58	DURBAN	ports: [{ id: 'DURBAN', label: 'DURBAN', x: 33.54, y: 86.18 }, { id: 'SHANGHAI', label: 'SHANGHAI', x: 90.82, y: 26.27 }],
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:62	Durban	{ code: 'ZADUR', label: 'Durban', waiting_units: 0, condition: null },
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:65	Pepkor	needs_look: { lines: 9, units: 731, distributors: [{ name: 'Pepkor', units: 523 }, { name: 'DCC', units: 130 }], since: '2026-09-29', days: 7, on_board_moved: { from: '2026-10-11', to: '2026-10-18' } },
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:168	Rectron	expect(card).toHaveTextContent('Rectron 1,498 · Mustek 1,350 · Pepkor 972');
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:207	Durban	expect(ports).toHaveTextContent('Durban (ZADUR)');
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:213	durban	expect(screen.getByTestId('otw-durban-note')).toHaveTextContent('Durban · No figure entered · Planned');
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:221	Pepkor	expect(card).toHaveTextContent('Pepkor 523 · DCC 130');
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:226	Durban	it('has no needs-a-look card when nothing needs one, and pulses at Durban only when a vessel is overdue', async () => {
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:233	Durban	it('keeps the map caption out of the map, so the Durban note cannot sit over it (GOV-008 minor)', async () => {
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:236	durban	expect(within(map).getByTestId('otw-durban-note')).toBeInTheDocument(); // the note stays on the map
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:255	durban	const anchor = { id: 'c:durban', x: port.x - 1.6 + pctX(100), y: port.y, priority: 1 };
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:271	DURBAN	{ id: 'DURBAN', label: 'DURBAN', x: 33.5, y: 86 },
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:278	DURBAN	expect(getComputedStyle(screen.getByTestId('otw-port-name-DURBAN')).left).toBe('12px');
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:287	DURBAN	const ports = ['DURBAN', 'SHANGHAI', 'SHENZHEN', 'CHONGQING', 'SINGAPORE'].map((l, i) => ({ id: l, label: l, x: 20 + i * 15, y: 40 }));
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:297	Durban	it('below 600 px names only ports a vessel sails to or from, plus Durban; the others are dots that show their name when tapped', async () => {
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:309	Durban	setup(withPorts()); // the vessels sail Chongqing / Shenzhen -> Durban -> City Deep
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:311	DURBAN	for (const id of ['DURBAN', 'SHENZHEN', 'CHONGQING']) expect(screen.getByTestId(`otw-port-name-${id}`)).toBeInTheDocument();
+TEST_FIXTURE	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.test.tsx:316	DURBAN	expect(screen.queryByTestId('otw-port-dot-DURBAN')).toBeNull();
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:96	ACZA	'ACZA Shipped / Unshipped',
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:145	durban	const durban = data.map.ports.find((p) => p.id === 'DURBAN');
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:176	Durban	// The Durban note sits on the map (not under it) except on a phone-width map.
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:177	durban	...(durban && !narrow
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:178	durban	? [{ id: 'durban-note', x: Math.min(durban.x + 5.4, 62), y: Math.min(durban.y + 4.3, 94), w: pctX(260), h: pctY(34) }]
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:188	durban	durban ? (
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:191	durban	...(narrow ? { display: 'inline-block' } : { position: 'absolute', left: `${Math.min(durban.x + 5.4, 62)}%`, top: `${Math.min(durban.y + 4.3, 94)}%` }),
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:194	durban	data-testid="otw-durban-note"
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:196	Durban	Durban · {conditionText(durbanRow)}
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:295	Durban	aria-label="Map from Western Europe to East Asia showing the sea lanes into Durban"
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:338	durban	{durban && data.tiles.at_sea.overdue_vessels > 0 ? (
+PRODUCT	apps/web/src/features/supply-inbound/onTheWater/OnTheWater.tsx:343	durban	position: 'absolute', left: `${durban.x}%`, top: `${durban.y}%`, width: 26, height: 26, borderRadius: '50%', border: `2px solid ${amber}`,
+TEST_FIXTURE	apps/web/src/features/workbench-ui/gridFind.test.ts:13	Takealot	{ name: 'Takealot', find: 'takealot' },
+TEST_FIXTURE	apps/web/src/features/workbench-ui/gridFind.test.ts:28	Takealot	{ name: 'Takealot', find: 'takealot' },
+TEST_FIXTURE	apps/web/src/lib/csvFormulaGuard.test.ts:13	Makro	expect(guardFormulaText('Makro')).toBe('Makro');
+#FILES	1719
