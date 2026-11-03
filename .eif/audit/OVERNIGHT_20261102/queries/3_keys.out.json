@@ -1,0 +1,465 @@
+{
+ "fact_key_shape": [
+  {
+   "customer_id": 11,
+   "name": "Hifi",
+   "import_job_id": 913,
+   "fact_rows": 51,
+   "store_label_but_chain_key": 51,
+   "site_keyed": 0,
+   "location_keyed": 0,
+   "sites": 22,
+   "d_min": "2025-06-09",
+   "d_max": "2025-06-09",
+   "units": 1.0
+  },
+  {
+   "customer_id": 12,
+   "name": "Incredible Connection",
+   "import_job_id": 912,
+   "fact_rows": 82,
+   "store_label_but_chain_key": 82,
+   "site_keyed": 0,
+   "location_keyed": 0,
+   "sites": 23,
+   "d_min": "2025-06-09",
+   "d_max": "2025-06-09",
+   "units": 3.0
+  },
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 903,
+   "fact_rows": 47,
+   "store_label_but_chain_key": 47,
+   "site_keyed": 0,
+   "location_keyed": 0,
+   "sites": 13,
+   "d_min": "2024-03-25",
+   "d_max": "2024-04-29",
+   "units": 93.0
+  },
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 1659,
+   "fact_rows": 532,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 532,
+   "location_keyed": 0,
+   "sites": 25,
+   "d_min": "2025-01-06",
+   "d_max": "2026-01-05",
+   "units": 1118.0
+  },
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 1660,
+   "fact_rows": 518,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 518,
+   "location_keyed": 0,
+   "sites": 27,
+   "d_min": "2025-04-07",
+   "d_max": "2026-04-06",
+   "units": 2775.0
+  },
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 1661,
+   "fact_rows": 282,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 282,
+   "location_keyed": 0,
+   "sites": 27,
+   "d_min": "2025-07-07",
+   "d_max": "2026-06-29",
+   "units": 808.0
+  },
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 1665,
+   "fact_rows": 357,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 357,
+   "location_keyed": 0,
+   "sites": 23,
+   "d_min": "2025-07-21",
+   "d_max": "2025-08-11",
+   "units": 1328.0
+  },
+  {
+   "customer_id": 57,
+   "name": "Game",
+   "import_job_id": 911,
+   "fact_rows": 54,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 54,
+   "location_keyed": 0,
+   "sites": 52,
+   "d_min": "2025-08-11",
+   "d_max": "2025-08-11",
+   "units": 53.0
+  },
+  {
+   "customer_id": 57,
+   "name": "Game",
+   "import_job_id": 1662,
+   "fact_rows": 19,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 19,
+   "location_keyed": 0,
+   "sites": 19,
+   "d_min": "2025-09-29",
+   "d_max": "2025-09-29",
+   "units": 22.0
+  },
+  {
+   "customer_id": 57,
+   "name": "Game",
+   "import_job_id": 1663,
+   "fact_rows": 82,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 82,
+   "location_keyed": 0,
+   "sites": 59,
+   "d_min": "2026-03-30",
+   "d_max": "2026-03-30",
+   "units": 128.0
+  },
+  {
+   "customer_id": 57,
+   "name": "Game",
+   "import_job_id": 1664,
+   "fact_rows": 564,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 564,
+   "location_keyed": 0,
+   "sites": 107,
+   "d_min": "2026-05-25",
+   "d_max": "2026-06-29",
+   "units": 1308.0
+  },
+  {
+   "customer_id": 57,
+   "name": "Game",
+   "import_job_id": 1667,
+   "fact_rows": 50,
+   "store_label_but_chain_key": 0,
+   "site_keyed": 50,
+   "location_keyed": 0,
+   "sites": 42,
+   "d_min": "2025-11-24",
+   "d_max": "2025-11-24",
+   "units": 68.0
+  }
+ ],
+ "applied_lines_vs_site_keys": [
+  {
+   "job_id": 903,
+   "applied_lines": 426,
+   "site_aware_keys": 426,
+   "chain_level_keys": 47
+  },
+  {
+   "job_id": 911,
+   "applied_lines": 69,
+   "site_aware_keys": 54,
+   "chain_level_keys": 3
+  },
+  {
+   "job_id": 912,
+   "applied_lines": 4320,
+   "site_aware_keys": 4237,
+   "chain_level_keys": 82
+  },
+  {
+   "job_id": 913,
+   "applied_lines": 1599,
+   "site_aware_keys": 1544,
+   "chain_level_keys": 51
+  },
+  {
+   "job_id": 928,
+   "applied_lines": 564,
+   "site_aware_keys": 564,
+   "chain_level_keys": 31
+  },
+  {
+   "job_id": 965,
+   "applied_lines": 559,
+   "site_aware_keys": 532,
+   "chain_level_keys": 104
+  },
+  {
+   "job_id": 966,
+   "applied_lines": 558,
+   "site_aware_keys": 518,
+   "chain_level_keys": 92
+  },
+  {
+   "job_id": 967,
+   "applied_lines": 282,
+   "site_aware_keys": 282,
+   "chain_level_keys": 55
+  },
+  {
+   "job_id": 968,
+   "applied_lines": 21,
+   "site_aware_keys": 19,
+   "chain_level_keys": 3
+  },
+  {
+   "job_id": 970,
+   "applied_lines": 118,
+   "site_aware_keys": 82,
+   "chain_level_keys": 7
+  },
+  {
+   "job_id": 971,
+   "applied_lines": 564,
+   "site_aware_keys": 564,
+   "chain_level_keys": 31
+  },
+  {
+   "job_id": 972,
+   "applied_lines": 423,
+   "site_aware_keys": 357,
+   "chain_level_keys": 64
+  },
+  {
+   "job_id": 973,
+   "applied_lines": 57,
+   "site_aware_keys": 50,
+   "chain_level_keys": 4
+  },
+  {
+   "job_id": 975,
+   "applied_lines": 57,
+   "site_aware_keys": 50,
+   "chain_level_keys": 4
+  },
+  {
+   "job_id": 1659,
+   "applied_lines": 559,
+   "site_aware_keys": 532,
+   "chain_level_keys": 104
+  },
+  {
+   "job_id": 1660,
+   "applied_lines": 558,
+   "site_aware_keys": 518,
+   "chain_level_keys": 92
+  },
+  {
+   "job_id": 1661,
+   "applied_lines": 282,
+   "site_aware_keys": 282,
+   "chain_level_keys": 55
+  },
+  {
+   "job_id": 1662,
+   "applied_lines": 21,
+   "site_aware_keys": 19,
+   "chain_level_keys": 3
+  },
+  {
+   "job_id": 1663,
+   "applied_lines": 118,
+   "site_aware_keys": 82,
+   "chain_level_keys": 7
+  },
+  {
+   "job_id": 1664,
+   "applied_lines": 564,
+   "site_aware_keys": 564,
+   "chain_level_keys": 31
+  },
+  {
+   "job_id": 1665,
+   "applied_lines": 423,
+   "site_aware_keys": 357,
+   "chain_level_keys": 64
+  },
+  {
+   "job_id": 1667,
+   "applied_lines": 57,
+   "site_aware_keys": 50,
+   "chain_level_keys": 4
+  }
+ ],
+ "site_like_payload_keys_all_customers": [
+  {
+   "cid": 11,
+   "key": "Site Code",
+   "rows": 3914
+  },
+  {
+   "cid": 11,
+   "key": "Site Name",
+   "rows": 3914
+  },
+  {
+   "cid": 12,
+   "key": "Site Code",
+   "rows": 32418
+  },
+  {
+   "cid": 12,
+   "key": "Site Name",
+   "rows": 32418
+  },
+  {
+   "cid": 15,
+   "key": "Site",
+   "rows": 4124
+  },
+  {
+   "cid": 15,
+   "key": "Site Name",
+   "rows": 4124
+  },
+  {
+   "cid": 57,
+   "key": "Site",
+   "rows": 3176
+  }
+ ],
+ "job900_vs_files_sites": [
+  {
+   "job900_sites": 202,
+   "job906_sites": 104,
+   "job907_sites": 68,
+   "in_906": 104,
+   "in_907": 68,
+   "in_neither": 30
+  }
+ ],
+ "job900_meta": [
+  {
+   "id": 900,
+   "file_name": "IC_Store_sales_WK24.xlsx",
+   "meta": {
+    "p4_label": "Incredible Connection",
+    "p4_pilot": true,
+    "customer_id": 12,
+    "cst_multi_file": false,
+    "cst_file_periods": [
+     {
+      "flags": [
+       "period_uncorroborated"
+      ],
+      "source": "steward_declared",
+      "excluded": false,
+      "filename": "IC_Store_sales_WK24.xlsx",
+      "file_inferred": null,
+      "period_start_date": "2025-06-09"
+     }
+    ],
+    "steward_period_start": "2025-06-09",
+    "declared_period_start": "2025-06-09",
+    "report_structure_type": "flat",
+    "customer_sellthrough_flat": {
+     "resolved": 6248,
+     "warnings": [
+      "IC_Store_sales_WK24.xlsx: Period could not be extracted from file or filename \u2014 manual entry required",
+      "IC_Store_sales_WK24.xlsx: Skipped 8365 row(s) with missing product token or units_sold",
+      "IC_Store_sales_WK24.xlsx: period_uncorroborated"
+     ],
+     "vat_basis": "ex_vat",
+     "file_count": 1,
+     "total_rows": 21634,
+     "unresolved": 15386,
+     "period_start_date": "2025-06-09"
+    }
+   },
+   "parse": null,
+   "file_headers": null
+  },
+  {
+   "id": 906,
+   "file_name": "IC_only_Store_sales_WK24.xlsx",
+   "meta": {
+    "p4_tag": null,
+    "p4_label": "Incredible Connection",
+    "p4_pilot": true,
+    "customer_id": 12,
+    "cst_multi_file": false,
+    "cst_file_periods": [
+     {
+      "flags": [
+       "period_uncorroborated"
+      ],
+      "source": "steward_declared",
+      "excluded": false,
+      "filename": "IC_only_Store_sales_WK24.xlsx",
+      "file_inferred": null,
+      "period_start_date": "2025-06-09"
+     }
+    ],
+    "steward_period_start": "2025-06-09",
+    "declared_period_start": "2025-06-09",
+    "report_structure_type": "flat",
+    "customer_sellthrough_flat": {
+     "resolved": 4320,
+     "warnings": [
+      "IC_only_Store_sales_WK24.xlsx: Period could not be extracted from file or filename \u2014 manual entry required",
+      "IC_only_Store_sales_WK24.xlsx: Skipped 5331 row(s) with missing product token or units_sold",
+      "IC_only_Store_sales_WK24.xlsx: period_uncorroborated"
+     ],
+     "vat_basis": "ex_vat",
+     "file_count": 1,
+     "total_rows": 5392,
+     "unresolved": 1072,
+     "period_start_date": "2025-06-09"
+    }
+   },
+   "parse": null,
+   "file_headers": null
+  },
+  {
+   "id": 907,
+   "file_name": "HiFi_only_Store_sales_WK24.xlsx",
+   "meta": {
+    "p4_tag": null,
+    "p4_label": "HiFi Corp",
+    "p4_pilot": true,
+    "customer_id": 11,
+    "cst_multi_file": false,
+    "cst_file_periods": [
+     {
+      "flags": [
+       "period_uncorroborated"
+      ],
+      "source": "steward_declared",
+      "excluded": false,
+      "filename": "HiFi_only_Store_sales_WK24.xlsx",
+      "file_inferred": null,
+      "period_start_date": "2025-06-09"
+     }
+    ],
+    "steward_period_start": "2025-06-09",
+    "declared_period_start": "2025-06-09",
+    "report_structure_type": "flat",
+    "customer_sellthrough_flat": {
+     "resolved": 1599,
+     "warnings": [
+      "HiFi_only_Store_sales_WK24.xlsx: Period could not be extracted from file or filename \u2014 manual entry required",
+      "HiFi_only_Store_sales_WK24.xlsx: Skipped 2021 row(s) with missing product token or units_sold",
+      "HiFi_only_Store_sales_WK24.xlsx: period_uncorroborated"
+     ],
+     "vat_basis": "ex_vat",
+     "file_count": 1,
+     "total_rows": 1957,
+     "unresolved": 358,
+     "period_start_date": "2025-06-09"
+    }
+   },
+   "parse": null,
+   "file_headers": null
+  }
+ ]
+}

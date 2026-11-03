@@ -1,0 +1,159 @@
+{
+ "all_customers_staging": [
+  {
+   "cid": 12,
+   "name": "Incredible Connection",
+   "staged_rows": 32418,
+   "store_level_rows": 32418,
+   "loaded_rows": 4320,
+   "store_loaded": 4320,
+   "store_not_applied": 28098,
+   "jobs": 3
+  },
+  {
+   "cid": 15,
+   "name": "Makro",
+   "staged_rows": 4124,
+   "store_level_rows": 4124,
+   "loaded_rows": 4070,
+   "store_loaded": 4070,
+   "store_not_applied": 54,
+   "jobs": 9
+  },
+  {
+   "cid": 11,
+   "name": "Hifi",
+   "staged_rows": 3914,
+   "store_level_rows": 3914,
+   "loaded_rows": 1599,
+   "store_loaded": 1599,
+   "store_not_applied": 2315,
+   "jobs": 2
+  },
+  {
+   "cid": 57,
+   "name": "Game",
+   "staged_rows": 3176,
+   "store_level_rows": 3176,
+   "loaded_rows": 2210,
+   "store_loaded": 2210,
+   "store_not_applied": 966,
+   "jobs": 17
+  },
+  {
+   "cid": 299,
+   "name": "AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)",
+   "staged_rows": 46490,
+   "store_level_rows": 0,
+   "loaded_rows": 19392,
+   "store_loaded": 0,
+   "store_not_applied": 0,
+   "jobs": 11
+  },
+  {
+   "cid": 18,
+   "name": "Computer Mania",
+   "staged_rows": 1659,
+   "store_level_rows": 0,
+   "loaded_rows": 774,
+   "store_loaded": 0,
+   "store_not_applied": 0,
+   "jobs": 19
+  },
+  {
+   "cid": 20,
+   "name": "Takealot",
+   "staged_rows": 656,
+   "store_level_rows": 0,
+   "loaded_rows": 440,
+   "store_loaded": 0,
+   "store_not_applied": 0,
+   "jobs": 17
+  },
+  {
+   "cid": 52,
+   "name": "Evetech",
+   "staged_rows": 567,
+   "store_level_rows": 0,
+   "loaded_rows": 335,
+   "store_loaded": 0,
+   "store_not_applied": 0,
+   "jobs": 13
+  }
+ ],
+ "fact_store_level_by_customer": [
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "fact_rows": 1736,
+   "store_fact_rows": 1736,
+   "store_units": 6122.0
+  },
+  {
+   "customer_id": 57,
+   "name": "Game",
+   "fact_rows": 769,
+   "store_fact_rows": 769,
+   "store_units": 1579.0
+  },
+  {
+   "customer_id": 12,
+   "name": "Incredible Connection",
+   "fact_rows": 82,
+   "store_fact_rows": 82,
+   "store_units": 3.0
+  },
+  {
+   "customer_id": 11,
+   "name": "Hifi",
+   "fact_rows": 51,
+   "store_fact_rows": 51,
+   "store_units": 1.0
+  },
+  {
+   "customer_id": 299,
+   "name": "AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)",
+   "fact_rows": 11732,
+   "store_fact_rows": 0,
+   "store_units": 0.0
+  },
+  {
+   "customer_id": 20,
+   "name": "Takealot",
+   "fact_rows": 96,
+   "store_fact_rows": 0,
+   "store_units": 0.0
+  },
+  {
+   "customer_id": 52,
+   "name": "Evetech",
+   "fact_rows": 130,
+   "store_fact_rows": 0,
+   "store_units": 0.0
+  },
+  {
+   "customer_id": 18,
+   "name": "Computer Mania",
+   "fact_rows": 302,
+   "store_fact_rows": 0,
+   "store_units": 0.0
+  }
+ ],
+ "staging_status_values": [
+  {
+   "resolution_status": "unresolved",
+   "apply_status": null,
+   "n": 38930
+  },
+  {
+   "resolution_status": "resolved",
+   "apply_status": "applied",
+   "n": 33140
+  },
+  {
+   "resolution_status": "resolved",
+   "apply_status": null,
+   "n": 20934
+  }
+ ]
+}

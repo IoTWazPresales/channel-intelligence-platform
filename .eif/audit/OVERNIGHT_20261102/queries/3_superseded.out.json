@@ -1,0 +1,180 @@
+{
+ "superseded_by_customer_job": [
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 965,
+   "superseded_by_import_job_id": 1659,
+   "reason": "restated_by_newer_load",
+   "n": 104,
+   "units": 151.0,
+   "soh": 91.0,
+   "d_min": "2025-01-06",
+   "d_max": "2026-01-05"
+  },
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 966,
+   "superseded_by_import_job_id": 1660,
+   "reason": "restated_by_newer_load",
+   "n": 92,
+   "units": 247.0,
+   "soh": 34.0,
+   "d_min": "2025-04-07",
+   "d_max": "2026-04-06"
+  },
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 967,
+   "superseded_by_import_job_id": 1661,
+   "reason": "restated_by_newer_load",
+   "n": 55,
+   "units": 94.0,
+   "soh": 0.0,
+   "d_min": "2025-07-07",
+   "d_max": "2026-06-29"
+  },
+  {
+   "customer_id": 15,
+   "name": "Makro",
+   "import_job_id": 972,
+   "superseded_by_import_job_id": 1665,
+   "reason": "restated_by_newer_load",
+   "n": 64,
+   "units": 103.0,
+   "soh": 48.0,
+   "d_min": "2025-07-21",
+   "d_max": "2025-08-11"
+  },
+  {
+   "customer_id": 57,
+   "name": "Game",
+   "import_job_id": 968,
+   "superseded_by_import_job_id": 1662,
+   "reason": "week_not_yet_happened",
+   "n": 19,
+   "units": 19.0,
+   "soh": 198.0,
+   "d_min": "2026-09-28",
+   "d_max": "2026-09-28"
+  }
+ ],
+ "applied_lines_nonzero": [
+  {
+   "job_id": 912,
+   "applied_lines": 4320,
+   "nonzero_lines": 888,
+   "distinct_facts": 82
+  },
+  {
+   "job_id": 913,
+   "applied_lines": 1599,
+   "nonzero_lines": 307,
+   "distinct_facts": 51
+  }
+ ],
+ "fact_sample_ic": [
+  {
+   "id": 157,
+   "source_key": "ct:12:0:458:2025-06-09",
+   "site_label": "I207",
+   "units_sold": 0.0,
+   "reported_soh": 0.0,
+   "period_start_date": "2025-06-09",
+   "import_job_id": 912,
+   "figure_import_jobs": {}
+  },
+  {
+   "id": 158,
+   "source_key": "ct:12:0:2894:2025-06-09",
+   "site_label": "I211",
+   "units_sold": 0.0,
+   "reported_soh": 0.0,
+   "period_start_date": "2025-06-09",
+   "import_job_id": 912,
+   "figure_import_jobs": {}
+  },
+  {
+   "id": 159,
+   "source_key": "ct:12:0:3637:2025-06-09",
+   "site_label": "I209",
+   "units_sold": 0.0,
+   "reported_soh": 0.0,
+   "period_start_date": "2025-06-09",
+   "import_job_id": 912,
+   "figure_import_jobs": {}
+  },
+  {
+   "id": 160,
+   "source_key": "ct:12:0:4250:2025-06-09",
+   "site_label": "I226",
+   "units_sold": 0.0,
+   "reported_soh": 1.0,
+   "period_start_date": "2025-06-09",
+   "import_job_id": 912,
+   "figure_import_jobs": {}
+  },
+  {
+   "id": 161,
+   "source_key": "ct:12:0:2250:2025-06-09",
+   "site_label": "I224",
+   "units_sold": 0.0,
+   "reported_soh": 0.0,
+   "period_start_date": "2025-06-09",
+   "import_job_id": 912,
+   "figure_import_jobs": {}
+  },
+  {
+   "id": 162,
+   "source_key": "ct:12:0:10864:2025-06-09",
+   "site_label": "I212",
+   "units_sold": 0.0,
+   "reported_soh": 0.0,
+   "period_start_date": "2025-06-09",
+   "import_job_id": 912,
+   "figure_import_jobs": {}
+  },
+  {
+   "id": 163,
+   "source_key": "ct:12:0:11468:2025-06-09",
+   "site_label": "I232",
+   "units_sold": 0.0,
+   "reported_soh": 0.0,
+   "period_start_date": "2025-06-09",
+   "import_job_id": 912,
+   "figure_import_jobs": {}
+  },
+  {
+   "id": 164,
+   "source_key": "ct:12:0:8227:2025-06-09",
+   "site_label": "I212",
+   "units_sold": 0.0,
+   "reported_soh": 0.0,
+   "period_start_date": "2025-06-09",
+   "import_job_id": 912,
+   "figure_import_jobs": {}
+  }
+ ],
+ "fact_ic_stats": [
+  {
+   "n": 82,
+   "sites": 23,
+   "products": 82,
+   "units_nonzero": 3,
+   "soh_nonzero": 15,
+   "all_zero": 66
+  }
+ ],
+ "fact_hifi_stats": [
+  {
+   "n": 51,
+   "sites": 22,
+   "products": 51,
+   "units_nonzero": 1,
+   "soh_nonzero": 5,
+   "all_zero": 46
+  }
+ ]
+}
