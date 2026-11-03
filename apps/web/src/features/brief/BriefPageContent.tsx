@@ -5,8 +5,11 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 
 import { BriefEmptyState, BriefSignalRow, type BriefSignal } from '@/features/brief/BriefSignalRow';
+import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
 import { ReadStrip } from '@/features/shell/ReadStrip';
 import { apiGet } from '@/lib/api';
+import { briefSignalsQueryKey } from '@/lib/myAccounts';
+import { useMyAccountsCleared } from '@/lib/useMyAccountsCleared';
 
 type BriefSignalsResponse = {
   as_of: string;
@@ -26,9 +29,10 @@ function formatBriefFooterAsOf(iso: string): string {
 export function BriefPageContent() {
   const theme = useTheme();
   const line = theme.palette.divider;
+  const cleared = useMyAccountsCleared();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['brief', 'signals'],
+    queryKey: briefSignalsQueryKey(cleared),
     queryFn: ({ signal }) => apiGet<BriefSignalsResponse>('/api/v1/brief/signals', { signal }),
     staleTime: 30_000,
   });
@@ -72,6 +76,7 @@ export function BriefPageContent() {
           </Box>{' '}
           · what needs action now
         </Typography>
+        <MyAccountsBar />
       </Box>
       {signals.length > 0 && data?.read ? <ReadStrip text={data.read} /> : null}
       <Box sx={{ flex: 1, overflow: 'auto' }}>

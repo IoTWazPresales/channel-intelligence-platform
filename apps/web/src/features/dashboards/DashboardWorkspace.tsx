@@ -34,6 +34,7 @@ import Link from 'next/link';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPatch, apiPost, safeDisplayError } from '@/lib/api';
 
@@ -412,6 +413,9 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
         Formula and data vintage sit on every face. Schedules still live on the <Link href="/reports">report builder</Link> after Promote.
         {builderAvailable ? ' Promote saves the current filters and selected dates as fixed dates for the report.' : ''}
       </Typography>
+      <Box sx={{ mb: 2 }}>
+        <MyAccountsBar />
+      </Box>
 
       {listQ.isError && (
         <Alert severity="warning" sx={{ mb: 2 }}>

@@ -13,6 +13,10 @@ export type CurrentUser = {
   display_name?: string | null;
   auth_mode?: string;
   roles_supported?: string[];
+  my_accounts?: {
+    assigned_count: number;
+    filter_on: boolean;
+  };
 };
 
 export const AUTH_ME_QUERY_KEY = ['auth', 'me'] as const;

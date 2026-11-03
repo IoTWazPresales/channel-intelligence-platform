@@ -1,5 +1,7 @@
 /** Browser session token for P2-3 auth (Bearer). */
 
+import { resetMyAccountsForSignIn } from '@/lib/myAccounts';
+
 const TOKEN_KEY = 'cip.auth.token.v1';
 
 export function getAuthToken(): string | null {
@@ -20,6 +22,7 @@ export function setAuthToken(token: string | null): void {
   } catch {
     /* ignore quota / private mode */
   }
+  resetMyAccountsForSignIn();
 }
 
 export function clearAuthToken(): void {

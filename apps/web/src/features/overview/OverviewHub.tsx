@@ -12,8 +12,11 @@ import { fetchCatalogV2 } from '@/features/dashboards/builder/api';
 import { DashboardWidgetCard } from '@/features/dashboards/DashboardWidgetCard';
 import type { CatalogResponse, Dashboard } from '@/features/dashboards/types';
 import { StartWorkPanel } from '@/features/overview/StartWorkPanel';
+import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { apiDelete, apiGet } from '@/lib/api';
+import { briefSignalsQueryKey } from '@/lib/myAccounts';
+import { useMyAccountsCleared } from '@/lib/useMyAccountsCleared';
 
 import { overviewAttentionFirst } from './overviewPaths';
 import { useClientReady } from './useClientReady';
@@ -84,9 +87,10 @@ export function OverviewHub() {
   });
   const attentionFirst = overviewAttentionFirst(isMobile, search?.get('zone'));
   const [columns, setColumns] = useDashboardColumns();
+  const accountsCleared = useMyAccountsCleared();
 
   const briefQ = useQuery({
-    queryKey: ['brief', 'signals'],
+    queryKey: briefSignalsQueryKey(accountsCleared),
     queryFn: ({ signal }) => apiGet<BriefSignalsResponse>('/api/v1/brief/signals', { signal }),
     staleTime: 30_000,
   });
@@ -312,6 +316,7 @@ export function OverviewHub() {
   return (
     <Box data-testid="overview-surface">
       <Stack spacing={2}>
+        <MyAccountsBar />
         {start}
         {stackAttention ? (
           <>

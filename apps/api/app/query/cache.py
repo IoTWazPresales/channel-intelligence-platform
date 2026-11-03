@@ -39,6 +39,15 @@ def _try_redis() -> Any | None:
     return _redis_client
 
 
+def _my_account_ids() -> list[int] | None:
+    from app.core.my_accounts import request_my_account_ids
+
+    ids = request_my_account_ids.get()
+    if not ids:
+        return None
+    return sorted(ids)
+
+
 def cache_key(
     *,
     tenant_id: str,
@@ -61,6 +70,7 @@ def cache_key(
         # result cached under one scope (an admin, an unscoped schedule run) must never serve another.
         "product_lines": scope_csv(request_product_lines.get()),
         "role": request_role.get(),
+        "my_account_ids": _my_account_ids(),
     }
     raw = json.dumps(canonical, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -78,6 +88,7 @@ def cache_key_v2(*, tenant_id: str, request: dict[str, Any], catalog_version: st
         "catalog_version": str(catalog_version),
         "product_lines": scope_csv(request_product_lines.get()),
         "role": request_role.get(),
+        "my_account_ids": _my_account_ids(),
     }
     if calendar is not None:
         canonical["calendar"] = calendar

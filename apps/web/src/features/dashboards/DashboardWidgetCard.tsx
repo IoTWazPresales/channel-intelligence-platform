@@ -10,6 +10,7 @@ import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { apiPost } from '@/lib/api';
+import { useMyAccountsCleared } from '@/lib/useMyAccountsCleared';
 
 import { chartToPng, exportableSvg } from './builder/exportPng';
 import { NO_FILTERS, type DashboardRunContext } from './builder/runContext';
@@ -100,6 +101,7 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
   const theme = useTheme();
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const onLayoutKey = useDashboardLayoutKey();
+  const accountsCleared = useMyAccountsCleared();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const boxHeight = useBoxHeight(bodyRef);
   const [full, setFull] = useState(false);
@@ -112,6 +114,7 @@ function V1WidgetCard({ widget, metric, onEdit, onDelete, onPromote, onDuplicate
       widget.grains,
       widget.period_grain,
       widget.filters,
+      accountsCleared ? 'off' : 'on',
     ],
     queryFn: () =>
       apiPost<QueryResult>('/api/v1/query/execute', {

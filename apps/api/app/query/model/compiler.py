@@ -470,6 +470,14 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
         j = model.joins.get(b)
         if j is not None and j.null_keys == "exclude_when_grouped":
             conds.append(ctx.owner(j.on).c[j.fk].is_not(None))
+    # My accounts: one predicate, present only while the request filter is on.
+    from app.core.my_accounts import account_predicate
+
+    customer_join = model.joins.get("customer")
+    if customer_join is not None:
+        account_on = account_predicate(ctx.owner(customer_join.on).c[customer_join.fk])
+        if account_on is not None:
+            conds.append(account_on)
 
     window_parts: list[ColumnElement[bool]] = []
     if tcol is not None and plan.period_from is not None:
@@ -517,6 +525,13 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
             if col is not None:
                 vals = [UNASSIGNED if v is None else v for v in flt.values]
                 lconds.append(col.in_(bindparam(f"latest_filter_{flt.breakdown}", value=vals, expanding=True)))
+        customer_join = model.joins.get("customer")
+        if customer_join is not None and customer_join.on is None:
+            from app.core.my_accounts import account_predicate
+
+            account_on = account_predicate(f2.c[customer_join.fk])
+            if account_on is not None:
+                lconds.append(account_on)
         latest = (
             select(f2.c[lm.latest_per].label("k"), func.max(f2.c[model.time.column]).label("d"))  # type: ignore[union-attr]
             .where(*lconds)

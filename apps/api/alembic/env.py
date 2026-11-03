@@ -84,6 +84,7 @@ from app.models import (  # noqa: F401
     StockHealth,
     StockRisk,
     TaskRun,
+    UserCustomerAccount,
     WeeksOfCoverObservation,
     WeeksOfStock,
     ShippingMailerRecipient,

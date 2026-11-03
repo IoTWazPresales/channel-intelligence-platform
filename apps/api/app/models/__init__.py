@@ -133,6 +133,7 @@ from app.models.commercial_lineup import (
 )
 from app.models.task_run import TaskRun
 from app.models.iam import AppUser, AppUserInvite, AuthSession, Tenant
+from app.models.user_customer_account import UserCustomerAccount
 from app.models.steward_audit import StewardAuditEvent
 from app.models.platform_audit import PlatformAuditEvent
 from app.models.pricing_unknown_sku import PricingUnknownSku
@@ -261,6 +262,7 @@ __all__ = [
     "TaskRun",
     "Tenant",
     "AppUser",
+    "UserCustomerAccount",
     "AuthSession",
     "StewardAuditEvent",
     "PlatformAuditEvent",

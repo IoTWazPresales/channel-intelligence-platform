@@ -124,6 +124,11 @@ async def _handle_dsi(
     cid = _opt_int(filters, "customer_id", "customer")
     if cid is not None:
         conds.append(FactSalesSellout.customer_id == cid)
+    from app.core.my_accounts import account_predicate
+
+    account_on = account_predicate(FactSalesSellout.customer_id)
+    if account_on is not None:
+        conds.append(account_on)
     pid = _opt_int(filters, "product_id", "product")
     if pid is not None:
         conds.append(FactSalesSellout.product_id == pid)
@@ -169,6 +174,11 @@ async def _handle_cst(
     cid = _opt_int(filters, "customer_id", "customer")
     if cid is not None:
         conds.append(FactCustomerSellthrough.customer_id == cid)
+    from app.core.my_accounts import account_predicate
+
+    account_on = account_predicate(FactCustomerSellthrough.customer_id)
+    if account_on is not None:
+        conds.append(account_on)
     pid = _opt_int(filters, "product_id", "product")
     if pid is not None:
         conds.append(FactCustomerSellthrough.product_id == pid)

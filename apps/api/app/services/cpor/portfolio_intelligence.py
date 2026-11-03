@@ -55,6 +55,11 @@ def build_portfolio_intelligence(
         stmt = stmt.where(CporCase.tenant_id == tenant_id)
     if customer_id is not None:
         stmt = stmt.where(CporCase.customer_id == customer_id)
+    from app.core.my_accounts import account_predicate
+
+    account_on = account_predicate(CporCase.customer_id)
+    if account_on is not None:
+        stmt = stmt.where(account_on)
     cases = list(
         session.scalars(stmt).unique().all()
     )

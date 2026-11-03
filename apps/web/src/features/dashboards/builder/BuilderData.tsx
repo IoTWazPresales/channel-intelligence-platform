@@ -11,6 +11,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 
 import { executeV2 } from './api';
 import type { V2Request, V2Response } from './types';
+import { useMyAccountsCleared } from '@/lib/useMyAccountsCleared';
 
 export type V2Executor = (req: V2Request, signal?: AbortSignal) => Promise<V2Response>;
 
@@ -31,8 +32,9 @@ export function useV2Executor(): V2Executor {
  */
 export function useV2Query(req: V2Request | null, opts: { enabled?: boolean; tag?: string } = {}) {
   const execute = useV2Executor();
+  const accountsCleared = useMyAccountsCleared();
   return useQuery({
-    queryKey: ['v2-execute', opts.tag ?? 'main', req],
+    queryKey: ['v2-execute', opts.tag ?? 'main', accountsCleared ? 'off' : 'on', req],
     queryFn: ({ signal }) => execute(req as V2Request, signal),
     enabled: Boolean(req) && opts.enabled !== false,
     placeholderData: req ? keepPreviousData : undefined,

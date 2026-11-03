@@ -1119,17 +1119,23 @@ def period_presets(cal: BusinessCalendar, today: date) -> list[dict[str, str]]:
     ]
 
 
-_BRIEF_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_BRIEF_CACHE: dict[tuple[str, tuple[int, ...]], tuple[float, dict[str, Any]]] = {}
 BRIEF_CACHE_SECONDS = 300
 
 
 def sell_through_attention(session: Session, tenant_id: str, today: date) -> dict[str, Any]:
     """Counts for the Attention page: SKUs to restock, slowing or stuck, and customers with reports
-    missing, over the last 13 weeks for all customers. Cached for five minutes per tenant."""
+    missing, over the last 13 weeks. Cached for five minutes per tenant and account set.
+    An empty account set is the wider book. A non-empty set is My accounts."""
     import time
 
+    from app.core.my_accounts import request_my_account_ids
+
+    raw_ids = request_my_account_ids.get()
+    account_ids = tuple(sorted(raw_ids)) if raw_ids else ()
     now = time.time()
-    hit = _BRIEF_CACHE.get(tenant_id)
+    key = (tenant_id, account_ids)
+    hit = _BRIEF_CACHE.get(key)
     if hit and now - hit[0] < BRIEF_CACHE_SECONDS:
         return hit[1]
     from app.services.business_calendar import tenant_calendar
@@ -1143,6 +1149,7 @@ def sell_through_attention(session: Session, tenant_id: str, today: date) -> dic
         grain="week",
         compare="none",
         tenant_id=tenant_id,
+        customer_ids=list(account_ids),
     )
     o = build_overview(session, f, cal, today=today, vat_rate=vat_rate_pct(tenant_id))
     pc = o["problems"]["counts"]
@@ -1157,5 +1164,5 @@ def sell_through_attention(session: Session, tenant_id: str, today: date) -> dic
         "customers_missing": o["coverage"]["customers_missing"],
         "has_data": bool(o["kpis"]["units"] or o["kpis"]["stock_on_hand"]),
     }
-    _BRIEF_CACHE[tenant_id] = (now, out)
+    _BRIEF_CACHE[key] = (now, out)
     return out

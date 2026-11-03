@@ -17,9 +17,13 @@ def request_scope() -> dict[str, Any]:
     """Scope as the request context holds it (explain-only runs no SQL)."""
     from app.core.product_line_scope import request_product_lines, request_role, scope_csv
 
+    from app.core.my_accounts import request_my_account_ids
+
+    account_ids = request_my_account_ids.get()
     return {
         "product_lines": scope_csv(request_product_lines.get()),
         "role": request_role.get(),
+        "my_accounts": "on" if account_ids else "off",
         "source": "request context (bound per transaction by the session listener)",
     }
 

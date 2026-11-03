@@ -4,17 +4,21 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Select,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UserRole } from '@cip/types';
 import type { ColDef } from 'ag-grid-community';
 
@@ -40,6 +44,74 @@ type UsersResponse = {
 
 const ROLES: UserRole[] = ['admin', 'steward', 'planner', 'viewer'];
 
+type AccountChoice = { id: number; name: string };
+type AccountScope = 'all' | 'selected';
+
+const ACCOUNT_EMPTY_NOTE =
+  'No accounts assigned means My accounts starts off. The person still sees the wider book their role and product lines allow. Assigning accounts turns the filter on at the next sign-in. Clear lasts for that sign-in only and does not hide the rest of the book.';
+
+function AccountScopeControls({
+  scope,
+  onScope,
+  selectedIds,
+  onToggle,
+  query,
+  onQuery,
+  options,
+  scopeTestId,
+}: {
+  scope: AccountScope;
+  onScope: (scope: AccountScope) => void;
+  selectedIds: number[];
+  onToggle: (id: number, name: string, checked: boolean) => void;
+  query: string;
+  onQuery: (value: string) => void;
+  options: AccountChoice[];
+  scopeTestId: 'edit' | 'create';
+}) {
+  const allId = scopeTestId === 'edit' ? 'users-account-scope-all' : 'users-create-account-scope-all';
+  const selectedId = scopeTestId === 'edit' ? 'users-account-scope-selected' : 'users-create-account-scope-selected';
+  return (
+    <Stack spacing={1}>
+      <RadioGroup value={scope} onChange={(ev) => onScope(ev.target.value as AccountScope)}>
+        <FormControlLabel
+          value="all"
+          control={<Radio inputProps={{ 'data-testid': allId }} />}
+          label="All accounts in this tenant"
+        />
+        <FormControlLabel
+          value="selected"
+          control={<Radio inputProps={{ 'data-testid': selectedId }} />}
+          label="Selected accounts"
+        />
+      </RadioGroup>
+      {scope === 'selected' ? (
+        <Stack spacing={1}>
+          <TextField
+            label="Find an account"
+            value={query}
+            onChange={(ev) => onQuery(ev.target.value)}
+            inputProps={{ 'data-testid': scopeTestId === 'edit' ? 'users-account-search' : 'users-create-account-search' }}
+          />
+          {options.map((account) => (
+            <FormControlLabel
+              key={account.id}
+              control={
+                <Checkbox
+                  checked={selectedIds.includes(account.id)}
+                  onChange={(ev) => onToggle(account.id, account.name, ev.target.checked)}
+                  inputProps={{ 'data-testid': `users-account-option-${account.id}` }}
+                />
+              }
+              label={account.name}
+            />
+          ))}
+        </Stack>
+      ) : null}
+    </Stack>
+  );
+}
+
 export function UsersWorkspace() {
   const qc = useQueryClient();
   const { data: me, isError: meError, isPending: mePending } = useCurrentUser();
@@ -53,6 +125,15 @@ export function UsersWorkspace() {
   const [accessUserId, setAccessUserId] = useState('');
   const [accessMode, setAccessMode] = useState<Record<string, 'none' | 'read' | 'edit'>>({});
   const [grainDraft, setGrainDraft] = useState('product_line');
+  const [createScope, setCreateScope] = useState<AccountScope>('all');
+  const [createAccountIds, setCreateAccountIds] = useState<number[]>([]);
+  const [accountUserId, setAccountUserId] = useState('');
+  const [editScope, setEditScope] = useState<AccountScope>('all');
+  const [editAccountIds, setEditAccountIds] = useState<number[]>([]);
+  const [accountQuery, setAccountQuery] = useState('');
+  const [accountQueryDebounced, setAccountQueryDebounced] = useState('');
+  const [knownAccounts, setKnownAccounts] = useState<Record<number, string>>({});
+  const hydratedAccountUser = useRef('');
 
   const usersQuery = useQuery({
     queryKey: ['auth', 'users'],
@@ -98,6 +179,26 @@ export function UsersWorkspace() {
     retry: false,
   });
 
+  const searchAccounts = isAdmin && (createScope === 'selected' || editScope === 'selected');
+  const accountSearchQuery = useQuery({
+    queryKey: ['auth', 'customer-accounts', accountQueryDebounced],
+    queryFn: () =>
+      apiGet<{ accounts?: AccountChoice[] }>(
+        `/api/v1/auth/customer-accounts?q=${encodeURIComponent(accountQueryDebounced)}`,
+      ),
+    enabled: searchAccounts,
+    retry: false,
+  });
+  const userAccountsQuery = useQuery({
+    queryKey: ['auth', 'user-accounts', accountUserId],
+    queryFn: () =>
+      apiGet<{ account_scope?: AccountScope; customer_ids?: number[]; accounts?: AccountChoice[] }>(
+        `/api/v1/auth/users/${accountUserId}/accounts`,
+      ),
+    enabled: isAdmin && accountUserId !== '',
+    retry: false,
+  });
+
   const createMutation = useMutation({
     mutationFn: () =>
       apiPost<ListedUser>('/api/v1/auth/users', {
@@ -105,6 +206,8 @@ export function UsersWorkspace() {
         display_name: displayName,
         role,
         tenant_id: me?.tenant_id || 'default',
+        account_scope: createScope,
+        customer_ids: createScope === 'selected' ? createAccountIds : [],
       }),
     onSuccess: async (created) => {
       setFormError(null);
@@ -116,6 +219,8 @@ export function UsersWorkspace() {
       setEmail('');
       setDisplayName('');
       setRole('viewer');
+      setCreateScope('all');
+      setCreateAccountIds([]);
       await qc.invalidateQueries({ queryKey: ['auth', 'users'] });
     },
     onError: (err) => {
@@ -127,6 +232,41 @@ export function UsersWorkspace() {
   useEffect(() => {
     if (grainQuery.data?.grain) setGrainDraft(grainQuery.data.grain);
   }, [grainQuery.data?.grain]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAccountQueryDebounced(accountQuery), 300);
+    return () => window.clearTimeout(timer);
+  }, [accountQuery]);
+
+  useEffect(() => {
+    const found = accountSearchQuery.data?.accounts ?? [];
+    if (!found.length) return;
+    setKnownAccounts((prev) => {
+      const next = { ...prev };
+      for (const account of found) next[account.id] = account.name;
+      return next;
+    });
+  }, [accountSearchQuery.data]);
+
+  useEffect(() => {
+    if (!accountUserId) {
+      hydratedAccountUser.current = '';
+      return;
+    }
+    const data = userAccountsQuery.data;
+    if (!data || hydratedAccountUser.current === accountUserId) return;
+    hydratedAccountUser.current = accountUserId;
+    const ids = Array.isArray(data.customer_ids) ? data.customer_ids : [];
+    setEditScope(data.account_scope === 'selected' && ids.length > 0 ? 'selected' : 'all');
+    setEditAccountIds(ids);
+    const named = data.accounts ?? [];
+    if (!named.length) return;
+    setKnownAccounts((prev) => {
+      const next = { ...prev };
+      for (const account of named) next[account.id] = account.name;
+      return next;
+    });
+  }, [accountUserId, userAccountsQuery.data]);
 
   useEffect(() => {
     const next: Record<string, 'none' | 'read' | 'edit'> = {};
@@ -170,10 +310,31 @@ export function UsersWorkspace() {
     },
   });
 
+  const saveAccounts = useMutation({
+    mutationFn: () =>
+      apiPut(`/api/v1/auth/users/${accountUserId}/accounts`, {
+        account_scope: editScope,
+        customer_ids: editScope === 'selected' ? editAccountIds : [],
+      }),
+    onSuccess: async () => {
+      setFormError(null);
+      setFormOk('Customer accounts saved. My accounts turns on at the next sign-in.');
+      await qc.invalidateQueries({ queryKey: ['auth', 'user-accounts', accountUserId] });
+    },
+    onError: (err) => {
+      setFormOk(null);
+      setFormError(safeDisplayError(err));
+    },
+  });
+
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
     setFormOk(null);
+    if (createScope === 'selected' && createAccountIds.length === 0) {
+      setFormError('Choose all accounts in this tenant, or at least one account.');
+      return;
+    }
     createMutation.mutate();
   }
 
@@ -240,6 +401,26 @@ export function UsersWorkspace() {
     ],
     [resetPassword, resendInvite],
   );
+
+  const accountOptions = useMemo(() => {
+    const byId = new Map<number, AccountChoice>();
+    for (const account of accountSearchQuery.data?.accounts ?? []) byId.set(account.id, account);
+    for (const id of [...createAccountIds, ...editAccountIds]) {
+      if (!byId.has(id)) byId.set(id, { id, name: knownAccounts[id] || `Account ${id}` });
+    }
+    return [...byId.values()];
+  }, [accountSearchQuery.data, createAccountIds, editAccountIds, knownAccounts]);
+
+  function toggleIds(
+    current: number[],
+    setIds: (ids: number[]) => void,
+    id: number,
+    name: string,
+    checked: boolean,
+  ) {
+    setKnownAccounts((prev) => ({ ...prev, [id]: name }));
+    setIds(checked ? [...current.filter((item) => item !== id), id] : current.filter((item) => item !== id));
+  }
 
   if (mePending && !me && !meError) {
     return (
@@ -315,6 +496,16 @@ export function UsersWorkspace() {
               ))}
             </Select>
           </FormControl>
+          <AccountScopeControls
+            scope={createScope}
+            onScope={setCreateScope}
+            selectedIds={createAccountIds}
+            onToggle={(id, name, checked) => toggleIds(createAccountIds, setCreateAccountIds, id, name, checked)}
+            query={accountQuery}
+            onQuery={setAccountQuery}
+            options={accountOptions}
+            scopeTestId="create"
+          />
           <Box>
             <Button
               type="submit"
@@ -323,6 +514,61 @@ export function UsersWorkspace() {
               data-testid="users-create-submit"
             >
               {createMutation.isPending ? 'Sending invite…' : 'Create and send invite'}
+            </Button>
+          </Box>
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 3, mb: 3 }} data-testid="users-account-editor">
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+          Customer accounts
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="users-account-note">
+          {ACCOUNT_EMPTY_NOTE}
+        </Typography>
+        <Stack spacing={2} maxWidth={640}>
+          <FormControl fullWidth>
+            <InputLabel id="users-account-user-label">User</InputLabel>
+            <Select
+              labelId="users-account-user-label"
+              label="User"
+              value={accountUserId}
+              onChange={(ev) => setAccountUserId(String(ev.target.value))}
+              inputProps={{ 'data-testid': 'users-account-user' }}
+            >
+              {(usersQuery.data?.users ?? []).map((u) => (
+                <MenuItem key={u.id} value={u.id}>
+                  {u.display_name || u.email}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <AccountScopeControls
+            scope={editScope}
+            onScope={setEditScope}
+            selectedIds={editAccountIds}
+            onToggle={(id, name, checked) => toggleIds(editAccountIds, setEditAccountIds, id, name, checked)}
+            query={accountQuery}
+            onQuery={setAccountQuery}
+            options={accountOptions}
+            scopeTestId="edit"
+          />
+          <Box>
+            <Button
+              variant="contained"
+              disabled={!accountUserId || saveAccounts.isPending}
+              data-testid="users-account-save"
+              onClick={() => {
+                setFormError(null);
+                setFormOk(null);
+                if (editScope === 'selected' && editAccountIds.length === 0) {
+                  setFormError('Choose all accounts in this tenant, or at least one account.');
+                  return;
+                }
+                saveAccounts.mutate();
+              }}
+            >
+              {saveAccounts.isPending ? 'Saving…' : 'Save customer accounts'}
             </Button>
           </Box>
         </Stack>

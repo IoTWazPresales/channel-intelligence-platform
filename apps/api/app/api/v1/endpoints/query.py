@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.my_accounts import my_accounts_scope
 from app.core.security import get_current_user, get_optional_current_user
 from app.core.tenant_scope import tenant_id_from_user
 from app.query.engine import execute_query
@@ -32,11 +33,17 @@ class QueryBody(BaseModel):
 @router.post("/execute")
 async def query_execute(
     body: QueryBody,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """Compose metric + grains + filters → validated execute with invariants + cache."""
     tid = tenant_id_from_user(user)
+    async with my_accounts_scope(db, user, request.headers):
+        return await _query_execute_body(body, db, tid)
+
+
+async def _query_execute_body(body: QueryBody, db: AsyncSession, tid: str) -> dict[str, Any]:
     result = await execute_query(
         db,
         metric=body.metric,
@@ -91,35 +98,45 @@ class V2QueryBody(BaseModel):
 @router.post("/v2/execute")
 async def query_v2_execute(
     body: V2QueryBody,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """N-0115: measures x breakdowns x filters x period through the model compiler (signed in only)."""
     from app.query.model.execute import run_v2
 
-    return await run_v2(db, body.to_request(), tenant_id=tenant_id_from_user(user))
+    async with my_accounts_scope(db, user, request.headers):
+        return await run_v2(db, body.to_request(), tenant_id=tenant_id_from_user(user))
 
 
 @router.post("/v2/explain")
 async def query_v2_explain(
     body: V2QueryBody,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Validate a v2 query and show the compiled SQL (parameter names only) without running it."""
     from app.query.model.execute import run_v2
 
-    return await run_v2(db, body.to_request(), tenant_id=tenant_id_from_user(user), explain_only=True)
+    async with my_accounts_scope(db, user, request.headers):
+        return await run_v2(db, body.to_request(), tenant_id=tenant_id_from_user(user), explain_only=True)
 
 
 @router.post("/explain")
 async def query_explain(
     body: QueryBody,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """Validate + show planned handler/invariants without running metric SQL."""
     tid = tenant_id_from_user(user)
+    async with my_accounts_scope(db, user, request.headers):
+        return await _query_explain_body(body, db, tid)
+
+
+async def _query_explain_body(body: QueryBody, db: AsyncSession, tid: str) -> dict[str, Any]:
     result = await execute_query(
         db,
         metric=body.metric,

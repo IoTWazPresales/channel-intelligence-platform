@@ -9,6 +9,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.feature_flags import commercial_planner_enabled
+from app.core.my_accounts import apply_account_predicate
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.iam import Tenant
@@ -39,7 +40,7 @@ def inbound_not_received_count_stmt(user: dict | None) -> Select[Any]:
     shipped open line still counts as one line (D-0065). Shared by the brief card and
     the dashboard tile so the two numbers agree.
     """
-    return (
+    stmt = (
         select(func.count())
         .select_from(FactInboundShipment)
         .where(FactInboundShipment.status != "received")
@@ -47,6 +48,7 @@ def inbound_not_received_count_stmt(user: dict | None) -> Select[Any]:
         .where(keep_counted_line(FactInboundShipment))
         .where(exclude_closed_inbound(FactInboundShipment))
     )
+    return apply_account_predicate(stmt, FactInboundShipment.resolved_customer_id)
 
 
 def _severity_from_rank(rank: int) -> str:
@@ -120,14 +122,18 @@ def cst_late_missing_signal(*, late: int, missing: int) -> dict[str, Any] | None
     )
 
 
+def cst_late_missing_count_stmt() -> Select[Any]:
+    """Late and missing customer sell-through slots. Account predicate when the filter is on."""
+    stmt = (
+        select(CustomerCstReportSlot.status, func.count())
+        .where(CustomerCstReportSlot.status.in_(("late", "missing")))
+        .group_by(CustomerCstReportSlot.status)
+    )
+    return apply_account_predicate(stmt, CustomerCstReportSlot.customer_id)
+
+
 async def _cst_late_missing_counts(db: AsyncSession) -> tuple[int, int]:
-    rows = (
-        await db.execute(
-            select(CustomerCstReportSlot.status, func.count())
-            .where(CustomerCstReportSlot.status.in_(("late", "missing")))
-            .group_by(CustomerCstReportSlot.status)
-        )
-    ).all()
+    rows = (await db.execute(cst_late_missing_count_stmt())).all()
     counts = {str(status): int(n) for status, n in rows}
     return counts.get("late", 0), counts.get("missing", 0)
 
@@ -280,11 +286,12 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
             "data_unavailable": True,
         }
 
-    open_q = (
+    open_q = apply_account_predicate(
         select(CporCase)
         .where(CporCase.status.in_(_OPEN_CPOR_STATUSES))
         .where(where_tenant(CporCase.tenant_id, user))
-        .where(where_commercial_intelligence())
+        .where(where_commercial_intelligence()),
+        CporCase.customer_id,
     )
     cases = (await db.execute(open_q)).scalars().all()
     # N-0083: "FX blocked" means the case has a rate but no booked/floating mode.
@@ -295,12 +302,15 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
 
     assumption_lines = (
         await db.execute(
-            select(func.count(func.distinct(CporCaseLine.product_id)))
-            .join(CporCase, CporCase.id == CporCaseLine.case_id)
-            .where(CporCase.status.in_(_OPEN_CPOR_STATUSES))
-            .where(where_tenant(CporCase.tenant_id, user))
-            .where(where_commercial_intelligence())
-            .where(or_(CporCaseLine.cost_basis.is_(None), CporCaseLine.cost_source.is_(None)))
+            apply_account_predicate(
+                select(func.count(func.distinct(CporCaseLine.product_id)))
+                .join(CporCase, CporCase.id == CporCaseLine.case_id)
+                .where(CporCase.status.in_(_OPEN_CPOR_STATUSES))
+                .where(where_tenant(CporCase.tenant_id, user))
+                .where(where_commercial_intelligence())
+                .where(or_(CporCaseLine.cost_basis.is_(None), CporCaseLine.cost_source.is_(None))),
+                CporCase.customer_id,
+            )
         )
     ).scalar()
 
@@ -327,8 +337,13 @@ async def _needs_look_summary(db: AsyncSession, user: dict | None) -> dict[str, 
     days = config_from_overrides(on_the_water_overrides(tenant)).needs_look_days
     row = (
         await db.execute(
-            select(func.count(), func.coalesce(func.sum(F.quantity), 0)).where(
-                F.tenant_id == tenant, predicate_needs_look(reporting_today(tenant), days), exclude_closed_inbound(F)
+            apply_account_predicate(
+                select(func.count(), func.coalesce(func.sum(F.quantity), 0)).where(
+                    F.tenant_id == tenant,
+                    predicate_needs_look(reporting_today(tenant), days),
+                    exclude_closed_inbound(F),
+                ),
+                F.resolved_customer_id,
             )
         )
     ).one()

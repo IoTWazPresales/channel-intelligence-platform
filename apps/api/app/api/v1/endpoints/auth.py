@@ -7,7 +7,7 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +24,7 @@ from app.core.password import (
 )
 from app.core.product_line_scope import widen_product_line_catalog
 from app.core.security import Role, get_current_user, normalize_role, require_roles
+from app.models.dimensions import DimCustomer
 from app.models.iam import AppUser, AuthSession, Tenant
 from app.models.product_line_access import TenantColumnGrain, UserProductLineAccess
 from app.services import commercial_tenant_profile
@@ -62,12 +63,26 @@ class LoginResponse(BaseModel):
     user: dict
 
 
+def _account_scope(value: str) -> str:
+    scope = str(value or "all").strip().lower()
+    if scope not in {"all", "selected"}:
+        raise ValueError("Account scope is all or selected.")
+    return scope
+
+
 class CreateUserRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str | None = None
     display_name: str = Field(min_length=1, max_length=200)
     role: Role = Role.VIEWER
     tenant_id: str = "default"
+    account_scope: str = "all"
+    customer_ids: list[int] = Field(default_factory=list)
+
+    @field_validator("account_scope")
+    @classmethod
+    def _scope(cls, v: str) -> str:
+        return _account_scope(v)
 
     @field_validator("email")
     @classmethod
@@ -94,8 +109,23 @@ class CreateUserRequest(BaseModel):
 
 
 @router.get("/me")
-async def me(user: dict = Depends(get_current_user)):
+async def me(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    from app.core.my_accounts import header_clears_my_accounts, load_assigned_customer_ids
+
     settings = get_settings()
+    uid = str(user.get("id") or "")
+    assigned: list[int] = []
+    if uid.isdigit():
+        assigned = await load_assigned_customer_ids(
+            db,
+            tenant_id=str(user.get("tenant_id") or "default").strip() or "default",
+            user_id=int(uid),
+        )
+    cleared = header_clears_my_accounts(request.headers)
     return {
         "id": user["id"],
         "role": user["role"].value if isinstance(user["role"], Role) else user["role"],
@@ -104,6 +134,10 @@ async def me(user: dict = Depends(get_current_user)):
         "display_name": user.get("display_name"),
         "auth_mode": settings.cip_auth_mode,
         "roles_supported": [r.value for r in Role],
+        "my_accounts": {
+            "assigned_count": len(assigned),
+            "filter_on": bool(assigned) and not cleared,
+        },
     }
 
 
@@ -242,6 +276,19 @@ async def create_user(
     )
     db.add(user)
     await db.flush()
+    from app.services.my_account_assignments import AccountAssignmentError, replace_user_accounts
+
+    try:
+        chosen_accounts = await replace_user_accounts(
+            db,
+            tenant_id=tenant_id,
+            user_id=int(user.id),
+            scope=body.account_scope,
+            customer_ids=list(body.customer_ids),
+        )
+    except AccountAssignmentError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     invite_sent = await issue_invite(db, user)
     await record_platform_audit(
         db,
@@ -250,7 +297,7 @@ async def create_user(
         action="user_create",
         target_type="app_user",
         target_id=str(user.id),
-        detail={"role": user.role, "invite_sent": invite_sent},
+        detail={"role": user.role, "invite_sent": invite_sent, "account_count": len(chosen_accounts)},
     )
     await db.commit()
     await db.refresh(user)
@@ -262,6 +309,110 @@ async def create_user(
         "display_name": user.display_name,
         "is_active": user.is_active,
         "invite_sent": invite_sent,
+    }
+
+
+class AccountAssignmentBody(BaseModel):
+    account_scope: str = "all"
+    customer_ids: list[int] = Field(default_factory=list)
+
+    @field_validator("account_scope")
+    @classmethod
+    def _scope(cls, v: str) -> str:
+        return _account_scope(v)
+
+
+def _like_contains(raw: str) -> str:
+    escaped = raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+@router.get("/customer-accounts")
+async def list_customer_accounts(
+    q: str = Query(default="", max_length=80),
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    """Existing customer accounts in this tenant. The picker does not create one."""
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    stmt = select(DimCustomer.id, DimCustomer.name).where(DimCustomer.tenant_id == tenant_id)
+    term = q.strip()
+    if term:
+        stmt = stmt.where(DimCustomer.name.ilike(_like_contains(term), escape="\\"))
+    rows = (await db.execute(stmt.order_by(DimCustomer.name.asc()).limit(50))).all()
+    return {"accounts": [{"id": int(row.id), "name": row.name} for row in rows]}
+
+
+@router.get("/users/{user_id}/accounts")
+async def get_user_accounts(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    from app.core.my_accounts import load_assigned_customer_ids
+
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    user = await db.get(AppUser, user_id)
+    if user is None or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    ids = await load_assigned_customer_ids(db, tenant_id=tenant_id, user_id=int(user.id))
+    names: dict[int, str] = {}
+    if ids:
+        found = (
+            await db.execute(
+                select(DimCustomer.id, DimCustomer.name).where(
+                    DimCustomer.tenant_id == tenant_id,
+                    DimCustomer.id.in_(ids),
+                )
+            )
+        ).all()
+        names = {int(row.id): str(row.name or "") for row in found}
+    return {
+        "user_id": str(user.id),
+        "account_scope": "selected" if ids else "all",
+        "customer_ids": ids,
+        "accounts": [{"id": cid, "name": names.get(cid, "")} for cid in ids],
+    }
+
+
+@router.put("/users/{user_id}/accounts")
+async def put_user_accounts(
+    user_id: int,
+    body: AccountAssignmentBody,
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    from app.services.my_account_assignments import AccountAssignmentError, replace_user_accounts
+
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    user = await db.get(AppUser, user_id)
+    if user is None or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    try:
+        chosen = await replace_user_accounts(
+            db,
+            tenant_id=tenant_id,
+            user_id=int(user.id),
+            scope=body.account_scope,
+            customer_ids=list(body.customer_ids),
+        )
+    except AccountAssignmentError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await record_platform_audit(
+        db,
+        admin,
+        area="admin",
+        action="user_accounts",
+        target_type="app_user",
+        target_id=str(user.id),
+        detail={"account_scope": body.account_scope, "account_count": len(chosen)},
+    )
+    await db.commit()
+    return {
+        "user_id": str(user.id),
+        "account_scope": "selected" if chosen else "all",
+        "customer_ids": chosen,
     }
 
 
