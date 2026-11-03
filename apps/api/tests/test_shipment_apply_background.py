@@ -15,11 +15,21 @@ import app.services.imports.shipment_inbound_facts as facts_mod
 from app.ingestion.pipeline import STAGE_LOADED
 
 
+def _lines(n: int):
+    from tests.shipment_evidence_fixtures import make_row
+
+    return [make_row(source_key=f"k{i}", import_job_id=32) for i in range(n)]
+
+
+def _install_lines(monkeypatch, n: int, lines=None):
+    rows = lines if lines is not None else _lines(n)
+    monkeypatch.setattr(facts_mod, "load_evidence_rows", lambda db, **kwargs: rows)
+    return rows
+
+
 def _db_with_lines(n: int) -> MagicMock:
     db = MagicMock()
-    scalars_result = MagicMock()
-    scalars_result.all.return_value = [object() for _ in range(n)]
-    db.scalars.return_value = scalars_result
+    db.get.return_value = MagicMock(tenant_id="default", id=32)
     return db
 
 
@@ -46,6 +56,7 @@ def test_upsert_retires_po_less_twins_after_the_chunks(monkeypatch) -> None:
 
     monkeypatch.setattr(facts_mod, "retire_po_less_twins_written_by_job", fake)
     monkeypatch.setattr(facts_mod, "retire_orphaned_open_rows", lambda db, job_id: {"superseded": 0, "disappeared": 0})
+    _install_lines(monkeypatch, 3)
     db = _db_with_lines(3)
     assert facts_mod.upsert_inbound_shipment_facts_for_job(db, 32) == 3
     assert seen == [32]
@@ -62,6 +73,7 @@ def test_upsert_batches_into_chunked_statements(monkeypatch) -> None:
     )
     monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
     monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
+    _install_lines(monkeypatch, 1200)
     db = _db_with_lines(1200)
     progress: list[tuple[int, int]] = []
 
@@ -80,7 +92,7 @@ def test_lines_of_one_fact_key_are_never_split_across_chunks(monkeypatch) -> Non
     """Rows of one key add up inside a chunk and a later chunk replaces the key: they must share a chunk (units were lost otherwise)."""
     _no_retire(monkeypatch)
     keys = iter(["A", "B", "C", "A", "D", "B", "A", "E"])
-    lines = [object() for _ in range(8)]
+    lines = _install_lines(monkeypatch, 8)
     by_line = {id(ln): k for ln, k in zip(lines, keys)}
     monkeypatch.setattr(
         facts_mod, "_row_values_from_evidence",
@@ -88,8 +100,7 @@ def test_lines_of_one_fact_key_are_never_split_across_chunks(monkeypatch) -> Non
     )
     seen: list[list[str]] = []
     monkeypatch.setattr(facts_mod, "_upsert_evidence_chunk", lambda db, tbl, chunk, values, **_: seen.append([v["fact_upsert_key"] for v in values]))
-    db = MagicMock()
-    db.scalars.return_value.all.return_value = lines
+    db = _db_with_lines(8)
     assert facts_mod.upsert_inbound_shipment_facts_for_job(db, 32, chunk_size=3) == 8
     flat = [k for c in seen for k in c]
     assert sorted(flat) == sorted(by_line.values())
@@ -108,6 +119,7 @@ def test_upsert_single_chunk_and_empty(monkeypatch) -> None:
     monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
     monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
 
+    _install_lines(monkeypatch, 3)
     db = _db_with_lines(3)
     progress: list[tuple[int, int]] = []
     n = facts_mod.upsert_inbound_shipment_facts_for_job(
@@ -117,6 +129,7 @@ def test_upsert_single_chunk_and_empty(monkeypatch) -> None:
     assert db.execute.call_count == 1
     assert progress == [(3, 3)]
 
+    _install_lines(monkeypatch, 0)
     db_empty = _db_with_lines(0)
     progress_empty: list[tuple[int, int]] = []
     n0 = facts_mod.upsert_inbound_shipment_facts_for_job(

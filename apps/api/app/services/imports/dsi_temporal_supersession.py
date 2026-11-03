@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.services.imports.shipment_evidence_rows import EVIDENCE_LINES_WITH_PAYLOAD_SQL
 from app.services.imports.provisional_entity_identity import canonical_provisional_entity_name_key
 
 REASON_TEMPORAL_SUPERSESSION = "temporal_supersession"
@@ -53,13 +54,13 @@ class ProductShipmentWindowIndex:
         idx = cls()
         rows = db.execute(
             text(
-                """
+                f"""
                 SELECT
                     distributor_id,
                     product_id,
                     MIN(COALESCE(ship_confirm_date, schedule_ship_date, promise_date))::date AS first_ship,
                     MAX(COALESCE(ship_confirm_date, schedule_ship_date, promise_date))::date AS last_ship
-                FROM shipment_evidence_line
+                FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l
                 WHERE product_resolution_status IN ('resolved', 'resolved_unique')
                   AND product_id IS NOT NULL
                   AND distributor_id IS NOT NULL

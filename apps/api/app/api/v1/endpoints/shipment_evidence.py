@@ -25,7 +25,6 @@ from app.services.imports.shipment_evidence_read import (
     shipment_evidence_read_model,
     shipment_evidence_read_relation,
 )
-from app.core.feature_flags import shipment_bitemporal_read_enabled
 from app.services.imports.import_background_slots import (
     SLOT_MAIN,
     SLOT_SHIPMENT_BULK,
@@ -207,14 +206,11 @@ async def list_shipment_evidence_raw_column_keys(
 ) -> dict[str, Any]:
     """Distinct JSON keys present in ``raw_source_row`` for one import job (for admin column picker)."""
     relation = shipment_evidence_read_relation()
-    superseded_clause = (
-        "" if shipment_bitemporal_read_enabled() else " AND corpus_superseded_at IS NULL"
-    )
     sql = text(
         f"""
         SELECT DISTINCT jsonb_object_keys(raw_source_row) AS k
         FROM {relation}
-        WHERE import_job_id = :import_job_id{superseded_clause}
+        WHERE import_job_id = :import_job_id
         ORDER BY 1
         """
     )

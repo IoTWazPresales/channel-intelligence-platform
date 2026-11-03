@@ -17,6 +17,7 @@ from app.services.imports.shipment_evidence_line_identity import (
     stable_line_identity_key_from_mapping,
 )
 from app.services.imports.shipment_evidence_observations import append_observations_for_job_lines
+from app.services.imports.shipment_evidence_rows import EVIDENCE_LINES_WITH_PAYLOAD_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +85,12 @@ def remigrate_observation_line_identity_keys(db: Session, *, chunk_size: int = 5
         line = line_by_id.get(int(obs.evidence_line_id)) if obs.evidence_line_id else None
         values = {
             "line_state": obs.line_state,
-            "operating_unit": obs.operating_unit or (line.operating_unit if line else None),
-            "order_no": obs.order_no or (line.order_no if line else None),
-            "order_line": obs.order_line or (line.order_line if line else None),
-            "delivery_no": obs.delivery_no or (line.delivery_no if line else None),
-            "invoice_line": obs.invoice_line or (line.invoice_line if line else None),
-            "item_code": obs.item_code or (line.item_code if line else None),
+            "operating_unit": obs.operating_unit,
+            "order_no": obs.order_no,
+            "order_line": obs.order_line,
+            "delivery_no": obs.delivery_no,
+            "invoice_line": obs.invoice_line,
+            "item_code": obs.item_code,
             "purchase_order_id": obs.purchase_order_id
             if obs.purchase_order_id is not None
             else (line.purchase_order_id if line else None),
@@ -146,10 +147,10 @@ def count_shipped_corpus_groups_in_evidence(db: Session) -> int:
     return int(
         db.scalar(
             text(
-                """
+                f"""
                 SELECT count(*) FROM (
                   SELECT 1
-                  FROM shipment_evidence_line
+                  FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l
                   WHERE lower(line_state) = 'shipped'
                     AND trim(coalesce(delivery_no, '')) <> ''
                     AND trim(coalesce(invoice_line, '')) <> ''

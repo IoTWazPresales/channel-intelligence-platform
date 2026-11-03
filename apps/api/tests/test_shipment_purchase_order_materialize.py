@@ -15,6 +15,7 @@ from app.services.commercial_planner.unassigned_distributor import UNASSIGNED_DI
 from app.services.imports.shipment_field_mapping import extract_customer_po_from_raw_row
 from app.services.imports.shipment_purchase_order_materialize import materialize_purchase_orders_for_shipment_job
 from app.models.dimensions import DimDistributor
+from tests.shipment_evidence_fixtures import add_evidence_line
 
 
 def _require_po_schema(db) -> None:
@@ -70,7 +71,8 @@ def test_materialize_purchase_order_from_customer_po():
             db.flush()
             job_id = int(job.id)
 
-            line = ShipmentEvidenceLine(
+            line = add_evidence_line(
+                db,
                 import_job_id=job_id,
                 source_row_number=1,
                 report_type="shipped",
@@ -83,7 +85,6 @@ def test_materialize_purchase_order_from_customer_po():
                 product_resolution_status="no_identifier",
                 distributor_resolution_status="resolved",
             )
-            db.add(line)
             db.commit()
             line_id = int(line.id)
 
@@ -139,18 +140,17 @@ def test_no_customer_po_does_not_create_purchase_order():
             db.add(job)
             db.flush()
             job_id = int(job.id)
-            db.add(
-                ShipmentEvidenceLine(
-                    import_job_id=job_id,
-                    source_row_number=1,
-                    report_type="shipped",
-                    line_state="shipped",
-                    source_key=f"test-po-none-{token}",
-                    raw_source_row={"Item": "Y"},
-                    customer_po=None,
-                    product_resolution_status="no_identifier",
-                    distributor_resolution_status="unresolved",
-                )
+            add_evidence_line(
+                db,
+                import_job_id=job_id,
+                source_row_number=1,
+                report_type="shipped",
+                line_state="shipped",
+                source_key=f"test-po-none-{token}",
+                raw_source_row={"Item": "Y"},
+                customer_po=None,
+                product_resolution_status="no_identifier",
+                distributor_resolution_status="unresolved",
             )
             db.commit()
             materialize_purchase_orders_for_shipment_job(db, job_id)
@@ -191,20 +191,19 @@ def test_materialize_defers_when_resolved_distributor_null():
             db.add(job)
             db.flush()
             job_id = int(job.id)
-            db.add(
-                ShipmentEvidenceLine(
-                    import_job_id=job_id,
-                    source_row_number=1,
-                    report_type="shipped",
-                    line_state="shipped",
-                    source_key=f"test-po-defer-{token}",
-                    raw_source_row={"Item": "Z"},
-                    customer_po="PO-DEFER-999",
-                    distributor_id=None,
-                    resolved_distributor_id=None,
-                    product_resolution_status="no_identifier",
-                    distributor_resolution_status="unresolved",
-                )
+            add_evidence_line(
+                db,
+                import_job_id=job_id,
+                source_row_number=1,
+                report_type="shipped",
+                line_state="shipped",
+                source_key=f"test-po-defer-{token}",
+                raw_source_row={"Item": "Z"},
+                customer_po="PO-DEFER-999",
+                distributor_id=None,
+                resolved_distributor_id=None,
+                product_resolution_status="no_identifier",
+                distributor_resolution_status="unresolved",
             )
             db.commit()
             materialize_purchase_orders_for_shipment_job(db, job_id)

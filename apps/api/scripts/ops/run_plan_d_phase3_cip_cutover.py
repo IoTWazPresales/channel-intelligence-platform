@@ -7,7 +7,6 @@ import sys
 
 from sqlalchemy import text
 
-from app.core.feature_flags import shipment_bitemporal_read_enabled
 from app.db.session_sync import SessionLocal
 from app.services.data_integrity_audit import format_summary_table, run_data_integrity_audit_sync
 from app.services.imports.shipment_plan_d_cutover import (
@@ -24,7 +23,6 @@ def main() -> int:
 
     with SessionLocal() as db:
         assert_database_is(db, "cip")
-        print(f"read_enabled: {shipment_bitemporal_read_enabled()}")
 
         supersede = soft_supersede_legacy_duplicate_evidence(db, dry_run=False)
         print("soft_supersede:", json.dumps(supersede, indent=2))

@@ -22,6 +22,7 @@ from app.models.iam import Tenant
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.shipment_evidence_source_keys import stable_source_key_for_row
+from tests.shipment_evidence_fixtures import add_evidence_line, row_of
 from app.services.imports.shipment_open_book import (
     OPEN_BOOK_NOTICE_HEADLINE,
     UNDATED_WRITE_KEY,
@@ -63,13 +64,10 @@ def world():
                  invoice=None, confirm=None) -> ShipmentEvidenceLine:
             nonlocal n
             n += 1
-            r = ShipmentEvidenceLine(import_job_id=int(j.id), source_sheet=sheet, source_row_number=n, report_type=rt, line_state=state,
+            return add_evidence_line(db, import_job_id=int(j.id), source_sheet=sheet, source_row_number=n, report_type=rt, line_state=state,
                                      source_key=key, raw_source_row={}, order_no=order, order_line=oline, item_code=item, quantity=qty,
                                      operating_unit=ou, delivery_no=delivery, invoice_line=invoice, ship_confirm_date=confirm,
                                      product_resolution_status="unresolved", distributor_resolution_status="unresolved")
-            db.add(r)
-            db.flush()
-            return r
 
         def fact(j, *, rt, state, key, order="SO", oline="1", item="IT", qty=1, ou=None, ev=None, delivery=None, confirm=None) -> FactInboundShipment:
             nonlocal n
@@ -144,7 +142,7 @@ def test_a_closed_shipped_state_fact_also_stays_closed(world):
     undated = job("ACZA Shipped Unshipped.xlsx", status="validated")
     ev = line(undated, rt=SHIPPED, state="shipped", key=f"s-{uuid.uuid4().hex}", order="SO-S", item="IT-S", qty=9, sheet="Shipped",
               delivery="D-S", invoice="1", confirm=date(2026, 8, 20))
-    key = _row_values_from_evidence(ev, tenant_id=tenant)["fact_upsert_key"]  # the key the writer will use for this line
+    key = _row_values_from_evidence(row_of(db, ev), tenant_id=tenant)["fact_upsert_key"]  # the key the writer will use for this line
     retired = fact(e, rt=SHIPPED, state="closed_superseded", key=key, order="SO-S", item="IT-S", qty=9, delivery="D-S", confirm=date(2026, 8, 20))
     result = write_shipment_facts_and_close_book(db, undated)
     assert result["fact_rows"] == 0 and result["already_closed_not_reopened"] == 1

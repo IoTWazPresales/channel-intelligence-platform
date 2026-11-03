@@ -40,7 +40,6 @@ from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
     shipment_evidence_read_model,
 )
-from app.core.feature_flags import shipment_bitemporal_read_enabled
 from app.services.commercial_planner.lineup_period_canonical import (
     active_lineup_case_filters,
     parse_period_filter_to_year_quarter,
@@ -141,7 +140,7 @@ def _is_shipped_delivery_evidence(line: Any) -> bool:
 
 
 def _load_shipped_evidence_for_audit(db: Session) -> list[Any]:
-    """Active shipped corpus rows: current-state view when Plan D read is on, else non-superseded lines."""
+    """Active shipped corpus rows from ``shipment_evidence_current`` (D4: the line payload is not a read source)."""
     EV = shipment_evidence_read_model()
     stmt = apply_active_evidence_filter(select(EV), EV)
     rows = list(db.execute(stmt).scalars().all())
@@ -636,9 +635,7 @@ def check_evidence_true_dupes(db: Session, *, sample_limit: int) -> CheckResult:
         meta={
             "domain_rule": "one shipped invoice line per corpus; within-job upsert only",
             "cross_job_duplicate_groups": cross_job,
-            "read_source": "shipment_evidence_current"
-            if shipment_bitemporal_read_enabled()
-            else "shipment_evidence_line_active",
+            "read_source": "shipment_evidence_current",
         },
     )
 
@@ -669,14 +666,9 @@ def collect_evidence_fact_parity(db: Session) -> list[dict[str, Any]]:
 
     findings: list[dict[str, Any]] = []
     for gkey, lines in group_evidence.items():
-        if shipment_bitemporal_read_enabled():
-            canonical_lines = lines
-            raw_sum = sum(float(ln.quantity or 0) for ln in lines)
-            canonical_sum = raw_sum
-        else:
-            canonical_lines = _latest_per_invoice_key(lines)
-            raw_sum = sum(float(ln.quantity or 0) for ln in lines)
-            canonical_sum = sum(float(ln.quantity or 0) for ln in canonical_lines)
+        canonical_lines = lines
+        raw_sum = sum(float(ln.quantity or 0) for ln in lines)
+        canonical_sum = raw_sum
         if canonical_sum <= QTY_EPS and raw_sum <= QTY_EPS:
             continue
 
@@ -743,9 +735,7 @@ def check_evidence_fact_parity(db: Session, *, sample_limit: int) -> CheckResult
         count=len(findings),
         samples=findings[:sample_limit],
         meta={
-            "parity_basis": "shipment_evidence_current_per_line_identity"
-            if shipment_bitemporal_read_enabled()
-            else "canonical_evidence_latest_job_per_invoice_line",
+            "parity_basis": "shipment_evidence_current_per_line_identity",
             "duplicate_qty_inflation_groups": inflation_groups,
         },
     )
@@ -865,14 +855,6 @@ def check_invoice_line_graduation_gap(db: Session, *, sample_limit: int) -> Chec
         group_current_by_lineage,
         load_unsuperseded_current_observations,
     )
-
-    if not shipment_bitemporal_read_enabled():
-        return CheckResult(
-            check="invoice_line_graduation_gap",
-            count=0,
-            samples=[],
-            meta={"skipped": "bitemporal read disabled"},
-        )
 
     gap_count, partial_count = count_ungraduated_invoice_lineage_gaps(db)
     verdicts = [v for v in discover_invoice_graduation_lineages(db) if v.outcome == "full"]

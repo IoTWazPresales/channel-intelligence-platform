@@ -82,14 +82,6 @@ def main() -> int:
         if not gate.passed:
             return 1
 
-        from app.core.feature_flags import (
-            shipment_bitemporal_dual_write_enabled,
-            shipment_bitemporal_read_enabled,
-        )
-
-        print("dual_write_enabled:", shipment_bitemporal_dual_write_enabled())
-        print("read_enabled:", shipment_bitemporal_read_enabled())
-
         can_read_view = db.scalar(text("SELECT count(*) FROM shipment_evidence_current"))
         print("shipment_evidence_current readable, rows:", int(can_read_view or 0))
 

@@ -28,6 +28,8 @@ class ShipmentEvidenceObservation(ShipmentWaterColumns, Base, TimestampMixin):
             postgresql_include=["product_id", "superseded_by_id"],
         ),
         Index("ix_shipment_ev_obs_valid_from", "valid_from"),
+        # A line's payload is its newest observation (20261103_0052).
+        Index("ix_shipment_ev_obs_evidence_line", "evidence_line_id", text("id DESC")),
         Index("ix_shipment_ev_obs_product_status", "product_resolution_status"),
         UniqueConstraint(
             "import_job_id",

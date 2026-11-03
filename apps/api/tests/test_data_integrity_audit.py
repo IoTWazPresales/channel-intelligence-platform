@@ -14,7 +14,6 @@ from app.models.dimensions import DimCustomer, DimProduct
 from app.models.facts import FactInboundShipment
 from app.models.ingestion import ImportJob, SourceDefinition
 from app.models.purchase_order import PurchaseOrder
-from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.data_integrity_audit import (
     _evidence_invoice_key,
     _link_still_derives_confidence,
@@ -238,25 +237,28 @@ def test_audit_seeded_violations_on_db():
             fact_ids.append(int(fact.id))
 
             # customer_mismatch link on po_a (c2 shipment vs c1 lineup)
-            # evidence: true dupe (5b) — same invoice line twice
-            for _ in range(2):
-                ev = ShipmentEvidenceLine(
+            # evidence: true dupe (5b) — same invoice line twice. Different operating units keep both
+            # rows current (one identity each); the audit key does not include the operating unit.
+            from tests.shipment_evidence_fixtures import add_evidence_line
+
+            for i, unit in enumerate(("OU-A", "OU-B")):
+                ev = add_evidence_line(
+                    db,
                     import_job_id=job_id,
                     source_row_number=1,
                     report_type="acza_workbook_shipped",
                     line_state="shipped",
-                    source_key=f"audit-ev-dup-{tok}-{_}",
+                    source_key=f"audit-ev-dup-{tok}-{i}",
                     raw_source_row={},
                     product_resolution_status="ok",
                     distributor_resolution_status="ok",
+                    operating_unit=unit,
                     delivery_no=f"AUD-ED-{tok}",
                     item_code=f"AUD-EI-{tok}",
                     purchase_order_id=int(po_b.id),
                     invoice_line="1",
                     quantity=5,
                 )
-                db.add(ev)
-                db.flush()
                 evidence_ids.append(int(ev.id))
 
             # evidence_fact_parity (6): multi-line group sums 30; fact holds 10 only
@@ -278,7 +280,8 @@ def test_audit_seeded_violations_on_db():
                 )
             )
             for inv in ("1", "2"):
-                ev = ShipmentEvidenceLine(
+                ev = add_evidence_line(
+                    db,
                     import_job_id=job_id,
                     source_row_number=2,
                     report_type="acza_workbook_shipped",
@@ -293,8 +296,6 @@ def test_audit_seeded_violations_on_db():
                     invoice_line=inv,
                     quantity=15,
                 )
-                db.add(ev)
-                db.flush()
                 evidence_ids.append(int(ev.id))
 
             db.commit()
@@ -319,31 +320,25 @@ def test_audit_seeded_violations_on_db():
             assert by_name["customer_mismatch"].count >= 1
             assert mismatch
 
-            from unittest.mock import patch
-
-            _read_off = "app.services.imports.shipment_evidence_read.shipment_bitemporal_read_enabled"
-            with patch(_read_off, return_value=False):
-                true_dupes = [
-                    s for s in collect_evidence_true_dupes(db) if s.get("delivery_no") == f"AUD-ED-{tok}"
-                ]
+            true_dupes = [
+                s for s in collect_evidence_true_dupes(db) if s.get("delivery_no") == f"AUD-ED-{tok}"
+            ]
             assert true_dupes
             assert true_dupes[0].get("violation") == "corpus_duplicate_shipped_invoice_line"
             assert true_dupes[0].get("duplicate_row_count") == 2
 
-            with patch(_read_off, return_value=False):
-                parity = [
-                    s
-                    for s in collect_evidence_fact_parity(db)
-                    if s.get("fact_upsert_key") == f"ship:AUD-PAR-{tok}|AUD-PARI-{tok}|{po_ids[1]}"
-                ]
+            parity = [
+                s
+                for s in collect_evidence_fact_parity(db)
+                if s.get("fact_upsert_key") == f"ship:AUD-PAR-{tok}|AUD-PARI-{tok}|{po_ids[1]}"
+            ]
             assert parity and parity[0].get("issue") == "single_line_undercount"
 
-            with patch(_read_off, return_value=False):
-                split_hits = [
-                    s
-                    for s in collect_evidence_true_dupes(db)
-                    if s.get("delivery_no") == f"AUD-PAR-{tok}"
-                ]
+            split_hits = [
+                s
+                for s in collect_evidence_true_dupes(db)
+                if s.get("delivery_no") == f"AUD-PAR-{tok}"
+            ]
             assert not split_hits
 
             # fact_key constraint meta always present
@@ -351,6 +346,11 @@ def test_audit_seeded_violations_on_db():
 
     finally:
         with SessionLocal() as db:
+            if job_id is not None:
+                db.execute(
+                    text("DELETE FROM shipment_evidence_observation WHERE import_job_id = :jid"),
+                    {"jid": job_id},
+                )
             db.execute(
                 text(
                     "DELETE FROM shipment_evidence_line WHERE source_key LIKE :pat OR delivery_no LIKE :dtok"

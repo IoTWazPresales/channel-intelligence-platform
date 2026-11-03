@@ -91,17 +91,15 @@ def test_match_ambiguous_sales_model(mock_idx: MagicMock) -> None:
 @patch("app.services.imports.product_master_gap_resolve.get_product_resolution_index")
 def test_preview_counts_and_dsi_facts_flag(mock_idx: MagicMock) -> None:
     mock_idx.return_value = _idx(sku_to_id={"gap-sku": 10})
-    ship = SimpleNamespace(
-        id=1,
+    from tests.shipment_evidence_fixtures import make_row
+
+    ship = make_row(
         import_job_id=100,
         product_resolution_token="GAP-SKU",
-        item_code=None,
-        ean_code=None,
-        upc_code=None,
-        sales_model_name=None,
-        customer_item=None,
-        mpor_item_no=None,
+        product_resolution_status="no_match",
+        product_id=None,
     )
+    ship.line.id = 1
     cand = SimpleNamespace(
         normalized_key="GAP-SKU",
         import_job_id=200,
@@ -112,8 +110,12 @@ def test_preview_counts_and_dsi_facts_flag(mock_idx: MagicMock) -> None:
         import_job_id=300,
         product_id=None,
     )
-    session = _session_returning([ship], [cand], [claim], [])
-    out = preview_gap_resolve(session, ["GAP-SKU"])
+    session = _session_returning([cand], [claim], [])
+    with patch(
+        "app.services.imports.product_master_gap_resolve._unresolved_shipment_rows",
+        return_value=[ship],
+    ):
+        out = preview_gap_resolve(session, ["GAP-SKU"])
     item = out["items"][0]
     assert item["matched"] is True
     assert item["counts"]["shipment"] == 1
@@ -137,17 +139,15 @@ def test_apply_requires_confirm(mock_idx: MagicMock, _inv: MagicMock) -> None:
 @patch("app.services.imports.product_master_gap_resolve.get_product_resolution_index")
 def test_apply_repoints_and_skips_dsi_facts(mock_idx: MagicMock, mock_inv: MagicMock) -> None:
     mock_idx.return_value = _idx(sku_to_id={"gap-sku": 10})
-    ship = SimpleNamespace(
-        id=11,
+    from tests.shipment_evidence_fixtures import make_row
+
+    ship = make_row(
         import_job_id=100,
         product_resolution_token="GAP-SKU",
-        item_code=None,
-        ean_code=None,
-        upc_code=None,
-        sales_model_name=None,
-        customer_item=None,
-        mpor_item_no=None,
+        product_resolution_status="no_match",
+        product_id=None,
     )
+    ship.line.id = 11
     cand = SimpleNamespace(
         id=5,
         normalized_key="GAP-SKU",
@@ -170,23 +170,25 @@ def test_apply_repoints_and_skips_dsi_facts(mock_idx: MagicMock, mock_inv: Magic
 
     # preview: ship, dsi, claim, cst; then repoint ship / dsi(+staging) / cpor / cst
     session = _session_returning(
-        [ship],
         [cand],
         [claim],
         [],
-        [ship],
         [cand],
         [staging],
         [claim],
         [],
     )
-    out = apply_gap_resolve(
-        session,
-        tokens=["GAP-SKU"],
-        confirm=True,
-        write_alias=True,
-        actor="test",
-    )
+    with patch(
+        "app.services.imports.product_master_gap_resolve._unresolved_shipment_rows",
+        return_value=[ship],
+    ):
+        out = apply_gap_resolve(
+            session,
+            tokens=["GAP-SKU"],
+            confirm=True,
+            write_alias=True,
+            actor="test",
+        )
     assert out["ok"] is True
     assert out["summary"]["repointed"] == 1
     item = out["items"][0]

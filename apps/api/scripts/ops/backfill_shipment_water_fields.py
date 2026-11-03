@@ -8,7 +8,7 @@ headers are the ones the operator confirmed) plus the mapping layer's header ali
 (``services/imports/shipment_voyage.py``). It fills a column only where it is NULL: nothing already set is
 changed, and a second run plans nothing.
 
-Covers ``shipment_evidence_line``, ``shipment_evidence_observation`` and ``fact_inbound_shipment``. An
+Covers ``shipment_evidence_observation`` and ``fact_inbound_shipment`` (D4: not the evidence line). An
 observation's hash does not cover these columns (``_OBSERVATION_HASH_COLS``), so no observation is re-keyed.
 
   python scripts/ops/backfill_shipment_water_fields.py                      dry run: read-only, prints the plan
@@ -35,7 +35,8 @@ from sqlalchemy import text  # noqa: E402
 
 from app.models.shipment_water import WATER_DATE_FIELDS, WATER_FIELDS  # noqa: E402
 
-TABLES = ("shipment_evidence_line", "shipment_evidence_observation", "fact_inbound_shipment")
+# D4 (20261103_0052): the evidence line no longer carries the payload, so it is not a target; the observation is.
+TABLES = ("shipment_evidence_observation", "fact_inbound_shipment")
 BATCH = 2000
 SQL_TYPE = {name: ("date" if name in WATER_DATE_FIELDS else "text") for name in WATER_FIELDS}
 

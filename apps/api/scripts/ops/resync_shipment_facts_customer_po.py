@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import argparse
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 
 from app.db.session_sync import SessionLocal
-from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.cip_db_identity import is_cip_application_database
+from app.services.imports.shipment_evidence_rows import EVIDENCE_LINES_WITH_PAYLOAD_SQL
 from app.services.imports.shipment_inbound_facts import upsert_inbound_shipment_facts_for_job
 
 
@@ -24,10 +24,10 @@ def run(*, dry_run: bool) -> dict[str, int]:
         job_ids = [
             int(x)
             for x in db.scalars(
-                select(ShipmentEvidenceLine.import_job_id)
-                .where(ShipmentEvidenceLine.customer_po.is_not(None))
-                .distinct()
-                .order_by(ShipmentEvidenceLine.import_job_id)
+                text(
+                    f"SELECT DISTINCT l.import_job_id FROM {EVIDENCE_LINES_WITH_PAYLOAD_SQL} l "
+                    "WHERE l.customer_po IS NOT NULL ORDER BY 1"
+                )
             ).all()
         ]
         stats["jobs"] = len(job_ids)

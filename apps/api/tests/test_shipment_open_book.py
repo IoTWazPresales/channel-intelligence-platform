@@ -19,6 +19,7 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 from app.services.imports.shipment_change_events import derive_change_events
 from app.services.imports.shipment_evidence_line_identity import stable_line_identity_key_from_fields
+from app.services.imports.shipment_evidence_rows import load_evidence_rows
 from app.services.imports.shipment_invoice_graduation import (
     is_blank_invoice_shipped_obs,
     process_invoice_graduation_after_job,
@@ -31,6 +32,7 @@ from app.services.imports.shipment_open_book import (
     write_shipment_facts_and_close_book,
 )
 from app.services.imports.shipment_report_date import report_date_from_file_name
+from tests.shipment_evidence_fixtures import add_evidence_line
 
 UNSHIP = "acza_workbook_unship"
 SHIPPED = "acza_workbook_shipped"
@@ -150,8 +152,10 @@ def _line(
     ship_confirm_date: date | None = None,
     est_pod_date: date | None = None,
     delivery_no: str | None = None,
+    customer_po: str | None = None,
 ) -> ShipmentEvidenceLine:
-    row = ShipmentEvidenceLine(
+    return add_evidence_line(
+        db,
         import_job_id=int(job.id),
         source_sheet=sheet,
         source_row_number=1,
@@ -162,6 +166,7 @@ def _line(
         order_no=order_no,
         order_line="1",
         delivery_no=delivery_no,
+        customer_po=customer_po,
         item_code=item_code,
         quantity=quantity,
         ship_confirm_date=ship_confirm_date,
@@ -169,9 +174,6 @@ def _line(
         product_resolution_status="unresolved",
         distributor_resolution_status="unresolved",
     )
-    db.add(row)
-    db.flush()
-    return row
 
 
 def _fact(
@@ -852,11 +854,10 @@ def test_bom_line_loads_open(db, monkeypatch):
             ]
         },
     )
-    lines = db.scalars(
-        select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == int(job.id))
-    ).all()
+    lines = load_evidence_rows(db, job_id=int(job.id))
     assert len(lines) == 1
     line = lines[0]
+    assert line.line.report_type is None and line.line.item_code is None, "D4: the line carries no payload"
     assert line.report_type == BOM
     assert line.line_state == "open_order"
     assert line.order_no == "RET-100"
@@ -931,9 +932,7 @@ def test_bom_line_also_on_unship_loads_once(db, monkeypatch):
             ],
         },
     )
-    lines = db.scalars(
-        select(ShipmentEvidenceLine).where(ShipmentEvidenceLine.import_job_id == int(job.id))
-    ).all()
+    lines = load_evidence_rows(db, job_id=int(job.id))
     assert len(lines) == 2
     by_order = {line.order_no: line for line in lines}
     assert set(by_order) == {"SO-1", "RET-ONLY"}
@@ -979,8 +978,8 @@ def test_bom_line_moving_to_unship_closes_as_moved(db):
         item_code="ITEM-1",
         quantity=3,
         sheet="Unship",
+        customer_po="PO-1",
     )
-    unship.customer_po = "PO-1"
     db.flush()
     closed = close_open_book_for_job(db, newer)
     db.refresh(moved)

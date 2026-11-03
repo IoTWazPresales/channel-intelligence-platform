@@ -283,11 +283,13 @@ def _shipment_line_stub(**overrides):
 def test_shipment_ai_product_auto_resolved_in_post_resolve() -> None:
     from app.services.imports.shipment_evidence_import import _resolve_unresolved_shipment_lines_for_job
 
+    from app.services.imports.shipment_evidence_rows import PAYLOAD_COLUMNS, EvidenceRow
+
     idx = SimpleNamespace(sku_to_id={"A": 1})
     line = _shipment_line_stub()
+    row = EvidenceRow(line, {col: getattr(line, col, None) for col in PAYLOAD_COLUMNS})
     job = SimpleNamespace(id=1, source_id=1)
     db = MagicMock()
-    db.scalars.return_value.all.return_value = [line]
 
     def fake_resolve_product(*_a, **_k):
         return None, "no_match", "UNKNOWN", "unresolved"
@@ -302,7 +304,15 @@ def test_shipment_ai_product_auto_resolved_in_post_resolve() -> None:
                 "app.services.imports.ai_resolver_wiring.suggest_token_resolution",
                 return_value=_suggestion(),
             ):
-                _resolve_unresolved_shipment_lines_for_job(db, job, idx, 1)
+                with patch(
+                    "app.services.imports.shipment_evidence_import.load_evidence_rows",
+                    return_value=[row],
+                ):
+                    with patch(
+                        "app.services.imports.shipment_resolved_entities.load_evidence_rows",
+                        return_value=[],
+                    ):
+                        _resolve_unresolved_shipment_lines_for_job(db, job, idx, 1)
 
     assert line.product_id == 42
     assert line.product_resolution_status == "resolved_unique"
@@ -311,11 +321,13 @@ def test_shipment_ai_product_auto_resolved_in_post_resolve() -> None:
 def test_shipment_ai_failure_graceful() -> None:
     from app.services.imports.shipment_evidence_import import _resolve_unresolved_shipment_lines_for_job
 
+    from app.services.imports.shipment_evidence_rows import PAYLOAD_COLUMNS, EvidenceRow
+
     idx = SimpleNamespace(sku_to_id={})
     line = _shipment_line_stub(item_code="X", distributor_id=1)
+    row = EvidenceRow(line, {col: getattr(line, col, None) for col in PAYLOAD_COLUMNS})
     job = SimpleNamespace(id=1, source_id=1)
     db = MagicMock()
-    db.scalars.return_value.all.return_value = [line]
 
     with patch.dict("os.environ", {"AI_ASSIST_ENABLED": "true"}, clear=False):
         get_settings.cache_clear()
@@ -324,7 +336,15 @@ def test_shipment_ai_failure_graceful() -> None:
             return_value=(None, "no_match", "X", None),
         ):
             with patch("app.services.imports.ai_resolver_wiring.suggest_token_resolution", return_value=None):
-                _resolve_unresolved_shipment_lines_for_job(db, job, idx, 1)
+                with patch(
+                    "app.services.imports.shipment_evidence_import.load_evidence_rows",
+                    return_value=[row],
+                ):
+                    with patch(
+                        "app.services.imports.shipment_resolved_entities.load_evidence_rows",
+                        return_value=[],
+                    ):
+                        _resolve_unresolved_shipment_lines_for_job(db, job, idx, 1)
 
     assert line.product_id is None
 

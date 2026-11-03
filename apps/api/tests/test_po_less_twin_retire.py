@@ -145,8 +145,6 @@ def test_pointer_follows_a_replaced_twin(world):
 
 def test_evidence_sum_rule_retires_a_partial_old_fact_only_when_asked_and_only_when_the_twin_adds_up(world):
     """An old job lost rows to the loader, so its fact is a part of what the twin holds: the twin equals its job's evidence lines."""
-    from app.models.shipment_evidence import ShipmentEvidenceLine
-
     db, (old_job, new_job), fact, tenant = world
     old_ok = fact(job=old_job, qty=36, delivery="DE", item="IE")
     twin_ok = fact(job=new_job, qty=108, delivery="DE", item="IE", with_po=True)
@@ -156,12 +154,14 @@ def test_evidence_sum_rule_retires_a_partial_old_fact_only_when_asked_and_only_w
     for twin, delivery, item, quantities in ((twin_ok, "DE", "IE", (36, 36, 36)), (twin_bad, "DF", "IF", (36, 36))):  # the second adds up to 72, not 108
         for q in quantities:
             n += 1
-            db.add(ShipmentEvidenceLine(
+            from tests.shipment_evidence_fixtures import add_evidence_line
+
+            add_evidence_line(
+                db,
                 import_job_id=int(new_job.id), source_sheet="Shipped", source_row_number=n, report_type="acza_workbook_shipped", line_state="shipped",
                 source_key=f"ev-{twin.id}-{n}", raw_source_row={}, delivery_no=delivery, item_code=item, quantity=q, purchase_order_id=twin.purchase_order_id,
                 product_resolution_status="unresolved", distributor_resolution_status="unresolved",
-            ))
-    db.flush()
+            )
     plan = {t.old_id: t for t in _mine(plan_po_less_shipped_twins(db), tenant, db)}
     assert plan[old_ok.id].qty_match is False and plan[old_ok.id].evidence_match is True
     assert plan[old_bad.id].evidence_match is False
@@ -177,7 +177,6 @@ def test_orphaned_open_rows_of_a_re_read_job_are_retired_and_the_needs_a_look_ru
     """A re-read job leaves its old-key open facts behind (no evidence line, same job): they were counted beside the new ones."""
     from datetime import date
 
-    from app.models.shipment_evidence import ShipmentEvidenceLine
     from app.services.imports.shipment_shipped_fact_identity_twin_merge import plan_orphaned_open_rows, retire_orphaned_open_rows
     from app.services.shipping_commercial_kpis import predicate_needs_look
 
@@ -189,13 +188,14 @@ def test_orphaned_open_rows_of_a_re_read_job_are_retired_and_the_needs_a_look_ru
         n += 1
         line_id = None
         if with_line:
-            line = ShipmentEvidenceLine(
+            from tests.shipment_evidence_fixtures import add_evidence_line
+
+            line = add_evidence_line(
+                db,
                 import_job_id=int(new_job.id), source_sheet="Shipped", source_row_number=n, report_type="acza_workbook_shipped", line_state="open_order",
                 source_key=f"ol-{n}", raw_source_row={}, order_no=order, order_line="1.1", item_code="I1", quantity=qty,
                 product_resolution_status="unresolved", distributor_resolution_status="unresolved",
             )
-            db.add(line)
-            db.flush()
             line_id = int(line.id)
         f = FactInboundShipment(
             tenant_id=tenant, import_job_id=int(new_job.id), source_key=f"of-{n}", fact_upsert_key=f"of-key-{n}", shipment_evidence_line_id=line_id,

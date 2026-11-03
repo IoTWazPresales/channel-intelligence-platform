@@ -3,7 +3,7 @@
 Default is dry-run. Pass --apply to write (requires current_database() = cip).
 
 Strategy: for shipped facts with NULL pod_date, take the latest non-null pod_date
-from active shipment_evidence_line rows that share the same fact_upsert_key
+from active shipment evidence (line state + observation payload) that share the same fact_upsert_key
 (computed via fact_upsert_key_for_evidence_values). Also set status='received'.
 """
 
@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 from app.models.facts import FactInboundShipment  # noqa: E402
 from app.models.shipment_evidence import ShipmentEvidenceLine  # noqa: E402
+from app.services.imports.shipment_evidence_rows import load_evidence_rows  # noqa: E402
 from app.services.imports.shipment_inbound_facts import (  # noqa: E402
     _row_values_from_evidence,
 )
@@ -38,12 +39,11 @@ def _database_url() -> str:
 
 
 def _best_pod_by_fact_key(db: Session) -> dict[str, date]:
-    lines = db.scalars(
-        select(ShipmentEvidenceLine).where(
-            ShipmentEvidenceLine.pod_date.is_not(None),
-            ShipmentEvidenceLine.corpus_superseded_at.is_(None),
-        )
-    ).all()
+    lines = [
+        r
+        for r in load_evidence_rows(db, where=(ShipmentEvidenceLine.corpus_superseded_at.is_(None),))
+        if r.has_payload and r.pod_date is not None
+    ]
     best: dict[str, date] = {}
     for line in lines:
         vals = _row_values_from_evidence(line)

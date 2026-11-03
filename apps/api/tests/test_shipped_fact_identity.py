@@ -309,10 +309,11 @@ def test_upsert_splits_shipped_and_open_order_paths(monkeypatch) -> None:
         },
     )
 
-    line_ship = MagicMock(shipped=True)
-    line_open = MagicMock(shipped=False)
+    line_ship = MagicMock(shipped=True, has_payload=True, id=1)
+    line_open = MagicMock(shipped=False, has_payload=True, id=2)
     db = MagicMock()
-    db.scalars.return_value.all.return_value = [line_ship, line_open]
+    db.get.return_value = MagicMock(tenant_id="default", id=1)
+    monkeypatch.setattr(facts_mod, "load_evidence_rows", lambda db, **kwargs: [line_ship, line_open])
     facts_mod.upsert_inbound_shipment_facts_for_job(db, 1)
     assert calls == ["shipped:1", "open:1"]
 

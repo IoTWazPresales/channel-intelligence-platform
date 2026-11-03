@@ -28,6 +28,7 @@ from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 from app.services.imports import shipment_inbound_facts as facts_mod
+from tests.shipment_evidence_fixtures import add_evidence_line
 
 API_DIR = Path(__file__).resolve().parents[1]
 SHIPPED = "acza_workbook_shipped"
@@ -71,16 +72,14 @@ def world():
 
         def evidence(j: ImportJob, *, qty: float, delivery: str) -> ShipmentEvidenceLine:
             counter["n"] += 1
-            r = ShipmentEvidenceLine(
+            return add_evidence_line(
+                db,
                 import_job_id=int(j.id), source_sheet="Shipped", source_row_number=counter["n"], report_type=SHIPPED,
                 line_state="shipped", source_key=f"m5-{tag}-{counter['n']}-{uuid.uuid4().hex[:6]}", raw_source_row={},
                 order_no="SO-M5", order_line="1", item_code="IT-M5", quantity=qty, operating_unit="OU-M5",
                 delivery_no=delivery, invoice_line="1", ship_confirm_date=date(2026, 10, 1),
                 product_resolution_status="unresolved", distributor_resolution_status="unresolved",
             )
-            db.add(r)
-            db.flush()
-            return r
 
         def observation(j: ImportJob, line, *, identity: str, eta: date, when: datetime) -> ShipmentEvidenceObservation:
             counter["n"] += 1

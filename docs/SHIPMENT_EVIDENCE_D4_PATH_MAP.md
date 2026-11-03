@@ -80,6 +80,7 @@ open-book close are not touched. Only the source of the payload fed to `_row_val
 3. **Lines without an observation.** The apply and the steward readers no longer fall back to the line's own payload. The clone
    script counts these lines before anything else (they should be 0).
 4. **Old rows keep their old payload.** The loader stops writing the columns; it does not clear them. D5 drops them.
+5. **Same-hash refresh.** `customer_po`, `raw_source_row`, `purchase_order_id`, `evidence_line_id` and the voyage fields are stored on the observation but are not part of `source_row_hash` (so a re-validate of rows already on cip does not mint a second observation). The observation insert updates those columns in place when the hash matches. A change to a hashed column still appends.
 
 ## 6. Migration
 
