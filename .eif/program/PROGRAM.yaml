@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2880
-  log_sha256: 70ba00f9e747a57a3ac8cfb292708000a66ba8fae8a1a45559702e3e4613ea68
+  snapshot_revision: 2908
+  log_sha256: 90a19d0cb6df4caaf9d544c067cd27ba02721f22c90803ca20c02ece49c092ec
   acceptance_policy:
     milestone: operator
     root: operator
@@ -12060,9 +12060,9 @@ nodes:
     title: 'CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136)'
     class: feature
     origin: operator
-    status: blocked
+    status: ready
     stage: discovery
-    revision: 7
+    revision: 8
     lease: null
     depends_on:
     - N-0065
@@ -12138,14 +12138,7 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0020
-      type: decision
-      ref: D-0141
-      opened: '2026-11-03T09:46:32Z'
-      note: First screen and whether My accounts starts on, per job, including an empty assignment. Blocks the filter and
-        the starter. The assignment table does not need this answer. The engine blocks the whole node; Warren says if the
-        assignment unit may start while this is open.
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: 'Scope extended on 2 Nov 2026 (decision D-0133 priority order item 2; D-0138 My accounts default, no database
@@ -13941,9 +13934,9 @@ nodes:
     title: Store and DC replenishment
     class: inception
     origin: operator
-    status: blocked
+    status: ready
     stage: null
-    revision: 3
+    revision: 5
     lease: null
     depends_on:
     - N-0110
@@ -13978,19 +13971,7 @@ nodes:
     quality: {}
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0021
-      type: decision
-      ref: D-0142
-      opened: '2026-11-03T09:47:03Z'
-      note: Planning numbers for a need and for slow or unsold stock. Blocks those units. Site level, confirmation, the read
-        model, the serves-account link, and the lead-time distribution do not need this. The engine blocks the whole node.
-    - id: BL-0022
-      type: decision
-      ref: D-0143
-      opened: '2026-11-03T09:47:33Z'
-      note: Store map when a site has no coordinates. Blocks the map unit. Site level and the read model do not need this.
-        The engine blocks the whole node while any blocker is open.
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: 'Inception chartered 2 Nov 2026 (D-0133 item 4; D-0134 to D-0137 and D-0139 accepted). Evidence EV-0204: .eif/audit/STORE_DC_CENSUS_20261030/REPORT.md.
@@ -14325,7 +14306,7 @@ decisions:
       cip (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load
       only the years D-h needs; (c) do not load. Blocks D-h depth.'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0021:
     id: D-0021
@@ -14333,7 +14314,7 @@ decisions:
     statement: Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked
       by Warren's customer/distributor data drive, not by code.
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0022:
     id: D-0022
@@ -14364,7 +14345,7 @@ decisions:
     statement: Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided
       (D-e).
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0026:
     id: D-0026
@@ -14375,7 +14356,7 @@ decisions:
       to show, >=8 to feed B2)? (4) When is a quarter closed for scoring (agent proposes quarter end + 1Q or no pipeline)?
       (5) Do late shipments count against the plan''s quarter or the ship quarter? Evidence: .eif/audit/PROGRAMME_20260924/dh/RECOMMENDATION.md'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0027:
     id: D-0027
@@ -14411,7 +14392,7 @@ decisions:
       can propose, approve, settle, export; keep, limit approve/settle to admin, or new roles later? Q4 promo-plan recompute
       (saves nothing) - default planner+admin; allow viewers?'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0030:
     id: D-0030
@@ -14506,7 +14487,7 @@ decisions:
       from the committed files (evidence-based); inverted count shows 2,795 -> 2,887 because 92 hidden 1970 rows become visibly
       inverted.'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0038:
     id: D-0038
@@ -14519,7 +14500,7 @@ decisions:
       a customer x SKU MAC master exists, is line cost_basis the right comparand? Also a finding: the D-062 ''MAC check''
       existed only in docs, not code; N-0049 added it read-only on the cost-suggest response.'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0039:
     id: D-0039
@@ -14549,7 +14530,7 @@ decisions:
     statement: 'Still undecided, not changed: PF Qty versus Total Qty (BACKLOG-105), and BU resolver thresholds 0.25 and 0.05
       (BACKLOG-055). Monthly phasing without month columns is closed by the accepted month-column rule.'
     origin: operator
-    status: proposed
+    status: accepted
     supersedes: null
   D-0042:
     id: D-0042
@@ -14664,7 +14645,7 @@ decisions:
       flagged 2026-07-08); lineup and CPOR margin currently do not share one definition. Reversibility: high (a read model).
       Resolving step: Warren names the headline cost and whether the other two are shown.'
     origin: gov-001
-    status: proposed
+    status: accepted
     supersedes: null
   D-0053:
     id: D-0053
@@ -14846,7 +14827,7 @@ decisions:
       only (no other D-0065 reader totals amount). Reversibility: high, read-side only, no fact rewrite. Resolving step: Warren
       picks (a)/(b)/(c); (b) is one CASE in shipment_strict_pair.twin_remainder plus the KPI amount sum.'
     origin: gov-001
-    status: proposed
+    status: accepted
     supersedes: null
   D-0068:
     id: D-0068
@@ -15337,7 +15318,7 @@ decisions:
     statement: 'N-0115 proposed for Warren: Day grain: allow day only on models dated by day (DSI, shipments, returns, CPOR)
       and only on the v2 endpoint, v1 keeps refusing day; alternative keep week as the lowest grain everywhere.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0117:
     id: D-0117
@@ -15345,7 +15326,7 @@ decisions:
     statement: 'N-0115 proposed for Warren: DSI sales value = units x unit price ex VAT on priced rows only, with priced-units
       coverage, currency not recorded, never SUM(revenue) (22,546 of 58,128 rows have no price; currency NULL on all rows).'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0118:
     id: D-0118
@@ -15353,7 +15334,7 @@ decisions:
     statement: 'N-0115 proposed for Warren: CST sales value converted to the tenant sales-value VAT setting per row vat_basis
       exactly as the sell-through overview does; no listing-price estimate for unpriced units.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0119:
     id: D-0119
@@ -15362,14 +15343,14 @@ decisions:
       in each bucket, no carry-forward, shown with pairs reporting; Channel Ops derived stock and weeks of cover stay governed
       and keep refusing period.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0120:
     id: D-0120
     scope: N-0115
     statement: 'N-0115 proposed for Warren: Shipments period date = ship confirm date; alternative POD date (landed).'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0121:
     id: D-0121
@@ -15377,7 +15358,7 @@ decisions:
     statement: 'N-0114 proposed for Warren: chart numbers keep the existing convention, decimal point and a space for thousands
       (R 1.2 M, US$ 1.2 M), not a decimal comma; USD is shown as US$ on charts, tiles and table headers (text only).'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0122:
     id: D-0122
@@ -15386,7 +15367,7 @@ decisions:
       with a Top 10 of 37 caption; pie shares are of the full total; series charts keep the 7-series colour cap with Other.
       Alternatives: keep the Other fold when top N is not All, or offer Other as a toggle.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0123:
     id: D-0123
@@ -15396,7 +15377,7 @@ decisions:
       USD (ttl_support_usd, the compute currency) with ZAR shown beside it. Alternatives: status column instead of workflow_status;
       estimate value instead of support.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0124:
     id: D-0124
@@ -15405,7 +15386,7 @@ decisions:
       sell-through code definitions if they exist (per-customer replenishment weeks of cover setting); if not, the widget
       shows reported on-hand beside per-week sell-through and no derived cover number.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0125:
     id: D-0125
@@ -15414,7 +15395,7 @@ decisions:
       (query + display; NULL = v1 path), dashboard.filters_json and template_key; alternatives query_v2 + display_v2 or a
       version int.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0126:
     id: D-0126
@@ -15422,7 +15403,7 @@ decisions:
     statement: 'N-0116 proposed for Warren: Migration 0048 and the definition script run on the clone (rolled back) and cip_test
       only; applying them to cip waits for Warren''s go (dual path: not migrating is safe).'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0127:
     id: D-0127
@@ -15430,7 +15411,7 @@ decisions:
     statement: 'N-0116 proposed for Warren: Starter B is titled Sell-through & stock across customers (no stock-cover figure
       exists yet); the mandate''s title needs decision 5 first.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0128:
     id: D-0128
@@ -15438,7 +15419,7 @@ decisions:
     statement: 'N-0116 proposed for Warren: Business unit in the filter bar = product line (bu), what v1 widgets use; dim_product.business_unit
       stays an attribute.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0129:
     id: D-0129
@@ -15446,7 +15427,7 @@ decisions:
     statement: 'N-0116 proposed for Warren: Compare previous year = both dates minus one calendar year; alternative 52 weeks
       (keeps Monday weeks aligned).'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0130:
     id: D-0130
@@ -15455,7 +15436,7 @@ decisions:
       are rendered on design-lab fixtures shaped like v2 responses; alternative grant the app role on a cip clone and run
       an API on it.'
     origin: eif
-    status: proposed
+    status: accepted
     supersedes: null
   D-0131:
     id: D-0131
