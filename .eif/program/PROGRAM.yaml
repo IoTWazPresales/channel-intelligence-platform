@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2915
-  log_sha256: eeb62f10145dae5e1764fb1b17b9789a4fb60eea5c99eeced03647992a3742f0
+  snapshot_revision: 2921
+  log_sha256: 513f41089ab62c371e7faa7dd8ddfbb2475f239ee4911fe7efafc21ba3c8d745
   acceptance_policy:
     milestone: operator
     root: operator
@@ -7615,9 +7615,9 @@ nodes:
     title: 'Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158)'
     class: feature
     origin: operator
-    status: blocked
+    status: deferred
     stage: null
-    revision: 1
+    revision: 2
     lease: null
     depends_on:
     - N-0052
@@ -7672,7 +7672,9 @@ nodes:
     stage_note: null
     debug_iterations: 0
     split_into: null
-    deferred: null
+    deferred:
+      decision: null
+      note: 'BL-0012: Warren 2026-11-04 decision interview: design lab deferred'
     rejected: null
     preservation: {}
     target_artifact_class: null
@@ -9001,9 +9003,9 @@ nodes:
     title: 'Stage 4.7: ACZA workbook non-operational sheets allowlist (BACKLOG-046), undecided'
     class: feature
     origin: operator
-    status: blocked
+    status: ready
     stage: null
-    revision: 1
+    revision: 2
     lease: null
     depends_on:
     - N-0050
@@ -9034,13 +9036,7 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0008
-      type: decision
-      ref: D-0025
-      opened: '2026-09-23T22:26:32Z'
-      note: Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided
-        (D-e).
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -14380,7 +14376,7 @@ decisions:
       by why they failed.''; (b) keep the approved copy and amend AC2. Warren decides; agent recommends (a) because ''in one
       place'' contradicts per-job steward routing (D-066/N-0027).'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0029:
     id: D-0029
@@ -14403,7 +14399,7 @@ decisions:
       as default-hidden Reference fields; web hook useFactColumns + FactColumnPicker wrapping ColumnPickerDialog; localStorage
       persistence; no migration. Evidence EV-N0034-DESIGN.'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0031:
     id: D-0031
@@ -14414,7 +14410,7 @@ decisions:
       code? (3) keep the exceptions inbox out of scope as a worklist? Defaults used: (1) unchanged, (2) unchanged, (3) out
       of scope.'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0032:
     id: D-0032
@@ -14909,7 +14905,7 @@ decisions:
       shares one 127.0.0.1 bucket; if the web is ever bound wider than loopback, LAN clients also share that bucket (fails
       closed, not open). Reversible by code revert; no data change.'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
   D-0075:
     id: D-0075
