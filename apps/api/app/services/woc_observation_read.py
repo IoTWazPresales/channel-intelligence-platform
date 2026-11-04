@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from sqlalchemy import case, inspect as sa_inspect, select
+from sqlalchemy import case, inspect as sa_inspect, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.derived import WeeksOfCoverObservation
 
@@ -47,16 +48,122 @@ def _as_opt_float(raw: Any) -> float | None:
     return float(raw)
 
 
+_WOC_TABLE_PRESENT: bool | None = None
+
+
 async def woc_observation_table_exists(db: AsyncSession) -> bool:
+    """True once the cover tape is present. A miss is not cached: tests create it later."""
+    global _WOC_TABLE_PRESENT
+    if _WOC_TABLE_PRESENT is True:
+        return True
     try:
         conn = await db.connection()
 
         def _check(sync_conn: Any) -> bool:
             return bool(sa_inspect(sync_conn).has_table("weeks_of_cover_observation"))
 
-        return bool(await conn.run_sync(_check))
+        present = bool(await conn.run_sync(_check))
     except Exception:
         return False
+    if present:
+        _WOC_TABLE_PRESENT = True
+    return present
+
+
+def _backfill_rank(entity: Any):
+    """Apply observations sort ahead of ``as_of_backfill`` when the cover date ties."""
+    return case((entity.trigger == "as_of_backfill", 1), else_=0)
+
+
+def _latest_from(
+    *,
+    tenant_id: str,
+    distributor_id: int | None = None,
+    product_id: int | None = None,
+):
+    """Pair list plus the one-row lateral. Callers choose which columns to read."""
+    obs = WeeksOfCoverObservation
+    filters = [obs.tenant_id == tenant_id]
+    if distributor_id is not None:
+        filters.append(obs.distributor_id == int(distributor_id))
+    if product_id is not None:
+        filters.append(obs.product_id == int(product_id))
+    pairs = (
+        select(obs.distributor_id, obs.product_id)
+        .where(*filters)
+        .distinct()
+        .subquery("woc_pairs")
+    )
+    one = aliased(obs)
+    lateral = (
+        select(one)
+        .where(
+            one.tenant_id == tenant_id,
+            one.distributor_id == pairs.c.distributor_id,
+            one.product_id == pairs.c.product_id,
+        )
+        .order_by(
+            one.distributor_id,
+            one.product_id,
+            one.cover_as_of_date.desc(),
+            _backfill_rank(one).asc(),
+            one.observed_at.desc(),
+        )
+        .limit(1)
+        .lateral("woc_latest")
+    )
+    picked = aliased(obs, lateral)
+    return pairs, lateral, picked
+
+
+def latest_woc_observation_stmt(
+    *,
+    tenant_id: str,
+    distributor_id: int | None = None,
+    product_id: int | None = None,
+):
+    """Latest row per distributor×product without sorting the whole wide tape.
+
+    ``ix_woc_observation_current`` lists the pairs (tenant, distributor, product).
+    A LATERAL limit 1 then keeps the same row DISTINCT ON kept: cover date
+    descending, an apply row ahead of an as-of backfill, then observed_at
+    descending. The pair list is narrow; only the winning row is read in full.
+    """
+    pairs, lateral, picked = _latest_from(
+        tenant_id=tenant_id,
+        distributor_id=distributor_id,
+        product_id=product_id,
+    )
+    return (
+        select(picked)
+        .select_from(pairs)
+        .join(lateral, true())
+        .order_by(pairs.c.distributor_id, pairs.c.product_id)
+    )
+
+
+def latest_woc_stock_stmt(
+    *,
+    tenant_id: str,
+    distributor_id: int | None = None,
+    product_id: int | None = None,
+):
+    """Stock and velocity of the latest row. The brief does not need the rest of the tape."""
+    pairs, lateral, picked = _latest_from(
+        tenant_id=tenant_id,
+        distributor_id=distributor_id,
+        product_id=product_id,
+    )
+    return (
+        select(
+            picked.distributor_id,
+            picked.product_id,
+            picked.derived_stock,
+            picked.weekly_velocity,
+        )
+        .select_from(pairs)
+        .join(lateral, true())
+    )
 
 
 async def latest_woc_observations(
@@ -66,34 +173,16 @@ async def latest_woc_observations(
     distributor_id: int | None = None,
     product_id: int | None = None,
 ) -> list[WocObservationRow]:
-    """DISTINCT ON (distributor_id, product_id) current cover tape."""
+    """Current cover tape: one observation per (distributor, product)."""
     if not await woc_observation_table_exists(db):
         return []
 
     tid = (tenant_id or "default").strip() or "default"
-    backfill_rank = case(
-        (WeeksOfCoverObservation.trigger == "as_of_backfill", 1),
-        else_=0,
+    stmt = latest_woc_observation_stmt(
+        tenant_id=tid,
+        distributor_id=distributor_id,
+        product_id=product_id,
     )
-    stmt = (
-        select(WeeksOfCoverObservation)
-        .where(WeeksOfCoverObservation.tenant_id == tid)
-        .distinct(
-            WeeksOfCoverObservation.distributor_id,
-            WeeksOfCoverObservation.product_id,
-        )
-        .order_by(
-            WeeksOfCoverObservation.distributor_id,
-            WeeksOfCoverObservation.product_id,
-            WeeksOfCoverObservation.cover_as_of_date.desc(),
-            backfill_rank.asc(),
-            WeeksOfCoverObservation.observed_at.desc(),
-        )
-    )
-    if distributor_id is not None:
-        stmt = stmt.where(WeeksOfCoverObservation.distributor_id == int(distributor_id))
-    if product_id is not None:
-        stmt = stmt.where(WeeksOfCoverObservation.product_id == int(product_id))
     rows = (await db.scalars(stmt)).all()
     out: list[WocObservationRow] = []
     for row in rows:
@@ -119,6 +208,22 @@ async def latest_woc_observations(
             )
         )
     return out
+
+
+async def latest_woc_stock_velocity(
+    db: AsyncSession,
+    *,
+    tenant_id: str | None = None,
+) -> list[tuple[int, int, float, float | None]]:
+    """Latest derived stock and weekly velocity per distributor×product."""
+    if not await woc_observation_table_exists(db):
+        return []
+    tid = (tenant_id or "default").strip() or "default"
+    rows = (await db.execute(latest_woc_stock_stmt(tenant_id=tid))).all()
+    return [
+        (int(row.distributor_id), int(row.product_id), _as_float(row.derived_stock), _as_opt_float(row.weekly_velocity))
+        for row in rows
+    ]
 
 
 def observations_to_stock_vel(
