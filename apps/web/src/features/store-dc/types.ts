@@ -11,6 +11,7 @@ export type StoreMapStore = {
   customer_id: number;
   customer_name: string | null;
   site_label: string;
+  place_name: string | null;
   latitude: number | null;
   longitude: number | null;
   pinned: boolean;

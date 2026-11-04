@@ -1,5 +1,7 @@
 /** Project store coordinates from the points on the map. No fixed geography. */
 
+export const storeMapPanelHeight = { xs: 220, md: 320 } as const;
+
 export type MapPoint = { id: string; latitude: number; longitude: number };
 
 export type Projected = { id: string; x: number; y: number };

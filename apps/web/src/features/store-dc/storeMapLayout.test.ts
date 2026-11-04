@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectStores, sellThroughColor, spreadOverlaps } from './storeMapLayout';
+import { projectStores, sellThroughColor, spreadOverlaps, storeMapPanelHeight } from './storeMapLayout';
 
 describe('store map layout', () => {
   it('puts a higher latitude further north and spreads identical coordinates', () => {
@@ -20,5 +20,6 @@ describe('store map layout', () => {
     expect(spread[0].dx === spread[1].dx && spread[0].dy === spread[1].dy).toBe(false);
     expect(sellThroughColor(1, '#111111', '#222222')).toContain('#111111');
     expect(sellThroughColor(null, '#111111', '#222222')).toBe('#222222');
+    expect(storeMapPanelHeight.md).toBeGreaterThan(storeMapPanelHeight.xs);
   });
 });
