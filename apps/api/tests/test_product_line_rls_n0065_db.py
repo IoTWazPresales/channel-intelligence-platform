@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
+from tests._rls_role import engage_nonsuperuser_role, release_nonsuperuser_role
+
 from app.core.product_line_scope import (
     product_line_scope_for,
     request_editable_product_lines,
@@ -56,7 +58,9 @@ def gated_conn():
         pytest.skip(f"product-line gate test runs on cip_test only (current_database()={db})")
     conn.rollback()
     tx = conn.begin()
+    engaged = False
     try:
+        engaged = engage_nonsuperuser_role(conn)
         has_fn = conn.execute(
             text("select count(*) from pg_proc where proname = 'cip_product_line_visible'")
         ).scalar_one()
@@ -77,6 +81,7 @@ def gated_conn():
             )
         yield conn, [(line_a, 2), (line_b, 1)]
     finally:
+        release_nonsuperuser_role(conn, engaged)
         tx.rollback()
         conn.close()
         eng.dispose()
