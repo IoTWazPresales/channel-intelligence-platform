@@ -100,6 +100,7 @@ class World:
         *,
         soh: float | None = None,
         site: str | None = None,
+        raw: dict | None = None,
     ) -> None:
         self._n += 1
         self.db.add(
@@ -114,6 +115,7 @@ class World:
                 units_sold=units,
                 reported_soh=soh,
                 site_label=site,
+                raw_source_row=raw,
             )
         )
 
@@ -125,9 +127,18 @@ class World:
         *,
         soh: float | None = None,
         site: str | None = None,
+        raw: dict | None = None,
     ) -> None:
         for index, qty in enumerate(units):
-            self.sell(customer, product, WEEK0 + timedelta(weeks=index), qty, soh=soh if index == len(units) - 1 else None, site=site)
+            self.sell(
+                customer,
+                product,
+                WEEK0 + timedelta(weeks=index),
+                qty,
+                soh=soh if index == len(units) - 1 else None,
+                site=site,
+                raw=raw,
+            )
 
     def shipment(
         self,

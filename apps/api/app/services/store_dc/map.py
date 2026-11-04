@@ -15,6 +15,7 @@ from app.models.dimensions import CustomerLocation, DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.store_dc import SiteCandidate
 from app.services.store_dc.candidates import served_customer_ids
+from app.services.store_dc.place_name import place_name_from_raw
 from app.services.store_dc.rules import (
     cover_weeks,
     is_weekly,
@@ -48,6 +49,7 @@ def build_store_map(db: Session, tenant_id: str, customer_ids: list[int] | None 
         FactCustomerSellthrough.units_sold,
         FactCustomerSellthrough.reported_soh,
         FactCustomerSellthrough.site_label,
+        FactCustomerSellthrough.raw_source_row,
     ).where(
         FactCustomerSellthrough.tenant_id == tenant_id,
         FactCustomerSellthrough.site_label.is_not(None),
@@ -58,7 +60,8 @@ def build_store_map(db: Session, tenant_id: str, customer_ids: list[int] | None 
     dc_labels = _confirmed_dc_labels(db, tenant_id)
     grouped: dict[tuple[int, str], list] = defaultdict(list)
     display: dict[tuple[int, str], str] = {}
-    for customer_id, product_id, period, grain, kind, units, soh, site in facts:
+    places: dict[tuple[int, str], str] = {}
+    for customer_id, product_id, period, grain, kind, units, soh, site, raw in facts:
         label = (site or "").strip()
         key_norm = norm_label(label)
         if not key_norm or key_norm in dc_labels.get(int(customer_id), set()):
@@ -66,6 +69,9 @@ def build_store_map(db: Session, tenant_id: str, customer_ids: list[int] | None 
         key = (int(customer_id), key_norm)
         grouped[key].append((product_id, period, grain, kind, float(units or 0), None if soh is None else float(soh)))
         display.setdefault(key, label)
+        place = place_name_from_raw(raw if isinstance(raw, dict) else None)
+        if place and key not in places:
+            places[key] = place
     if not grouped and not customer_ids:
         return {
             "customers": [],
@@ -160,6 +166,7 @@ def build_store_map(db: Session, tenant_id: str, customer_ids: list[int] | None 
                 "customer_id": customer_id,
                 "customer_name": names.get(customer_id),
                 "site_label": display[key],
+                "place_name": places.get(key),
                 "latitude": float(loc.latitude) if pinned else None,
                 "longitude": float(loc.longitude) if pinned else None,
                 "pinned": pinned,
