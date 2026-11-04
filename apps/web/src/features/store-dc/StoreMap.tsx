@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
-import { projectStores, sellThroughColor, spreadOverlaps } from './storeMapLayout';
+import { projectStores, sellThroughColor, spreadOverlaps, storeMapPanelHeight } from './storeMapLayout';
 import type { StoreMapPayload, StoreMapStore } from './types';
 
 function fmt(value: number | null | undefined): string {
@@ -18,6 +18,11 @@ function fmt(value: number | null | undefined): string {
 
 function storeKey(store: StoreMapStore): string {
   return `${store.customer_id}:${store.site_label}`;
+}
+
+function storePlace(store: StoreMapStore): string {
+  const name = store.place_name?.trim();
+  return name || store.site_label;
 }
 
 export function StoreMap() {
@@ -32,6 +37,7 @@ export function StoreMap() {
   const [longitude, setLongitude] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [unpinnedQuery, setUnpinnedQuery] = useState('');
 
   const mapQuery = useQuery({
     queryKey: ['store-dc-map'],
@@ -50,6 +56,12 @@ export function StoreMap() {
   const visible = customerId === 'all' ? stores : stores.filter((store) => store.customer_id === customerId);
   const pinned = visible.filter((store) => store.pinned && store.latitude != null && store.longitude != null);
   const unpinned = visible.filter((store) => !store.pinned);
+  const needle = unpinnedQuery.trim().toLowerCase();
+  const listed = needle
+    ? unpinned.filter((store) =>
+        [storePlace(store), store.site_label, store.customer_name ?? ''].join(' ').toLowerCase().includes(needle),
+      )
+    : unpinned;
   const projected = useMemo(
     () =>
       projectStores(
@@ -145,9 +157,11 @@ export function StoreMap() {
       <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' } }}>
         <Box
           data-testid="store-map-canvas"
+          data-height-xs={storeMapPanelHeight.xs}
+          data-height-md={storeMapPanelHeight.md}
           sx={{
             position: 'relative',
-            height: { xs: 220, md: 320 },
+            height: storeMapPanelHeight,
             borderRadius: 1,
             bgcolor: tokens.bg.surfaceMuted,
             border: `1px solid ${tokens.border.subtle}`,
@@ -169,7 +183,7 @@ export function StoreMap() {
                 type="button"
                 data-testid="store-dot"
                 data-customer-id={store.customer_id}
-                aria-label={`${store.site_label}, ${store.customer_name ?? ''}`}
+                aria-label={`${storePlace(store)}, ${store.site_label}, ${store.customer_name ?? ''}`}
                 onMouseEnter={() => setHoverKey(storeKey(store))}
                 onMouseLeave={() => setHoverKey((current) => (current === storeKey(store) ? null : current))}
                 onClick={() => setSelectedKey(storeKey(store))}
@@ -206,6 +220,7 @@ export function StoreMap() {
                 fontSize: 12,
               }}
             >
+              <div>{storePlace(hover)}</div>
               <div>{hover.site_label}</div>
               <div>{hover.customer_name}</div>
               <div>Last week {fmt(hover.last_week_units)} units</div>
@@ -214,21 +229,46 @@ export function StoreMap() {
             </Box>
           ) : null}
         </Box>
-        <Box data-testid="store-map-unpinned">
+        <Box
+          data-testid="store-map-unpinned"
+          data-height-xs={storeMapPanelHeight.xs}
+          data-height-md={storeMapPanelHeight.md}
+          sx={{ height: storeMapPanelHeight, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+        >
           <Typography variant="caption" sx={{ color: tokens.text.secondary }}>
             No coordinates
           </Typography>
+          <TextField
+            size="small"
+            placeholder="Search stores"
+            value={unpinnedQuery}
+            onChange={(event) => setUnpinnedQuery(event.target.value)}
+            inputProps={{ 'aria-label': 'Search stores', 'data-testid': 'store-map-search' }}
+            sx={{ mt: 0.5 }}
+          />
+          <Box data-testid="store-map-unpinned-scroll" sx={{ overflowY: 'auto', flex: 1, minHeight: 0, mt: 0.5 }}>
           {unpinned.length === 0 ? (
-            <Typography variant="body2" sx={{ color: tokens.text.muted, mt: 0.5 }}>
+            <Typography variant="body2" sx={{ color: tokens.text.muted }}>
               Every store in this view has a pin.
             </Typography>
+          ) : listed.length === 0 ? (
+            <Typography variant="body2" sx={{ color: tokens.text.muted }}>
+              No store matches that search.
+            </Typography>
           ) : (
-            unpinned.map((store) => {
+            listed.map((store) => {
               const key = storeKey(store);
+              const place = storePlace(store);
               return (
                 <Box key={key} sx={{ mt: 1 }}>
                   <Typography variant="body2">
-                    {store.site_label}
+                    {place}
+                    {place !== store.site_label ? (
+                      <Box component="span" sx={{ color: tokens.text.secondary }}>
+                        {' '}
+                        · {store.site_label}
+                      </Box>
+                    ) : null}
                     <Box component="span" sx={{ color: tokens.text.secondary }}>
                       {' '}
                       · {store.customer_name}
@@ -267,12 +307,13 @@ export function StoreMap() {
               );
             })
           )}
+          </Box>
         </Box>
       </Box>
       {selected ? (
         <Box data-testid="store-map-lines" sx={{ mt: 1.5 }}>
           <Typography variant="subtitle2">
-            {selected.site_label} · {selected.customer_name}
+            {storePlace(selected)} · {selected.site_label} · {selected.customer_name}
           </Typography>
           {selected.lines.length === 0 ? (
             <Typography variant="body2" sx={{ color: tokens.text.secondary }}>
