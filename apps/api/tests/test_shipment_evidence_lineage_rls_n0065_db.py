@@ -31,6 +31,8 @@ from contextlib import contextmanager
 
 import pytest
 from sqlalchemy import create_engine, text
+
+from tests._rls_role import engage_nonsuperuser_role, release_nonsuperuser_role
 from sqlalchemy.pool import NullPool
 
 from app.core.product_line_scope import (
@@ -108,7 +110,9 @@ def lineage():
     rev = conn.execute(text("select version_num from alembic_version")).scalar_one()
     conn.rollback()
     tx = conn.begin()
+    engaged = False
     try:
+        engaged = engage_nonsuperuser_role(conn)
         assert _applied(rev, "20261009_0026"), f"cip_test must have 0026 applied, is at {rev}"
         tag = uuid.uuid4().hex[:8]
         lines = {"A": f"N0065L-A-{tag}", "B": f"N0065L-B-{tag}"}
@@ -163,6 +167,7 @@ def lineage():
         yield conn, lines, keys, {"shipment_evidence_observation": O, "shipment_evidence_line": L,
                                   "fact_inbound_shipment": inb}
     finally:
+        release_nonsuperuser_role(conn, engaged)
         tx.rollback()
         conn.close()
         eng.dispose()
@@ -397,7 +402,9 @@ def no_product():
         pytest.skip(f"round-5 tests run on cip_test only (current_database()={db})")
     conn.rollback()
     tx = conn.begin()
+    engaged = False
     try:
+        engaged = engage_nonsuperuser_role(conn)
         _require_0027(conn)
         tag = uuid.uuid4().hex[:8]
         lines = {"A": f"N0065N-A-{tag}", "B": f"N0065N-B-{tag}"}
@@ -420,6 +427,7 @@ def no_product():
             conn.execute(text(f"ALTER TABLE {_q(t)} FORCE ROW LEVEL SECURITY"))
         yield conn, lines, fx
     finally:
+        release_nonsuperuser_role(conn, engaged)
         tx.rollback()
         conn.close()
         eng.dispose()

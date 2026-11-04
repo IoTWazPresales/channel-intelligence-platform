@@ -53,6 +53,8 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
+
+from tests._rls_role import engage_nonsuperuser_role, release_nonsuperuser_role
 from sqlalchemy.pool import NullPool
 
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
@@ -272,7 +274,9 @@ def run_version(ver: int) -> dict:
         conn.rollback()
         tx = conn.begin()
         out: dict = {"ver": ver, "tables": {}}
+        engaged = False
         try:
+            engaged = engage_nonsuperuser_role(conn)
             from alembic.operations import Operations
             from alembic.runtime.migration import MigrationContext
 
@@ -503,6 +507,7 @@ def run_version(ver: int) -> dict:
             out["pick_config"] = conn.execute(text(
                 "select proconfig from pg_proc where proname = 'cip_sev_current_observation_ids'")).scalar()
         finally:
+            release_nonsuperuser_role(conn, engaged)
             tx.rollback()
         return out
     finally:
