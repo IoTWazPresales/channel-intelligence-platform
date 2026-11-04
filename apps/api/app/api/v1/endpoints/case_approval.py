@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.core.case_approval_throttle import (
+    case_approval_throttle,
+    client_address,
+    log_throttle_event,
+)
 from app.core.security import Role, require_roles
 from app.core.tenant_scope import tenant_id_from_user
 from app.db.session_sync import SessionLocal
@@ -49,6 +54,20 @@ class DecideBody(BaseModel):
         if choice not in {"approved", "rejected"}:
             raise ValueError("decision")
         return choice
+
+
+def _limit_public(request: Request, token: str) -> None:
+    """Bound GET and POST /api/v1/case-approval. No sign-in and no role."""
+    address = client_address(request)
+    verdict = case_approval_throttle.admit(token, address)
+    if verdict is None:
+        return
+    log_throttle_event(verdict, token=token, address=address)
+    raise HTTPException(
+        status_code=429,
+        detail="Too many requests. Try again later.",
+        headers={"Retry-After": str(verdict.retry_after)},
+    )
 
 
 def _actor(user: dict) -> str:
@@ -103,7 +122,8 @@ def post_revoke_approval_link(case_id: int, user: dict = Depends(_require_planne
 
 
 @public_router.get("")
-def get_public_approval(token: str):
+def get_public_approval(token: str, request: Request):
+    _limit_public(request, token)
     with SessionLocal() as session:
         try:
             return read_public(session, token)
@@ -112,7 +132,8 @@ def get_public_approval(token: str):
 
 
 @public_router.post("")
-def post_public_approval(body: DecideBody):
+def post_public_approval(body: DecideBody, request: Request):
+    _limit_public(request, body.token)
     with SessionLocal() as session:
         try:
             decide_public(

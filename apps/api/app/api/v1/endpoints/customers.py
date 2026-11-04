@@ -637,7 +637,10 @@ class CustomerFullMergeBulkPreviewBody(BaseModel):
 
 
 @router.post("/duplicate-groups/merge-preview")
-async def customer_full_merge_preview_endpoint(body: CustomerFullMergeBody):
+async def customer_full_merge_preview_endpoint(
+    body: CustomerFullMergeBody,
+    _user: dict = Depends(require_roles(Role.STEWARD)),
+):
     import asyncio
 
     from app.db.session_sync import SessionLocal
@@ -660,7 +663,10 @@ async def customer_full_merge_preview_endpoint(body: CustomerFullMergeBody):
 
 
 @router.post("/duplicate-groups/merge-preview-bulk")
-async def customer_full_merge_bulk_preview_endpoint(body: CustomerFullMergeBulkPreviewBody):
+async def customer_full_merge_bulk_preview_endpoint(
+    body: CustomerFullMergeBulkPreviewBody,
+    _user: dict = Depends(require_roles(Role.STEWARD)),
+):
     import asyncio
 
     from app.db.session_sync import SessionLocal
@@ -683,7 +689,7 @@ async def customer_full_merge_bulk_preview_endpoint(body: CustomerFullMergeBulkP
 @router.post("/duplicate-groups/merge-confirm", status_code=202)
 async def customer_full_merge_confirm_endpoint(
     body: CustomerFullMergeBody,
-    user: dict | None = Depends(get_optional_current_user),
+    user: dict = Depends(require_roles(Role.STEWARD)),
 ):
     from app.services.customer_full_merge import CustomerFullMergeError
     from app.services.customer_full_merge_enqueue import enqueue_customer_full_merge_confirm
@@ -697,7 +703,7 @@ async def customer_full_merge_confirm_endpoint(
         "audit_note": body.audit_note,
         "customer_ids": body.customer_ids,
         # Names the steward on the merge note and the platform audit event.
-        "performed_by": str((user or {}).get("email") or (user or {}).get("id") or "steward"),
+        "performed_by": str(user.get("email") or user.get("id") or "steward"),
     }
     try:
         task_id, async_poll = enqueue_customer_full_merge_confirm(payload)
