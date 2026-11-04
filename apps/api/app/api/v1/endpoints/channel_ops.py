@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect as sa_inspect
 
 from app.api.deps import get_db
+from app.db.parallel_reads import gather_reads
 from app.core.security import get_optional_current_user
 from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
@@ -1123,7 +1124,14 @@ async def channel_ops_cover_distribution(
     from app.core.tenant_scope import tenant_id_from_user
 
     tid = tenant_id_from_user(user if isinstance(user, dict) else None)
-    obs = await latest_woc_observations(db, tenant_id=tid)
+    # The latest tape, open inbound, and the weekly flow do not depend on each
+    # other. Overlapping them is what keeps this route inside its time budget.
+    obs, inbound_open, weekly_flow = await gather_reads(
+        db,
+        lambda s: latest_woc_observations(s, tenant_id=tid),
+        lambda s: _open_inbound_by_pair(s, tid),
+        lambda s: _cover_weekly_flow(s, tid),
+    )
     if not obs:
         return _empty_cover_distribution()
 
@@ -1161,10 +1169,6 @@ async def channel_ops_cover_distribution(
                 family,
                 str(r.sales_model_name or ""),
             )
-
-    inbound_open = await _open_inbound_by_pair(db, tid)
-
-    weekly_flow = await _cover_weekly_flow(db, tid)
 
     buckets: dict[str, int] = {"lt2": 0, "2to4": 0, "4to8": 0, "8to13": 0, "gte13": 0}
     lab_counts = {b: 0 for b in LAB_WOC_BUCKETS}

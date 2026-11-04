@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -9,6 +10,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.feature_flags import commercial_planner_enabled
+from app.db.parallel_reads import gather_reads
 from app.core.my_accounts import apply_account_predicate
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
@@ -23,7 +25,7 @@ from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET
 from app.services.cpor.settle_readiness import case_missing_roe, fx_declared, fx_mode_valid
 from app.services.imports.shipment_open_book import exclude_closed_inbound
 from app.services.shipment_strict_pair import keep_counted_line
-from app.services.woc_observation_read import latest_woc_observations, observations_to_stock_vel
+from app.services.woc_observation_read import latest_woc_stock_velocity
 
 _FRESH_STATUSES = ("completed", "completed_with_errors")
 _STALE_HOURS = 168
@@ -255,13 +257,12 @@ async def _dsi_freshness(db: AsyncSession, user: dict | None) -> dict[str, Any] 
 
 async def _cover_summary(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     tid = tenant_id_from_user(user if isinstance(user, dict) else None)
-    obs = await latest_woc_observations(db, tenant_id=tid, distributor_id=None)
-    stock_by_pair, vel_by_pair = observations_to_stock_vel(obs)
+    rows = await latest_woc_stock_velocity(db, tenant_id=tid)
     threshold = float(REPLENISHMENT_WOC_THRESHOLD_WEEKS)
     pairs_below = 0
     woc_values: list[float] = []
-    for key, stock in stock_by_pair.items():
-        woc = weeks_of_cover_or_none(stock, vel_by_pair.get(key))
+    for _distributor_id, _product_id, stock, velocity in rows:
+        woc = weeks_of_cover_or_none(stock, velocity)
         if woc is not None:
             woc_values.append(float(woc))
         if replenishment_flag_v1(woc, threshold_weeks=threshold):
@@ -269,7 +270,7 @@ async def _cover_summary(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     book_mean = round(sum(woc_values) / len(woc_values), 1) if woc_values else None
     return {
         "pairs_below_threshold": pairs_below,
-        "pair_count": len(stock_by_pair),
+        "pair_count": len(rows),
         "book_mean_weeks": book_mean,
         "grain": "distributor_product",
     }
@@ -350,8 +351,7 @@ async def _needs_look_summary(db: AsyncSession, user: dict | None) -> dict[str, 
     return {"lines": int(row[0] or 0), "units": float(row[1] or 0), "days": days}
 
 
-async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, Any]:
-    now = datetime.now(timezone.utc)
+async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int, int, dict[str, Any] | None, tuple[int, int]]:
     failed_open = int(
         await db.scalar(
             select(func.count())
@@ -362,19 +362,31 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         )
         or 0
     )
-
-    recon_rows = int(
-        await db.scalar(select(func.count()).select_from(FactInventoryReconciliation)) or 0
-    )
-    soh_recon_not_run = recon_rows == 0
-
+    recon_rows = int(await db.scalar(select(func.count()).select_from(FactInventoryReconciliation)) or 0)
     dsi = await _dsi_freshness(db, user)
-    cover = await _cover_summary(db, user)
-    settlement = await _settlement_aggregates(db, user)
+    cst_counts = await _cst_late_missing_counts(db)
+    return failed_open, recon_rows, dsi, cst_counts
 
-    inbound_open = int(await db.scalar(inbound_not_received_count_stmt(user)) or 0)
-    cst_late, cst_missing = await _cst_late_missing_counts(db)
-    needs_look = await _needs_look_summary(db, user)
+
+async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    # Cover, settlement, the open-inbound count and needs-look are separate
+    # statements. They overlap; the small counts share one session.
+    async def _parts() -> list[Any]:
+        return await gather_reads(
+            db,
+            lambda s: _brief_small_counts(s, user),
+            lambda s: _cover_summary(s, user),
+            lambda s: _settlement_aggregates(s, user),
+            lambda s: s.scalar(inbound_not_received_count_stmt(user)),
+            lambda s: _needs_look_summary(s, user),
+        )
+
+    parts, st = await asyncio.gather(_parts(), _sell_through_attention(user))
+    small, cover, settlement, inbound_raw, needs_look = parts
+    failed_open, recon_rows, dsi, (cst_late, cst_missing) = small
+    soh_recon_not_run = recon_rows == 0
+    inbound_open = int(inbound_raw or 0)
 
     signals: list[dict[str, Any]] = []
     rank = 1
@@ -455,7 +467,6 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         rank += 1
 
     # Warren 2026-10-19: the Sell-through tab's SKU problems and missing reports on Attention.
-    st = await _sell_through_attention(user)
     for sig in sell_through_signals(st, slot_signal_shown=cst_signal is not None):
         sig["rank"] = rank
         signals.append(sig)

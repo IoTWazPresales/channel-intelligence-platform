@@ -33,7 +33,7 @@ INVARIANTS = [
 
 EXPLAIN = {
     "sql_fragments": [
-        "weeks_of_cover_observation DISTINCT ON (distributor_id, product_id)",
+        "weeks_of_cover_observation latest row per distributor×product (LATERAL limit 1)",
         "ORDER BY cover_as_of_date DESC, apply-beats-backfill, observed_at DESC",
         "live calculator only for explain_only / woc_source=live",
     ],

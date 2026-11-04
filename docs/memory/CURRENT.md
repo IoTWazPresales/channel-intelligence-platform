@@ -1,18 +1,16 @@
 # CURRENT state
 
-**Last updated:** 2026-11-03 (five tracks on one branch)
+**Last updated:** 2026-11-04 (N-0108 latest cover read)
 
-**Branch:** `feat/integrate-20261103`. My accounts, listing, store and DC, tenant mapping, and shipment D4 are on this branch. Do not push to main.
+**Branch:** `feat/integrate-20261103`.
 
-**Alembic code head:** `20261103_0056`. Chain: `20261103_0052` user accounts -> `20261103_0053` listing sites -> `20261103_0054` store and DC -> `20261103_0055` tenant mapping -> `20261103_0056` shipment single-write. Applied to `cip` and `cip_test` on 3 Nov 2026 as the table owner. `current_database()` was `cip` for the cip upgrade. Role `cip` has SELECT, INSERT, UPDATE, DELETE on the new listing and store tables, and USAGE, SELECT on their sequences.
+**Alembic:** `cip` is now at `20261104_0057` (applied by Warren on 2026-11-04). That revision replaces `cip_inbound_shipment_lineage()` so a product-less inbound row is resolved from its evidence line. The line index and the identity index already exist. Code head is the same revision.
 
-**Proven:** `cip` and `cip_test` are at `20261103_0056`. `source_definition.tenant_id` exists. `ix_shipment_ev_obs_evidence_line` exists. Before the `cip_test` upgrade, 63 older customer-alias copies and 94 older distributor-alias copies were set to `superseded`; the newest approved row in each group was kept. `cip` had no duplicate approved groups, so its aliases were not changed.
+**Proven on cip, read-only, before that apply:** the lateral latest-observation read matches the old `DISTINCT ON` row for row (unset and `*` 2,481 rows; `NB` 1,099). That statement is about 0.22–0.29s, against about 0.37–0.66s before. Warm second pass of the handlers: unset cover 1.247s and brief 1.107s; `*` cover 1.279s and brief 1.215s. `NB` cover 2.641s and brief 1.899s while the old lineage helper was still installed (0.741s for 765 rows). The replacement lookup returned the same 765 rows in 0.092s.
 
-**Not proven:** the browser checks. The running web is still the previous build until it is rebuilt from this branch and the API and worker are restarted. D5 is not done. Listing nodes are not closed.
+**Next:** re-time brief and cover for `NB` on cip, read-only.
 
-**Next:** rebuild the web from this branch, restart the API and worker, then sign in and check My accounts, the store map, replenishment, and listings.
-
-**Blockers requiring Warren:** none for the schema. Do not push to main.
+**Blockers requiring Warren:** none for this migration. Do not push to main.
 
 The paragraphs below are older checkpoints. Where they disagree with this block on branch or on cip's Alembic revision, this block wins.
 
