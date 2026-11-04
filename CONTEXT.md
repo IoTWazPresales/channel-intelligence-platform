@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-04 - **N-0108 needs-a-look:** a brief read already bound to one connection stays on that connection, so the on-the-water fixture still raises `shipment_needs_look` (1 line, 9 units, 7 days on `cip_test`). On `cip`, read-only, that signal's fact ids and quantities match on the old request-session path and the overlapped path (12 lines, 1,316 units, 7 days). `cip` is at `20261104_0057`, applied by Warren on 2026-11-04. Merged `feat/integrate-20261103` at `bb8e1729`. No write to `cip`. No main. Commit `6d23b903`.
+
 - 2026-11-04 - **N-0108 latest cover read:** branch `perf/n0108-latest-observation`. The latest weeks-of-cover row is a narrow lateral lookup, same rows as `DISTINCT ON` on `cip` (2,481 / 2,481 / 1,099). Brief and cover overlap their independent reads. Warm unset and `*` are under 1.5s. `NB` is not, until `20261104_0057` is applied to `cip`. That revision is on `cip_test` only. No write to `cip`. No main. Commit `729ac02c`.
 
 - 2026-11-03 - **Integration migrated:** `cip` and `cip_test` are at `20261103_0056` on `feat/integrate-20261103`. `cip_test` kept the newest approved alias in each duplicate group and marked the older copies `superseded` (63 customer, 94 distributor). `cip` aliases were not changed. Role `cip` was granted the new tables and sequences. No main. Commit 11bc803b.
