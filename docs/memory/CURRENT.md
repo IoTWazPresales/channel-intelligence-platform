@@ -2,17 +2,15 @@
 
 **Last updated:** 2026-11-04 (N-0108 latest cover read)
 
-**Branch:** `perf/n0108-latest-observation`. Do not push to main. Do not apply `20261104_0057` to `cip` until Warren says so.
+**Branch:** `feat/integrate-20261103`.
 
-**Alembic code head:** `20261104_0057` revises `20261103_0056`. It replaces `cip_inbound_shipment_lineage()` so a product-less inbound row is resolved from its evidence line (the line index and the identity index already exist). Applied to `cip_test` only. `current_database()` was `cip_test`; the function owner is `cip`. `cip` stays `20261103_0056`.
+**Alembic:** `cip` is now at `20261104_0057` (applied by Warren on 2026-11-04). That revision replaces `cip_inbound_shipment_lineage()` so a product-less inbound row is resolved from its evidence line. The line index and the identity index already exist. Code head is the same revision.
 
-**Proven on cip, read-only:** the lateral latest-observation read matches the old `DISTINCT ON` row for row (unset and `*` 2,481 rows; `NB` 1,099). That statement is about 0.22–0.29s, against about 0.37–0.66s before. Warm second pass of the handlers: unset cover 1.247s and brief 1.107s; `*` cover 1.279s and brief 1.215s. `NB` cover 2.641s and brief 1.899s. Those two stay over 1.5s because `cip` still runs the old lineage helper (0.741s for 765 rows). The replacement lookup returned the same 765 rows in 0.092s and is what `20261104_0057` installs.
+**Proven on cip, read-only, before that apply:** the lateral latest-observation read matches the old `DISTINCT ON` row for row (unset and `*` 2,481 rows; `NB` 1,099). That statement is about 0.22–0.29s, against about 0.37–0.66s before. Warm second pass of the handlers: unset cover 1.247s and brief 1.107s; `*` cover 1.279s and brief 1.215s. `NB` cover 2.641s and brief 1.899s while the old lineage helper was still installed (0.741s for 765 rows). The replacement lookup returned the same 765 rows in 0.092s.
 
-**Next:** Warren applies `20261104_0057` to `cip`, then re-time brief and cover for `NB`.
+**Next:** re-time brief and cover for `NB` on cip, read-only.
 
-**Blockers requiring Warren:** apply `20261104_0057` on `cip` (no write was made to `cip` in this work). Do not push to main.
-
-The paragraphs below are older checkpoints. Where they disagree with this block on branch or on cip's Alembic revision, this block wins.
+**Blockers requiring Warren:** none for this migration. Do not push to main.
 
 The paragraphs below are older checkpoints. Where they disagree with this block on branch or on cip's Alembic revision, this block wins.
 
