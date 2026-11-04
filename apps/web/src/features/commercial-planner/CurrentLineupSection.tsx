@@ -50,6 +50,10 @@ import {
   type ReconCustomerSlice,
   type ReconSummary,
 } from './lineupReconciliationDisplay';
+import {
+  LINE_IDENTIFIER_SALES_MODEL_COL_ID,
+  LINE_IDENTIFIER_SKU_COL_ID,
+} from '@/features/tenant/lineIdentifier';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 
 function formatHttpErrorDetail(detail: unknown): string {
@@ -336,6 +340,46 @@ const CORE_WORKBENCH_LABELS: Record<CoreWorkbenchId, string> = {
   issues: 'Status / issues',
   sync: 'Sync preview (plan)',
 };
+
+/**
+ * SKU / sales-model text for one workbench identity column.
+ * Uses the same coalesced sources as the single-slot cell (`product_*` then raw), with no
+ * cross-fallback between the two columns — empty stays empty so the shared formatter can show —.
+ */
+function lineupWorkbenchIdentifierRaw(
+  ln: CommercialLineupLine,
+  which: 'sku' | 'sales_model',
+): string | null {
+  const raw =
+    which === 'sku'
+      ? (ln.product_sku ?? ln.sku_raw)
+      : (ln.product_sales_model_name ?? ln.model_raw);
+  const trimmed = raw?.trim() ?? '';
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Under `both` the grid col ids are the shared identity pair. The saved layout keeps the one
+ * `sku` slot (the stored preference values are not renamed).
+ */
+function collapseWorkbenchDisplayedColIds(order: string[], preference: string): string[] {
+  if (preference !== 'both') return order;
+  const collapsed: string[] = [];
+  for (const id of order) {
+    const stored =
+      id === LINE_IDENTIFIER_SKU_COL_ID || id === LINE_IDENTIFIER_SALES_MODEL_COL_ID ? 'sku' : id;
+    if (!collapsed.includes(stored)) collapsed.push(stored);
+  }
+  return collapsed;
+}
+
+/** Default layouts omit the `sku` slot. Under `both` that slot is the two identity columns, so the commercial template includes it. */
+function withBothIdentitySlot(ids: string[], preference: string): string[] {
+  if (preference !== 'both' || ids.includes('sku')) return ids;
+  const productIdx = ids.indexOf('product');
+  const insertAt = productIdx >= 0 ? productIdx + 1 : ids.length;
+  return [...ids.slice(0, insertAt), 'sku', ...ids.slice(insertAt)];
+}
 
 function rawHeaderMatchesProcessorAliases(header: string): boolean {
   const n = header.toLowerCase().trim();
@@ -2899,6 +2943,14 @@ export function CurrentLineupSection({
 }) {
   const qc = useQueryClient();
   const lineIdent = useLineIdentifierPreference();
+  // Same query as the preference hook so the workbench waits for the real preference before
+  // saving a default column layout (a still-loading profile parses as `sku`).
+  const identProfile = useQuery({
+    queryKey: ['auth', 'tenant-commercial-profile'],
+    queryFn: ({ signal }) =>
+      apiGet<{ line_identifier_preference?: string }>('/api/v1/auth/tenant-commercial-profile', { signal }),
+    staleTime: 60_000,
+  });
   const [expanded, setExpanded] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewLinesCase, setViewLinesCase] = useState<CommercialLineupCase | null>(null);
@@ -3029,13 +3081,14 @@ export function CurrentLineupSection({
       setVisibleCols([]);
       return;
     }
-    if (!wbMetaReady) return;
+    if (!wbMetaReady || !identProfile.isFetched) return;
     const allow = mergeWorkbenchAllowedIds(wbMeta, hasWorkbenchPlan);
     const defaults = defaultUnifiedLineupWorkbenchIds(wbMeta, hasWorkbenchPlan);
-    const stored = readInitialWorkbenchVisible(activeCaseId, wbMeta, hasWorkbenchPlan);
-    const chosen = stored.filter((id) => allow.has(id));
+    const stored = readCaseWorkbenchStorage(activeCaseId);
+    let chosen = (stored ?? defaults).filter((id) => allow.has(id));
+    if (!stored) chosen = withBothIdentitySlot(chosen, lineIdent.preference);
     setVisibleCols(chosen.length ? chosen : defaults.filter((id) => allow.has(id)));
-  }, [activeCaseId, wbMetaReady, wbMeta, hasWorkbenchPlan]);
+  }, [activeCaseId, wbMetaReady, wbMeta, hasWorkbenchPlan, identProfile.isFetched, lineIdent.preference]);
 
   useEffect(() => {
     if (activeCaseId == null || !visibleCols.length) return;
@@ -3375,7 +3428,24 @@ export function CurrentLineupSection({
   const wbCanEdit = activeCase?.commercial_status === 'draft_imported';
 
   const wbColumnDefs = useMemo<ColDef[]>(() => {
-    return visibleColsFiltered.map((colId) => {
+    return visibleColsFiltered.flatMap((colId): ColDef[] => {
+      // `both` splits the one saved `sku` slot into the shared identity columns. Single modes
+      // stay on the `sku` colId below (welded header + value, including the other-identifier fallback).
+      if (colId === 'sku' && lineIdent.preference === 'both') {
+        const identCols = lineIdent.columns<CommercialLineupLine>(
+          { sku: 'product_sku', salesModel: 'product_sales_model_name' },
+          { minWidth: 120, sortable: true },
+        );
+        return identCols.map((col) => {
+          const which = col.colId === LINE_IDENTIFIER_SKU_COL_ID ? 'sku' : 'sales_model';
+          return {
+            ...col,
+            sortable: true,
+            valueGetter: (p) =>
+              p.data ? lineupWorkbenchIdentifierRaw(p.data as CommercialLineupLine, which) : null,
+          } satisfies ColDef;
+        });
+      }
       const headerName = colId === 'sku' ? lineIdent.header : workbenchColumnLabel(colId, wbMeta);
       const editableField =
         colId === 'units'
@@ -3386,25 +3456,29 @@ export function CurrentLineupSection({
               ? 'promo_price_evidence_local'
               : null;
       if (wbCanEdit && editableField) {
-        return {
+        return [
+          {
+            colId,
+            headerName,
+            editable: true,
+            type: 'numericColumn',
+            minWidth: 100,
+            valueGetter: (p) =>
+              p.data ? ((p.data as Record<string, unknown>)[editableField] as number | null) ?? null : null,
+            valueFormatter: (p) => (p.value == null || p.value === '' ? '' : String(p.value)),
+          } satisfies ColDef,
+        ];
+      }
+      return [
+        {
           colId,
           headerName,
-          editable: true,
-          type: 'numericColumn',
-          minWidth: 100,
-          valueGetter: (p) =>
-            p.data ? ((p.data as Record<string, unknown>)[editableField] as number | null) ?? null : null,
-          valueFormatter: (p) => (p.value == null || p.value === '' ? '' : String(p.value)),
-        } satisfies ColDef;
-      }
-      return {
-        colId,
-        headerName,
-        minWidth: colId === 'num' ? 72 : 120,
-        valueGetter: (p) => (p.data ? wbCellValue(p.data as CommercialLineupLine, colId) : null),
-        cellRenderer: (p: ICellRendererParams<CommercialLineupLine>) =>
-          p.data ? wbCellContent(p.data, colId, false) : null,
-      } satisfies ColDef;
+          minWidth: colId === 'num' ? 72 : 120,
+          valueGetter: (p) => (p.data ? wbCellValue(p.data as CommercialLineupLine, colId) : null),
+          cellRenderer: (p: ICellRendererParams<CommercialLineupLine>) =>
+            p.data ? wbCellContent(p.data, colId, false) : null,
+        } satisfies ColDef,
+      ];
     });
   }, [visibleColsFiltered, wbMeta, wbCanEdit, wbCellValue, wbCellContent, lineIdent]);
 
@@ -3439,7 +3513,8 @@ export function CurrentLineupSection({
       onCellValueChanged: (e) => onWbCellValueChanged(e),
       // Persist user column reordering back into visibleCols (which is saved to localStorage).
       onDragStopped: (e) => {
-        const order = e.api.getAllDisplayedColumns().map((c) => c.getColId());
+        const displayed = e.api.getAllDisplayedColumns().map((c) => c.getColId());
+        const order = collapseWorkbenchDisplayedColIds(displayed, lineIdent.preference);
         if (!order.length) return;
         setVisibleCols((prev) => {
           const displayed = new Set(order);
@@ -3452,7 +3527,7 @@ export function CurrentLineupSection({
         });
       },
     }),
-    [onWbCellValueChanged],
+    [onWbCellValueChanged, lineIdent.preference],
   );
 
   const statusMutation = useMutation({
@@ -4009,7 +4084,9 @@ export function CurrentLineupSection({
                     const cols = q
                       ? group.cols.filter((id) =>
                           workbenchColumnLabel(id, wbMeta).toLowerCase().includes(q) ||
-                            (id === 'sku' && lineIdent.header.toLowerCase().includes(q)),
+                            (id === 'sku' &&
+                              (lineIdent.header.toLowerCase().includes(q) ||
+                                lineIdent.headers.some((h) => h.toLowerCase().includes(q)))),
                         )
                       : group.cols;
                     if (!cols.length) return null;
@@ -4046,7 +4123,7 @@ export function CurrentLineupSection({
                               }
                               label={
                                 <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-                                  {id === 'sku' ? lineIdent.header : workbenchColumnLabel(id, wbMeta)}
+                                  {id === 'sku' ? lineIdent.headers.join(', ') : workbenchColumnLabel(id, wbMeta)}
                                 </Typography>
                               }
                             />
@@ -4061,7 +4138,12 @@ export function CurrentLineupSection({
                 <Button
                   size="small"
                   onClick={() => {
-                    setVisibleCols(defaultUnifiedLineupWorkbenchIds(wbMeta, hasWorkbenchPlan));
+                    setVisibleCols(
+                      withBothIdentitySlot(
+                        defaultUnifiedLineupWorkbenchIds(wbMeta, hasWorkbenchPlan),
+                        lineIdent.preference,
+                      ),
+                    );
                   }}
                   data-testid="lineup-columns-preset-commercial"
                 >

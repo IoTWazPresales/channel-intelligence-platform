@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -17,44 +17,90 @@ vi.mock('@/lib/api', () => ({
 
 // Mirror the repo pattern (see commercial-planner/page.test.tsx): mock the grid and render cells
 // from columnDefs so header/cell assertions work without AG Grid's real (layout-dependent) DOM.
-vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({
+// Columns that set sortable: true reorder on header click via their valueGetter (the real grid
+// sorts through EnterpriseDataGrid's defaultColDef).
+vi.mock('@/components/EnterpriseDataGrid', () => {
+  const React = require('react') as typeof import('react');
+
+  function compareSortValues(av: unknown, bv: unknown, dir: 'asc' | 'desc'): number {
+    const aEmpty = av == null || av === '';
+    const bEmpty = bv == null || bv === '';
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return dir === 'asc' ? 1 : -1;
+    if (bEmpty) return dir === 'asc' ? -1 : 1;
+    const cmp =
+      typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+    return dir === 'asc' ? cmp : -cmp;
+  }
+
+  function EnterpriseDataGrid({
     rowData,
     columnDefs,
   }: {
     rowData: Array<Record<string, unknown>>;
     columnDefs?: Array<Record<string, unknown>>;
-  }) => (
-    <div data-testid="lineup-wb-grid-mock">
-      <div role="row">
-        {columnDefs?.map((c, i) => (
-          <div role="columnheader" key={(c.colId as string) ?? i}>
-            {c.headerName as string}
+  }) {
+    const [sort, setSort] = React.useState<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
+    const displayed = React.useMemo(() => {
+      if (!sort || !columnDefs) return rowData;
+      const col = columnDefs.find((c) => c.colId === sort.colId);
+      if (!col || col.sortable !== true || typeof col.valueGetter !== 'function') return rowData;
+      const getter = col.valueGetter as (p: { data: Record<string, unknown> }) => unknown;
+      return [...rowData].sort((a, b) =>
+        compareSortValues(getter({ data: a }), getter({ data: b }), sort.dir),
+      );
+    }, [rowData, columnDefs, sort]);
+
+    return (
+      <div data-testid="lineup-wb-grid-mock">
+        <div role="row">
+          {columnDefs?.map((c, i) => (
+            <div
+              role="columnheader"
+              key={(c.colId as string) ?? i}
+              onClick={() => {
+                if (c.sortable !== true || typeof c.colId !== 'string') return;
+                const colId = c.colId;
+                setSort((prev: { colId: string; dir: 'asc' | 'desc' } | null) =>
+                  prev?.colId === colId && prev.dir === 'asc' ? { colId, dir: 'desc' } : { colId, dir: 'asc' },
+                );
+              }}
+            >
+              {c.headerName as string}
+            </div>
+          ))}
+        </div>
+        {displayed.map((row, ri) => (
+          <div role="row" key={(row.id as number) ?? ri}>
+            {columnDefs?.map((c, ci) => {
+              const params = {
+                data: row,
+                value:
+                  typeof c.valueGetter === 'function'
+                    ? (c.valueGetter as (p: unknown) => unknown)({ data: row })
+                    : undefined,
+              };
+              let content: unknown;
+              if (typeof c.cellRenderer === 'function') content = (c.cellRenderer as (p: unknown) => unknown)(params);
+              else if (typeof c.valueFormatter === 'function')
+                content = (c.valueFormatter as (p: unknown) => unknown)(params);
+              else content = params.value;
+              return (
+                <div role="cell" key={(c.colId as string) ?? ci}>
+                  {content as ReactNode}
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
-      {rowData.map((row, ri) => (
-        <div role="row" key={(row.id as number) ?? ri}>
-          {columnDefs?.map((c, ci) => {
-            const params = {
-              data: row,
-              value: typeof c.valueGetter === 'function' ? (c.valueGetter as (p: unknown) => unknown)({ data: row }) : undefined,
-            };
-            let content: unknown;
-            if (typeof c.cellRenderer === 'function') content = (c.cellRenderer as (p: unknown) => unknown)(params);
-            else if (typeof c.valueFormatter === 'function') content = (c.valueFormatter as (p: unknown) => unknown)(params);
-            else content = params.value;
-            return (
-              <div role="cell" key={(c.colId as string) ?? ci}>
-                {content as ReactNode}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  ),
-}));
+    );
+  }
+
+  return { EnterpriseDataGrid };
+});
 
 vi.mock('./EntitySearchAutocomplete', () => ({
   EntitySearchAutocomplete: ({
@@ -1189,5 +1235,220 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     expect(await screen.findByRole('columnheader', { name: /Model name \(catalogue\)/i })).toBeInTheDocument();
     expect(await screen.findByRole('columnheader', { name: /Processor \(catalogue spec\)/i })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /Upload:\s*Dealer price/i })).not.toBeInTheDocument();
+  });
+
+  const WB_COLS_KEY = 'cip.commercial-planner.currentLineupWorkbench.columns.v4';
+  const EMPTY_CELL = '—';
+
+  function seedWorkbenchCols(caseId: number, cols: string[]) {
+    localStorage.setItem(WB_COLS_KEY, JSON.stringify({ version: 1, cases: { [String(caseId)]: cols } }));
+  }
+
+  function identCase(id: number) {
+    return {
+      id,
+      import_job_id: null,
+      commercial_plan_id: 5,
+      file_name: 'idents.csv',
+      period_label: null,
+      country_code: 'US',
+      currency_code: 'USD',
+      commercial_status: 'draft_imported',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 1,
+      created_at: null,
+    };
+  }
+
+  function identLine(id: number, caseId: number, fields: Record<string, unknown>) {
+    return {
+      ...lineupLineOpenChannel(),
+      id,
+      case_id: caseId,
+      staging_open_channel: false,
+      channel_route_uploaded_cell: null,
+      product_sku: null,
+      sku_raw: null,
+      product_sales_model_name: null,
+      model_raw: null,
+      product_name: `Line ${id}`,
+      product_model_name: null,
+      ...fields,
+    };
+  }
+
+  async function openIdentWorkbench(
+    preference: 'sku' | 'sales_model' | 'both',
+    caseId: number,
+    lines: Array<Record<string, unknown>>,
+    cols?: string[],
+  ) {
+    if (cols) seedWorkbenchCols(caseId, cols);
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const draftCase = identCase(caseId);
+    mockApiGetWithPlanEntity(async (url: string) => {
+      if (url.includes('/tenant-commercial-profile')) return { line_identifier_preference: preference };
+      if (url.includes('/lineup-cases?')) return [draftCase];
+      if (url.includes('/workbench-column-metadata')) {
+        return {
+          case_id: caseId,
+          raw_columns: [],
+          parsed_fields: [],
+          catalogue_product_fields: [],
+          catalogue_spec_keys: [],
+          sync_fields: [],
+          calc_fields: [],
+        };
+      }
+      if (url.includes(`/lineup-cases/${caseId}/lines`)) return { lines, dap_semantics_note: null };
+      return [];
+    });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    await user.click(await screen.findByTestId(`lineup-workbench-${caseId}`));
+    await screen.findByTestId('lineup-wb-grid-mock');
+    return user;
+  }
+
+  function columnTexts(header: string): string[] {
+    const grid = screen.getByTestId('lineup-wb-grid-mock');
+    const headers = within(grid).getAllByRole('columnheader');
+    const idx = headers.findIndex((h) => h.textContent === header);
+    expect(idx).toBeGreaterThanOrEqual(0);
+    return within(grid)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => within(row).getAllByRole('cell')[idx]?.textContent ?? '');
+  }
+
+  function identityPairs(): Array<[string, string]> {
+    const sku = columnTexts('SKU');
+    const model = columnTexts('Sales model');
+    return sku.map((value, i) => [value, model[i] ?? '']);
+  }
+
+  it('under both, the workbench shows sortable SKU and Sales model columns and an em dash for empties', async () => {
+    const lines = [
+      identLine(1, 70, { product_sku: 'M-SKU' }),
+      identLine(2, 70, { product_sku: 'A-SKU', product_sales_model_name: 'Z-Model' }),
+      identLine(3, 70, { product_sales_model_name: 'A-Model' }),
+      identLine(4, 70, { sku_raw: 'RAW-1' }),
+      identLine(5, 70, { product_sku: '   ', sku_raw: 'SHOULD-NOT-SHOW', product_sales_model_name: 'W-Model' }),
+    ];
+    const user = await openIdentWorkbench('both', 70, lines, ['product', 'sku']);
+    const grid = screen.getByTestId('lineup-wb-grid-mock');
+
+    expect(within(grid).getByRole('columnheader', { name: 'SKU' })).toBeInTheDocument();
+    expect(within(grid).getByRole('columnheader', { name: 'Sales model' })).toBeInTheDocument();
+    expect(within(grid).queryByRole('columnheader', { name: 'SKU · Sales model' })).not.toBeInTheDocument();
+    expect(within(grid).getAllByRole('columnheader', { name: 'SKU' })).toHaveLength(1);
+    expect(screen.queryByText('SHOULD-NOT-SHOW')).not.toBeInTheDocument();
+    expect(identityPairs()).toEqual([
+      ['M-SKU', EMPTY_CELL],
+      ['A-SKU', 'Z-Model'],
+      [EMPTY_CELL, 'A-Model'],
+      ['RAW-1', EMPTY_CELL],
+      [EMPTY_CELL, 'W-Model'],
+    ]);
+
+    await user.click(within(grid).getByRole('columnheader', { name: 'SKU' }));
+    await waitFor(() => {
+      expect(identityPairs()).toEqual([
+        ['A-SKU', 'Z-Model'],
+        ['M-SKU', EMPTY_CELL],
+        ['RAW-1', EMPTY_CELL],
+        [EMPTY_CELL, 'A-Model'],
+        [EMPTY_CELL, 'W-Model'],
+      ]);
+    });
+
+    await user.click(within(grid).getByRole('columnheader', { name: 'Sales model' }));
+    await waitFor(() => {
+      expect(identityPairs()).toEqual([
+        [EMPTY_CELL, 'A-Model'],
+        [EMPTY_CELL, 'W-Model'],
+        ['A-SKU', 'Z-Model'],
+        ['M-SKU', EMPTY_CELL],
+        ['RAW-1', EMPTY_CELL],
+      ]);
+    });
+
+    await waitFor(() => {
+      const raw = localStorage.getItem(WB_COLS_KEY) ?? '';
+      expect(raw).toContain('"sku"');
+      expect(raw).not.toContain('line_identifier');
+    });
+  });
+
+  it('under both, a fresh workbench layout shows the two identity columns', async () => {
+    const user = await openIdentWorkbench('both', 71, [
+      identLine(1, 71, { product_sales_model_name: 'Solo' }),
+    ]);
+    const grid = screen.getByTestId('lineup-wb-grid-mock');
+    expect(within(grid).getByRole('columnheader', { name: 'SKU' })).toBeInTheDocument();
+    expect(within(grid).getByRole('columnheader', { name: 'Sales model' })).toBeInTheDocument();
+    expect(columnTexts('SKU')).toEqual([EMPTY_CELL]);
+    expect(columnTexts('Sales model')).toEqual(['Solo']);
+
+    await user.click(await screen.findByTestId('lineup-workbench-columns'));
+    expect(await screen.findByRole('checkbox', { name: 'SKU, Sales model' })).toBeChecked();
+    expect(screen.queryByText('SKU · Sales model')).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const raw = localStorage.getItem(WB_COLS_KEY) ?? '';
+      expect(raw).toContain('"sku"');
+      expect(raw).not.toContain('line_identifier');
+    });
+  });
+
+  it('single-mode sku keeps one SKU column and the other-identifier fallback', async () => {
+    await openIdentWorkbench(
+      'sku',
+      72,
+      [
+        identLine(1, 72, { product_sales_model_name: 'OnlyModel' }),
+        identLine(2, 72, { product_sku: 'S1', product_sales_model_name: 'OtherModel' }),
+      ],
+      ['product', 'sku'],
+    );
+    const grid = screen.getByTestId('lineup-wb-grid-mock');
+    expect(within(grid).getByRole('columnheader', { name: 'SKU' })).toBeInTheDocument();
+    expect(within(grid).queryByRole('columnheader', { name: 'Sales model' })).not.toBeInTheDocument();
+    expect(within(grid).queryByRole('columnheader', { name: 'SKU · Sales model' })).not.toBeInTheDocument();
+    expect(columnTexts('SKU')).toEqual(['OnlyModel', 'S1']);
+    expect(screen.queryByText('S1 · OtherModel')).not.toBeInTheDocument();
+  });
+
+  it('single-mode sales_model keeps one Sales model column and the sku fallback', async () => {
+    await openIdentWorkbench(
+      'sales_model',
+      73,
+      [
+        identLine(1, 73, { product_sku: 'S-Fallback' }),
+        identLine(2, 73, { product_sku: 'S1', product_sales_model_name: 'OnlyModel' }),
+      ],
+      ['product', 'sku'],
+    );
+    const grid = screen.getByTestId('lineup-wb-grid-mock');
+    expect(within(grid).getByRole('columnheader', { name: 'Sales model' })).toBeInTheDocument();
+    expect(within(grid).queryByRole('columnheader', { name: 'SKU' })).not.toBeInTheDocument();
+    expect(within(grid).queryByRole('columnheader', { name: 'SKU · Sales model' })).not.toBeInTheDocument();
+    expect(columnTexts('Sales model')).toEqual(['S-Fallback', 'OnlyModel']);
+    expect(screen.queryByText('S1 · OnlyModel')).not.toBeInTheDocument();
+  });
+
+  it('single-mode sales_model does not add an identity column to the commercial template', async () => {
+    await openIdentWorkbench('sales_model', 74, [identLine(1, 74, { product_sku: 'S1', product_sales_model_name: 'M1' })]);
+    const grid = screen.getByTestId('lineup-wb-grid-mock');
+    expect(within(grid).queryByRole('columnheader', { name: 'SKU' })).not.toBeInTheDocument();
+    expect(within(grid).queryByRole('columnheader', { name: 'Sales model' })).not.toBeInTheDocument();
+    expect(within(grid).queryByRole('columnheader', { name: 'SKU · Sales model' })).not.toBeInTheDocument();
   });
 });
