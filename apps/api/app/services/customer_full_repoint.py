@@ -39,13 +39,14 @@ def count_customer_fk_refs(db: Session, customer_id: int) -> dict[str, int]:
     for table, column in discover_customer_fk_columns(db):
         key = f"{table}.{column}"
         try:
-            n = int(
-                db.execute(
-                    text(f"SELECT count(*) FROM {table} WHERE {column} = :cid"),
-                    {"cid": cid},
-                ).scalar()
-                or 0
-            )
+            with db.begin_nested():
+                n = int(
+                    db.execute(
+                        text(f"SELECT count(*) FROM {table} WHERE {column} = :cid"),
+                        {"cid": cid},
+                    ).scalar()
+                    or 0
+                )
         except ProgrammingError:
             n = 0
         if n:
@@ -54,15 +55,16 @@ def count_customer_fk_refs(db: Session, customer_id: int) -> dict[str, int]:
     for table, column, where_extra in extra_customer_ref_specs():
         key = f"{table}.{column}"
         try:
-            n = int(
-                db.execute(
-                    text(
-                        f"SELECT count(*) FROM {table} WHERE {column} = :cid AND ({where_extra})"
-                    ),
-                    {"cid": cid},
-                ).scalar()
-                or 0
-            )
+            with db.begin_nested():
+                n = int(
+                    db.execute(
+                        text(
+                            f"SELECT count(*) FROM {table} WHERE {column} = :cid AND ({where_extra})"
+                        ),
+                        {"cid": cid},
+                    ).scalar()
+                    or 0
+                )
         except ProgrammingError:
             n = 0
         if n:
