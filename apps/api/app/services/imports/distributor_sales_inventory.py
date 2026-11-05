@@ -789,20 +789,20 @@ def _build_resolution_cache(
     customer_name_to_ids: dict[str, list[int]] = {}
     customer_sim_name_to_ids: dict[str, list[int]] = {}
     for c in customer_rows:
-        tid = int(customer_redirect.get(int(c.id), int(c.id)))
+        resolved_customer_id = int(customer_redirect.get(int(c.id), int(c.id)))
         ck = (c.code or "").strip().lower()
         if ck:
-            customer_code_to_id[ck] = tid
+            customer_code_to_id[ck] = resolved_customer_id
         nk = (c.name or "").strip().lower()
         if nk:
             bucket = customer_name_to_ids.setdefault(nk, [])
-            if tid not in bucket:
-                bucket.append(tid)
+            if resolved_customer_id not in bucket:
+                bucket.append(resolved_customer_id)
         sk = normalize_customer_name_for_similarity(c.name)
         if sk:
             sbucket = customer_sim_name_to_ids.setdefault(sk, [])
-            if tid not in sbucket:
-                sbucket.append(tid)
+            if resolved_customer_id not in sbucket:
+                sbucket.append(resolved_customer_id)
 
     if on_sub_phase is not None:
         on_sub_phase("customer_aliases")
