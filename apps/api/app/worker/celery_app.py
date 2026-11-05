@@ -45,6 +45,12 @@ def build_beat_schedule() -> dict:
             "task": "imports.cst_advance_report_slots",
             "schedule": crontab(hour=6, minute=15),
         },
+        # Daily, 05:20 UTC, so the 05:30 listing-capture-poll sees sites this run configured.
+        # The poll itself stays every 30 minutes. Also callable on demand (on_demand=True).
+        "listing-capture-autoconfigure": {
+            "task": "listing_capture.autoconfigure_sites",
+            "schedule": crontab(hour=5, minute=20),
+        },
         # Listing Capture poller (LC-U1): gated no-op unless schedule enabled + listings exist.
         "listing-capture-poll": {
             "task": "listing_capture.poll_listings",

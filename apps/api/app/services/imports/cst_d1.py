@@ -23,13 +23,6 @@ from app.utils.json_safe import to_jsonable
 DEFAULT_VAT_BASIS = "ex_vat"
 CONFIRMED_ALIAS_STATUSES = frozenset({"confirmed", "active"})
 
-# When feed_profile omits listing_seed, known layout families still emit marketplace seeds.
-_LAYOUT_LISTING_SEED_DEFAULTS: dict[str, dict[str, str]] = {
-    "amazon_asin_sourcing": {"marketplace": "amazon", "external_id_from": "raw_product_token"},
-    "takealot_week": {"marketplace": "takealot", "external_id_from": "raw_product_token"},
-    "evetech_sales_report": {"marketplace": "evetech", "external_id_from": "raw_product_token"},
-}
-
 
 def normalize_article_token(raw: str | None) -> str:
     if raw is None:
@@ -151,22 +144,22 @@ def apply_listing_seed_fields(
 ) -> dict[str, Any]:
     """Fill listing_external_id / listing_marketplace for LC-U1 seed emission.
 
-    Customer-agnostic via ``feed_profile.listing_seed``::
+    Customer-agnostic via ``feed_profile.listing_seed`` (data, not a layout-family table)::
 
         {
-          "marketplace": "amazon",                 # required constant when column absent
-          "external_id_from": "raw_product_token"  # or "listing_external_id" (default)
+          "marketplace": "<site key>",            # required constant when the column is absent
+          "external_id_from": "raw_product_token", # or "listing_external_id" (default)
+          "compact_spaced_numeric_external_id": true
         }
 
-    Column-mapped values always win. Never invents a marketplace without config or column.
+    Column-mapped values always win. A layout family does not imply a marketplace.
+    ``compact_spaced_numeric_external_id`` strips spaces from a numeric external id
+    of at least 5 digits when that customer's seed says so.
     """
     if not isinstance(row, dict):
         return row
     profile = feed_profile if isinstance(feed_profile, dict) else {}
     seed_cfg = profile.get("listing_seed") if isinstance(profile.get("listing_seed"), dict) else {}
-    if not seed_cfg:
-        layout = str(profile.get("layout_family") or "").strip()
-        seed_cfg = dict(_LAYOUT_LISTING_SEED_DEFAULTS.get(layout) or {})
 
     ext = row.get("listing_external_id")
     if not (isinstance(ext, str) and ext.strip()):
@@ -188,8 +181,7 @@ def apply_listing_seed_fields(
     elif isinstance(mkt, str):
         row["listing_marketplace"] = mkt.strip().lower()
 
-    # Takealot Product IDs often arrive with spaces ("222 547 542").
-    if (row.get("listing_marketplace") or "").strip().lower() == "takealot":
+    if seed_cfg.get("compact_spaced_numeric_external_id") is True:
         ext_raw = row.get("listing_external_id")
         if isinstance(ext_raw, str) and ext_raw.strip():
             compact = re.sub(r"\s+", "", ext_raw.strip())
@@ -210,7 +202,7 @@ def upsert_cst_listing_seed(
 ) -> CstListingSeed | None:
     """Durable LC-U1 handoff capture. No registry / no auto-confirm.
 
-    De-dupes within the current Session flush (Takealot week files repeat Product ID
+    De-dupes within the current Session flush (week files repeat a product id
     across months) so batched INSERT does not hit uq_cst_listing_seed_*.
     """
     mkt = (marketplace or "").strip().lower()
