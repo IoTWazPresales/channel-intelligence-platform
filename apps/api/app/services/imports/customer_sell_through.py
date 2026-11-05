@@ -789,7 +789,7 @@ def _ingest_parse_result(
 
     for idx, row in enumerate(result.rows):
         if isinstance(row, dict):
-            apply_listing_seed_fields(row, feed_profile)
+            apply_listing_seed_fields(row, feed_profile, session=db, customer_id=customer_id)
             stamp_period_grain(row, week_calendar)
         line = ImportCustomerSellthroughStagingLine(**row)
         line.resolved_customer_id = customer_id
@@ -1291,7 +1291,7 @@ def _handle_flat(
                     row.update(_period_fields_for(row.get("period_grain"), effective_period, week_calendar))
                     row["period_start_date"] = row.get("period_start_date") or effective_period
             stamp_period_grain(row, week_calendar)
-            apply_listing_seed_fields(row, feed_profile)
+            apply_listing_seed_fields(row, feed_profile, session=db, customer_id=customer_id)
 
             line = ImportCustomerSellthroughStagingLine(**row)
             line.resolved_customer_id = customer_id

@@ -55,9 +55,49 @@ def test_listing_seed_compacts_spaced_numeric_id_when_configured():
 
 
 def test_spaced_numeric_id_stays_when_compact_is_not_configured():
+    """No flag and no prior ids: do not invent a compact. History has to show the shape."""
     row = {
         "listing_external_id": "222 547 542",
         "listing_marketplace": "shop-a",
     }
     apply_listing_seed_fields(row, {"listing_seed": {"marketplace": "shop-a"}})
+    assert row["listing_external_id"] == "222 547 542"
+
+
+def test_absent_flag_compacts_when_prior_ids_are_already_compacted():
+    row = {
+        "listing_external_id": "222 547 542",
+        "listing_marketplace": "shop-a",
+    }
+    apply_listing_seed_fields(
+        row,
+        {"listing_seed": {"marketplace": "shop-a"}},
+        prior_external_ids=("222547542", "PLU-KEEP"),
+    )
+    assert row["listing_external_id"] == "222547542"
+
+
+def test_absent_flag_keeps_spaces_when_a_prior_numeric_id_kept_spaces():
+    row = {
+        "listing_external_id": "222 547 542",
+        "listing_marketplace": "shop-a",
+    }
+    apply_listing_seed_fields(
+        row,
+        {"listing_seed": {"marketplace": "shop-a"}},
+        prior_external_ids=("222 547 541", "333444555"),
+    )
+    assert row["listing_external_id"] == "222 547 542"
+
+
+def test_explicit_false_does_not_compact_even_when_prior_ids_are_compacted():
+    row = {
+        "listing_external_id": "222 547 542",
+        "listing_marketplace": "shop-a",
+    }
+    apply_listing_seed_fields(
+        row,
+        {"listing_seed": {"marketplace": "shop-a", "compact_spaced_numeric_external_id": False}},
+        prior_external_ids=("222547542",),
+    )
     assert row["listing_external_id"] == "222 547 542"

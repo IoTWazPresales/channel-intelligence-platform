@@ -9,7 +9,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.cst_listing_seed import CstListingSeed
@@ -17,6 +17,7 @@ from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
+from app.models.listing_capture import CustomerListing
 from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.utils.json_safe import to_jsonable
 
@@ -138,9 +139,66 @@ def propose_customer_article_alias(
     return row
 
 
+def external_ids_show_compacted_numeric_shape(external_ids: list[str] | tuple[str, ...]) -> bool:
+    """True when prior ids are already digits of length >= 5 with no stored spaces.
+
+    A spaced numeric id means this customer kept the spaces, so a later import must
+    not strip them. Non-numeric ids are ignored. No numeric history is not evidence.
+    """
+    numeric: list[str] = []
+    for raw in external_ids:
+        text = str(raw).strip()
+        if not text:
+            continue
+        compact = re.sub(r"\s+", "", text)
+        if compact.isdigit() and len(compact) >= 5:
+            numeric.append(text)
+    if not numeric:
+        return False
+    return all(re.search(r"\s", text) is None for text in numeric)
+
+
+def _prior_external_ids(session: Session, customer_id: int, marketplace: str) -> list[str]:
+    """Listing and seed ids for one customer and marketplace, loaded once per session."""
+    cache: dict[tuple[int, str], list[str]] = session.info.setdefault("_cst_prior_external_ids", {})
+    key = (int(customer_id), marketplace)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    listing_ids = session.scalars(
+        select(CustomerListing.external_id).where(
+            CustomerListing.customer_id == int(customer_id),
+            func.lower(func.trim(CustomerListing.marketplace)) == marketplace,
+            CustomerListing.external_id.is_not(None),
+        )
+    ).all()
+    seed_ids = session.scalars(
+        select(CstListingSeed.external_id).where(
+            CstListingSeed.customer_id == int(customer_id),
+            func.lower(CstListingSeed.marketplace) == marketplace,
+        )
+    ).all()
+    found = [str(value) for value in (*listing_ids, *seed_ids) if value]
+    cache[key] = found
+    return found
+
+
+def _compact_numeric_external_id(row: dict[str, Any]) -> None:
+    ext_raw = row.get("listing_external_id")
+    if not isinstance(ext_raw, str) or not ext_raw.strip():
+        return
+    compact = re.sub(r"\s+", "", ext_raw.strip())
+    if compact.isdigit() and len(compact) >= 5:
+        row["listing_external_id"] = compact
+
+
 def apply_listing_seed_fields(
     row: dict[str, Any],
     feed_profile: dict[str, Any] | None,
+    *,
+    session: Session | None = None,
+    customer_id: int | None = None,
+    prior_external_ids: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     """Fill listing_external_id / listing_marketplace for LC-U1 seed emission.
 
@@ -153,8 +211,13 @@ def apply_listing_seed_fields(
         }
 
     Column-mapped values always win. A layout family does not imply a marketplace.
-    ``compact_spaced_numeric_external_id`` strips spaces from a numeric external id
-    of at least 5 digits when that customer's seed says so.
+
+    Spaced numeric external ids (digits, length >= 5 once spaces are removed):
+    ``compact_spaced_numeric_external_id: true`` always compacts; ``false`` never
+    does. When the flag is absent, compact only if this customer's existing
+    ``customer_listing`` / ``cst_listing_seed`` ids for the same marketplace are
+    already the compacted shape. No history does not compact — the shape has to
+    come from data already stored for that customer.
     """
     if not isinstance(row, dict):
         return row
@@ -181,12 +244,21 @@ def apply_listing_seed_fields(
     elif isinstance(mkt, str):
         row["listing_marketplace"] = mkt.strip().lower()
 
-    if seed_cfg.get("compact_spaced_numeric_external_id") is True:
-        ext_raw = row.get("listing_external_id")
-        if isinstance(ext_raw, str) and ext_raw.strip():
-            compact = re.sub(r"\s+", "", ext_raw.strip())
-            if compact.isdigit() and len(compact) >= 5:
-                row["listing_external_id"] = compact
+    flag = seed_cfg.get("compact_spaced_numeric_external_id")
+    if flag is True:
+        _compact_numeric_external_id(row)
+    elif flag is not False:
+        marketplace = row.get("listing_marketplace")
+        market = marketplace.strip().lower() if isinstance(marketplace, str) else ""
+        ids: list[str] | tuple[str, ...] | None
+        if prior_external_ids is not None:
+            ids = prior_external_ids
+        elif session is not None and customer_id is not None and market:
+            ids = _prior_external_ids(session, int(customer_id), market)
+        else:
+            ids = None
+        if ids and external_ids_show_compacted_numeric_shape(ids):
+            _compact_numeric_external_id(row)
     return row
 
 

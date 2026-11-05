@@ -4,7 +4,11 @@ A reporting customer is ``customer_report_config.reports_expected``. The site ke
 ``feed_profile_json.listing_seed.marketplace`` when that seed names one, otherwise each
 distinct ``customer_listing.marketplace`` for that customer. Nothing here names a site.
 Steward-filled columns are left as they are. The beat task and the steward endpoint pass
-an HTTP getter; callers that pass none do not fetch.
+an HTTP getter; callers that pass none do not fetch. The beat runs this daily at 05:20 UTC.
+The listing-capture poll runs every 30 minutes.
+
+A customer whose adapter is still unconfigured and who also has no seller names or ids is
+reported with both ``needs_details_pattern`` and ``no_seller_data`` (in both buckets).
 
 Seed shape (all optional, all data)::
 
@@ -187,6 +191,7 @@ def _configure_customer(
                 site_key=None,
                 outcome=OUTCOME_EXCLUDED,
                 reason=REASON_NO_SITE_KEY,
+                reasons=[REASON_NO_SITE_KEY],
             )
         ]
     entries: list[dict[str, Any]] = []
@@ -254,20 +259,29 @@ def _configure_site(
             _ensure_seller(session, row, customer_id=int(customer.id), seed=seed)
             session.refresh(row)
 
-    seller_ok = _seller_present(row, int(customer.id)) if row is not None else False
+    seller_known = _seller_known(row, int(customer.id), seed)
     configured = bool(row is not None and row.is_active and configured_adapter(site_config_from_row(row)) is not None)
+    reasons: list[str] = []
     if not configured:
-        outcome, reason = OUTCOME_NEEDS_PATTERN, REASON_NEEDS_PATTERN
-    elif not seller_ok:
-        outcome, reason = OUTCOME_EXCLUDED, REASON_NO_SELLER
-    else:
+        reasons.append(REASON_NEEDS_PATTERN)
+    if not seller_known:
+        reasons.append(REASON_NO_SELLER)
+    if not reasons:
         outcome, reason = OUTCOME_CONFIGURED, None
+    elif reasons == [REASON_NO_SELLER]:
+        outcome, reason = OUTCOME_EXCLUDED, REASON_NO_SELLER
+    elif reasons == [REASON_NEEDS_PATTERN]:
+        outcome, reason = OUTCOME_NEEDS_PATTERN, REASON_NEEDS_PATTERN
+    else:
+        # Both gaps. ``reason`` stays unset so one field cannot hide the other.
+        outcome, reason = OUTCOME_NEEDS_PATTERN, None
     return _entry(
         customer_id=int(customer.id),
         tenant_id=tenant_id,
         site_key=site_key,
         outcome=outcome,
         reason=reason,
+        reasons=reasons,
         site_id=int(row.id) if row is not None and row.id is not None else None,
         pattern_status=pattern_status,
     )
@@ -452,6 +466,14 @@ def _ensure_seller(session: Session, row: ListingSite, *, customer_id: int, seed
     )
 
 
+def _seller_known(row: ListingSite | None, customer_id: int, seed: dict[str, Any]) -> bool:
+    """Stored seller row or seed names/ids. Seed data counts before the row is written."""
+    if _seller_present(row, customer_id):
+        return True
+    names, ids = _seed_seller(seed)
+    return any(str(value or "").strip() for value in names) or any(str(value or "").strip() for value in ids)
+
+
 def _seller_present(row: ListingSite | None, customer_id: int) -> bool:
     if row is None:
         return False
@@ -578,9 +600,11 @@ def _entry(
     site_key: str | None,
     outcome: str,
     reason: str | None,
+    reasons: list[str] | None = None,
     site_id: int | None = None,
     pattern_status: str | None = None,
 ) -> dict[str, Any]:
+    listed = list(reasons) if reasons is not None else ([reason] if reason else [])
     return {
         "customer_id": customer_id,
         "tenant_id": tenant_id,
@@ -588,16 +612,29 @@ def _entry(
         "site_id": site_id,
         "outcome": outcome,
         "reason": reason,
+        "reasons": listed,
         "pattern_status": pattern_status,
     }
 
 
 def _bucket(entries: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     ordered = sorted(entries, key=lambda entry: (entry["tenant_id"], entry["customer_id"], entry["site_key"] or ""))
+    configured: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
+    needs_pattern: list[dict[str, Any]] = []
+    for entry in ordered:
+        reasons = entry.get("reasons") or []
+        if entry["outcome"] == OUTCOME_CONFIGURED and not reasons:
+            configured.append(entry)
+            continue
+        if REASON_NO_SELLER in reasons or entry["outcome"] == OUTCOME_EXCLUDED:
+            excluded.append(entry)
+        if REASON_NEEDS_PATTERN in reasons or entry["outcome"] == OUTCOME_NEEDS_PATTERN:
+            needs_pattern.append(entry)
     return {
-        "configured": [entry for entry in ordered if entry["outcome"] == OUTCOME_CONFIGURED],
-        "excluded": [entry for entry in ordered if entry["outcome"] == OUTCOME_EXCLUDED],
-        "needs_pattern": [entry for entry in ordered if entry["outcome"] == OUTCOME_NEEDS_PATTERN],
+        "configured": configured,
+        "excluded": excluded,
+        "needs_pattern": needs_pattern,
     }
 
 

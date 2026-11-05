@@ -204,7 +204,7 @@ def _parse_decimal(value: Any) -> float | None:
     s = _normalize_text(value)
     if not s:
         return None
-    # Takealot / ZA currency cells: "R  1 486.00", "R1,999.00"
+    # ZA currency cells: "R  1 486.00", "R1,999.00"
     s = s.replace(",", "")
     s = re.sub(r"^[^\d\-]+", "", s)
     s = re.sub(r"\s+", "", s)
@@ -598,7 +598,7 @@ def enrich_flat_rows_from_companion_soh(
 ) -> list[dict[str, Any]]:
     """Fill missing sell/cost/SOH from a companion SOH sheet described by feed_profile.
 
-    Takealot WEEK workbooks carry qty on the sales sheet and prices/SOH on ``soh``.
+    WEEK workbooks carry qty on the sales sheet and prices/SOH on ``soh``.
     Join key defaults to barcode (override via ``soh_join_columns``).
     """
     if not rows or not isinstance(feed_profile, dict):

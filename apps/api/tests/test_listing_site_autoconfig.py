@@ -14,10 +14,12 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from app.models.cst_listing_seed import CstListingSeed
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.listing_capture import CustomerListing
 from app.models.listing_site import ListingSite
+from app.services.imports.cst_d1 import apply_listing_seed_fields
 from app.services.listing_capture.autoconfig import autoconfigure_sites, capture_health
 from app.services.listing_capture.registry import poll_active_listings
 from app.services.listing_capture.site_pause import MemorySitePauseStore
@@ -130,7 +132,7 @@ def _site(session: Session, tenant: str, site_key: str) -> ListingSite:
     return found
 
 
-def test_autoconfigure_task_is_scheduled_before_the_half_hour_poll() -> None:
+def test_autoconfigure_runs_daily_at_0520_and_poll_runs_every_30_minutes() -> None:
     schedule = build_beat_schedule()
     auto = schedule["listing-capture-autoconfigure"]
     poll = schedule["listing-capture-poll"]
@@ -138,7 +140,8 @@ def test_autoconfigure_task_is_scheduled_before_the_half_hour_poll() -> None:
     assert poll["task"] == "listing_capture.poll_listings"
     assert auto["schedule"].hour == {5}
     assert auto["schedule"].minute == {20}
-    assert 30 in poll["schedule"].minute
+    assert set(poll["schedule"].minute) == {0, 30}
+    assert len(set(poll["schedule"].hour)) > 1
     if dev_beat_disabled():
         from app.worker.tasks import listing_capture_autoconfigure_sites_task
 
@@ -375,6 +378,60 @@ def test_excluded_customers_keep_their_reason(db_session: Session) -> None:
     assert (no_seller.id, "no_seller_data") in health_reasons
 
 
+def test_missing_adapter_and_seller_reports_both_reasons(db_session: Session) -> None:
+    tenant = f"t-both-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "both")
+    _report(db_session, customer, {"marketplace": "shop-b"})
+    _listing(db_session, customer, site_key="shop-b", url="https://shop-b.example.test/only")
+    report = autoconfigure_sites(db_session, tenant_id=tenant)
+    needs = [row for row in report["needs_pattern"] if row["customer_id"] == customer.id]
+    excluded = [row for row in report["excluded"] if row["customer_id"] == customer.id]
+    assert len(needs) == 1 and len(excluded) == 1
+    assert needs[0] is excluded[0]
+    assert needs[0]["reasons"] == ["needs_details_pattern", "no_seller_data"]
+    assert needs[0]["reason"] is None
+    assert all(row["customer_id"] != customer.id for row in report["configured"])
+    health = capture_health(db_session, tenant_id=tenant)
+    health_rows = [row for row in health["exclusions"] if row["customer_id"] == customer.id]
+    assert len(health_rows) == 1
+    assert health_rows[0]["reasons"] == ["needs_details_pattern", "no_seller_data"]
+
+
+def test_absent_compact_flag_follows_stored_external_ids(db_session: Session) -> None:
+    tenant = f"t-compact-{uuid.uuid4().hex[:6]}"
+    compacted = _customer(db_session, tenant, "compacted")
+    spaced = _customer(db_session, tenant, "spaced")
+    db_session.add(
+        CstListingSeed(
+            customer_id=int(compacted.id),
+            marketplace="shop-a",
+            external_id="222547542",
+            status="proposed",
+        )
+    )
+    listing = _listing(db_session, spaced, site_key="shop-a", url="https://shop-a.example.test/p/1")
+    listing.external_id = "111 222 333"
+    db_session.flush()
+
+    compact_row = {"listing_external_id": "333 444 555", "listing_marketplace": "shop-a"}
+    apply_listing_seed_fields(
+        compact_row,
+        {"listing_seed": {"marketplace": "shop-a"}},
+        session=db_session,
+        customer_id=int(compacted.id),
+    )
+    assert compact_row["listing_external_id"] == "333444555"
+
+    spaced_row = {"listing_external_id": "333 444 555", "listing_marketplace": "shop-a"}
+    apply_listing_seed_fields(
+        spaced_row,
+        {"listing_seed": {"marketplace": "shop-a"}},
+        session=db_session,
+        customer_id=int(spaced.id),
+    )
+    assert spaced_row["listing_external_id"] == "333 444 555"
+
+
 def test_second_tenant_with_the_same_site_key_does_not_collide_or_leak(db_session: Session) -> None:
     tag = uuid.uuid4().hex[:6]
     tenant_a, tenant_b = f"t-a-{tag}", f"t-b-{tag}"
@@ -434,28 +491,77 @@ def test_second_tenant_with_the_same_site_key_does_not_collide_or_leak(db_sessio
     assert health_a["sites"][0]["site_id"] == site_a.id
 
 
+# Fixture rows use marketplace="test" as a placeholder word. It is not a site key;
+# scanning it would match the word "test" across the API. Every other marketplace
+# value is taken from listing_seed / customer_listing fixtures and from data files.
+_PLACEHOLDER_MARKETPLACES = frozenset({"test"})
+_CONFIG_SKIP_DIRS = frozenset({".git", "node_modules", ".worktrees", ".venv", "venv", "__pycache__", ".next", "dist"})
+
+
+def _declared_site_keys() -> set[str]:
+    """Site keys named by fixtures and config. Not a hand-maintained retailer list."""
+    keys: set[str] = set()
+    marketplace_re = re.compile(
+        r"""(?:["']marketplace["']\s*:|marketplace\s*=)\s*["']([^"']+)["']"""
+    )
+    tests_dir = Path(__file__).resolve().parent
+    for path in tests_dir.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        source = path.read_text(encoding="utf-8", errors="replace")
+        keys.update(match.group(1).strip().lower() for match in marketplace_re.finditer(source))
+    repo = Path(__file__).resolve().parents[3]
+    field_re = re.compile(
+        r"""["'](?:site_key|marketplace)["']\s*:\s*["']([^"']+)["']"""
+    )
+    yaml_re = re.compile(r"""^(?:site_key|marketplace)\s*:\s*["']?([A-Za-z0-9][\w.-]*)["']?\s*$""", re.M)
+    for root in (repo / "scripts", repo / "apps" / "api" / "scripts", repo / "docs"):
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file() or any(part in _CONFIG_SKIP_DIRS for part in path.parts):
+                continue
+            if path.suffix.lower() not in {".json", ".yaml", ".yml"}:
+                continue
+            source = path.read_text(encoding="utf-8", errors="replace")
+            keys.update(match.group(1).strip().lower() for match in field_re.finditer(source))
+            if path.suffix.lower() in {".yaml", ".yml"}:
+                keys.update(match.group(1).strip().lower() for match in yaml_re.finditer(source))
+    keys -= _PLACEHOLDER_MARKETPLACES
+    return {key for key in keys if len(key) >= 4}
+
+
 def test_no_site_literals(db_session: Session) -> None:
     db = db_session.execute(text("select current_database()")).scalar_one()
     print("current_database()", db)
     assert db == "cip_test"
-    keys = [
-        str(key)
-        for key in db_session.execute(text("select distinct site_key from listing_site where site_key <> ''")).scalars().all()
-        if key and len(str(key)) >= 2
-    ]
+    keys = _declared_site_keys()
+    for key in db_session.execute(
+        text("select distinct site_key from listing_site where site_key <> ''")
+    ).scalars().all():
+        text_key = str(key).strip().lower()
+        if len(text_key) >= 4 and text_key not in _PLACEHOLDER_MARKETPLACES:
+            keys.add(text_key)
+    assert keys, "forbidden set must come from fixtures, config, or cip_test site keys"
     api_root = Path(__file__).resolve().parents[1]
     hits: list[str] = []
+    patterns = [
+        (key, re.compile(r"(?<![A-Za-z0-9_])" + re.escape(key) + r"(?![A-Za-z0-9_])", re.IGNORECASE))
+        for key in sorted(keys)
+    ]
     for root in (api_root / "app", api_root / "alembic"):
         for path in root.rglob("*"):
             if "__pycache__" in path.parts or path.suffix.lower() not in {".py", ".sql", ".mako"}:
                 continue
             source = path.read_text(encoding="utf-8", errors="replace")
-            for key in keys:
-                pattern = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(key) + r"(?![A-Za-z0-9_])")
-                for line_no, line in enumerate(source.splitlines(), start=1):
+            for line_no, line in enumerate(source.splitlines(), start=1):
+                for key, pattern in patterns:
                     if pattern.search(line):
                         hits.append(f"{path.relative_to(api_root)}:{line_no}: {key}")
-    assert hits == [], "listing_site keys from cip_test must not be literals in app/ or alembic/:\n" + "\n".join(hits)
+    assert hits == [], (
+        "site keys from fixtures, config, and cip_test must not be literals in app/ or alembic/:\n"
+        + "\n".join(hits)
+    )
 
 
 def _count_sites(session: Session, tenant: str, site_key: str) -> int:

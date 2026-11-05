@@ -866,8 +866,9 @@ def listing_capture_autoconfigure_sites_task(
 ) -> dict:
     """Beat task: fill empty listing-site rows for reporting customers. Idempotent.
 
-    Scheduled daily before the half-hour poll. ``on_demand=True`` runs even when dev
-    beat is disabled (the steward endpoint calls the service directly).
+    Scheduled daily at 05:20 UTC. The listing-capture poll runs every 30 minutes.
+    ``on_demand=True`` runs even when dev beat is disabled (the steward endpoint
+    calls the service directly).
     """
     import logging
 
