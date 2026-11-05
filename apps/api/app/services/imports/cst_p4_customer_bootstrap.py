@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
 
-TAKEALOT_CUSTOMER_ID = 20
+EXCLUDED_PILOT_CUSTOMER_ID = 20
 
 P4_CUSTOMER_IDS: dict[int, str] = {
     52: "Evetech",
@@ -62,10 +62,10 @@ def bootstrap_p4_customer_configs(session: Session) -> dict[str, Any]:
     missing_customer: list[int] = []
 
     for customer_id, expected_name in P4_CUSTOMER_IDS.items():
-        if customer_id == TAKEALOT_CUSTOMER_ID:
+        if customer_id == EXCLUDED_PILOT_CUSTOMER_ID:
             # Defensive — customer_id=20 is never in P4_CUSTOMER_IDS, but this guard stays
             # even if the roster changes later.
-            skipped.append({"customer_id": customer_id, "reason": "takealot_never_touched"})
+            skipped.append({"customer_id": customer_id, "reason": "excluded_customer_never_touched"})
             continue
 
         customer = session.get(DimCustomer, customer_id)

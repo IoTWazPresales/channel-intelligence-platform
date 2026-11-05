@@ -9,7 +9,7 @@ from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
 from app.services.imports.cst_p4_customer_bootstrap import (
     P4_CUSTOMER_IDS,
-    TAKEALOT_CUSTOMER_ID,
+    EXCLUDED_PILOT_CUSTOMER_ID,
     bootstrap_p4_customer_configs,
 )
 
@@ -51,7 +51,7 @@ def test_p4_roster_matches_expected_ids() -> None:
         15: "Makro",
         57: "Game",
     }
-    assert TAKEALOT_CUSTOMER_ID not in P4_CUSTOMER_IDS
+    assert EXCLUDED_PILOT_CUSTOMER_ID not in P4_CUSTOMER_IDS
 
 
 def test_creates_placeholder_config_for_each_customer() -> None:
@@ -129,5 +129,5 @@ def test_takealot_never_touched_even_if_added_to_roster(monkeypatch) -> None:
     customers[20] = _customer(20, "Takealot")
     session = _FakeSession(customers, configs={})
     result = mod.bootstrap_p4_customer_configs(session)
-    assert any(s["customer_id"] == 20 and s["reason"] == "takealot_never_touched" for s in result["skipped"])
+    assert any(s["customer_id"] == 20 and s["reason"] == "excluded_customer_never_touched" for s in result["skipped"])
     assert 20 not in {c["customer_id"] for c in result["created"]}

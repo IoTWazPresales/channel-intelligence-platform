@@ -149,6 +149,34 @@ def test_autoconfigure_runs_daily_at_0520_and_poll_runs_every_30_minutes() -> No
         assert skipped == {"skipped": True, "reason": "dev_beat_disabled"}
 
 
+def test_autoconfigure_task_does_not_pass_http_when_live_fetch_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CIP_LISTING_LIVE_FETCH", raising=False)
+    seen: dict[str, object] = {}
+
+    def fake_auto(session, *, tenant_id=None, http_get=None):
+        seen["http_get"] = http_get
+        return {"configured": [], "excluded": [], "needs_pattern": [], "live_fetch_disabled": True}
+
+    class _Session:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def commit(self):
+            seen["committed"] = True
+
+    monkeypatch.setattr("app.services.listing_capture.autoconfig.autoconfigure_sites", fake_auto)
+    monkeypatch.setattr("app.db.session_sync.SessionLocal", lambda: _Session())
+    from app.worker.tasks import listing_capture_autoconfigure_sites_task
+
+    result = listing_capture_autoconfigure_sites_task.run(on_demand=True)
+    assert seen["http_get"] is None
+    assert result["live_fetch_disabled"] is True
+    assert seen["committed"] is True
+
+
 def test_seed_configures_a_site_and_a_second_run_does_not_change_it(db_session: Session) -> None:
     tenant = f"t-seed-{uuid.uuid4().hex[:6]}"
     customer = _customer(db_session, tenant, "seed")
@@ -277,7 +305,8 @@ def test_steward_fields_are_not_overwritten(db_session: Session) -> None:
     ]
 
 
-def test_html_probe_configures_and_mixed_urls_need_a_pattern(db_session: Session) -> None:
+def test_html_probe_configures_and_mixed_urls_need_a_pattern(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CIP_LISTING_LIVE_FETCH", "1")
     tenant = f"t-html-{uuid.uuid4().hex[:6]}"
     product = _product(db_session, tenant)
     html_customer = _customer(db_session, tenant, "html")
@@ -368,7 +397,8 @@ def test_excluded_customers_keep_their_reason(db_session: Session) -> None:
     reasons = {row["customer_id"]: row["reason"] for row in report["excluded"]}
     assert reasons[no_key.id] == "no_site_key"
     assert reasons[no_seller.id] == "no_seller_data"
-    assert silent.id not in {row["customer_id"] for bucket in report.values() for row in bucket}
+    buckets = [value for value in report.values() if isinstance(value, list)]
+    assert silent.id not in {row["customer_id"] for bucket in buckets for row in bucket}
     seller_site = _site(db_session, tenant, "shop-a")
     assert seller_site.adapter_key == "html_page"
     assert seller_site.sellers == []
@@ -395,6 +425,75 @@ def test_missing_adapter_and_seller_reports_both_reasons(db_session: Session) ->
     health_rows = [row for row in health["exclusions"] if row["customer_id"] == customer.id]
     assert len(health_rows) == 1
     assert health_rows[0]["reasons"] == ["needs_details_pattern", "no_seller_data"]
+
+
+def test_live_fetch_off_does_not_call_http(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CIP_LISTING_LIVE_FETCH", raising=False)
+    tenant = f"t-off-{uuid.uuid4().hex[:6]}"
+    product = _product(db_session, tenant)
+    customer = _customer(db_session, tenant, "off")
+    _report(db_session, customer, {"marketplace": "shop-a", "seller_names": ["Seller"]})
+    _listing(db_session, customer, site_key="shop-a", url="https://shop-a.example.test/p/111", product=product)
+    calls: list[str] = []
+
+    def http_get(url, headers=None):
+        calls.append(url)
+        return 200, _PAGE
+
+    report = autoconfigure_sites(db_session, tenant_id=tenant, http_get=http_get)
+    assert calls == []
+    assert report["live_fetch_disabled"] is True
+    assert _site(db_session, tenant, "shop-a").adapter_key is None
+
+
+def test_bad_seller_seed_shapes_leave_the_other_customers_configured(db_session: Session) -> None:
+    tenant = f"t-seller-{uuid.uuid4().hex[:6]}"
+    broken = _customer(db_session, tenant, "broken")
+    blank = _customer(db_session, tenant, "blank")
+    blanks = _customer(db_session, tenant, "blanks")
+    named = _customer(db_session, tenant, "named")
+    good = _customer(db_session, tenant, "good")
+    _report(
+        db_session,
+        broken,
+        {"marketplace": "shop-z", "seller_names": {"bad": True}, "site": {"adapter_key": "html_page"}},
+    )
+    _report(
+        db_session,
+        blank,
+        {"marketplace": "shop-a", "seller_names": "   ", "seller_ids": "  ", "site": {"adapter_key": "html_page"}},
+    )
+    _report(
+        db_session,
+        blanks,
+        {"marketplace": "shop-b", "seller_names": [" ", ""], "site": {"adapter_key": "html_page"}},
+    )
+    _report(
+        db_session,
+        named,
+        {
+            "marketplace": "shop-c",
+            "seller_names": "  Counter  ",
+            "seller_ids": "  sid-9 ",
+            "site": {"adapter_key": "html_page"},
+        },
+    )
+    _report(
+        db_session,
+        good,
+        {"marketplace": "shop-w", "seller_names": ["Good Seller"], "site": {"adapter_key": "html_page"}},
+    )
+    report = autoconfigure_sites(db_session, tenant_id=tenant)
+    reasons = {row["customer_id"]: row["reason"] for row in report["excluded"]}
+    assert reasons[broken.id] == "seller_seed_invalid"
+    assert reasons[blank.id] == "no_seller_data"
+    assert reasons[blanks.id] == "no_seller_data"
+    assert {row["customer_id"] for row in report["configured"]} >= {named.id, good.id}
+    assert _site(db_session, tenant, "shop-c").sellers[0].seller_names == ["Counter"]
+    assert _site(db_session, tenant, "shop-c").sellers[0].seller_ids == ["sid-9"]
+    assert _site(db_session, tenant, "shop-w").sellers[0].seller_names == ["Good Seller"]
+    assert _site(db_session, tenant, "shop-a").sellers == []
+    assert db_session.scalar(text("select id from listing_site where tenant_id = :t and site_key = 'shop-z'"), {"t": tenant}) is None
 
 
 def test_absent_compact_flag_follows_stored_external_ids(db_session: Session) -> None:
@@ -546,7 +645,8 @@ def test_no_site_literals(db_session: Session) -> None:
     api_root = Path(__file__).resolve().parents[1]
     hits: list[str] = []
     patterns = [
-        (key, re.compile(r"(?<![A-Za-z0-9_])" + re.escape(key) + r"(?![A-Za-z0-9_])", re.IGNORECASE))
+        # Underscore is not a boundary: prefix_key and key_suffix still name the key.
+        (key, re.compile(r"(?<![A-Za-z0-9])" + re.escape(key) + r"(?![A-Za-z0-9])", re.IGNORECASE))
         for key in sorted(keys)
     ]
     for root in (api_root / "app", api_root / "alembic"):

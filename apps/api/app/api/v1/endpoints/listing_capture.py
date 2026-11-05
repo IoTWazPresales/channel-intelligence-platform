@@ -198,14 +198,15 @@ def put_site_seller(
 def post_autoconfigure_sites(user: dict = Depends(require_roles(Role.STEWARD))):
     """Fill empty listing sites for this tenant's reporting customers. Steward only."""
     from app.services.listing_capture.autoconfig import autoconfigure_sites
-    from app.services.listing_capture.observation import default_http_get
+    from app.services.listing_capture.observation import default_http_get, listing_live_fetch_enabled
 
+    live = listing_live_fetch_enabled()
     with SessionLocal() as session:
         try:
             report = autoconfigure_sites(
                 session,
                 tenant_id=tenant_id_from_user(user),
-                http_get=default_http_get,
+                http_get=default_http_get if live else None,
             )
             session.commit()
         except Exception:

@@ -61,6 +61,18 @@ def ensure_database_allowed(database_name: str, *, allow_cip: bool) -> None:
         raise DatabaseRefused("refusing database cip; pass --allow-cip to run against cip")
 
 
+def _seller_values(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items: list[Any] = [value]
+    elif isinstance(value, list):
+        items = value
+    else:
+        raise DatabaseRefused("seller_names and seller_ids must be a string or a list")
+    return [text for item in items if (text := str(item or "").strip())]
+
+
 def merge_listing_seed(profile: dict[str, Any] | None, patch: dict[str, Any]) -> dict[str, Any]:
     """Merge seller names/ids and curated site fields. Other keys stay."""
     base = dict(profile or {})
@@ -70,9 +82,14 @@ def merge_listing_seed(profile: dict[str, Any] | None, patch: dict[str, Any]) ->
     if isinstance(marketplace, str) and marketplace.strip():
         seed["marketplace"] = marketplace.strip().lower()
     if "seller_names" in patch:
-        seed["seller_names"] = [str(value) for value in (patch.get("seller_names") or [])]
+        seed["seller_names"] = _seller_values(patch.get("seller_names"))
     if "seller_ids" in patch:
-        seed["seller_ids"] = [str(value) for value in (patch.get("seller_ids") or [])]
+        seed["seller_ids"] = _seller_values(patch.get("seller_ids"))
+    if "compact_spaced_numeric_external_id" in patch:
+        flag = patch.get("compact_spaced_numeric_external_id")
+        if not isinstance(flag, bool):
+            raise DatabaseRefused("compact_spaced_numeric_external_id must be a boolean")
+        seed["compact_spaced_numeric_external_id"] = flag
     site_patch = patch.get("site")
     if isinstance(site_patch, dict):
         current_site = seed.get("site")

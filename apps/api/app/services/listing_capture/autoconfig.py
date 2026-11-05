@@ -62,6 +62,8 @@ LOCK_NAMESPACE = "listing_capture.autoconfigure_sites"
 REASON_NO_SITE_KEY = "no_site_key"
 REASON_NO_SELLER = "no_seller_data"
 REASON_NEEDS_PATTERN = "needs_details_pattern"
+REASON_SELLER_SEED = "seller_seed_invalid"
+REASON_FAILED = "autoconfigure_failed"
 OUTCOME_CONFIGURED = "configured"
 OUTCOME_EXCLUDED = "excluded"
 OUTCOME_NEEDS_PATTERN = "needs_pattern"
@@ -83,17 +85,22 @@ def autoconfigure_sites(
     *,
     tenant_id: str | None = None,
     http_get: _HttpGet | None = None,
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, Any]:
     """Create or fill listing sites for reporting customers. Idempotent under an advisory lock.
 
     ``tenant_id`` limits the run to one tenant. The beat task passes none and walks every
     tenant that has a reporting customer, filtering every read and write by that tenant.
     """
+    from app.services.listing_capture.observation import listing_live_fetch_enabled
+
+    live = listing_live_fetch_enabled()
     _advisory_lock(session)
     entries: list[dict[str, Any]] = []
     for tid in _tenant_ids(session, tenant_id):
-        entries.extend(_configure_tenant(session, tid, http_get=http_get))
-    return _bucket(entries)
+        entries.extend(_configure_tenant(session, tid, http_get=http_get if live else None))
+    report = _bucket(entries)
+    report["live_fetch_disabled"] = not live
+    return report
 
 
 def capture_health(session: Session, *, tenant_id: str) -> dict[str, Any]:
@@ -147,16 +154,43 @@ def _configure_tenant(
     for config, customer in _reporting_customers(session, tenant_id):
         if str(customer.tenant_id) != tenant_id:
             continue
-        entries.extend(
-            _configure_customer(
-                session,
-                tenant_id=tenant_id,
-                customer=customer,
-                seed=_seed(config),
-                http_get=http_get,
-                apply=apply,
+        try:
+            with session.begin_nested():
+                customer_entries = _configure_customer(
+                    session,
+                    tenant_id=tenant_id,
+                    customer=customer,
+                    seed=_seed(config),
+                    http_get=http_get,
+                    apply=apply,
+                )
+        except SellerSeedError as exc:
+            logger.info("listing autoconfigure: customer %s rejected seller seed: %s", customer.id, exc)
+            entries.append(
+                _entry(
+                    customer_id=int(customer.id),
+                    tenant_id=tenant_id,
+                    site_key=None,
+                    outcome=OUTCOME_EXCLUDED,
+                    reason=REASON_SELLER_SEED,
+                    reasons=[REASON_SELLER_SEED],
+                )
             )
-        )
+            continue
+        except Exception:
+            logger.exception("listing autoconfigure: customer %s failed", customer.id)
+            entries.append(
+                _entry(
+                    customer_id=int(customer.id),
+                    tenant_id=tenant_id,
+                    site_key=None,
+                    outcome=OUTCOME_EXCLUDED,
+                    reason=REASON_FAILED,
+                    reasons=[REASON_FAILED],
+                )
+            )
+            continue
+        entries.extend(customer_entries)
     return entries
 
 
@@ -340,7 +374,9 @@ def _html_probe(
 
     A page corroborates when its gtin/mpn/model equals the product. A stock code does not.
     """
-    if not adapter_blank or http_get is None:
+    from app.services.listing_capture.observation import listing_live_fetch_enabled
+
+    if not adapter_blank or http_get is None or not listing_live_fetch_enabled():
         return False
     listing = next((row for row in listings if row.product_id and str(row.url or "").strip()), None)
     if listing is None:
@@ -493,7 +529,33 @@ def _seed(config: CustomerReportConfig) -> dict[str, Any]:
     return dict(seed) if isinstance(seed, dict) else {}
 
 
-def _seed_seller(seed: dict[str, Any]) -> tuple[list[Any], list[Any]]:
+class SellerSeedError(ValueError):
+    """Seller names or ids are not a string or a list of strings."""
+
+
+def _seller_values(value: Any) -> list[str]:
+    """A string is one seller value. Lists are stripped. Empty values are dropped."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items: list[Any] = [value]
+    elif isinstance(value, (list, tuple)):
+        items = list(value)
+    else:
+        raise SellerSeedError("seller field must be a string or a list")
+    cleaned: list[str] = []
+    for item in items:
+        if item is None:
+            continue
+        if not isinstance(item, str):
+            raise SellerSeedError("seller field must be a string or a list")
+        text = item.strip()
+        if text:
+            cleaned.append(text)
+    return cleaned
+
+
+def _seed_seller(seed: dict[str, Any]) -> tuple[list[str], list[str]]:
     block = seed.get("seller") if isinstance(seed.get("seller"), dict) else {}
     site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
     names = seed.get("seller_names")
@@ -506,7 +568,7 @@ def _seed_seller(seed: dict[str, Any]) -> tuple[list[Any], list[Any]]:
         ids = block.get("ids", block.get("seller_ids"))
     if ids is None:
         ids = site.get("seller_ids")
-    return list(names or []), list(ids or [])
+    return _seller_values(names), _seller_values(ids)
 
 
 def _display_name(seed: dict[str, Any], site_key: str) -> str:

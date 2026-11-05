@@ -63,6 +63,20 @@ def test_refuses_cip_unless_allowed() -> None:
     ops.ensure_database_allowed("cip_test", allow_cip=False)
 
 
+def test_merge_pins_compact_flag_and_keeps_a_string_seller_whole() -> None:
+    ops = _ops()
+    merged = ops.merge_listing_seed(
+        {},
+        {"seller_names": "  Counter  ", "compact_spaced_numeric_external_id": False},
+    )
+    assert merged["listing_seed"]["seller_names"] == ["Counter"]
+    assert merged["listing_seed"]["compact_spaced_numeric_external_id"] is False
+    pinned = ops.merge_listing_seed(merged, {"compact_spaced_numeric_external_id": True})
+    assert pinned["listing_seed"]["compact_spaced_numeric_external_id"] is True
+    with pytest.raises(ops.DatabaseRefused):
+        ops.merge_listing_seed({}, {"compact_spaced_numeric_external_id": "yes"})
+
+
 def test_merge_keeps_unrelated_profile_keys() -> None:
     ops = _ops()
     merged = ops.merge_listing_seed(

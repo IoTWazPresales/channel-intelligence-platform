@@ -854,9 +854,9 @@ def reports_fanout_import_complete_task(tenant_id: str) -> dict:
 
 def _listing_live_fetch_enabled() -> bool:
     """`CIP_LISTING_LIVE_FETCH` truthy values: 1/true/on — default off (P5)."""
-    import os
+    from app.services.listing_capture.observation import listing_live_fetch_enabled
 
-    return os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on")
+    return listing_live_fetch_enabled()
 
 
 @celery_app.task(name="listing_capture.autoconfigure_sites")
@@ -881,8 +881,13 @@ def listing_capture_autoconfigure_sites_task(
     if dev_beat_disabled() and not on_demand:
         return {"skipped": True, "reason": "dev_beat_disabled"}
 
+    live = _listing_live_fetch_enabled()
     with SessionLocal() as session:
-        report = autoconfigure_sites(session, tenant_id=tenant_id, http_get=default_http_get)
+        report = autoconfigure_sites(
+            session,
+            tenant_id=tenant_id,
+            http_get=default_http_get if live else None,
+        )
         session.commit()
     log.info(
         "listing capture autoconfigure: configured=%s excluded=%s needs_pattern=%s",
