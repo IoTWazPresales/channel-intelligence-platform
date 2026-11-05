@@ -14,8 +14,10 @@ from sqlalchemy import text
 from app.db.session_sync import SessionLocal
 from app.main import app
 
-STEWARD = {"X-User-Role": "steward"}
-VIEWER = {"X-User-Role": "viewer"}
+# Unmatched X-User-Id so stub auth forges the header role. A missing id resolves
+# admin@local and require_roles admits that admin, so the viewer post would be 200.
+STEWARD = {"X-User-Role": "steward", "X-User-Id": "steward-probe"}
+VIEWER = {"X-User-Role": "viewer", "X-User-Id": "viewer-probe"}
 
 
 @pytest.fixture()
