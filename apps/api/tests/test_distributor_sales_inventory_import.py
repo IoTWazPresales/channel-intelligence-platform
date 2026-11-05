@@ -399,39 +399,51 @@ def test_distributor_si_apply_sellout_and_inventory_and_double_apply(dsi_source_
 
 
 def test_distributor_si_approved_alias_resolves_customer(dsi_source_id: int) -> None:
-    with SessionLocal() as db:
-        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
-        dist = db.scalars(select(DimDistributor).where(DimDistributor.code == "DIST-01")).first()
-        assert cust and dist
-        cust_id = cust.id
-        db.add(
-            CustomerSourceTokenAlias(
-                customer_id=cust_id,
-                source_definition_id=dsi_source_id,
-                distributor_id=dist.id,
-                raw_token="Alias Dealer Token",
-                normalized_token="alias dealer token",
-                status="approved",
+    # A fixed token committed on cip_test collides with uq_cust_src_token_alias_approved_scope
+    # on the next run. The apply path does not insert this alias; the test's own commit does.
+    token = f"Alias Dealer {uuid.uuid4().hex}"
+    normalized = token.lower()
+    try:
+        with SessionLocal() as db:
+            cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+            dist = db.scalars(select(DimDistributor).where(DimDistributor.code == "DIST-01")).first()
+            assert cust and dist
+            cust_id = cust.id
+            db.add(
+                CustomerSourceTokenAlias(
+                    tenant_id=cust.tenant_id or "default",
+                    customer_id=cust_id,
+                    source_definition_id=dsi_source_id,
+                    distributor_id=dist.id,
+                    raw_token=token,
+                    normalized_token=normalized,
+                    status="approved",
+                )
             )
+            db.commit()
+
+        csv = (
+            "distributor_code,sku,date,qty,customer_name,soh\n"
+            f"DIST-01,SKU-ALPHA-01,2024-03-01,1,{token},3\n"
         )
-        db.commit()
+        job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_alias.csv")
+        job_id = job.id
 
-    csv = (
-        "distributor_code,sku,date,qty,customer_name,soh\n"
-        "DIST-01,SKU-ALPHA-01,2024-03-01,1,Alias Dealer Token,3\n"
-    )
-    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="apply", filename="dsi_alias.csv")
-    job_id = job.id
-
-    with SessionLocal() as db:
-        line = db.scalars(
-            select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == job_id)
-        ).first()
-        assert line is not None
-        assert line.severity != "error"
-        assert line.resolved_customer_id == cust_id
-        fs = db.scalars(select(FactSalesSellout).where(FactSalesSellout.source_import_job_id == job_id)).all()
-        assert len(fs) == 1
+        with SessionLocal() as db:
+            line = db.scalars(
+                select(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == job_id)
+            ).first()
+            assert line is not None
+            assert line.severity != "error"
+            assert line.resolved_customer_id == cust_id
+            fs = db.scalars(select(FactSalesSellout).where(FactSalesSellout.source_import_job_id == job_id)).all()
+            assert len(fs) == 1
+    finally:
+        with SessionLocal() as db:
+            db.execute(
+                delete(CustomerSourceTokenAlias).where(CustomerSourceTokenAlias.normalized_token == normalized)
+            )
+            db.commit()
 
 
 def test_disti_header_maps_to_distributor_token(dsi_source_id: int) -> None:

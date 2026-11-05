@@ -33,6 +33,10 @@ _SLASH = chr(47)
 
 def _url_for(database: str) -> str:
     sync = get_settings().database_url_sync
+    for scheme in ("postgresql+psycopg://", "postgresql+asyncpg://"):
+        if sync.startswith(scheme):
+            sync = "postgresql://" + sync[len(scheme) :]
+            break
     base, _, leaf = sync.rpartition(_SLASH)
     if not base:
         raise RuntimeError("database url has no database name")

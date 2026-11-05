@@ -15,7 +15,7 @@ from app.models.cpor import CporCase
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import CustomerLocation, DimCustomer, DimDistributor, DimProduct, DistributorLocation
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
-from app.models.facts import FactInboundShipment, FactPromotionPlan
+from app.models.facts import FactInboundShipment
 
 WEEK0 = date(2026, 1, 5)
 
@@ -180,10 +180,12 @@ class World:
             self.shipment(customer=customer, distributor=distributor, ship_to=ship_to, confirm=confirm, pod=confirm + timedelta(days=days))
 
     def counts(self) -> tuple[int, int, int]:
-        promotions = self.db.execute(select(func.count()).select_from(FactPromotionPlan)).scalar_one()
+        # fact_promotion_plan was dropped by 20261011_0032. Shipments stay as the
+        # "labels do not write" canary beside cpor cases.
+        shipments = self.db.execute(select(func.count()).select_from(FactInboundShipment)).scalar_one()
         cases = self.db.execute(select(func.count()).select_from(CporCase)).scalar_one()
         locations = self.db.execute(select(func.count()).select_from(CustomerLocation)).scalar_one()
-        return int(promotions), int(cases), int(locations)
+        return int(shipments), int(cases), int(locations)
 
 
 @pytest.fixture

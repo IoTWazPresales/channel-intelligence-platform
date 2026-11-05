@@ -33,9 +33,9 @@ from app.services.imports.tenant_mapping_scope import effective_tenant_id
 API_DIR = Path(__file__).resolve().parents[1]
 
 
-def _migration_0052():
-    path = API_DIR / "alembic" / "versions" / "20261103_0052_tenant_mapping_memory_aliases.py"
-    spec = importlib.util.spec_from_file_location("m0052", path)
+def _migration_0055():
+    path = API_DIR / "alembic" / "versions" / "20261103_0055_tenant_mapping_memory_aliases.py"
+    spec = importlib.util.spec_from_file_location("m0055", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
@@ -46,11 +46,19 @@ def db_world():
     with SessionLocal() as db:
         if db.scalar(text("select current_database()")) != "cip_test":
             pytest.skip("cip_test only")
-        rev = db.scalar(text("select version_num from alembic_version"))
-        if rev != "20261103_0052":
+        # 0055 was renumbered off the old 0052 filename. Apply it only when the
+        # tenant column is still missing; a later head must not re-run upgrade.
+        has_tenant = db.scalar(
+            text(
+                "select 1 from information_schema.columns "
+                "where table_schema = 'public' and table_name = 'source_definition' "
+                "and column_name = 'tenant_id'"
+            )
+        )
+        if not has_tenant:
             ops = Operations.context(MigrationContext.configure(db.connection()))
             with ops:
-                _migration_0052().upgrade()
+                _migration_0055().upgrade()
         tag = uuid.uuid4().hex[:8]
 
         def mk_tenant(label: str) -> str:
@@ -158,13 +166,17 @@ def test_shipment_sheet_memory_not_shared_across_tenants(db_world):
     assert "col_b" not in mem_a
 
 
-def test_migration_0052_downgrade_upgrade(db_world):
+def test_migration_0055_downgrade_upgrade(db_world):
     db, *_ = db_world
+    mod = _migration_0055()
+    assert mod.revision == "20261103_0055"
+    stamped = db.scalar(text("select version_num from alembic_version"))
     ops = Operations.context(MigrationContext.configure(db.connection()))
     with ops:
-        _migration_0052().downgrade()
-    assert db.scalar(text("select count(*) from information_schema.columns where table_name='source_definition' and column_name='tenant_id'")) == 0
-    with ops:
-        _migration_0052().upgrade()
-    assert db.scalar(text("select version_num from alembic_version")) == "20261103_0052"
+        mod.downgrade()
+        assert db.scalar(text("select count(*) from information_schema.columns where table_name='source_definition' and column_name='tenant_id'")) == 0
+        mod.upgrade()
+    # Direct upgrade() does not stamp alembic_version. The column coming back is the proof.
+    assert db.scalar(text("select version_num from alembic_version")) == stamped
+    assert db.scalar(text("select count(*) from information_schema.columns where table_name='source_definition' and column_name='tenant_id'")) == 1
     assert effective_tenant_id(None) == "default"

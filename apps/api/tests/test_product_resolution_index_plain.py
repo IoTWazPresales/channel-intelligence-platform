@@ -70,7 +70,7 @@ def test_narrow_load_snapshots_products_to_plain_rows() -> None:
             return _Q(self._aliases)
 
     db = _S([orm], [])
-    idx = cache_mod._load_product_resolution_index_narrow(db)  # type: ignore[arg-type]
+    idx = cache_mod._load_product_resolution_index_narrow(db, tenant_id="default")  # type: ignore[arg-type]
     row = idx.products_by_id[1]
     assert isinstance(row, ProductResolutionProductRow)
     assert row.sku == "SKU-MAIN"
