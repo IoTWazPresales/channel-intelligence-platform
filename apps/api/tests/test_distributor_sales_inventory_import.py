@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import secrets
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
+from typing import NamedTuple
 
 import pytest
-from sqlalchemy import func, inspect, select
+from sqlalchemy import delete, func, inspect, select
 
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
@@ -86,6 +90,176 @@ def _seed_dsi_catalog() -> int:
 
         invalidate_product_resolution_index_cache()
         return _dsi_source_id(db)
+
+
+class _PrivateDsiMaster(NamedTuple):
+    suffix: str
+    distributor_code: str
+    sku: str
+    customer_code: str
+    distributor_id: int
+    product_id: int
+    customer_id: int
+
+
+class _PrivateDsiJobs:
+    def __init__(self) -> None:
+        self.ids: list[int] = []
+        self.file_names: list[str] = []
+
+
+def _isolated_master_suffix(db) -> str:
+    """A uuid hex that will not bind to a distributor, product, or customer already in the database."""
+    distributors = list(db.execute(select(DimDistributor.code, DimDistributor.name)).all())
+    if any(not (name or "").strip() for _code, name in distributors):
+        raise RuntimeError("a distributor with an empty name matches every DSI token")
+    product_keys: set[str] = set()
+    for row in db.execute(
+        select(
+            DimProduct.sku,
+            DimProduct.part_number,
+            DimProduct.sales_model_name,
+            DimProduct.model_name,
+            DimProduct.marketing_name,
+            DimProduct.ean,
+            DimProduct.upc,
+        )
+    ).all():
+        for value in row:
+            if value and str(value).strip():
+                product_keys.add(str(value).strip().lower())
+    customer_keys: set[str] = set()
+    for code, name in db.execute(select(DimCustomer.code, DimCustomer.name)).all():
+        for value in (code, name):
+            if value and str(value).strip():
+                customer_keys.add(str(value).strip().lower())
+
+    for _ in range(64):
+        suffix = uuid.uuid4().hex
+        token = suffix.lower()
+        sku = "s" + token
+        customer_code = "c" + token
+        customer_name = f"isolated customer {token}"
+        if sku in product_keys or customer_code in customer_keys or customer_name in customer_keys:
+            continue
+        stolen = False
+        for code, name in distributors:
+            code_l = (code or "").strip().lower()
+            name_l = (name or "").strip().lower()
+            # DSI binds a token to the first distributor whose name contains the token, or whose
+            # name is contained in the token. Exact code or name also binds.
+            if code_l == token or name_l == token:
+                stolen = True
+                break
+            if len(token) >= 4 and (token in name_l or name_l in token):
+                stolen = True
+                break
+        if stolen:
+            continue
+        return suffix
+    raise RuntimeError("could not build an isolated uuid suffix against the current master rows")
+
+
+def _insert_private_dsi_master() -> _PrivateDsiMaster:
+    """Distributor, product, and customer rows owned by one test. Codes end in a uuid hex."""
+    from app.services.imports.product_resolution_index_cache import (
+        invalidate_product_resolution_index_cache,
+    )
+
+    with SessionLocal() as db:
+        suffix = _isolated_master_suffix(db)
+        distributor = DimDistributor(
+            code=suffix,
+            name=f"Isolated Distributor {suffix}",
+            tenant_id="default",
+        )
+        product = DimProduct(
+            sku="s" + suffix,
+            name=f"Isolated Product {suffix}",
+            category="Audio",
+            tenant_id="default",
+        )
+        customer = DimCustomer(
+            code="c" + suffix,
+            name=f"Isolated Customer {suffix}",
+            tenant_id="default",
+        )
+        db.add(distributor)
+        db.add(product)
+        db.add(customer)
+        db.commit()
+        master = _PrivateDsiMaster(
+            suffix=suffix,
+            distributor_code=distributor.code,
+            sku=product.sku,
+            customer_code=customer.code,
+            distributor_id=int(distributor.id),
+            product_id=int(product.id),
+            customer_id=int(customer.id),
+        )
+    invalidate_product_resolution_index_cache()
+    return master
+
+
+def _delete_private_dsi_master(master: _PrivateDsiMaster, jobs: _PrivateDsiJobs) -> None:
+    """Delete the import rows and the master rows this test inserted."""
+    from app.services.imports.product_resolution_index_cache import (
+        invalidate_product_resolution_index_cache,
+    )
+
+    with SessionLocal() as db:
+        job_ids: set[int] = {int(job_id) for job_id in jobs.ids}
+        if jobs.file_names:
+            job_ids.update(
+                int(job_id)
+                for job_id in db.scalars(
+                    select(ImportJob.id).where(ImportJob.file_name.in_(jobs.file_names))
+                ).all()
+            )
+        job_ids.update(
+            int(job_id)
+            for job_id in db.scalars(
+                select(ImportDistributorSiStagingLine.import_job_id).where(
+                    ImportDistributorSiStagingLine.resolved_product_id == master.product_id
+                )
+            ).all()
+            if job_id is not None
+        )
+        if job_ids:
+            db.execute(delete(EntityMappingQueue).where(EntityMappingQueue.job_id.in_(job_ids)))
+            db.execute(delete(ImportRowResult).where(ImportRowResult.job_id.in_(job_ids)))
+            db.execute(delete(RawFileMetadata).where(RawFileMetadata.job_id.in_(job_ids)))
+            db.execute(
+                delete(ImportDistributorSiStagingLine).where(
+                    ImportDistributorSiStagingLine.import_job_id.in_(job_ids)
+                )
+            )
+            db.execute(
+                delete(ImportEntityMappingCandidate).where(
+                    ImportEntityMappingCandidate.import_job_id.in_(job_ids)
+                )
+            )
+            db.execute(delete(ImportJob).where(ImportJob.id.in_(job_ids)))
+        db.execute(
+            delete(CustomerSourceTokenAlias).where(
+                CustomerSourceTokenAlias.customer_id == master.customer_id
+            )
+        )
+        db.execute(delete(DimProduct).where(DimProduct.id == master.product_id))
+        db.execute(delete(DimCustomer).where(DimCustomer.id == master.customer_id))
+        db.execute(delete(DimDistributor).where(DimDistributor.id == master.distributor_id))
+        db.commit()
+    invalidate_product_resolution_index_cache()
+
+
+@contextmanager
+def _private_dsi_catalog() -> Iterator[tuple[_PrivateDsiMaster, _PrivateDsiJobs]]:
+    master = _insert_private_dsi_master()
+    jobs = _PrivateDsiJobs()
+    try:
+        yield master, jobs
+    finally:
+        _delete_private_dsi_master(master, jobs)
 
 
 def _csv_bytes(content: str) -> bytes:
@@ -710,45 +884,56 @@ def test_dsi_candidate_steward_map_customer_and_alias_persisted(dsi_source_id: i
     with SessionLocal() as db:
         if "distributor_source_token_alias" not in set(inspect(db.connection()).get_table_names()):
             pytest.skip("Apply migration 20260430_0027 (distributor_source_token_alias).")
-    token = f"Steward Map Dealer {secrets.token_hex(4)}"
-    csv = f"distributor_code,sku,date,qty,customer_name,soh\nDIST-01,SKU-ALPHA-01,2024-03-10,1,{token},1\n"
-    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_steward_cust.csv")
-    with SessionLocal() as db:
-        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
-        assert cust is not None
-        cand = db.scalars(
-            select(ImportEntityMappingCandidate).where(
-                ImportEntityMappingCandidate.import_job_id == job.id,
-                ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
-            )
-        ).first()
-        assert cand is not None
-        cand_id = cand.id
-        cust_id = cust.id
-    with TestClient(app) as client:
-        r = client.post(f"/api/v1/mappings/import-candidates/{cand_id}/map-customer", json={"customer_id": cust_id})
-        assert r.status_code == 200, r.text
-    with SessionLocal() as db:
-        cand2 = db.get(ImportEntityMappingCandidate, cand_id)
-        assert cand2 is not None
-        assert cand2.status == "resolved"
-        assert cand2.suggested_entity_id == cust_id
-        alias_n = db.scalar(
-            select(func.count()).select_from(CustomerSourceTokenAlias).where(
-                CustomerSourceTokenAlias.customer_id == cust_id,
-                CustomerSourceTokenAlias.import_entity_mapping_candidate_id == cand_id,
-            )
+    with _private_dsi_catalog() as (master, jobs):
+        token = f"Steward Map Dealer {master.suffix}"
+        filename = f"dsi_steward_cust_{master.suffix}.csv"
+        jobs.file_names.append(filename)
+        csv = (
+            "distributor_code,sku,date,qty,customer_name,soh\n"
+            f"{master.distributor_code},{master.sku},2024-03-10,1,{token},1\n"
         )
-        assert int(alias_n or 0) >= 1
+        job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename=filename)
+        jobs.ids.append(job.id)
+        with SessionLocal() as db:
+            cust = db.get(DimCustomer, master.customer_id)
+            assert cust is not None
+            assert cust.code == master.customer_code
+            cand = db.scalars(
+                select(ImportEntityMappingCandidate).where(
+                    ImportEntityMappingCandidate.import_job_id == job.id,
+                    ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+                )
+            ).first()
+            assert cand is not None
+            cand_id = cand.id
+            cust_id = cust.id
+        with TestClient(app) as client:
+            r = client.post(
+                f"/api/v1/mappings/import-candidates/{cand_id}/map-customer",
+                json={"customer_id": cust_id},
+            )
+            assert r.status_code == 200, r.text
+        with SessionLocal() as db:
+            cand2 = db.get(ImportEntityMappingCandidate, cand_id)
+            assert cand2 is not None
+            assert cand2.status == "resolved"
+            assert cand2.suggested_entity_id == cust_id
+            alias_n = db.scalar(
+                select(func.count()).select_from(CustomerSourceTokenAlias).where(
+                    CustomerSourceTokenAlias.customer_id == cust_id,
+                    CustomerSourceTokenAlias.import_entity_mapping_candidate_id == cand_id,
+                )
+            )
+            assert int(alias_n or 0) >= 1
 
-    import asyncio
+        import asyncio
 
-    from app.db import session as db_session
+        from app.db import session as db_session
 
-    async def _dispose() -> None:
-        await db_session.engine.dispose()
+        async def _dispose() -> None:
+            await db_session.engine.dispose()
 
-    asyncio.run(_dispose())
+        asyncio.run(_dispose())
 
 
 def test_dsi_candidate_steward_distributor_alias_then_revalidate_resolves(dsi_source_id: int) -> None:
