@@ -1,16 +1,18 @@
 # CURRENT state
 
-**Last updated:** 2026-11-03 (five tracks on one branch)
+**Last updated:** 2026-11-04 (web rebuilt and stack restarted)
 
-**Branch:** `feat/integrate-20261103`. My accounts, listing, store and DC, tenant mapping, and shipment D4 are on this branch. Do not push to main.
+**Branch:** `feat/integrate-20261103` at `e15619ba`, plus an uncommitted type fix in `apps/web/src/features/administration/UsersWorkspace.tsx`. My accounts, listing, store and DC, tenant mapping, and shipment D4 are on this branch. Do not push to main. The type fix is not committed.
 
 **Alembic code head:** `20261103_0056`. Chain: `20261103_0052` user accounts -> `20261103_0053` listing sites -> `20261103_0054` store and DC -> `20261103_0055` tenant mapping -> `20261103_0056` shipment single-write. Applied to `cip` and `cip_test` on 3 Nov 2026 as the table owner. `current_database()` was `cip` for the cip upgrade. Role `cip` has SELECT, INSERT, UPDATE, DELETE on the new listing and store tables, and USAGE, SELECT on their sequences.
 
 **Proven:** `cip` and `cip_test` are at `20261103_0056`. `source_definition.tenant_id` exists. `ix_shipment_ev_obs_evidence_line` exists. Before the `cip_test` upgrade, 63 older customer-alias copies and 94 older distributor-alias copies were set to `superseded`; the newest approved row in each group was kept. `cip` had no duplicate approved groups, so its aliases were not changed.
 
-**Not proven:** the browser checks. The running web is still the previous build until it is rebuilt from this branch and the API and worker are restarted. D5 is not done. Listing nodes are not closed.
+**Not proven:** signed-in browser checks of My accounts, the store map, replenishment, and listings. D5 is not done. Listing nodes are not closed. The account-scope unit test was not re-run.
 
-**Next:** rebuild the web from this branch, restart the API and worker, then sign in and check My accounts, the store map, replenishment, and listings.
+**Running:** web production build `O0T3PFz6VVMeT1W6710T-` from this working tree. Supervisor at 2026-11-04 00:47 +02: API, worker, and web healthy (`/health` 200, `/login` 200). That build includes the uncommitted `data-testid` type assertion on the account-scope radios and checkbox.
+
+**Next:** sign in and check My accounts, the store map, replenishment, and listings. Commit the type fix when asked.
 
 **Blockers requiring Warren:** none for the schema. Do not push to main.
 
