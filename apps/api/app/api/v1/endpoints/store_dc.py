@@ -60,6 +60,14 @@ class DecisionBody(BaseModel):
 
 class ServedBody(BaseModel):
     customer_ids: list[int] = Field(default_factory=list)
+    context_customer_id: int | None = Field(
+        default=None,
+        description="Board viewer customer; requires visible_customer_ids when set.",
+    )
+    visible_customer_ids: list[int] | None = Field(
+        default=None,
+        description="Customer IDs that had a checkbox row on save; links outside this set are preserved.",
+    )
 
 
 class ConfigBody(BaseModel):
@@ -173,7 +181,16 @@ def put_served(
     db: Session = Depends(_sync_db),
     user: dict = Depends(require_roles(Role.STEWARD)),
 ):
-    return _run(lambda: set_served_accounts(db, _tenant(user), candidate_id, body.customer_ids))
+    return _run(
+        lambda: set_served_accounts(
+            db,
+            _tenant(user),
+            candidate_id,
+            body.customer_ids,
+            context_customer_id=body.context_customer_id,
+            visible_customer_ids=body.visible_customer_ids,
+        )
+    )
 
 
 @router.get("/config")
