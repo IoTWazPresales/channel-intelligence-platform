@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-06 - **N-0118 chain-key re-apply:** branch `feat/n0118-cst-apply-c57a` from `c57adbbe`. A sell-through apply re-keys rows already stored on a chain-level key when the staged row names a site. The chain-level fact moves aside. Second apply changes nothing. `cip_test` only. No cip write. No migration. No main.
+- 2026-11-06 - **N-0118 chain-key re-apply:** branch `feat/n0118-cst-apply-c57a` from `c57adbbe`. A sell-through apply re-keys rows already stored on a chain-level key when the staged row names a site. The chain-level fact moves aside. Second apply changes nothing. `cip_test` only. No cip write. No migration. No main. Commit `06ababdf`.
 
 - 2026-11-04 - **N-0108 needs-a-look:** a brief read already bound to one connection stays on that connection, so the on-the-water fixture still raises `shipment_needs_look` (1 line, 9 units, 7 days on `cip_test`). On `cip`, read-only, that signal's fact ids and quantities match on the old request-session path and the overlapped path (12 lines, 1,316 units, 7 days). `cip` is at `20261104_0057`, applied by Warren on 2026-11-04. Merged `feat/integrate-20261103` at `bb8e1729`. No write to `cip`. No main. Commit `6d23b903`.
 
