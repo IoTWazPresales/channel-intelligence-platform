@@ -1,16 +1,18 @@
 import React from 'react';
 import { screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { ListingUrl, listingUrlState, MarketSurface } from './MarketSurface';
 
+const nav = vi.hoisted(() => ({ pathname: '/listing-capture' }));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
-  usePathname: () => '/listing-capture',
+  usePathname: () => nav.pathname,
 }));
 
 vi.mock('@/components/EnterpriseDataGrid', () => ({
@@ -27,6 +29,16 @@ vi.mock('@/lib/api', () => ({
     if (url.includes('/listing-capture/intelligence')) return { items: [], listings: 0 };
     if (url.includes('/listing-capture/proposals')) return { items: [] };
     if (url.includes('/listing-capture/observations')) return { items: [] };
+    if (url.includes('/listing-capture/capture-health')) {
+      return {
+        data_unavailable: false,
+        listings_due: 3,
+        skipped_not_configured: {},
+        sites: [],
+        configured: [],
+        exclusions: [],
+      };
+    }
     if (url.includes('/customers')) return { items: [] };
     if (url.includes('/competition/mappings')) return [];
     if (url.includes('/competition/prices')) return [];
@@ -37,6 +49,10 @@ vi.mock('@/lib/api', () => ({
 }));
 
 describe('MarketSurface', () => {
+  beforeEach(() => {
+    nav.pathname = '/listing-capture';
+  });
+
   it('mounts lab chrome and the listings lens, not the /market stub', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderWithProviders(
@@ -53,6 +69,21 @@ describe('MarketSurface', () => {
     expect(screen.getByTestId('listing-last-check')).toHaveTextContent('Last check: not yet');
     expect(screen.getByTestId('market-add-listing')).toBeInTheDocument();
     expect(screen.queryByText(/static JSON stub/i)).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('listing-capture-health-due')).toHaveTextContent('3'));
+    expect(screen.getByText('No sites in capture health.')).toBeInTheDocument();
+    expect(screen.getByText('No link-pattern status yet.')).toBeInTheDocument();
+  });
+
+  it('leaves capture health off the competitor lenses', async () => {
+    nav.pathname = '/competition';
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('market-surface')).toBeInTheDocument());
+    expect(screen.queryByTestId('listing-capture-health')).toBeNull();
   });
 });
 
