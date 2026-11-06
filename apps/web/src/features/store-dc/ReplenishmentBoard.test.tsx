@@ -278,7 +278,7 @@ describe('ReplenishmentView', () => {
     expect(onSaveThresholds).toHaveBeenCalledWith({ slow_cover_multiple: 2.5 });
     fireEvent.click(screen.getByTestId('served-customer-2').querySelector('input') as HTMLInputElement);
     fireEvent.click(screen.getByTestId('served-save-4'));
-    expect(onAssignServed).toHaveBeenCalledWith(4, [1, 2]);
+    expect(onAssignServed).toHaveBeenCalledWith(4, [1, 2], [1, 2]);
     fireEvent.click(screen.getByTestId('lead-time-reload'));
     expect(onReloadLeadTimes).toHaveBeenCalledOnce();
     expect(api.apiPost).not.toHaveBeenCalled();
@@ -386,7 +386,11 @@ describe('ReplenishmentBoard', () => {
     fireEvent.click(screen.getByTestId('served-customer-2').querySelector('input') as HTMLInputElement);
     fireEvent.click(screen.getByTestId('served-save-4'));
     await waitFor(() =>
-      expect(api.apiPut).toHaveBeenCalledWith('/api/v1/store-dc/candidates/4/served-accounts', { customer_ids: [1, 2] }),
+      expect(api.apiPut).toHaveBeenCalledWith('/api/v1/store-dc/candidates/4/served-accounts', {
+        customer_ids: [1, 2],
+        context_customer_id: 1,
+        visible_customer_ids: [1, 2],
+      }),
     );
 
     const before = api.apiGet.mock.calls.filter((call) => String(call[0]).includes('/lead-times')).length;

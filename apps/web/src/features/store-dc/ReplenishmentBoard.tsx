@@ -123,10 +123,15 @@ export function ReplenishmentBoard() {
     }
   }
 
-  async function onAssignServed(candidateId: number, customerIds: number[]) {
+  async function onAssignServed(candidateId: number, customerIds: number[], visibleCustomerIds: number[]) {
+    if (selected == null) return;
     setServedError(null);
     try {
-      await apiPut(`/api/v1/store-dc/candidates/${candidateId}/served-accounts`, { customer_ids: customerIds });
+      await apiPut(`/api/v1/store-dc/candidates/${candidateId}/served-accounts`, {
+        customer_ids: customerIds,
+        context_customer_id: selected,
+        visible_customer_ids: visibleCustomerIds,
+      });
       await queryClient.invalidateQueries({ queryKey: ['store-dc-customer'] });
     } catch (error) {
       setServedError(safeDisplayError(error));
@@ -154,7 +159,9 @@ export function ReplenishmentBoard() {
       savedThresholds={selected != null ? savedThresholds[selected] ?? null : null}
       onSaveThresholds={(body) => void onSaveThresholds(body)}
       thresholdError={thresholdError}
-      onAssignServed={(candidateId, customerIds) => void onAssignServed(candidateId, customerIds)}
+      onAssignServed={(candidateId, customerIds, visibleCustomerIds) =>
+        void onAssignServed(candidateId, customerIds, visibleCustomerIds)
+      }
       servedError={servedError}
       onReloadLeadTimes={selected != null ? () => void leadQuery.refetch() : undefined}
       leadTimeError={leadQuery.isError ? safeDisplayError(leadQuery.error) : null}

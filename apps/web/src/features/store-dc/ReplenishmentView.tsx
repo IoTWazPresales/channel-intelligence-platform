@@ -225,7 +225,8 @@ function ServedAccountControl({
   candidateId: number;
   customers: CustomerOption[];
   initialIds: number[];
-  onSave: (candidateId: number, customerIds: number[]) => void;
+  /** visibleCustomerIds: every account that had a checkbox row (matches server merge for out-of-scope links). */
+  onSave: (candidateId: number, customerIds: number[], visibleCustomerIds: number[]) => void;
 }) {
   const [selected, setSelected] = useState(initialIds);
   const rows: CustomerOption[] = [
@@ -258,7 +259,14 @@ function ServedAccountControl({
       <Button
         size="small"
         data-testid={`served-save-${candidateId}`}
-        onClick={() => onSave(candidateId, rows.map((row) => row.id).filter((id) => selected.includes(id)))}
+        onClick={() => {
+          const visible = rows.map((row) => row.id);
+          onSave(
+            candidateId,
+            visible.filter((id) => selected.includes(id)),
+            visible,
+          );
+        }}
       >
         Save served accounts
       </Button>
@@ -316,7 +324,7 @@ export function ReplenishmentView({
   savedThresholds?: CustomerThresholds | null;
   onSaveThresholds?: (body: ThresholdInput) => void;
   thresholdError?: string | null;
-  onAssignServed?: (candidateId: number, customerIds: number[]) => void;
+  onAssignServed?: (candidateId: number, customerIds: number[], visibleCustomerIds: number[]) => void;
   servedError?: string | null;
   onReloadLeadTimes?: () => void;
   leadTimeError?: string | null;
