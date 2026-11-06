@@ -2,7 +2,14 @@
 
 from datetime import date, timedelta
 
-from app.services.store_dc.candidates import decide_candidate, refresh_candidates, set_served_accounts
+import pytest
+
+from app.services.store_dc.candidates import (
+    decide_candidate,
+    refresh_candidates,
+    served_customer_ids,
+    set_served_accounts,
+)
 from app.services.store_dc.read_model import build_customer_view
 from app.services.store_dc.rules import COLLAPSED_NOTE, NO_HISTORY
 from tests.store_dc_fixture import World
@@ -136,6 +143,82 @@ def test_confirmed_dc_serves_two_accounts_and_stock_is_once(world: World):
     assert section["need_from_distributor"][0]["stock_on_hand"] == 50
     other_view = build_customer_view(world.db, world.tenant, other.id)
     assert other_view["dc_sections"][0]["stock_on_hand"] == 50
+
+
+def test_served_accounts_save_from_owner_context_preserves_extra_served_links(world: World):
+    """B1: saving while the board shows only the owner checkbox must not drop other links."""
+    owner = world.customer("SDC-C1")
+    other = world.customer("SDC-C2")
+    third = world.customer("SDC-C3")
+    distributor = world.distributor()
+    product = world.product()
+    hub = world.code("SDC-HUB-1")
+    site = world.code("SDC-SITE-A")
+    world.weeks(owner, product, [0, 0, 0, 0], soh=50, site=hub)
+    world.weeks(other, product, [10, 10, 10, 10], soh=20, site=site)
+    world.weeks(third, product, [10, 10, 10, 10], soh=20, site=site)
+    world.deliveries(owner, distributor, hub, 5)
+    world.db.flush()
+    refresh_candidates(world.db, world.tenant)
+    from app.models.store_dc import SiteCandidate
+    from sqlalchemy import select
+
+    candidate = world.db.execute(
+        select(SiteCandidate).where(SiteCandidate.tenant_id == world.tenant, SiteCandidate.site_label == hub)
+    ).scalar_one()
+    decide_candidate(world.db, world.tenant, candidate.id, "confirm", "steward-test")
+    set_served_accounts(world.db, world.tenant, candidate.id, [other.id, third.id])
+    assert set(served_customer_ids(world.db, world.tenant, candidate)) == {owner.id, other.id, third.id}
+
+    # Narrow visible set (only owner had a checkbox row); payload omits other and third — merge must keep them.
+    set_served_accounts(
+        world.db,
+        world.tenant,
+        candidate.id,
+        [owner.id],
+        context_customer_id=owner.id,
+        visible_customer_ids=[owner.id],
+    )
+    assert set(served_customer_ids(world.db, world.tenant, candidate)) == {owner.id, other.id, third.id}
+
+    # Steward sees every linked account in checkboxes — may remove one explicitly.
+    set_served_accounts(
+        world.db,
+        world.tenant,
+        candidate.id,
+        [owner.id, third.id],
+        context_customer_id=other.id,
+        visible_customer_ids=[owner.id, other.id, third.id],
+    )
+    assert set(served_customer_ids(world.db, world.tenant, candidate)) == {owner.id, third.id}
+
+
+def test_served_accounts_save_rejects_context_not_linked_to_site(world: World):
+    owner = world.customer("SDC-C1")
+    stranger = world.customer("SDC-CX")
+    distributor = world.distributor()
+    product = world.product()
+    hub = world.code("SDC-HUB-1")
+    world.weeks(owner, product, [0, 0, 0, 0], soh=50, site=hub)
+    world.deliveries(owner, distributor, hub, 5)
+    world.db.flush()
+    refresh_candidates(world.db, world.tenant)
+    from app.models.store_dc import SiteCandidate
+    from sqlalchemy import select
+
+    candidate = world.db.execute(
+        select(SiteCandidate).where(SiteCandidate.tenant_id == world.tenant, SiteCandidate.site_label == hub)
+    ).scalar_one()
+    decide_candidate(world.db, world.tenant, candidate.id, "confirm", "steward-test")
+    with pytest.raises(ValueError, match="not allowed until"):
+        set_served_accounts(
+            world.db,
+            world.tenant,
+            candidate.id,
+            [stranger.id],
+            context_customer_id=stranger.id,
+            visible_customer_ids=[stranger.id],
+        )
 
 
 def test_slow_and_unsold_are_labels_only(world: World):

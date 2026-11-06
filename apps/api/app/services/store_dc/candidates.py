@@ -293,7 +293,30 @@ def decide_candidate(db: Session, tenant_id: str, candidate_id: int, decision: s
     return _candidate_payload(row, name)
 
 
-def set_served_accounts(db: Session, tenant_id: str, candidate_id: int, customer_ids: list[int]) -> dict[str, Any]:
+def merge_served_account_ids(
+    before: set[int],
+    wanted: set[int],
+    visible: set[int],
+) -> list[int]:
+    """Combine the UI selection with links the editor could not see (no checkbox row).
+
+    `visible` is the set of customer IDs that had a checkbox row on save (see ReplenishmentView).
+    Any ID in `before` that is not in `visible` is preserved unless removed explicitly — but removal
+    is only possible when the ID is visible, so out-of-scope links are never dropped.
+    """
+    preserve = before - visible
+    return sorted(wanted | preserve)
+
+
+def set_served_accounts(
+    db: Session,
+    tenant_id: str,
+    candidate_id: int,
+    customer_ids: list[int],
+    *,
+    context_customer_id: int | None = None,
+    visible_customer_ids: list[int] | None = None,
+) -> dict[str, Any]:
     row = db.get(SiteCandidate, candidate_id)
     if row is None or row.tenant_id != tenant_id:
         raise LookupError(str(candidate_id))
@@ -301,11 +324,32 @@ def set_served_accounts(db: Session, tenant_id: str, candidate_id: int, customer
         raise ValueError("Link accounts only after the site is confirmed as a customer distribution centre")
     if row.blocked_as_distributor_site:
         raise ValueError("A distributor-owned site cannot serve customer accounts as a distribution centre")
-    wanted = []
+    wanted: list[int] = []
     for raw in customer_ids:
         cid = int(raw)
         if cid not in wanted:
             wanted.append(cid)
+    wanted_set = set(wanted)
+
+    before = set(served_customer_ids(db, tenant_id, row))
+    if context_customer_id is not None:
+        ctx = int(context_customer_id)
+        if ctx not in before:
+            raise ValueError(
+                "Saving from this customer context is not allowed until that account is linked to this site, "
+                "or open the board for a customer that this distribution centre already serves."
+            )
+        if not visible_customer_ids:
+            raise ValueError(
+                "visible_customer_ids is required (non-empty) when context_customer_id is set so the server can preserve "
+                "served-account links that are not shown as checkboxes for this board view."
+            )
+        visible: set[int] = set()
+        for raw in visible_customer_ids:
+            visible.add(int(raw))
+        wanted_set = set(merge_served_account_ids(before, wanted_set, visible))
+
+    wanted = sorted(wanted_set)
     if wanted:
         found = db.execute(
             select(DimCustomer.id).where(DimCustomer.id.in_(wanted), DimCustomer.tenant_id == tenant_id)
