@@ -4,7 +4,7 @@
 
 **Branch:** `feat/n0118-cst-apply-c57a` from `feat/integrate-20261103` at `c57adbbe`.
 
-**N-0118:** Re-applying a customer sell-through job re-keys staged rows that were stored on a chain-level source key while the staged row names a site or a location. The chain-level fact moves aside. A second apply changes nothing. Unmatched products stay staged. No master is created. **B1/B2 (2026-11-06):** punctuation-only or non-Latin site labels use `slh:` keys (never chain `0`); chain-level retirement counts only staging lines for the same job so a partial re-key does not delete the chain row early. Proven on `cip_test` only (`current_database=cip_test`, transaction rolled back). Not run against `cip`. No migration.
+**N-0118:** Re-applying a customer sell-through job re-keys staged rows that were stored on a chain-level source key while the staged row names a site or a location. The chain-level fact moves aside. A second apply changes nothing. Unmatched products stay staged. No master is created. **B1/B2 (2026-11-06):** punctuation-only or non-Latin site labels use `slh:` keys (never chain `0`); chain-level retirement counts only staging lines for the same job so a partial re-key does not delete the chain row early. **Site key collision:** `sl:{norm}` only when the raw label is plain ASCII A–Z/a–z/0–9 (case folds to norm); any separator or non-ASCII uses `slh:` on raw bytes so `A-1` / `A 1` / `店-A1` do not alias `A1`. Proven on `cip_test` only (`current_database=cip_test`, transaction rolled back). Not run against `cip`. No migration.
 
 **Branch (previous checkpoint):** `feat/integrate-20261103`.
 
