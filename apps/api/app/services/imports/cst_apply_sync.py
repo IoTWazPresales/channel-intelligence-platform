@@ -2,9 +2,11 @@
 
 The sell-through Apply step, on the shipment / DSI apply pattern (import-parity rule 2): the
 endpoint marks the job running and dispatches ``imports.cst_apply``; the worker runs this, which
-marks steward-mapped rows resolved, upserts the matched rows not loaded yet (batched, with
-progress) and moves the job to ``loaded``. Unmatched and ignored rows stay out and are counted in
-the job's load report. Safe to re-run: rows already applied are not written again.
+marks steward-mapped rows resolved, upserts the matched rows (batched, with progress) and moves
+the job to ``loaded``. Unmatched and ignored rows stay out and are counted in the job's load
+report. Safe to re-run: a row already applied onto its own key is not written again. A row applied
+onto a chain-level key while the staged row names a site is re-keyed by that site, and the
+chain-level fact moves aside.
 """
 
 from __future__ import annotations
@@ -85,6 +87,8 @@ def run_cst_apply_sync(db: Session, job_id: int, *, on_progress: ProgressFn | No
         "marked_resolved": marked,
         "applied": summary.applied,
         "skipped_unresolved": summary.skipped_unresolved,
+        "superseded_rows": summary.superseded_rows,
+        "superseded_units": summary.superseded_units,
     }
 
 

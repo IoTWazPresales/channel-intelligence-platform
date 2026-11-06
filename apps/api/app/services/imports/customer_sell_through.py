@@ -122,6 +122,18 @@ def customer_sellthrough_source_key(
     return f"ct:{customer_id}:{loc_part}:{product_id}:{period_start_date.isoformat()}"
 
 
+# ``ct:{customer}:0:{product}:{period}`` — no location id and no site label in the key.
+_CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY = re.compile(
+    r"^ct:[0-9]+:0:[0-9]+:[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+)
+CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY_SQL = _CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY.pattern
+
+
+def is_chain_level_sellthrough_source_key(source_key: str | None) -> bool:
+    """True when the fact key is customer, product and period with no site."""
+    return bool(source_key and _CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY.fullmatch(source_key))
+
+
 def new_customer_sellthrough_staging_line(
     *,
     import_job_id: int,
