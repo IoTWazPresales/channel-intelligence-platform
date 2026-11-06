@@ -76,23 +76,34 @@ STRUCTURE_MTD_DELTA = "mtd_delta"
 STRUCTURE_WIDE_EXTRACT = "wide_extract"
 
 _SITE_LABEL_KEY_RE = re.compile(r"[^A-Z0-9]+")
+# ``sl:{norm}`` is kept only for labels that are *already* plain ASCII alphanumerics (no spaces,
+# punctuation, or non-Latin). Anything else uses ``slh:`` over the raw UTF-8 bytes so two different
+# labels (``A-1`` vs ``A 1``, ``店-A1`` vs ``A1``) never collide just because they share the same
+# folded ``norm``.
+_RAW_SITE_LABEL_SL_NORM_RE = re.compile(r"^[A-Za-z0-9]+$")
 
 
 def _site_label_source_key_token(*, raw: str, norm: str) -> str:
     """Stable site token for the source key when there is no location FK.
 
-    Latin alphanumeric labels use ``sl:{norm}`` (uppercase, punctuation folded to ``_``).
-    Punctuation-only, non-Latin, or labels that normalize to empty use ``slh:{digest}``
-    over the full trimmed UTF-8 string so two sites never collapse to chain-level ``0`` and
-    distinct raw labels stay distinct.
+    **Canonical** (ASCII letters and digits only): ``sl:{norm}`` with ``norm == raw.upper()`` —
+    unchanged from historical rows, including long labels digested to ``sl:{sha1_12}``.
+
+    **Non-canonical** (any separator, space, or non-ASCII): ``slh:{sha1_12}`` over the full raw
+    string so normalization is never used as an unintentional alias key.
+
+    Empty ``norm`` (punctuation-only scripts) still uses ``slh:`` over ``raw``.
     """
     if not norm:
         digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
         return f"slh:{digest}"
-    if len(norm) > 80:
-        digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
-        return f"sl:{digest}"
-    return f"sl:{norm}"
+    if _RAW_SITE_LABEL_SL_NORM_RE.fullmatch(raw) and raw.upper() == norm:
+        if len(norm) > 80:
+            digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
+            return f"sl:{digest}"
+        return f"sl:{norm}"
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+    return f"slh:{digest}"
 
 
 def _source_key_site_part(
@@ -126,7 +137,7 @@ def customer_sellthrough_source_key(
     period_start_date: date,
     site_label: str | None = None,
 ) -> str:
-    """Natural upsert key: ``ct:{customer}:{loc|sl:SITE|0}:{product}:{period}``.
+    """Natural upsert key: ``ct:{customer}:{loc|sl|slh|0}:{product}:{period}``.
 
     Siteless reports (Amazon ASIN) stay ``…:0:…``. Site-named reports (Game G007)
     persist one fact per site×product×week without requiring a location master.
