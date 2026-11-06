@@ -79,7 +79,7 @@ def _tier1_cst(
     product_id: int,
     as_of: date,
 ) -> CostSuggestion | None:
-    """Prefer unit_mac when present (Takealot MAC), else unit_cost. Tier order unchanged."""
+    """Prefer unit_mac when present, else unit_cost. Tier order unchanged."""
     from sqlalchemy import or_
 
     row = session.execute(

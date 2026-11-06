@@ -181,6 +181,17 @@ def should_backoff_dead_link(
     return now < last_fetch_at + timedelta(hours=DEAD_LINK_BACKOFF_HOURS)
 
 
+def listing_live_fetch_enabled() -> bool:
+    """`CIP_LISTING_LIVE_FETCH` truthy values: 1/true/on. Default off.
+
+    The poll, the autoconfigure beat task, and the steward autoconfigure endpoint
+    all use this switch. Off means no live HTTP.
+    """
+    import os
+
+    return os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on")
+
+
 def default_http_get(url: str, *, headers: dict[str, str] | None = None) -> tuple[int, str]:
     """Live HTTP fetch — only invoked when the caller explicitly enables live fetch (P5).
 

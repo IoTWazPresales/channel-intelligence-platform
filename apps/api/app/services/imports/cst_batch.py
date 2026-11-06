@@ -18,7 +18,7 @@ CST_TEMPLATE_SLUG = "customer_sell_through"
 CST_CAPABLE_GROUP_SIGNATURE = "cst_capable"
 CST_UNMAPPABLE_GROUP_SIGNATURE = "unmappable"
 
-# Header tokens that indicate a Takealot-style / flat CST sales sheet (case-insensitive).
+# Header tokens that indicate a flat CST sales sheet (case-insensitive).
 _CST_SIGNAL_TOKENS = (
     "transaction week",
     "transaction month",
@@ -119,7 +119,7 @@ def propose_cst_batch_groups(
     """Group uploaded files by CST capability (read-only, no DB).
 
     All CST-capable files join one ``cst_capable`` group so one steward session covers
-    multi-week Takealot-style batches. Unmappable files are listed separately.
+    multi-week flat CST batches. Unmappable files are listed separately.
     """
     previews: list[CstFilePreview] = []
     for filename, raw_bytes in files:

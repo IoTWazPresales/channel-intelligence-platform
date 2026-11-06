@@ -364,7 +364,7 @@ def p4_bootstrap_configs(
 ):
     """P4 — upsert placeholder customer_report_config rows for the remaining pilot roster.
 
-    Admin-only. Idempotent; never touches Takealot (customer_id=20) or any row that
+    Admin-only. Idempotent; never touches customer_id=20 or any row that
     already has a richer config (see cst_p4_customer_bootstrap._has_richer_config).
     """
     with SessionLocal() as session:

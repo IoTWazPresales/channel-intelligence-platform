@@ -150,9 +150,10 @@ def _customer_candidate_identity_norm(customer_dealer_raw: str | None, dealer_gr
 
 
 # Channel / marketplace hints for steward review (generic; not region-specific).
+# Stored listing_site.site_key values are added at runtime so a site key never has
+# to be spelled in this module.
 STRATEGIC_CHANNEL_HINT_SUBSTRINGS = (
     "amazon",
-    "takealot",
     "makro",
     "massmart",
     "game ",
@@ -166,6 +167,31 @@ STRATEGIC_CHANNEL_HINT_SUBSTRINGS = (
     "etail",
     "e-tail",
 )
+
+
+def strategic_channel_hint_substrings(db: Session | None = None) -> tuple[str, ...]:
+    """Static channel words plus site keys already stored on listing_site.
+
+    Site keys are loaded once per session. A key that exists only as data still
+    hints; this tuple does not name it.
+    """
+    if db is None:
+        return STRATEGIC_CHANNEL_HINT_SUBSTRINGS
+    cached = db.info.get("_strategic_channel_site_keys")
+    if not isinstance(cached, tuple):
+        from app.models.listing_site import ListingSite
+
+        cached = tuple(
+            dict.fromkeys(
+                str(key).strip().lower()
+                for key in db.scalars(select(ListingSite.site_key)).all()
+                if isinstance(key, str) and key.strip()
+            )
+        )
+        db.info["_strategic_channel_site_keys"] = cached
+    if not cached:
+        return STRATEGIC_CHANNEL_HINT_SUBSTRINGS
+    return tuple(dict.fromkeys((*STRATEGIC_CHANNEL_HINT_SUBSTRINGS, *cached)))
 
 
 def _norm_key(s: str | None) -> str:
@@ -3052,7 +3078,7 @@ def process_distributor_sales_inventory(
                         int(a.get("shipment_cust_corr_best") or 0), int(cc.get("match_count") or 0)
                     )
             chv = (ch_raw or "").strip().lower()
-            if chv and any(h in chv for h in STRATEGIC_CHANNEL_HINT_SUBSTRINGS):
+            if chv and any(h in chv for h in strategic_channel_hint_substrings(db)):
                 a["strategic_channel_hint"] = True
 
             if reg_raw:

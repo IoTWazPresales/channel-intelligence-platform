@@ -4,9 +4,9 @@ Canonical customer_ids fixed by Warren (Q-004): Evetech, Computer Mania, Incredi
 Connection, Amazon, Hifi, Makro, Game. Verified against `cip` on 2026-08-08 —
 `dim_customer.name` for each id matches this roster exactly (see task discovery).
 
-Never touches Takealot (`customer_id=20`) — that customer already has a
+Never touches customer_id=20 — that customer already has a
 hand-verified, richer config (`report_structure_type='flat'`,
-`feed_profile_json.vat_basis` set — see `.tmp/apply_takealot_cst_config_db.py`)
+`feed_profile_json.vat_basis` set — see the historical config apply script)
 and must not be clobbered by this bulk placeholder bootstrap. The same guard also
 protects any *other* customer that already carries a real structure/vat_basis —
 this bootstrap only ever creates or refreshes placeholder "awaiting sample file"
@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
 
-TAKEALOT_CUSTOMER_ID = 20
+EXCLUDED_PILOT_CUSTOMER_ID = 20
 
 P4_CUSTOMER_IDS: dict[int, str] = {
     52: "Evetech",
@@ -62,10 +62,10 @@ def bootstrap_p4_customer_configs(session: Session) -> dict[str, Any]:
     missing_customer: list[int] = []
 
     for customer_id, expected_name in P4_CUSTOMER_IDS.items():
-        if customer_id == TAKEALOT_CUSTOMER_ID:
-            # Defensive — Takealot is never in P4_CUSTOMER_IDS, but this guard stays
+        if customer_id == EXCLUDED_PILOT_CUSTOMER_ID:
+            # Defensive — customer_id=20 is never in P4_CUSTOMER_IDS, but this guard stays
             # even if the roster changes later.
-            skipped.append({"customer_id": customer_id, "reason": "takealot_never_touched"})
+            skipped.append({"customer_id": customer_id, "reason": "excluded_customer_never_touched"})
             continue
 
         customer = session.get(DimCustomer, customer_id)

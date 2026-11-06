@@ -854,9 +854,48 @@ def reports_fanout_import_complete_task(tenant_id: str) -> dict:
 
 def _listing_live_fetch_enabled() -> bool:
     """`CIP_LISTING_LIVE_FETCH` truthy values: 1/true/on — default off (P5)."""
-    import os
+    from app.services.listing_capture.observation import listing_live_fetch_enabled
 
-    return os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on")
+    return listing_live_fetch_enabled()
+
+
+@celery_app.task(name="listing_capture.autoconfigure_sites")
+def listing_capture_autoconfigure_sites_task(
+    tenant_id: str | None = None,
+    on_demand: bool = False,
+) -> dict:
+    """Beat task: fill empty listing-site rows for reporting customers. Idempotent.
+
+    Scheduled daily at 05:20 UTC. The listing-capture poll runs every 30 minutes.
+    ``on_demand=True`` runs even when dev beat is disabled (the steward endpoint
+    calls the service directly).
+    """
+    import logging
+
+    from app.db.session_sync import SessionLocal
+    from app.services.listing_capture.autoconfig import autoconfigure_sites
+    from app.services.listing_capture.observation import default_http_get
+    from app.worker.celery_queues import dev_beat_disabled
+
+    log = logging.getLogger(__name__)
+    if dev_beat_disabled() and not on_demand:
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+
+    live = _listing_live_fetch_enabled()
+    with SessionLocal() as session:
+        report = autoconfigure_sites(
+            session,
+            tenant_id=tenant_id,
+            http_get=default_http_get if live else None,
+        )
+        session.commit()
+    log.info(
+        "listing capture autoconfigure: configured=%s excluded=%s needs_pattern=%s",
+        len(report["configured"]),
+        len(report["excluded"]),
+        len(report["needs_pattern"]),
+    )
+    return {"skipped": False, **report}
 
 
 @celery_app.task(name="listing_capture.poll_listings")

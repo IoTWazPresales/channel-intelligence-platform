@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
@@ -190,6 +192,50 @@ def put_site_seller(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return _site_payload(session, site_service.get_site(session, site_id))
+
+
+@router.post("/sites/autoconfigure")
+def post_autoconfigure_sites(user: dict = Depends(require_roles(Role.STEWARD))):
+    """Fill empty listing sites for this tenant's reporting customers. Steward only."""
+    from app.services.listing_capture.autoconfig import autoconfigure_sites
+    from app.services.listing_capture.observation import default_http_get, listing_live_fetch_enabled
+
+    live = listing_live_fetch_enabled()
+    with SessionLocal() as session:
+        try:
+            report = autoconfigure_sites(
+                session,
+                tenant_id=tenant_id_from_user(user),
+                http_get=default_http_get if live else None,
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            logging.getLogger(__name__).exception("listing site autoconfigure failed")
+            return {"configured": [], "excluded": [], "needs_pattern": [], "data_unavailable": True}
+        return {**report, "data_unavailable": False}
+
+
+@router.get("/capture-health")
+def get_capture_health(user: dict = Depends(get_current_user)):
+    """Per-site capture posture for the caller's tenant: configured, newest price, skips, exclusions."""
+    from app.services.listing_capture.autoconfig import capture_health
+
+    with SessionLocal() as session:
+        try:
+            return capture_health(session, tenant_id=tenant_id_from_user(user))
+        except Exception:
+            session.rollback()
+            logging.getLogger(__name__).exception("listing capture health failed")
+            return {
+                "tenant_id": tenant_id_from_user(user),
+                "data_unavailable": True,
+                "sites": [],
+                "listings_due": 0,
+                "skipped_not_configured": {},
+                "exclusions": [],
+                "configured": [],
+            }
 
 
 @router.delete("/sites/{site_id}/sellers/{customer_id}")
