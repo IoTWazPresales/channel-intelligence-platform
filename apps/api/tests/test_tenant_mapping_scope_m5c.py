@@ -156,6 +156,9 @@ def test_shipment_sheet_memory_not_shared_across_tenants(db_world):
         tenant_id=tb,
         field_mapping={"Col B": "item_code"},
     )
+    # Session.refresh reloads the row and drops unflushed JSON. The writer stages
+    # the mapping; the API commits. Flush first so the reload still shows tenant B.
+    db.flush()
     db.refresh(sb)
     assert remembered_sheet_names(sb, tenant_id=tb) == []
     mem = (sb.column_mapping_memory or {}).get("by_header_norm") or {}
