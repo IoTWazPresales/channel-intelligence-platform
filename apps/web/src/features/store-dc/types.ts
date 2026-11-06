@@ -119,3 +119,35 @@ export type SiteCandidateRow = {
   status: string;
   blocked_as_distributor_site: boolean;
 };
+
+export type StoreDcConfig = {
+  tenant_id: string;
+  lead_time_min_deliveries: number;
+  dc_name_patterns: string[];
+  stock_behaviour_min_soh: number;
+  stored: boolean;
+};
+
+export type StoreDcConfigInput = {
+  lead_time_min_deliveries: number;
+  dc_name_patterns: string[];
+  stock_behaviour_min_soh: number;
+};
+
+export type LeadTimesPayload = {
+  customer_id?: number;
+  lead_time_min_deliveries: number;
+  lead_times: ReplenishmentViewData['lead_times'];
+};
+
+export type CustomerThresholds = {
+  customer_id: number;
+  slow_cover_multiple: number | null;
+  unsold_weeks: number | null;
+  cover: ReplenishmentViewData['cover'];
+};
+
+export type ThresholdInput = {
+  slow_cover_multiple?: number;
+  unsold_weeks?: number;
+};
