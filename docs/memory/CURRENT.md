@@ -1,8 +1,12 @@
 # CURRENT state
 
-**Last updated:** 2026-11-04 (N-0108 latest cover read)
+**Last updated:** 2026-11-06 (N-0118 chain-key re-apply)
 
-**Branch:** `feat/integrate-20261103`.
+**Branch:** `feat/n0118-cst-apply-c57a` from `feat/integrate-20261103` at `c57adbbe`.
+
+**N-0118:** Re-applying a customer sell-through job re-keys staged rows that were stored on a chain-level source key while the staged row names a site or a location. The chain-level fact moves aside. A second apply changes nothing. Unmatched products stay staged. No master is created. **B1/B2 (2026-11-06):** punctuation-only or non-Latin site labels use `slh:` keys (never chain `0`); chain-level retirement counts only staging lines for the same job so a partial re-key does not delete the chain row early. **Partial re-key (2026-11-06):** apply re-selects every resolved line still pointing at a chain-level fact (including chain-only rows) so the chain key is re-written with only the units still on that key; retirement runs only when no chain-only line remains for that fact. **Site key collision:** `sl:{norm}` only when the raw label is plain ASCII A–Z/a–z/0–9 (case folds to norm); any separator or non-ASCII uses `slh:` on raw bytes so `A-1` / `A 1` / `店-A1` do not alias `A1`. Proven on `cip_test` only (`current_database=cip_test`, transaction rolled back). Not run against `cip`. No migration.
+
+**Branch (previous checkpoint):** `feat/integrate-20261103`.
 
 **Alembic:** `cip` is now at `20261104_0057` (applied by Warren on 2026-11-04). That revision replaces `cip_inbound_shipment_lineage()` so a product-less inbound row is resolved from its evidence line. The line index and the identity index already exist. Code head is the same revision.
 
