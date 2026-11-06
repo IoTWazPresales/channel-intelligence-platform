@@ -318,3 +318,192 @@ def test_reapply_rekeys_chain_level_facts_and_second_apply_changes_nothing(sessi
     ).scalar()
     assert kept == 1
     assert _counts(session) == masters_before
+
+
+def test_reapply_idempotent_when_site_label_is_punctuation_only(session: Session) -> None:
+    """B1: punctuation-only labels map to ``slh:…`` keys, not chain ``0``; re-apply does not double-count (B2)."""
+    name = session.execute(text("select current_database()")).scalar()
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    source, customer, product, _other = _ids(session)
+    job = ImportJob(
+        tenant_id=TENANT,
+        source_id=source,
+        template_slug="customer_sell_through",
+        import_mode="apply",
+        status="completed",
+        stage="loaded",
+        file_name="punct.xlsx",
+        created_at=T0,
+    )
+    session.add(job)
+    session.flush()
+
+    punct_label = "@@@"
+    site_key = customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=product,
+        period_start_date=WEEK,
+        site_label=punct_label,
+    )
+    assert site_key.startswith(f"ct:{customer}:slh:")
+
+    chain_key = customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=product,
+        period_start_date=WEEK,
+    )
+    collapsed = FactCustomerSellthrough(
+        source_key=chain_key,
+        tenant_id=TENANT,
+        customer_id=customer,
+        product_id=product,
+        period_start_date=WEEK,
+        period_type="weekly",
+        period_grain="week",
+        units_sold=Decimal("5"),
+        site_label=punct_label,
+        import_job_id=job.id,
+    )
+    session.add(collapsed)
+    session.flush()
+
+    session.add(
+        ImportCustomerSellthroughStagingLine(
+            import_job_id=job.id,
+            source_row_number=1,
+            raw_row_payload={"u": "3"},
+            resolved_customer_id=customer,
+            resolved_product_id=product,
+            period_start_date=WEEK,
+            period_type="weekly",
+            period_grain="week",
+            units_sold=Decimal("3"),
+            site_label=punct_label,
+            resolution_status="resolved",
+            apply_status="applied",
+            fact_sellthrough_row_id=collapsed.id,
+        )
+    )
+    session.flush()
+
+    first = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert first.errors == []
+    assert first.applied == 1
+    row = session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == site_key))
+    assert row is not None
+    assert Decimal(row.units_sold) == Decimal("3")
+
+    second = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert second.errors == []
+    assert second.applied == 0
+    again = session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == site_key))
+    assert again is not None and Decimal(again.units_sold) == Decimal("3")
+
+
+def test_partial_rekey_same_job_does_not_retire_chain_while_chain_only_line_remains(session: Session) -> None:
+    """B2: only some rows re-key in a run — the chain fact stays until every same-job line is rewritten."""
+    name = session.execute(text("select current_database()")).scalar()
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+
+    source, customer, product, _other = _ids(session)
+    job = ImportJob(
+        tenant_id=TENANT,
+        source_id=source,
+        template_slug="customer_sell_through",
+        import_mode="apply",
+        status="completed",
+        stage="loaded",
+        file_name="partial.xlsx",
+        created_at=T0,
+    )
+    session.add(job)
+    session.flush()
+
+    chain_key = customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=product,
+        period_start_date=WEEK,
+    )
+    collapsed = FactCustomerSellthrough(
+        source_key=chain_key,
+        tenant_id=TENANT,
+        customer_id=customer,
+        product_id=product,
+        period_start_date=WEEK,
+        period_type="weekly",
+        period_grain="week",
+        units_sold=Decimal("9"),
+        import_job_id=job.id,
+    )
+    session.add(collapsed)
+    session.flush()
+
+    session.add_all(
+        [
+            ImportCustomerSellthroughStagingLine(
+                import_job_id=job.id,
+                source_row_number=1,
+                raw_row_payload={"site": "S1", "units": "4"},
+                resolved_customer_id=customer,
+                resolved_product_id=product,
+                period_start_date=WEEK,
+                period_type="weekly",
+                period_grain="week",
+                units_sold=Decimal("4"),
+                site_label="S1",
+                resolution_status="resolved",
+                apply_status="applied",
+                fact_sellthrough_row_id=collapsed.id,
+            ),
+            ImportCustomerSellthroughStagingLine(
+                import_job_id=job.id,
+                source_row_number=2,
+                raw_row_payload={"units": "5"},
+                resolved_customer_id=customer,
+                resolved_product_id=product,
+                period_start_date=WEEK,
+                period_type="weekly",
+                period_grain="week",
+                units_sold=Decimal("5"),
+                site_label=None,
+                raw_location_token=None,
+                resolution_status="resolved",
+                apply_status="applied",
+                fact_sellthrough_row_id=collapsed.id,
+            ),
+        ]
+    )
+    session.flush()
+
+    first = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert first.errors == []
+    assert first.applied == 1
+    assert first.superseded_rows == 0
+
+    chain = session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == chain_key))
+    assert chain is not None
+    assert Decimal(chain.units_sold) == Decimal("5")
+
+    site_key = customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=product,
+        period_start_date=WEEK,
+        site_label="S1",
+    )
+    site_row = session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == site_key))
+    assert site_row is not None
+    assert Decimal(site_row.units_sold) == Decimal("4")
+
+    assert (
+        session.execute(
+            text("select count(*) from fact_customer_sellthrough_superseded where tenant_id = :t"),
+            {"t": TENANT},
+        ).scalar()
+        == 0
+    )

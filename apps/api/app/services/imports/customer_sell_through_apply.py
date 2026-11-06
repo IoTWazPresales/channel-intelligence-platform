@@ -245,8 +245,9 @@ def apply_customer_sellthrough_staging(
             .order_by(line.source_row_number, line.id)
         ).all()
     )
-    # Every staged row that still points at those chain-level facts, including one this query
-    # did not select. The fact moves aside only when this run rewrote all of them.
+    # Every staging line for *this job* that still points at those chain-level facts, including one
+    # this query did not select. The fact moves aside only when this run rewrote all of them for
+    # this job (other jobs’ staging must not widen the set or retire the fact early).
     chain_fact_lines: dict[int, set[int]] = defaultdict(set)
     rekey_fact_ids = {
         int(row.fact_sellthrough_row_id)
@@ -255,7 +256,9 @@ def apply_customer_sellthrough_staging(
     }
     if rekey_fact_ids:
         for line_id, fact_id in db.execute(
-            select(line.id, line.fact_sellthrough_row_id).where(line.fact_sellthrough_row_id.in_(rekey_fact_ids))
+            select(line.id, line.fact_sellthrough_row_id)
+            .where(line.fact_sellthrough_row_id.in_(rekey_fact_ids))
+            .where(line.import_job_id == int(job_id))
         ).all():
             if fact_id is not None:
                 chain_fact_lines[int(fact_id)].add(int(line_id))

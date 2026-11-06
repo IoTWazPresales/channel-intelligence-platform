@@ -68,6 +68,55 @@ def test_source_key_unmapped_site_label_is_distinct_from_chain() -> None:
     assert is_chain_level_sellthrough_source_key(other) is False
 
 
+def test_source_key_punctuation_only_label_is_distinct_from_chain() -> None:
+    """Labels that normalize to empty must not use chain key ``…:0:…``."""
+    k_dash = customer_sellthrough_source_key(
+        customer_id=1,
+        customer_location_id=None,
+        product_id=2,
+        period_start_date=date(2026, 6, 1),
+        site_label="---",
+    )
+    k_hash = customer_sellthrough_source_key(
+        customer_id=1,
+        customer_location_id=None,
+        product_id=2,
+        period_start_date=date(2026, 6, 1),
+        site_label="###",
+    )
+    chain = customer_sellthrough_source_key(
+        customer_id=1,
+        customer_location_id=None,
+        product_id=2,
+        period_start_date=date(2026, 6, 1),
+    )
+    assert k_dash.startswith("ct:1:slh:") and k_dash.endswith(":2:2026-06-01")
+    assert k_hash.startswith("ct:1:slh:") and k_hash.endswith(":2:2026-06-01")
+    assert k_dash != k_hash
+    assert is_chain_level_sellthrough_source_key(k_dash) is False
+    assert is_chain_level_sellthrough_source_key(chain) is True
+
+
+def test_source_key_non_latin_and_mixed_labels_distinct() -> None:
+    k_cjk = customer_sellthrough_source_key(
+        customer_id=3,
+        customer_location_id=None,
+        product_id=4,
+        period_start_date=date(2026, 7, 1),
+        site_label="店舗あ",
+    )
+    k_mixed = customer_sellthrough_source_key(
+        customer_id=3,
+        customer_location_id=None,
+        product_id=4,
+        period_start_date=date(2026, 7, 1),
+        site_label="店-A1",
+    )
+    assert k_cjk.startswith("ct:3:slh:")
+    assert k_mixed == "ct:3:sl:A1:4:2026-07-01"
+    assert k_cjk != k_mixed
+
+
 def test_chain_level_source_key_is_customer_product_period_only() -> None:
     chain = customer_sellthrough_source_key(
         customer_id=10,

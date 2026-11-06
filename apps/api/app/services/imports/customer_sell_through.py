@@ -78,6 +78,23 @@ STRUCTURE_WIDE_EXTRACT = "wide_extract"
 _SITE_LABEL_KEY_RE = re.compile(r"[^A-Z0-9]+")
 
 
+def _site_label_source_key_token(*, raw: str, norm: str) -> str:
+    """Stable site token for the source key when there is no location FK.
+
+    Latin alphanumeric labels use ``sl:{norm}`` (uppercase, punctuation folded to ``_``).
+    Punctuation-only, non-Latin, or labels that normalize to empty use ``slh:{digest}``
+    over the full trimmed UTF-8 string so two sites never collapse to chain-level ``0`` and
+    distinct raw labels stay distinct.
+    """
+    if not norm:
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+        return f"slh:{digest}"
+    if len(norm) > 80:
+        digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
+        return f"sl:{digest}"
+    return f"sl:{norm}"
+
+
 def _source_key_site_part(
     *,
     customer_location_id: int | None,
@@ -87,6 +104,10 @@ def _source_key_site_part(
 
     Unmapped Game (and similar) site codes must not share loc=0 — that last-write-wins
     the week down to one store. FLAG ≠ BLOCK: we do not auto-create customer_location.
+
+    A non-empty site label whose alphanumeric normalization is empty (punctuation-only,
+    non-Latin scripts, etc.) must not use ``0`` — that would collide with the chain-level key
+    and a re-apply would overwrite the wrong fact.
     """
     if customer_location_id is not None:
         return str(int(customer_location_id))
@@ -94,12 +115,7 @@ def _source_key_site_part(
     if not raw:
         return "0"
     norm = _SITE_LABEL_KEY_RE.sub("_", raw.upper()).strip("_")
-    if not norm:
-        return "0"
-    if len(norm) > 80:
-        digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
-        return f"sl:{digest}"
-    return f"sl:{norm}"
+    return _site_label_source_key_token(raw=raw, norm=norm)
 
 
 def customer_sellthrough_source_key(
