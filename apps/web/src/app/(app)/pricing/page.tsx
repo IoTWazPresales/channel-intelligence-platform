@@ -23,6 +23,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
@@ -178,7 +179,7 @@ export default function PricingPage() {
   const busyFacts = bulkFacts.isPending || addFact.isPending || delFact.isPending || clearFacts.isPending;
 
   return (
-    <>
+    <WorkbenchCanvas>
       <PageHeader crumbs={[{ label: 'Planning' }, { label: 'Recorded prices' }]} title="Recorded prices" />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1, maxWidth: 900 }}>
         List and net prices are kept here. A SKU that is not in the product master goes to product catalogue gaps.
@@ -296,6 +297,6 @@ export default function PricingPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </WorkbenchCanvas>
   );
 }
