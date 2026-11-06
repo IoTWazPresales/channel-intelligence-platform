@@ -1,0 +1,320 @@
+"""N-0118: re-applying a job re-keys rows stored on a chain-level fact while the staged row names a site.
+
+One rolled-back transaction. Writes only to cip_test. Prints current_database() before any write.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+from decimal import Decimal
+
+import pytest
+from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.db.sync_url import sqlalchemy_sync_engine_url
+from app.models.dimensions import CustomerLocation, DimCustomer, DimProduct
+from app.models.fact_customer_sellthrough import FactCustomerSellthrough
+from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
+from app.models.ingestion import ImportJob, SourceDefinition
+from app.services.imports.customer_sell_through import customer_sellthrough_source_key
+from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
+
+TENANT = "n0118_chain_rekey"
+WEEK = date(1999, 1, 4)
+T0 = datetime(2026, 8, 1, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+def session():
+    engine = create_engine(sqlalchemy_sync_engine_url(get_settings().database_url_sync))
+    with engine.connect() as conn:
+        name = conn.execute(text("select current_database()")).scalar()
+        print(f"current_database={name}", flush=True)
+        if name != "cip_test":
+            pytest.skip(f"cip_test only, current_database={name}")
+        if not conn.execute(text("select to_regclass('fact_customer_sellthrough_superseded')")).scalar():
+            pytest.skip("fact_customer_sellthrough_superseded is not present")
+        conn.rollback()
+        outer = conn.begin()
+        db = Session(bind=conn, join_transaction_mode="create_savepoint")
+        try:
+            yield db
+        finally:
+            db.close()
+            outer.rollback()
+    engine.dispose()
+
+
+def _ids(db: Session) -> tuple[int, int, int, int]:
+    source = db.scalar(select(SourceDefinition.id).order_by(SourceDefinition.id).limit(1))
+    customer = db.scalar(select(DimCustomer.id).order_by(DimCustomer.id).limit(1))
+    products = db.scalars(select(DimProduct.id).order_by(DimProduct.id).limit(30)).all()
+    if source is None or customer is None or len(products) < 2:
+        pytest.skip("cip_test needs a source, a customer and two products")
+    free: list[int] = []
+    for product in products:
+        keys = [
+            customer_sellthrough_source_key(
+                customer_id=int(customer),
+                customer_location_id=None,
+                product_id=int(product),
+                period_start_date=WEEK,
+            ),
+            customer_sellthrough_source_key(
+                customer_id=int(customer),
+                customer_location_id=None,
+                product_id=int(product),
+                period_start_date=WEEK,
+                site_label="S1",
+            ),
+            customer_sellthrough_source_key(
+                customer_id=int(customer),
+                customer_location_id=None,
+                product_id=int(product),
+                period_start_date=WEEK,
+                site_label="S2",
+            ),
+        ]
+        taken = db.scalar(
+            select(func.count()).select_from(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key.in_(keys))
+        )
+        if not taken:
+            free.append(int(product))
+        if len(free) == 2:
+            break
+    if len(free) < 2:
+        pytest.skip("cip_test has no free sell-through keys for the fixture week")
+    return int(source), int(customer), free[0], free[1]
+
+
+def _counts(db: Session) -> tuple[int, int]:
+    products = int(db.scalar(select(func.count()).select_from(DimProduct)) or 0)
+    locations = int(db.scalar(select(func.count()).select_from(CustomerLocation)) or 0)
+    return products, locations
+
+
+def test_reapply_rekeys_chain_level_facts_and_second_apply_changes_nothing(session: Session) -> None:
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    assert name == "cip_test"
+
+    source, customer, product, other_product = _ids(session)
+    masters_before = _counts(session)
+    job = ImportJob(
+        tenant_id=TENANT,
+        source_id=source,
+        template_slug="customer_sell_through",
+        import_mode="apply",
+        status="completed",
+        stage="loaded",
+        file_name="store-week.xlsx",
+        created_at=T0,
+    )
+    session.add(job)
+    session.flush()
+
+    chain_key = customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=product,
+        period_start_date=WEEK,
+    )
+    collapsed = FactCustomerSellthrough(
+        source_key=chain_key,
+        tenant_id=TENANT,
+        customer_id=customer,
+        product_id=product,
+        period_start_date=WEEK,
+        period_type="weekly",
+        period_grain="week",
+        units_sold=Decimal("3"),
+        reported_soh=Decimal("1"),
+        site_label="S1",
+        import_job_id=job.id,
+    )
+    other_key = customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=other_product,
+        period_start_date=WEEK,
+    )
+    other = FactCustomerSellthrough(
+        source_key=other_key,
+        tenant_id=TENANT,
+        customer_id=customer,
+        product_id=other_product,
+        period_start_date=WEEK,
+        period_type="weekly",
+        period_grain="week",
+        units_sold=Decimal("9"),
+        reported_soh=Decimal("8"),
+        import_job_id=job.id,
+    )
+    session.add_all([collapsed, other])
+    session.flush()
+
+    session.add_all(
+        [
+            ImportCustomerSellthroughStagingLine(
+                import_job_id=job.id,
+                source_row_number=1,
+                raw_row_payload={"site": "S1", "units": "10", "soh": "4"},
+                resolved_customer_id=customer,
+                resolved_product_id=product,
+                period_start_date=WEEK,
+                period_type="weekly",
+                period_grain="week",
+                units_sold=Decimal("10"),
+                reported_soh=Decimal("4"),
+                site_label="S1",
+                resolution_status="resolved",
+                apply_status="applied",
+                fact_sellthrough_row_id=collapsed.id,
+            ),
+            ImportCustomerSellthroughStagingLine(
+                import_job_id=job.id,
+                source_row_number=2,
+                raw_row_payload={"site": "S2", "units": "7", "soh": "2"},
+                resolved_customer_id=customer,
+                resolved_product_id=product,
+                period_start_date=WEEK,
+                period_type="weekly",
+                period_grain="week",
+                units_sold=Decimal("7"),
+                reported_soh=Decimal("2"),
+                site_label=None,
+                raw_location_token="S2",
+                resolution_status="resolved",
+                apply_status="applied",
+                fact_sellthrough_row_id=collapsed.id,
+            ),
+            ImportCustomerSellthroughStagingLine(
+                import_job_id=job.id,
+                source_row_number=3,
+                raw_row_payload={"units": "9"},
+                resolved_customer_id=customer,
+                resolved_product_id=other_product,
+                period_start_date=WEEK,
+                period_type="weekly",
+                period_grain="week",
+                units_sold=Decimal("9"),
+                reported_soh=Decimal("8"),
+                resolution_status="resolved",
+                apply_status="applied",
+                fact_sellthrough_row_id=other.id,
+            ),
+            ImportCustomerSellthroughStagingLine(
+                import_job_id=job.id,
+                source_row_number=4,
+                raw_row_payload={"site": "S9", "token": "UNMATCHED"},
+                raw_product_token="UNMATCHED",
+                site_label="S9",
+                period_start_date=WEEK,
+                units_sold=Decimal("1"),
+                resolution_status="product_not_matched",
+            ),
+        ]
+    )
+    session.flush()
+
+    first = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert first.errors == []
+    assert first.applied == 2
+    assert first.skipped_unresolved == 1
+    assert first.superseded_rows == 1
+    assert first.superseded_units == 3.0
+
+    site_keys = {
+        "S1": customer_sellthrough_source_key(
+            customer_id=customer,
+            customer_location_id=None,
+            product_id=product,
+            period_start_date=WEEK,
+            site_label="S1",
+        ),
+        "S2": customer_sellthrough_source_key(
+            customer_id=customer,
+            customer_location_id=None,
+            product_id=product,
+            period_start_date=WEEK,
+            site_label="S2",
+        ),
+    }
+    rows = {
+        row.source_key: row
+        for row in session.scalars(
+            select(FactCustomerSellthrough).where(FactCustomerSellthrough.tenant_id == TENANT)
+        ).all()
+    }
+    assert chain_key not in rows
+    assert set(rows) == {site_keys["S1"], site_keys["S2"], other_key}
+    assert Decimal(rows[site_keys["S1"]].units_sold) == Decimal("10")
+    assert Decimal(rows[site_keys["S1"]].reported_soh) == Decimal("4")
+    assert rows[site_keys["S1"]].site_label == "S1"
+    assert Decimal(rows[site_keys["S2"]].units_sold) == Decimal("7")
+    assert Decimal(rows[site_keys["S2"]].reported_soh) == Decimal("2")
+    assert rows[site_keys["S2"]].site_label == "S2"
+    assert rows[other_key].id == other.id
+    assert Decimal(rows[other_key].units_sold) == Decimal("9")
+    assert Decimal(rows[other_key].reported_soh) == Decimal("8")
+
+    moved = session.execute(
+        text(
+            "select import_job_id, superseded_by_import_job_id, reason, units_sold, "
+            "row_json->>'source_key', row_json->>'site_label' "
+            "from fact_customer_sellthrough_superseded where tenant_id = :t"
+        ),
+        {"t": TENANT},
+    ).all()
+    assert len(moved) == 1
+    assert moved[0][0] == job.id and moved[0][1] == job.id
+    assert moved[0][2] == "restated_by_newer_load"
+    assert Decimal(moved[0][3]) == Decimal("3")
+    assert moved[0][4] == chain_key and moved[0][5] == "S1"
+
+    pointed = {
+        int(row[0]): (row[1], row[2])
+        for row in session.execute(
+            select(
+                ImportCustomerSellthroughStagingLine.source_row_number,
+                ImportCustomerSellthroughStagingLine.fact_sellthrough_row_id,
+                ImportCustomerSellthroughStagingLine.apply_status,
+            ).where(ImportCustomerSellthroughStagingLine.import_job_id == job.id)
+        ).all()
+    }
+    assert pointed[1] == (rows[site_keys["S1"]].id, "applied")
+    assert pointed[2] == (rows[site_keys["S2"]].id, "applied")
+    assert pointed[3] == (other.id, "applied")
+    unmatched = session.scalar(
+        select(ImportCustomerSellthroughStagingLine).where(
+            ImportCustomerSellthroughStagingLine.import_job_id == job.id,
+            ImportCustomerSellthroughStagingLine.source_row_number == 4,
+        )
+    )
+    assert unmatched is not None
+    assert unmatched.resolution_status == "product_not_matched"
+    assert unmatched.apply_status is None
+    assert unmatched.resolved_product_id is None
+    assert _counts(session) == masters_before
+
+    snapshot = sorted((key, str(row.units_sold), str(row.reported_soh)) for key, row in rows.items())
+    second = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert second.errors == []
+    assert second.applied == 0
+    assert second.superseded_rows == 0
+    assert second.superseded_units == 0.0
+    again = {
+        row.source_key: row
+        for row in session.scalars(
+            select(FactCustomerSellthrough).where(FactCustomerSellthrough.tenant_id == TENANT)
+        ).all()
+    }
+    assert sorted((key, str(row.units_sold), str(row.reported_soh)) for key, row in again.items()) == snapshot
+    kept = session.execute(
+        text("select count(*) from fact_customer_sellthrough_superseded where tenant_id = :t"),
+        {"t": TENANT},
+    ).scalar()
+    assert kept == 1
+    assert _counts(session) == masters_before

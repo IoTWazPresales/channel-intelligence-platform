@@ -1,8 +1,12 @@
 # CURRENT state
 
-**Last updated:** 2026-11-04 (N-0108 latest cover read)
+**Last updated:** 2026-11-06 (N-0118 chain-key re-apply)
 
-**Branch:** `feat/integrate-20261103`.
+**Branch:** `feat/n0118-cst-apply-c57a` from `feat/integrate-20261103` at `c57adbbe`.
+
+**N-0118:** Re-applying a customer sell-through job re-keys staged rows that were stored on a chain-level source key while the staged row names a site or a location. The chain-level fact moves aside. A second apply changes nothing. Unmatched products stay staged. No master is created. Proven on `cip_test` only (`current_database=cip_test`, transaction rolled back). Not run against `cip`. No migration.
+
+**Branch (previous checkpoint):** `feat/integrate-20261103`.
 
 **Alembic:** `cip` is now at `20261104_0057` (applied by Warren on 2026-11-04). That revision replaces `cip_inbound_shipment_lineage()` so a product-less inbound row is resolved from its evidence line. The line index and the identity index already exist. Code head is the same revision.
 

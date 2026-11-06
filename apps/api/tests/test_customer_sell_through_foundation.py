@@ -20,6 +20,7 @@ from app.services.imports.customer_sell_through import (
     _handle_wide_extract,
     customer_report_config_defaults,
     customer_sellthrough_source_key,
+    is_chain_level_sellthrough_source_key,
     new_customer_sellthrough_staging_line,
     process_customer_sell_through,
 )
@@ -63,6 +64,28 @@ def test_source_key_unmapped_site_label_is_distinct_from_chain() -> None:
     )
     assert other == "ct:57:sl:G018:5376:2026-05-25"
     assert key != other
+    assert is_chain_level_sellthrough_source_key(key) is False
+    assert is_chain_level_sellthrough_source_key(other) is False
+
+
+def test_chain_level_source_key_is_customer_product_period_only() -> None:
+    chain = customer_sellthrough_source_key(
+        customer_id=10,
+        customer_location_id=None,
+        product_id=20,
+        period_start_date=date(2026, 5, 1),
+    )
+    located = customer_sellthrough_source_key(
+        customer_id=10,
+        customer_location_id=55,
+        product_id=20,
+        period_start_date=date(2026, 5, 1),
+    )
+    assert chain == "ct:10:0:20:2026-05-01"
+    assert is_chain_level_sellthrough_source_key(chain) is True
+    assert is_chain_level_sellthrough_source_key(located) is False
+    assert is_chain_level_sellthrough_source_key(None) is False
+    assert is_chain_level_sellthrough_source_key("ct:10:0:20:2026-05-01:extra") is False
 
 
 def test_staging_line_defaults_to_pending() -> None:
