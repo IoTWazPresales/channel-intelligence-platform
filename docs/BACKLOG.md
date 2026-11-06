@@ -3267,7 +3267,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-09-29 · Recorded as `finding.defer` (`DOES_NOT_FIT`) on N-0053. |
+| **Status / parked** | **Done** · 2026-11-04 · PR #46 merge `5668c180c7bcc6717187cad3086a5ea73cf26f7c` (`ee12c168`). The lineup workbench under `both` expands the saved `sku` slot into two columns through `lineIdentifierColumns` (SKU and Sales model, an em dash when empty, each sortable). Single-mode `sku` and `sales_model` keep one column. CoverLensView, SettlementDesk, and the commercial-planner drawer heading still use the welded string; this entry already treated those captions as one string. |
 | **Effort** | Small per consumer; the lineup workbench is Medium because its column model is a fixed per-`colId` switch, not `ColDef[]`. |
 | **Source** | `.eif/audit/PROGRAMME_20260924/n0053/finding_textslot.json`; `.eif/audit/PROGRAMME_20260924/n0053/IMPL.md` ("Text-slot consumers"). |
 | **Idea** | N-0053 made `both` render two real, sortable, filterable columns on every AG Grid and MUI-table host through `lineIdentifierColumns` / `headers` / `values`. Four places consume the identifier as a single text slot and, under `both`, still show the welded `value` (`sku · model`) with header `SKU · Sales model`: `CoverLensView` product caption/subtitle, `SettlementDesk` drawer title, the commercial-planner drawer heading, and the `CurrentLineupSection` lineup workbench (`colId === 'sku'` cell renderer, column label, and column-selector search). |
@@ -3342,7 +3342,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-10-22 · Warren's test-leak brief (Step 1). |
+| **Status / parked** | **Done** · 2026-11-05 · PR #49 squash `42e52b03b8af30c6c936a94646879b01c4f5f09e` (`f9609867`). Four tests insert and delete their own distributor, product, and customer (codes end in a uuid hex) and no longer read `DIST-01`, `SKU-ALPHA-01`, or `CUST-1001`: `test_ignored_customer_stays_excluded_after_revalidate`, `test_refresh_keeps_ignored_customer_excluded`, `test_refresh_loads_shipment_evidence_and_ignored_customers_once`, and `test_dsi_candidate_steward_map_customer_and_alias_persisted`. |
 | **Effort** | Small per test. |
 | **Source** | Two tests in `tests/test_dsi_customer_ignore_revalidate.py` and `test_dsi_candidate_steward_map_customer_and_alias_persisted` in `tests/test_distributor_sales_inventory_import.py` pass only because `cip_test` already holds rows earlier runs left. `test_refresh_loads_shipment_evidence_and_ignored_customers_once` is also order-dependent (its query count depends on what ran before it). |
 | **Idea** | Each test seeds the rows it needs inside its own transaction or fixture, and cleans them, so it passes on an empty database and in any order. |
@@ -3357,7 +3357,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-10-22 · Warren's test-leak brief (Step 1). |
+| **Status / parked** | **Done** · 2026-11-04 · PR #47 squash `247eb591dfd8d9960169fdb3bf232aada1c405ce` (`7f95a4b6`). CI creates LOGIN role `cip` with `NOSUPERUSER NOBYPASSRLS` and owns the disposable databases. `test_product_line_rls_n0065_db.py`, `test_product_line_rls_parity_n0065_db.py`, and `test_shipment_evidence_lineage_rls_n0065_db.py` call `engage_nonsuperuser_role`, which `SET LOCAL ROLE`s to a non-bypassing LOGIN role when the session user would skip row security, and fails when no such role exists. |
 | **Effort** | Small: decide the CI role, then make the tests use a non-superuser role or skip with a reason. |
 | **Source** | `tests/test_product_line_rls_n0065_db.py`, `tests/test_product_line_rls_parity_n0065_db.py`, `tests/test_shipment_evidence_lineage_rls_n0065_db.py`. A superuser (or `BYPASSRLS`) role skips row security even under `FORCE ROW LEVEL SECURITY`, so the tests that expect rows hidden see them. Locally the app role `cip` is not a superuser, so they pass. |
 | **Idea** | CI connects as a superuser by default (the database image's owner). The tests should connect as, or `SET ROLE` to, a non-superuser app role created for the run, the way the app connects in production. |
