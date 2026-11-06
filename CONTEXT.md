@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-06 - **Warren decisions docs (PR #61):** merged `feat/integrate-20261103` at `c5e4f4e0`. `CURRENT` notes D-0144 implementation paths (`apps/api/alembic/versions/20261103_0055_tenant_mapping_memory_aliases.py`, `apps/api/app/services/imports/tenant_mapping_scope.py`) and records Warren's 2026-11-06 resolution for D-0141 vs D-0145 (D-0141 stays; job column and user–account assignments in N-0100 part B via the serial migration queue; until then behaviour stays as D-0145 with no job column). Docs only; no EIF ledger edits. Commit `81174a7e`.
+- 2026-11-06 - **Warren decisions docs (PR #61):** merged `feat/integrate-20261103` at `c5e4f4e0`. `CURRENT` notes D-0144 implementation paths (`apps/api/alembic/versions/20261103_0055_tenant_mapping_memory_aliases.py`, `apps/api/app/services/imports/tenant_mapping_scope.py`) and records Warren's 2026-11-06 resolution for D-0141 vs D-0145 (D-0141 stays; job column and user–account assignments in N-0100 part B via the serial migration queue; until then behaviour stays as D-0145 with no job column). Docs only; no EIF ledger edits. Commit `19aba116`.
 
 - 2026-11-04 - **N-0108 needs-a-look:** a brief read already bound to one connection stays on that connection, so the on-the-water fixture still raises `shipment_needs_look` (1 line, 9 units, 7 days on `cip_test`). On `cip`, read-only, that signal's fact ids and quantities match on the old request-session path and the overlapped path (12 lines, 1,316 units, 7 days). `cip` is at `20261104_0057`, applied by Warren on 2026-11-04. Merged `feat/integrate-20261103` at `bb8e1729`. No write to `cip`. No main. Commit `6d23b903`.
 
