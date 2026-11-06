@@ -2,6 +2,7 @@
 
 import { Alert, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { apiGet } from '@/lib/api';
 import { StatusChip } from '@/features/workbench-ui/controls';
@@ -39,6 +40,10 @@ type CaptureHealth = {
   exclusions?: DiscoveryRow[];
   configured?: DiscoveryRow[];
 };
+
+type CustomerRow = { id: number; customer_code: string; customer_name: string };
+
+type CustomerList = { items?: CustomerRow[] };
 
 const PATTERN_LABEL: Record<string, string> = {
   derived: 'One link pattern',
@@ -94,6 +99,19 @@ export function ListingCaptureHealth() {
     queryKey: ['listing-capture', 'capture-health'],
     queryFn: ({ signal }) => apiGet<CaptureHealth>('/api/v1/listing-capture/capture-health', { signal }),
   });
+  const { data: customersPage } = useQuery({
+    queryKey: ['customers', 'listing-capture-health-names'],
+    queryFn: ({ signal }) => apiGet<CustomerList>('/api/v1/customers?page=1&page_size=200', { signal }),
+    staleTime: 60_000,
+  });
+  const customerLabelById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const c of customersPage?.items ?? []) {
+      const label = (c.customer_name || c.customer_code || '').trim();
+      if (label) m.set(c.id, label);
+    }
+    return m;
+  }, [customersPage]);
   const data = health.data;
   const sites = data?.sites ?? [];
   const configured = data?.configured ?? [];
@@ -104,6 +122,7 @@ export function ListingCaptureHealth() {
   const ready = sites.filter((site) => site.configured).length;
   const patternGaps = discovery.filter((row) => row.pattern_status === 'mixed' || row.pattern_status === 'none').length;
   const unavailable = health.isError || data?.data_unavailable === true;
+  const dashPlaceholder = unavailable && !health.isLoading;
 
   return (
     <Stack spacing={1.5} sx={{ mt: 2 }} data-testid="listing-capture-health">
@@ -118,37 +137,39 @@ export function ListingCaptureHealth() {
       <HeadlineStrip columns={4}>
         <HeadlineFigure
           label="Listings due"
-          value={health.isLoading ? '…' : listingsDue}
+          value={health.isLoading ? '…' : dashPlaceholder ? '—' : listingsDue}
           compact
           testId="listing-capture-health-due"
           caption="Active listings waiting for a check"
         />
         <HeadlineFigure
           label="Skipped, not configured"
-          value={health.isLoading ? '…' : skipped}
+          value={health.isLoading ? '…' : dashPlaceholder ? '—' : skipped}
           compact
-          severity={skipped ? 'warn' : 'neutral'}
+          severity={dashPlaceholder ? 'neutral' : skipped ? 'warn' : 'neutral'}
           testId="listing-capture-health-skipped"
           caption="Due listings on a site with no page reader"
         />
         <HeadlineFigure
           label="Sites ready"
-          value={health.isLoading ? '…' : ready}
-          unit={sites.length ? `of ${sites.length}` : undefined}
+          value={health.isLoading ? '…' : dashPlaceholder ? '—' : ready}
+          unit={!dashPlaceholder && sites.length ? `of ${sites.length}` : undefined}
           compact
-          severity={sites.length && ready === sites.length ? 'good' : 'neutral'}
+          severity={
+            dashPlaceholder ? 'neutral' : sites.length && ready === sites.length ? 'good' : 'neutral'
+          }
           testId="listing-capture-health-ready"
         />
         <HeadlineFigure
           label="Link patterns to look at"
-          value={health.isLoading ? '…' : patternGaps}
+          value={health.isLoading ? '…' : dashPlaceholder ? '—' : patternGaps}
           compact
-          severity={patternGaps ? 'warn' : 'neutral'}
+          severity={dashPlaceholder ? 'neutral' : patternGaps ? 'warn' : 'neutral'}
           testId="listing-capture-health-patterns"
           caption="Mixed links, or no shared pattern yet"
         />
       </HeadlineStrip>
-      {sites.length === 0 && !health.isLoading ? (
+      {sites.length === 0 && !health.isLoading && !unavailable ? (
         <Typography variant="body2" data-testid="listing-capture-health-sites-empty">
           No sites in capture health.
         </Typography>
@@ -176,8 +197,8 @@ export function ListingCaptureHealth() {
                     tone={site.configured ? 'success' : 'warning'}
                   />
                 </TableCell>
-                <TableCell align="right">{site.listings_due}</TableCell>
-                <TableCell align="right">{site.skipped_not_configured}</TableCell>
+                <TableCell align="right">{dashPlaceholder ? '—' : site.listings_due}</TableCell>
+                <TableCell align="right">{dashPlaceholder ? '—' : site.skipped_not_configured}</TableCell>
                 <TableCell>{fmtWhen(site.newest_observation?.fetched_at)}</TableCell>
                 <TableCell>{site.newest_observation?.status ?? '—'}</TableCell>
                 <TableCell align="right">{fmtPrice(site.newest_observation?.price)}</TableCell>
@@ -187,7 +208,7 @@ export function ListingCaptureHealth() {
         </Table>
       ) : null}
       <Typography variant="subtitle2">Link discovery</Typography>
-      {discovery.length === 0 && !health.isLoading ? (
+      {discovery.length === 0 && !health.isLoading && !unavailable ? (
         <Typography variant="body2" data-testid="listing-capture-health-discovery-empty">
           No link-pattern status yet.
         </Typography>
@@ -205,7 +226,7 @@ export function ListingCaptureHealth() {
             data-testid={`listing-capture-health-discovery-${row.customer_id}-${siteKey}`}
           >
             <Typography variant="body2">
-              {row.site_key || 'No site'} · customer {row.customer_id}
+              {row.site_key || 'No site'} · {customerLabelById.get(row.customer_id) ?? '—'}
             </Typography>
             <StatusChip label={OUTCOME_LABEL[row.outcome] ?? row.outcome} tone={row.outcome === 'configured' ? 'success' : 'warning'} />
             {row.pattern_status ? <StatusChip label={patternLabel(row.pattern_status)} tone={patternTone(row.pattern_status)} /> : null}
