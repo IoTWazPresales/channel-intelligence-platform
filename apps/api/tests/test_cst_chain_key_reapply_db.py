@@ -221,7 +221,8 @@ def test_reapply_rekeys_chain_level_facts_and_second_apply_changes_nothing(sessi
 
     first = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
     assert first.errors == []
-    assert first.applied == 2
+    # Two site re-keys plus the other_product chain row re-stated on its chain key.
+    assert first.applied == 3
     assert first.skipped_unresolved == 1
     assert first.superseded_rows == 1
     assert first.superseded_units == 3.0
@@ -482,7 +483,7 @@ def test_partial_rekey_same_job_does_not_retire_chain_while_chain_only_line_rema
 
     first = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
     assert first.errors == []
-    assert first.applied == 1
+    assert first.applied == 2
     assert first.superseded_rows == 0
 
     chain = session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == chain_key))

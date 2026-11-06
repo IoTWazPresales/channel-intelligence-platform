@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, func, not_, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -132,11 +132,18 @@ def _retire_rewritten_chain_facts(
     job_id: int,
     chain_fact_lines: dict[int, set[int]],
     rewritten_line_ids: set[int],
+    line_model: type,
+    site_named,
 ) -> Any:
     """Move a chain-level fact aside once every staged row that pointed at it was re-keyed.
 
     ``supersede_restated_rows`` leaves a row this same job wrote. N-0118 is that row: the site
     key is a different fact, and the chain-level fact must not stay beside it.
+
+    A **partial** re-key (some rows still chain-only, no site token) must not delete the chain
+    row: retirement runs only when every staging line for this job that pointed at the fact was
+    rewritten **and** every one of those lines names a site or location (nothing left on the
+    chain key for that job).
     """
     from app.services.imports.customer_sell_through_supersede import (
         REASON_RESTATED,
@@ -145,7 +152,21 @@ def _retire_rewritten_chain_facts(
         move_to_superseded,
     )
 
-    ready = [fid for fid, ids in chain_fact_lines.items() if ids and ids <= rewritten_line_ids]
+    ln = line_model
+    ready: list[int] = []
+    for fid, ids in chain_fact_lines.items():
+        if not ids or not ids <= rewritten_line_ids:
+            continue
+        # Any chain-only line still applied to this fact blocks retirement.
+        still_chain_only = db.scalar(
+            select(func.count())
+            .select_from(ln)
+            .where(ln.import_job_id == int(job_id))
+            .where(ln.fact_sellthrough_row_id == int(fid))
+            .where(not_(site_named))
+        ) or 0
+        if int(still_chain_only) == 0:
+            ready.append(int(fid))
     if not ready:
         return SupersedeSummary()
     stored = list(db.scalars(select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(ready))).all())
@@ -172,10 +193,12 @@ def apply_customer_sellthrough_staging(
 ) -> ApplySummary:
     """Upsert fact rows for resolved staging lines.
 
-    A line not yet applied is written. A line already applied onto a chain-level key
-    (customer, product and period, no site) is written again when the staged row names a site
-    or a location (N-0118). The chain-level fact then moves aside. A line already applied onto
-    its site key is left as it is, so a second apply changes nothing.
+    A line not yet applied is written. A line already applied onto a chain-level fact row
+    (source key ``ct:{customer}:0:{product}:{period}``) is selected again: site-named rows are
+    re-written at site grain (N-0118); chain-only rows re-upsert the chain key so totals match
+    only the lines still on that key (partial re-key). The chain-level fact moves aside only when
+    every staging line for this job that pointed at it has moved to site grain. A line already
+    applied onto a site key is left as it is, so a second apply changes nothing.
 
     Batched: lines are grouped by ``source_key`` and upserted in chunked multi-row
     ``INSERT … ON CONFLICT DO UPDATE`` statements rather than one round-trip per row. The conflict
@@ -224,8 +247,9 @@ def apply_customer_sellthrough_staging(
         func.length(func.btrim(func.coalesce(line.raw_location_token, ""))) > 0,
         line.resolved_location_id.is_not(None),
     )
-    # N-0118: a resolved row already stored on a chain-level key, while the staged row names a
-    # site, is selected again so this same apply path can key the fact by that site.
+    # N-0118: resolved rows already stored on a chain-level fact are selected again so this path
+    # can re-key site-named rows to site grain and re-state chain-only rows on the chain key
+    # (partial re-key: chain totals must not include units that moved to a site row).
     lines = list(
         db.scalars(
             select(line)
@@ -238,7 +262,6 @@ def apply_customer_sellthrough_staging(
                     and_(
                         line.apply_status.in_(("applied", "duplicate")),
                         FactCustomerSellthrough.source_key.op("~")(CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY_SQL),
-                        site_named,
                     ),
                 )
             )
@@ -437,6 +460,8 @@ def apply_customer_sellthrough_staging(
                     job_id=int(job_id),
                     chain_fact_lines=chain_fact_lines,
                     rewritten_line_ids=rewritten_line_ids,
+                    line_model=line,
+                    site_named=site_named,
                 )
             summary.superseded_rows = moved.rows + collapsed.rows
             summary.superseded_units = moved.units + collapsed.units
