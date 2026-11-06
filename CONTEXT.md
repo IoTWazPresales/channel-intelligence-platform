@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-06 - **N-0118 partial re-key:** apply re-selects all rows pointing at a chain-level fact (not only site-named); chain-only lines re-upsert chain units; chain fact retires only when every pointing row is site-named and rewritten. Branch `feat/n0118-cst-apply-c57a`.
+
 - 2026-11-06 - **N-0118 site key collision:** `sl:{norm}` only for canonical ASCII-only labels (existing applied keys stable); any separator or non-ASCII uses `slh:` on raw UTF-8. Branch `feat/n0118-cst-apply-c57a`.
 
 - 2026-11-06 - **N-0118 review blockers (B1/B2):** `slh:` site keys when normalization is empty; chain retirement counts same-job staging lines only; unit + `cip_test` tests for punctuation / mixed / partial re-key. Branch `feat/n0118-cst-apply-c57a`.
