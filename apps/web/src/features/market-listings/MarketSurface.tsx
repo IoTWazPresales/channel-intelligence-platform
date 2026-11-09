@@ -508,7 +508,12 @@ export function MarketSurface() {
     approvedMappings: mappingRows.filter((m) => m.approval_status === 'approved').length,
   };
 
-  const selected = gridRows.find((l) => l.id === selectedListing) ?? null;
+  const selected =
+    (selectedListing == null
+      ? null
+      : gridRows.find((l) => l.id === selectedListing) ??
+        activationLensRows.find((l) => l.id === selectedListing) ??
+        null);
   const selectedObs = useMemo(() => {
     const id = selected?.id;
     if (!id) return [];

@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -121,7 +121,7 @@ describe('MarketSurface', () => {
       {
         listing_id: 1,
         customer_id: 1,
-        product_id: 8,
+        product_id: null,
         marketplace: 'shop',
         url: 'https://shop.example.test/old',
         observation_count: 5,
@@ -163,6 +163,12 @@ describe('MarketSurface', () => {
     // Older worklist listing (id 1) must appear even though it is outside listings page 200.
     await waitFor(() => expect(screen.getByText(/Case 42/i)).toBeInTheDocument());
     expect(screen.queryByText(/Case 43/i)).toBeNull();
+    // Click the older worklist row (outside listings page 200); detail panel must resolve it
+    // from activationLensRows (not only gridRows / listings page_size=200).
+    const caseCell = screen.getByText(/Case 42/i);
+    fireEvent.click(caseCell.closest('tr') ?? caseCell);
+    await waitFor(() => expect(screen.getByTestId('entity-context-panel')).toBeInTheDocument());
+    expect(screen.getByTestId('entity-context-panel')).toHaveTextContent(/listing 1/i);
   });
 
 describe('ListingUrl (N-0039)', () => {
