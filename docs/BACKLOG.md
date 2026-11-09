@@ -1617,7 +1617,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-01 |
+| **Status / parked** | **Partial** — 2026-11-09 — Steward panel already uses /mapping-candidates/paginated + /tab-counts. After-apply steward warning on shipment-evidence page switched from non-paginated list to /tab-counts (this PR). Non-paginated list endpoint remains for compatibility; omitting context.line_ids from list payload still open. · was Parked 2026-06-01 |
 | **Effort** | Medium (API + web) |
 | **Source** | `CONTEXT.md` (Jun 1 steward perf: “Unchanged: … mapping-candidates payload shape”); `apps/api/app/api/v1/endpoints/shipment_evidence.py` (`list_shipment_import_job_mapping_candidates` returns full `context` per row); contrast `apps/api/app/schemas/dsi_mapping_candidates.py` (paginated DSI list) |
 | **Idea** | Reduce steward panel load time (~3–5s GET for large jobs) by paginating candidates and/or omitting `context.line_ids` from list payload while keeping `row_count` (and fetch line scope only on steward apply server-side). |
@@ -3450,7 +3450,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Done** — 2026-11-09 — Wired score_competitor_candidate via propose_competitor_mappings, POST /competition/mappings/propose, POST /competition/prices/import, MarketSurface Propose + price-import UI. Tests: tests/test_competition_propose_import.py (cip_test). Cites PR #67. CURRENT.md note deferred until after this merge (was parked for #60). |
+| **Status / parked** | **Done** — 2026-11-09 — Wired score_competitor_candidate via propose_competitor_mappings, POST /competition/mappings/propose, POST /competition/prices/import, MarketSurface Propose + price-import UI (#67). Residual copy in capabilities.ts + navConfig.ts updated to match live Propose/import (this PR). Tests: tests/test_competition_propose_import.py (cip_test). CURRENT.md note deferred until after #67 merge (was parked for #60). |
 | **Effort** | S–M (wire into existing competition router + market lenses; no new flow) |
 | **Source** | 2026-11-06 overnight orphan audit §3; re-verified 2026-11-09 against tip |
 | **Idea** | Wire candidate proposal / suggested matches into the existing competition surfaces, and land competitor price import against approved mappings — reuse `score_competitor_candidate`; do not add an AI adapter or a parallel pipeline. |

@@ -8,9 +8,10 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Iterator
 
-from sqlalchemy import and_, func, not_, or_, select, text
+from sqlalchemy import Integer, and_, any_, bindparam, func, not_, or_, select, text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -66,6 +67,34 @@ _CONFLICT_SET = {
 }
 
 _APPLY_CHUNK_SIZE = 500
+
+# N-0118 review NB1: psycopg3 sends at most 65,535 bind parameters in one statement, and an
+# ``IN (...)`` list binds one per value. Lookups by a list of fact ids or source keys read the list
+# in chunks of this many values (read at call time, so a test can lower it).
+_LOOKUP_CHUNK_SIZE = 5000
+
+# N-0118 review NB3: every character Python's ``str.strip()`` removes (``str.isspace()``). SQL
+# ``btrim`` with this set strips exactly what Python strips, so the SQL and Python tests of
+# "this row names a site" agree on tab, non-breaking space and other Unicode whitespace.
+_PY_WHITESPACE = (
+    "\t\n\x0b\x0c\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000"
+)
+
+
+def _chunks(values: Iterable[Any]) -> Iterator[list[Any]]:
+    """Distinct ``values``, sorted, in lists of at most ``_LOOKUP_CHUNK_SIZE`` (NB1)."""
+    size = max(1, int(_LOOKUP_CHUNK_SIZE))
+    items = sorted(set(values))
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
+
+
+def _site_text_present(column: Any) -> Any:
+    """SQL twin of ``bool(str(value or "").strip())`` (NB3)."""
+    return func.length(func.btrim(func.coalesce(column, ""), _PY_WHITESPACE)) > 0
+
 
 # Flows summed over differing source rows of one key (D-0091).
 _SUMMED_FIELDS = ("units_sold", "raw_mtd_units")
@@ -160,16 +189,18 @@ def _claimed_by_other_jobs(db: Session, fact_ids: set[int], job_id: int) -> set[
     if not fact_ids:
         return set()
     ids = sorted(int(i) for i in fact_ids)
-    claimed = {
-        int(fid)
-        for fid in db.scalars(
-            select(ImportCustomerSellthroughStagingLine.fact_sellthrough_row_id)
-            .where(ImportCustomerSellthroughStagingLine.fact_sellthrough_row_id.in_(ids))
-            .where(ImportCustomerSellthroughStagingLine.import_job_id != int(job_id))
-            .distinct()
-        ).all()
-        if fid is not None
-    }
+    claimed: set[int] = set()
+    for chunk in _chunks(ids):
+        claimed |= {
+            int(fid)
+            for fid in db.scalars(
+                select(ImportCustomerSellthroughStagingLine.fact_sellthrough_row_id)
+                .where(ImportCustomerSellthroughStagingLine.fact_sellthrough_row_id.in_(chunk))
+                .where(ImportCustomerSellthroughStagingLine.import_job_id != int(job_id))
+                .distinct()
+            ).all()
+            if fid is not None
+        }
     claimed |= {
         int(fid)
         for fid in db.execute(
@@ -251,7 +282,8 @@ def _retire_rewritten_chain_facts(
     claimed = _claimed_by_other_jobs(db, set(ready), int(job_id))
     stored = [
         row
-        for row in db.scalars(select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(ready))).all()
+        for chunk in _chunks(ready)
+        for row in db.scalars(select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(chunk))).all()
         if int(row.id) not in claimed and _owned_by(row, int(job_id))
     ]
     if not stored:
@@ -326,9 +358,10 @@ def apply_customer_sellthrough_staging(
         return summary
 
     stg = ImportCustomerSellthroughStagingLine
+    # Same test as ``_line_names_site``: blank means empty after Python's ``strip()`` (NB3).
     site_named = or_(
-        func.length(func.btrim(func.coalesce(stg.site_label, ""))) > 0,
-        func.length(func.btrim(func.coalesce(stg.raw_location_token, ""))) > 0,
+        _site_text_present(stg.site_label),
+        _site_text_present(stg.raw_location_token),
         stg.resolved_location_id.is_not(None),
     )
     uploaded_on = upload_day(job) if job is not None else None
@@ -384,8 +417,9 @@ def apply_customer_sellthrough_staging(
         blocked: set[int] = set()
         facts = {
             int(f.id): f
+            for chunk in _chunks(candidate_fact_ids)
             for f in db.scalars(
-                select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(candidate_fact_ids))
+                select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(chunk))
             ).all()
         }
         blocked |= {fid for fid in candidate_fact_ids if fid not in facts or not _owned_by(facts[fid], int(job_id))}
@@ -393,11 +427,16 @@ def apply_customer_sellthrough_staging(
         target_keys: dict[str, set[int]] = defaultdict(set)
         chain_only_figures: dict[int, set[str]] = defaultdict(set)
         has_chain_only: set[int] = set()
-        for row in db.scalars(
-            select(stg)
-            .where(stg.import_job_id == job_id)
-            .where(stg.fact_sellthrough_row_id.in_(candidate_fact_ids))
-        ).all():
+        candidate_rows = [
+            row
+            for chunk in _chunks(candidate_fact_ids)
+            for row in db.scalars(
+                select(stg)
+                .where(stg.import_job_id == job_id)
+                .where(stg.fact_sellthrough_row_id.in_(chunk))
+            ).all()
+        ]
+        for row in candidate_rows:
             fid = int(row.fact_sellthrough_row_id)
             chain_fact_lines[fid].add(int(row.id))
             if (
@@ -425,11 +464,14 @@ def apply_customer_sellthrough_staging(
         # The site key a row moves to must not hold a figure another job set or claimed: the
         # re-key would write this job's older figure over it.
         if target_keys:
-            existing = list(
-                db.scalars(
-                    select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key.in_(list(target_keys)))
+            # One store-grain file can name more sites than one statement may bind (NB1).
+            existing = [
+                f
+                for chunk in _chunks(target_keys)
+                for f in db.scalars(
+                    select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key.in_(chunk))
                 ).all()
-            )
+            ]
             foreign = _claimed_by_other_jobs(db, {int(f.id) for f in existing}, int(job_id))
             for f in existing:
                 if int(f.id) in foreign or not _owned_by(f, int(job_id)):
@@ -447,7 +489,12 @@ def apply_customer_sellthrough_staging(
     if rekey_fact_ids:
         pending_filter = or_(
             pending_filter,
-            and_(already_applied, stg.fact_sellthrough_row_id.in_(rekey_fact_ids)),
+            # One array parameter, however many facts are re-keyed (NB1).
+            and_(
+                already_applied,
+                stg.fact_sellthrough_row_id
+                == any_(bindparam("n0118_rekey_ids", value=sorted(rekey_fact_ids), type_=ARRAY(Integer))),
+            ),
         )
     lines = list(
         db.scalars(
