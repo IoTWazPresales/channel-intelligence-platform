@@ -49,13 +49,13 @@ export const COMPETITION_CAPABILITIES: CapabilityItem[] = [
   },
   {
     label: 'System-proposed candidates with factor breakdown',
-    state: 'substrate',
-    note: 'Suggested matches, and a reason for the score, are not offered yet.',
+    state: 'live',
+    note: 'Propose candidates scores competitor products with the existing matcher. Approve or reject on the mappings list; the stored score is shown with each match.',
   },
   {
     label: 'Competitor price observations',
-    state: 'substrate',
-    note: 'No file to import yet, so this list stays empty.',
+    state: 'live',
+    note: 'Import a JSON array of price observations against existing competitor SKUs. Unknown SKUs are skipped; products are not created.',
   },
   {
     label: 'Monitored competitor listings',
