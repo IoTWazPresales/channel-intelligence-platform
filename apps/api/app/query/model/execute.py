@@ -128,6 +128,23 @@ async def run_v2(
     if plan.governed is not None:
         return await _run_governed(db, plan, tid=tid, explain_only=explain_only, version=version, skip_cache=skip_cache)
 
+    if plan.carry_forward_period and plan.measures:
+        from app.query.model.stock_carry_forward_execute import run_carry_forward_stock
+        from app.services.business_calendar import tenant_calendar
+
+        cal = tenant_calendar(tid)
+        plan.calendar = None if platform_calendar(cal) else cal
+        return await run_carry_forward_stock(
+            db,
+            plan=plan,
+            req=req,
+            dm=dm,
+            tenant_id=tid,
+            version=version,
+            explain_only=explain_only,
+            skip_cache=skip_cache,
+        )
+
     if not plan.measures:
         return _response(ok=False, refusals=plan.refusals, explain=build_explain(dm, plan, None, catalog_version=version))
 

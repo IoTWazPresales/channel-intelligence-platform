@@ -3479,3 +3479,15 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **TRIGGER** | Fired and closed 2026-11-09 with this PR. |
 
 ---
+
+## BACKLOG-223 — Distributor stock carry-forward by period (D-0119)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done (this PR)** — 2026-11-09 — feat/d0119-stock-carry-forward: read-time carry-forward of last distributor on-hand count into empty period buckets; response flag distributor_stock.on_hand_carried_forward. Channel Ops channel_stock / WoC still refuse period. No DB migration. |
+| **Source** | docs/decisions/DECISIONS_20261109_WARREN.md D-0119 / WI-D0119-carry-forward |
+| **Idea** | A period with no new distributor stock count must show the last count and be flagged as carried forward; never start from zero for want of a fresh report; never invent zero when no count ever existed. |
+| **What the work is** | Query-model carry_forward on distributor_stock.on_hand; execute path builds a period spine at read time. |
+| **Out of scope** | DB migration / stored carry column; Channel Ops derived stock period breakdown; customer CST reported_soh period series; web chart chrome for the flag (no distributor_stock-by-period widget yet). |
+| **TRIGGER** | Merge of the D-0119 PR into the integration branch, then any widget that charts distributor on-hand by period. |
+

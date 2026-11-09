@@ -60,7 +60,7 @@ Proposal that was rejected (PROGRAM.yaml D-0119):
 
 **Warren 9 Nov 2026 rule:** distributor reported stock **always carries forward** from the last count until a newer count replaces it. A period with no report shows the carried-forward count and must be **flagged as carried forward**. (No period starts from zero for want of a fresh report.)
 
-**Build status:** not started (new work item below).
+**Build status:** in progress on `feat/d0119-stock-carry-forward` (read-time carry-forward + flag).
 
 ### D-0130 — agent review screenshots only
 
@@ -149,7 +149,7 @@ Research context retained (not a contrary decision): PF is a product-line code i
 
 | ID | From | Work | Status |
 |----|------|------|--------|
-| WI-D0119-carry-forward | D-0119 | Distributor reported-stock by period: carry forward last count; flag carried-forward periods | not started |
+| WI-D0119-carry-forward | D-0119 | Distributor reported-stock by period: carry forward last count; flag carried-forward periods | Done (this PR) |
 | WI-D0038-soh-tolerance | D-0038 | Customer SOH check tolerance flag (default 10%, tenant setting); units-only for Evetech; flag stock wherever it sits | not started |
 | WI-D0035-smoke-remove | D-0035 | Explicit reviewed removal of case 3 BATCH0-SMOKE-001 from `cip` | not started (cip write — held until dedicated step) |
 | WI-D0034-cleanup | D-0034 | Safe stale worktree + stale clone DB cleanup per N-0046 inventory | not started (separate safe execution) |

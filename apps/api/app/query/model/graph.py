@@ -50,7 +50,10 @@ def period_start_refusal(model_label: str) -> str:
 def period_grains_for(dm: DataModel, m: Measure | Calculated) -> list[str]:
     """The period grains the planner accepts for ``m``: the one rule the catalog and the planner share."""
     base = base_inputs(dm, m)
-    if not base or any(not b.allows_period or b.additivity == "semi_additive" for b in base):
+    if not base or any(not b.allows_period for b in base):
+        return []
+    # Semi-additive measures refuse period unless D-0119 carry_forward is set.
+    if any(b.additivity == "semi_additive" and not b.carry_forward for b in base):
         return []
     model = dm.models[m.model]
     grains = list(dm.period.grains)
@@ -129,6 +132,8 @@ class Plan:
     governed: Any = None  # v1 MetricDef when the single measure is a governed metric
     governed_filters: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    # D-0119: execute carries last distributor stock counts into empty period buckets.
+    carry_forward_period: bool = False
 
     @property
     def ok(self) -> bool:
@@ -454,6 +459,51 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
             )
             continue
         if isinstance(m, Measure) and m.additivity == "semi_additive" and period_in:
+            if m.carry_forward:
+                # D-0119: reported stock may break down by period; empty buckets carry the
+                # last count forward and are flagged at read time (not a period sum).
+                if m.id != "distributor_stock.on_hand":
+                    plan.refusals.append(
+                        Refusal(
+                            measure=m.id,
+                            reason=(
+                                f"{m.label} sets carry_forward, but only distributor_stock.on_hand "
+                                "is implemented for period carry-forward today."
+                            ),
+                        )
+                    )
+                    continue
+                # Unbounded period is allowed: execute derives the spine from the
+                # filtered observations' first/last as_of_date (catalog contract:
+                # every offered period grain must plan without period.from/to).
+                allowed_cf = {"period", "distributor", "product"}
+                extra = [b for b in breakdowns if b not in allowed_cf]
+                if extra:
+                    plan.refusals.append(
+                        Refusal(
+                            measure=m.id,
+                            reason=(
+                                "Distributor stock carry-forward by period only allows "
+                                "period, distributor and product breakdowns "
+                                f"(not {', '.join(extra)})."
+                            ),
+                        )
+                    )
+                    continue
+                if plan.period_from is None or plan.period_to is None:
+                    plan.notes.append(
+                        "D-0119: period.from/to omitted; carry-forward spine will be "
+                        "derived at read time from the first and last distributor "
+                        "stock counts in scope."
+                    )
+                plan.carry_forward_period = True
+                plan.notes.append(
+                    "D-0119: empty period buckets carry the last per distributor×product count "
+                    "forward and are flagged. Without period, on_hand still uses the latest "
+                    "distributor report date (latest_per)."
+                )
+                plan.measures.append(m)
+                continue
             wall = dm.wall("W-SNAPSHOT-NOT-SUMMED")
             plan.refusals.append(
                 Refusal(measure=m.id, reason=wall.reason if wall else "Stock is never summed across dates.", wall="W-SNAPSHOT-NOT-SUMMED")
@@ -480,18 +530,39 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if bid == "period":
             plan.refusals.append(Refusal(measure=None, reason="Filter dates with period.from / period.to."))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         r = _breakdown_refusal(dm, model, bid, allowed)
         if r is not None:
             plan.refusals.append(Refusal(measure=None, reason=f"Filter {bid!r}: {r.reason}", wall=r.wall))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         values, err = _coerce_values(bid, raw_val)
         if err is not None:
             plan.refusals.append(Refusal(measure=None, reason=err))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         plan.filters.append(ResolvedFilter(breakdown=bid, values=values or [], is_list=isinstance(raw_val, (list, tuple))))
+
+    # D-0119 carry-forward path only honours distributor/product filters.
+    if plan.carry_forward_period:
+        bad_filters = [f.breakdown for f in plan.filters if f.breakdown not in {"distributor", "product"}]
+        if bad_filters:
+            plan.refusals.append(
+                Refusal(
+                    measure=None,
+                    reason=(
+                        "Distributor stock carry-forward by period only allows "
+                        "distributor and product filters "
+                        f"(not {', '.join(sorted(set(bad_filters)))})."
+                    ),
+                )
+            )
+            plan.measures = []
+            plan.carry_forward_period = False
+            return plan
 
     # Sort: an id from this request only.
     valid_ids = [m.id for m in plan.measures]
@@ -500,6 +571,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if by not in valid_ids and _norm_id(by) not in breakdowns:
             plan.refusals.append(Refusal(measure=None, reason=f"Sort by {by!r}: sort by one of the requested measures or breakdowns."))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         plan.sort_by = by if by in valid_ids else _norm_id(by)
     default_asc = plan.sort_by in breakdowns or (plan.sort_by is None and "period" in breakdowns)
@@ -507,6 +579,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
     if direction not in ("asc", "desc"):
         plan.refusals.append(Refusal(measure=None, reason="sort.dir is asc or desc."))
         plan.measures = []
+        plan.carry_forward_period = False
         return plan
     plan.sort_dir = direction
 
@@ -521,6 +594,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if lim < 1:
             plan.refusals.append(Refusal(measure=None, reason="limit must be a whole number of at least 1."))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         if lim > MAX_LIMIT:
             plan.refusals.append(
@@ -530,6 +604,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                 )
             )
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         plan.limit = lim
 

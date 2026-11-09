@@ -339,13 +339,17 @@ models:
       product: {fk: product_id}
       distributor: {fk: distributor_id}
     measures:
+      # D-0119: with a period breakdown, empty buckets carry the last count forward and are
+      # flagged as carried_forward at read time. Without period, still the latest stock date.
+      # Channel Ops channel_stock / weeks_of_cover stay governed and still refuse period.
       on_hand:
-        label: Distributor on-hand units (latest stock date)
+        label: Distributor on-hand units
         unit: units
         agg: latest_sum
         column: on_hand_units
         latest_per: distributor_id
         additivity: semi_additive
+        carry_forward: true
 
   lineup:
     label: Commercial lineup (planned units)
