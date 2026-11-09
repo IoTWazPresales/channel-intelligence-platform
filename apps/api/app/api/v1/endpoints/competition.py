@@ -5,14 +5,33 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from datetime import datetime, timezone
+
 from app.models.dimensions import DimCompetitorBrand, DimCompetitorProduct, DimProduct
 from app.models.facts import FactCompetitorMapping, FactCompetitorPrice
+from app.services.competition.propose import propose_competitor_mappings
 
 router = APIRouter()
 
 
 class ClearConfirmBody(BaseModel):
     confirm: bool = False
+
+
+class ProposeBody(BaseModel):
+    min_score: float = 0.55
+    max_per_product: int = 3
+
+
+class PriceImportRow(BaseModel):
+    competitor_sku: str
+    price: float
+    observed_at: datetime | None = None
+    channel: str | None = None
+
+
+class PriceImportBody(BaseModel):
+    rows: list[PriceImportRow]
 
 
 @router.get("/mappings")
@@ -132,3 +151,54 @@ async def clear_comp_prices(body: ClearConfirmBody, db: AsyncSession = Depends(g
         await db.rollback()
         raise HTTPException(status_code=409, detail="Cannot clear: rows are still referenced by other tables. Delete dependent rows first.")
     return {"deleted": res.rowcount or 0}
+
+
+@router.post("/mappings/propose")
+async def propose_mappings(body: ProposeBody | None = None, db: AsyncSession = Depends(get_db)):
+    """Score internal SKUs against competitor products and create pending mappings."""
+    payload = body or ProposeBody()
+    if payload.min_score < 0 or payload.min_score > 1:
+        raise HTTPException(status_code=400, detail="min_score must be between 0 and 1")
+    if payload.max_per_product < 1 or payload.max_per_product > 20:
+        raise HTTPException(status_code=400, detail="max_per_product must be 1..20")
+    return await propose_competitor_mappings(
+        db, min_score=payload.min_score, max_per_product=payload.max_per_product
+    )
+
+
+@router.post("/prices/import")
+async def import_comp_prices(body: PriceImportBody, db: AsyncSession = Depends(get_db)):
+    """Import competitor price observations against existing competitor SKUs.
+
+    Does not create competitor products. Unknown SKUs are reported and skipped.
+    """
+    if not body.rows:
+        raise HTTPException(status_code=400, detail="rows must not be empty")
+    created = 0
+    skipped_unknown: list[str] = []
+    for row in body.rows:
+        sku = (row.competitor_sku or "").strip()
+        if not sku:
+            skipped_unknown.append("")
+            continue
+        res = await db.execute(select(DimCompetitorProduct).where(DimCompetitorProduct.sku == sku))
+        comp = res.scalars().first()
+        if not comp:
+            skipped_unknown.append(sku)
+            continue
+        observed = row.observed_at or datetime.now(timezone.utc)
+        if observed.tzinfo is None:
+            observed = observed.replace(tzinfo=timezone.utc)
+        db.add(
+            FactCompetitorPrice(
+                competitor_product_id=comp.id,
+                observed_at=observed,
+                price=row.price,
+                channel=row.channel,
+            )
+        )
+        created += 1
+    if created:
+        await db.commit()
+    return {"created": created, "skipped_unknown_skus": skipped_unknown}
+

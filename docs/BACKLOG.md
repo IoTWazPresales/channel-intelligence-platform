@@ -3450,7 +3450,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** — 2026-11-09 — Orphan re-check on tip `1aa9df5b`: `score_competitor_candidate` has no production caller outside `services/competition`; `MarketSurface` still says suggested matches are not offered and competitor price import is absent. Store/DC UI and `ListingCaptureHealth` mounts are **not** orphans (cleared same day). Tracked in `docs/audits/ORPHAN_AND_STAGE_STATUS_20261109.md`. Docs record in open PR #66 (branch docs/orphan-stage-status-20261109, stacked on #65). CURRENT.md note deferred until #60 merges. |
+| **Status / parked** | **In PR** — 2026-11-09 — Wired score_competitor_candidate via propose_competitor_mappings, POST /competition/mappings/propose, POST /competition/prices/import, MarketSurface Propose + price-import UI. Tests: 	ests/test_competition_propose_import.py (4 passed on cip_test). PR cite filled after open. CURRENT.md note deferred until #60 merges. |
 | **Effort** | S–M (wire into existing competition router + market lenses; no new flow) |
 | **Source** | 2026-11-06 overnight orphan audit §3; re-verified 2026-11-09 against tip |
 | **Idea** | Wire candidate proposal / suggested matches into the existing competition surfaces, and land competitor price import against approved mappings — reuse `score_competitor_candidate`; do not add an AI adapter or a parallel pipeline. |
