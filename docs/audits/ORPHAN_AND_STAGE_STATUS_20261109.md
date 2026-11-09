@@ -8,13 +8,13 @@
 
 | Item | Class | Evidence |
 |------|-------|----------|
-| Docs BACKLOG-210 / 215 / 216 Done | **DONE** | Merged via PR #57 |
-| Pricing padding | **DONE** | Merged via PR #55 / related |
-| Shipment test fix | **DONE** | Merged via PR #56 |
+| Docs BACKLOG-210 / 215 / 216 Done | **DONE** | Merged in Stage-1 group (#55/#56/#57) |
+| Pricing padding | **DONE** | Merged in Stage-1 group (#55/#56/#57) |
+| Shipment test fix | **DONE** | Merged in Stage-1 group (#55/#56/#57) |
 | D-0144 tenant mapping / `source_definition` | **DONE** | Migrations `20261103_0055` + `0060` + `tenant_mapping_scope.py` on tip |
 | BACKLOG-200 dead `MasterColumnPickerDialog` | **SAFE-NOW → PR open** | PR #65 (this stack base); deletions + BACKLOG Done |
 | N-0118 CST chain re-key / site grain | **WAITS-FOR-#60** | Open PR #60; touches CST apply + `docs/memory/CURRENT.md` |
-| Competition suggested-match / price import | **SAFE-NOW (wire)** / recorded | Scorer still unused; UI copy still says no suggested matches / no price import — see BACKLOG-221 |
+| Competition suggested-match / price import | **SAFE-NOW (unscheduled wire)** | Scorer unused outside package; UI still says no suggested matches / no price import — BACKLOG-221; serial with MarketSurface/listing-lens edits |
 | Store/DC UI controls | **DONE (wiring)** | `ReplenishmentBoard.tsx` calls refresh, config, thresholds, lead-times, served-accounts; `StoreMap` pins — Nov 6 unmounted claim is stale |
 | Listing capture health | **DONE (mount)** | `ListingCaptureHealth` imported and rendered from `MarketSurface` (skipped only on `/competition`) — Nov 6 no front-end hit claim is stale |
 | URL pattern / autoconfig | **DONE (not orphan)** | Invoked from autoconfig path; false positive on Nov 6 list |
