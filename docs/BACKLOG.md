@@ -3450,7 +3450,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **In PR** — 2026-11-09 — Wired score_competitor_candidate via propose_competitor_mappings, POST /competition/mappings/propose, POST /competition/prices/import, MarketSurface Propose + price-import UI. Tests: 	ests/test_competition_propose_import.py (4 passed on cip_test). PR cite filled after open. CURRENT.md note deferred until #60 merges. |
+| **Status / parked** | **In PR** — 2026-11-09 — Wired score_competitor_candidate via propose_competitor_mappings, POST /competition/mappings/propose, POST /competition/prices/import, MarketSurface Propose + price-import UI. Tests: 	ests/test_competition_propose_import.py (4 passed on cip_test). Cites PR #67 (branch feat/backlog-221-competition-wire, stacked on #66). CURRENT.md note deferred until #60 merges. |
 | **Effort** | S–M (wire into existing competition router + market lenses; no new flow) |
 | **Source** | 2026-11-06 overnight orphan audit §3; re-verified 2026-11-09 against tip |
 | **Idea** | Wire candidate proposal / suggested matches into the existing competition surfaces, and land competitor price import against approved mappings — reuse `score_competitor_candidate`; do not add an AI adapter or a parallel pipeline. |
