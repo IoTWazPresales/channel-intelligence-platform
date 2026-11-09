@@ -2,7 +2,7 @@
 eif: autonomy-policy
 version: 0.3
 status: accepted
-last_updated: '2026-08-30'
+last_updated: '2026-11-09'
 owner: Warren
 review_after: 30d
 project_id: channel-intelligence-platform
@@ -184,3 +184,8 @@ For L3, `change_paths` must be explicit before product-source writes are granted
 3. Run `tools/compile_policy.py`.
 4. Run the runtime probe in the same Cursor mode that will execute the work.
 5. Grant only authority supported by the **measured** `RUNTIME_CAPABILITIES.md`. Sandbox UNAVAILABLE does not block L3.
+
+## Change record
+
+- 2026-11-04: `change_paths` gained `.worktrees/*/` mirrors of `apps/api/**`, `apps/web/**`, `packages/ui/**`, `docs/**` and `CONTEXT.md` (merged to the integration branch in PR #63).
+- 2026-11-09: Warren approved hardening those mirrors (review of PR #63, item 2). Because `fnmatch` `*` also matches `/`, a `.worktrees/*/` change path could reach a worktree's own control plane. `PROJECT_MANIFEST.md` `protected_paths` now lists `.worktrees/*/.cursor/**`, `.worktrees/*/.claude/**`, `.worktrees/*/CLAUDE.md`, `.worktrees/*/.eif/**`, `.worktrees/*/dist/**` and `.worktrees/*/build/**`. The guard checks control-plane and protected paths before change scope, so writes there are denied. Runtime policy recompiled with `tools/compile_policy.py`.

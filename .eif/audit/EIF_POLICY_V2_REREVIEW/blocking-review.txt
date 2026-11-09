@@ -1,0 +1,92 @@
+﻿# Verdict: APPROVE WITH CHANGES (blocking). Don't merge as-is.
+
+The design direction is right: denials no longer create debt, gates are per-session, the legacy debt is retired with honest labels, and nothing fakes success. The problems are in two places. The heuristics can still hide real executed mutations, which is the one thing this change exists to catch. And several consumers and compatibility paths break.
+
+**Basis and limits:** I reviewed the inline diff only, in a fresh context using the same model family. That makes this a separate-session review, not a separate-model one. I ran no commands and read no files. I couldn't see `conversation()`, `action()`, `closure_context()`, `verify_request()`, `_quote_segments()`, `write_operator_log()`, `verified_runtime()` or the guard's call sites. Items that depend on that code are marked **VERIFY**.
+
+## Claim check
+
+| Claim | Status |
+|---|---|
+| A pre-hook denial creates no execution and no debt | **Holds.** `record_block` always returns False and `retry_check` never denies. |
+| No debt carried across sessions | **Holds for gating.** `pending`/`unresolved` are per-session. VERIFY that a session with no identity (`unknown`) doesn't share one state file (S7). |
+| Closure is checked for the current session only | Partly. Git closure still looks at the whole repo, which can't be avoided in a shared worktree. The verifier path doesn't check unresolved failures (B5). |
+| `&&`/`\|\|` failures are exempted only when PowerShell failed to parse | **Fails.** See B1. |
+| No shared anonymous budget pool | **Holds for `preToolUse` only** (S7). |
+| Actual mutation failures are recorded and later cleared or retired | **Partial.** Some mutating commands are classed as safe (B2), timeouts are dropped (B3), and a rollback brings retired items back (B4). |
+| Operator equivalence from two different events | Tool, cwd and target are compared, but "exitCode=0 verified" only means the operator's JSON file says so (S1). |
+| Schema 1 compatibility | The file can be read on rollback, but retired items come back as live debt (B4). |
+| Reason registry | `SESSION_REVIEW` was added; `LEGACY_DENIED_QUARANTINE` is missing (B7). |
+| Installer manifest recompile | **Not in the diff** (B9). |
+| f97f8d3b budget denial | Retired correctly as `LEGACY_PREEXECUTION_DENIAL_NEVER_EXECUTED`, with no success claimed. Two conditions: the stored `reason_code` must be the bare token (S4), and that session must fire a hook again. A rollback undoes it (B4). |
+
+## Blockers
+
+**B1: The parse-failure exemption can hide executed mutations** (`static_powershell_syntax_failure`)
+- `&&` and `||` are valid in PowerShell 7 and in bash. Nothing in the hook data shows the interpreter was Windows PowerShell 5.1.
+- The `ParserError` pattern is case-insensitive and is also checked against stdout. It matches `pandas.errors.ParserError` and similar. Example: `python scripts/load.py && echo ok`, where the script writes rows and then raises a pandas ParserError, exits 1 and is classed as "never executed". That's a realistic risk for this repo's import and parse code.
+- Fix: only exempt when there is evidence of PowerShell 5.x, stdout is empty, and stderr is just the PS5 parser block (`The token '&&' is not a valid statement separator in this version.` / `InvalidEndOfLine`). Otherwise record the debt.
+
+**B2: `shell_failure_may_mutate` isn't conservative**
+- These are classed as non-mutating: `python script.py`, `python -m alembic upgrade head`, `npx prisma migrate deploy`, `npx supabase db push`, `npm ci`, `npm version` (commits and tags), bare `yarn`, and `tsc` (it still writes output on errors unless `noEmitOnError`/`--noEmit`).
+- `git config`, `git branch`, `git remote` and `git fetch` all have write forms.
+- Fix: switch to a short allowlist of forms that are provably read-only (`pytest`, `python -m pytest`, `ruff check` without `--fix`, `mypy`, `tsc --noEmit`, `git status|diff|log|show|rev-parse|ls-files`). Treat everything else as a mutation.
+
+**B3: Shell failures without an exit code are dropped**
+- `executed_failure` returns early when there's no integer `exitCode`. So a Shell `postToolUseFailure` from a timeout records nothing, and a timed-out `alembic upgrade` is the textbook partial mutation.
+- Fix: for Shell `postToolUseFailure`, record the debt unless `failure_type == 'permission_denied'` or B1's tightened exemption applies. The "background spawn is neither success nor failure" rule should apply to `postToolUse` only.
+
+**B4: Rollback brings retired debt back across all sessions**
+- Items are retired in place inside `retry`. The old code treats every `retry` entry as live, and its `pending()` scans every session file. After a rollback, every quarantined, attempt-capped or exact-success item comes back as a `SESSION_RETRY_REQUIRED` block on all sessions.
+- Fix: keep only live items in `retry` and move retired ones under a new key the old code ignores (for example `retry_history`).
+
+**B5: The closure verifier doesn't check unresolved failures (VERIFY)**
+- `boundary()` returns early at stop when there are failures, but `verify_request()` is unchanged in the diff. An earlier `closure_request` id might still verify while executed failures are unresolved.
+- Fix: `verify_request` must refuse when `unresolved(...)` is non-empty, whatever the request's state.
+
+**B6: Callers broken by removed or changed APIs**
+- `pending(root)` now raises without `data`. The old message pointed operators to `tools/session_retry.py`, which most likely calls it with the old signature.
+- `NON_RETRYABLE_CODES` and `retry_admissible` are removed, but the deleted comment says `tools/test_retry_admission.py` classifies codes against that constant.
+- Both need updating in the same change, along with any other `retry_admissible` callers.
+
+**B7: Reason registry gap**
+- `write_operator_log('LEGACY_DENIED_QUARANTINE', ÔÇª)` uses a code that isn't registered. If the operator log validates codes, this raises.
+
+**B8: Location and protection of the new review log**
+- `.eif/runtime-session-reviews.jsonl` sits outside `.eif/runtime-session/`. That causes three problems:
+  - It probably isn't gitignored (VERIFY). Every append would dirty the worktree and could make Git closure fail repeatedly.
+  - It isn't in the protected control-plane list. That list doesn't include `.eif/runtime-session/**` either. VERIFY that the guard protects both some other way; if not, the agent can write `retired: true` into its own state.
+  - Different sessions append under different per-session locks, so concurrent appends aren't serialised.
+- Fix: move it to `.eif/runtime-session/reviews.jsonl`, give it a dedicated lock, and add it to the protected paths.
+
+**B9: Compiled rules and manifest aren't updated**
+- The diff includes no runtime manifest hash or installer changes, so `RUNTIME_INTEGRITY` would trip unless the installer recompiles.
+- The compiled CLAUDE.md and Cursor rules still say `SESSION_RETRY_REQUIRED` "must be retried exactly ÔÇª before other work is admitted". The runtime no longer behaves that way, and agents will act on the stale text.
+
+## Should-fix
+
+- **S1: Tighten operator equivalence binding**
+  - Require `conversation(new) == key`.
+  - Require the success event's digest to appear in the audit log after `item['at']`.
+  - Restrict it to Shell, Write and Delete.
+  - Require a non-empty target. Right now `None == None` passes for MCP tools, or if Write uses `path` instead of `file_path`.
+  - Prefer the `unresolved` entry when a fingerprint exists in both lists, instead of failing with `NO_UNIQUE`.
+- **S2: "Operator-only" isn't authenticated.** It rests entirely on the text-based control-plane deny. Either document that limitation or add a TTY or token check. Also delete the `external_equivalent_success` stub: its docstring describes signed approval tokens that don't exist, so the doc contradicts the code.
+- **S3: The report isn't reachable.** The stop message points to an "operator report", but nothing exposes `unresolved_report`. Add a read-only `--report` that lists session key, fingerprint, tool and time.
+- **S4: Simplify legacy retirement.** The old `retry_admissible` only admitted pre-hook request events, so every legacy `retry` entry was a pre-execution denial. Retire them all and drop the code allowlist, which also settles the doubt about `COMMAND_TIMEOUT` and `IDENTITY_GIT_FAILURE`. Compare `reason_code.split(':')[0]`. Separately, the guard's second `legacy_denials` call at stop always returns 0 because `boundary()` already ran it, so the operator log line never fires.
+- **S5: Validate `unresolved` entries in `read_state`.** It should check they are dicts. Otherwise an `AttributeError` slips past `ValueError` handling.
+- **S6: Hygiene and performance**
+  - `executed_failure`'s dedupe throws away retired history for the same fingerprint.
+  - `record_success` rewrites the session file on every `postToolUse`, even when nothing changed.
+  - `pre_check` now does 4ÔÇô5 lock-and-read cycles per hook.
+- **S7: Identity**
+  - The `budget_ok` identity gate covers `preToolUse` only, not `beforeShellExecution` or `beforeMCPExecution`.
+  - VERIFY that `conversation()` really returns the literal `'unknown'`.
+  - Budget filenames change key, so live sessions get a one-time budget reset. Put that in the release notes.
+- **S8: Adapter coverage**
+  - Confirm `action()` maps Claude Code's tool names (`Bash`, `PowerShell`, `Edit`, `MultiEdit`, `NotebookEdit`) and its PascalCase event names. Otherwise executed failures go untracked under Claude Code, and this repo ships both adapters.
+  - MCP mutation failures (for example Supabase `apply_migration`) aren't tracked. Record that as a deferred finding.
+- **S9: Docstring accuracy.** "Attempt caps move debts into that same review queue" is wrong: retired items aren't in any queue, only in the log.
+- **S10: Removed stop follow-up.** The stop-time `followup_message` used for Git closure was removed, and none of your claims mention it. Record it as an explicit decision if it's intended, and restore it if it isn't.
+
+**Next step:** fix B1ÔÇôB9, then do a second pass on the revised diff that also includes `verify_request`, `action`, `conversation` and the guard's call sites.

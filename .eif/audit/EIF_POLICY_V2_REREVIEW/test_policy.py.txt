@@ -1,0 +1,44 @@
+﻿import sys, json, tempfile, unittest
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).parent/'source'))
+import eif_session as s
+import eif_guard as g
+
+def event(command, session='a', result=None, name='postToolUse'):
+ return {'tool_name':'Shell','tool_input':{'command':command},'conversation_id':session,'hook_event_name':name,'tool_response':result}
+class PolicyTests(unittest.TestCase):
+ def setUp(self): self.t=tempfile.TemporaryDirectory(); self.root=Path(self.t.name)
+ def tearDown(self): self.t.cleanup()
+ def test_denial_and_readonly_failures_have_no_debt(self):
+  for command in ('git status','python -m pytest','ruff check .','mypy .','tsc --noEmit'):
+   e=event(command,result={'exitCode':1}); e['eif_executed_mutation']=g.shell_failure_may_mutate(e)
+   s.executed_failure(self.root,e)
+  self.assertEqual(s.unresolved(self.root,event('x')),[])
+ def test_mutations_and_timeouts_are_never_hidden(self):
+  for command,result in [('python -m alembic upgrade head',{'exitCode':1}),('npm ci',{'exitCode':1}),('python load.py && echo ok',{'stderr':'pandas.errors.ParserError'}),('npx prisma migrate deploy',{}),('git fetch origin',{}),('npm ci',{})]:
+   e=event(command,result=result,name='postToolUseFailure');e['eif_executed_mutation']=g.shell_failure_may_mutate(e)
+   s.executed_failure(self.root,e)
+  self.assertEqual(len(s.unresolved(self.root,event('x'))),5)
+ def test_strict_ps5_only(self):
+  result={'exitCode':1,'stdout':'','stderr':"At line:1 char:18\n+ git status && pwd\n+                  ~~\nThe token '&&' is not a valid statement separator in this version.\n+ CategoryInfo : ParserError: (:) [], ParentContainsErrorRecordException\n+ FullyQualifiedErrorId : UnexpectedToken"}
+  self.assertFalse(s.static_powershell_syntax_failure(event('python load.py && echo ok',result=dict(result,stderr='pandas.errors.ParserError'))))
+ def test_legacy_and_attempt_retirement_ignored_by_old_pending_scan(self):
+  e=event('f97f8d3b');p=s.state_path(self.root,e);p.parent.mkdir(parents=True)
+  item={'fingerprint':s.fingerprint(e),'reason_code':'BUDGET_EXHAUSTED','attempts':2,'tool':'Shell'}
+  s.atomic_json(p,{'version':1,'retry':[item],'closure_required':False,'started':True})
+  s.legacy_denials(self.root,e)
+  self.assertEqual(s.pending(self.root,e),[])
+  self.assertEqual(len(s.read_state(p)['retry_history']),1)
+ def test_closure_verifier_refuses_actual_failure_before_network(self):
+  e=event('npx prisma migrate deploy',result={'exitCode':1});e['eif_executed_mutation']=True;s.executed_failure(self.root,e)
+  ok,code,_=s.verify_request(self.root,s.state_path(self.root,e).stem,'0'*32)
+  self.assertFalse(ok); self.assertEqual(code,'SESSION_RETRY_REQUIRED')
+ def test_local_success_moves_retry_out_of_rollback_queue(self):
+  e=event('x');p=s.state_path(self.root,e);p.parent.mkdir(parents=True)
+  s.atomic_json(p,{'version':1,'retry':[{'fingerprint':s.fingerprint(e),'reason_code':'x'}],'closure_required':False,'started':True})
+  e['tool_response']={'exitCode':0};s.record_success(self.root,e)
+  self.assertEqual(s.pending(self.root,e),[])
+if __name__=='__main__': unittest.main()
+
+
+

@@ -27,6 +27,12 @@ protected_paths:
 - dist/**
 - build/**
 - '**/generated/**'
+- '.worktrees/*/.cursor/**'
+- '.worktrees/*/.claude/**'
+- '.worktrees/*/CLAUDE.md'
+- '.worktrees/*/.eif/**'
+- '.worktrees/*/dist/**'
+- '.worktrees/*/build/**'
 sensitive_read_paths:
 - .env
 - .env.*

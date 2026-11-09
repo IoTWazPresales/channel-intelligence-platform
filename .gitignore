@@ -78,7 +78,6 @@ celerybeat-schedule*
 # Local agent and EIF runtime churn on the operator PC (never commit; added 2026-11-09)
 /.eif/runtime/hook-launcher/
 /.eif/runtime-events.jsonl
-/.eif/audit/EIF_POLICY_V2_REREVIEW/*.txt
 /.worktrees/
 /_pr55_audit_scratch/
 /_pr56_audit_scratch/
