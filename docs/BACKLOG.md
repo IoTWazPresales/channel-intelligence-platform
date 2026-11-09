@@ -3463,3 +3463,19 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **TRIGGER** | Next competition / market-listings unit, or Warren asks to wire suggested matches / price import. |
 
 ---
+## BACKLOG-222 — Brief Attention signal `promo_not_activated`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** — 2026-11-09 — Wired `promo_not_activated` into `build_brief_payload` from the listing intelligence worklist (BACKLOG-130 activation + ready); deep-link `/listing-capture?tab=intelligence&activation=not_activated&worklist=1`; MarketSurface honours activation/worklist query params and marks the Attention (Brief) row live. Tenant + My-accounts filter on the count. Tests: `tests/test_brief_signals.py`, `tests/test_brief_signals_href.py` (targeted 10/10); MarketSurface vitest; full API suite green on this branch. |
+| **Effort** | S (extend existing Brief signal blotter + intelligence worklist; no new flow) |
+| **Source** | CAPABILITY_ACCOUNTING / COMMERCIAL_DIRECTION proposed signals; MarketSurface Attention candidates panel ("derivable today, not yet wired") |
+| **Idea** | Surface listings on the intelligence worklist that are not at promo price as a Brief Attention row, linking to the activation lens. |
+| **Why it matters / deferrable** | Activation check was live (BACKLOG-130) but Brief did not call operators to the worklist. |
+| **What the work is** | Count via `build_listing_intelligence` worklist; `_signal_row` + href; MarketSurface filter + live copy. |
+| **Regression traps** | Do not invent a second activation rule; keep retailer names out of code; Brief must still load if intelligence count fails (FLAG ≠ BLOCK). |
+| **Behavior to retain** | Existing Brief signals and ranking; listing intelligence worklist semantics. |
+| **Out of scope** | listing_price_change / competitor_mapping_pending proposed signals. Follow-up: listing-capture /listings + /intelligence still lack tenant + My-accounts predicates (Brief count is scoped; destination table uses the same browser My-accounts header only where those APIs honour it). |
+| **TRIGGER** | Fired and closed 2026-11-09 with this PR. |
+
+---

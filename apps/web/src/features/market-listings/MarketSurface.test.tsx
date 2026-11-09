@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,11 +7,14 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { ListingUrl, listingUrlState, MarketSurface } from './MarketSurface';
 
-const nav = vi.hoisted(() => ({ pathname: '/listing-capture' }));
+const nav = vi.hoisted(() => ({
+  pathname: '/listing-capture',
+  search: '',
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(nav.search),
   usePathname: () => nav.pathname,
 }));
 
@@ -23,10 +26,15 @@ vi.mock('@/features/commercial-planner/EntitySearchAutocomplete', () => ({
   EntitySearchAutocomplete: () => null,
 }));
 
+const apiState = vi.hoisted(() => ({
+  listings: [] as Record<string, unknown>[],
+  intel: [] as Record<string, unknown>[],
+}));
+
 vi.mock('@/lib/api', () => ({
   apiGet: async (url: string) => {
-    if (url.includes('/listing-capture/listings')) return { items: [], total: 0 };
-    if (url.includes('/listing-capture/intelligence')) return { items: [], listings: 0 };
+    if (url.includes('/listing-capture/listings')) return { items: apiState.listings, total: apiState.listings.length };
+    if (url.includes('/listing-capture/intelligence')) return { items: apiState.intel, listings: apiState.intel.length };
     if (url.includes('/listing-capture/proposals')) return { items: [] };
     if (url.includes('/listing-capture/observations')) return { items: [] };
     if (url.includes('/listing-capture/capture-health')) {
@@ -51,6 +59,9 @@ vi.mock('@/lib/api', () => ({
 describe('MarketSurface', () => {
   beforeEach(() => {
     nav.pathname = '/listing-capture';
+    nav.search = '';
+    apiState.listings = [];
+    apiState.intel = [];
   });
 
   it('mounts lab chrome and the listings lens, not the /market stub', async () => {
@@ -86,6 +97,79 @@ describe('MarketSurface', () => {
     expect(screen.queryByTestId('listing-capture-health')).toBeNull();
   });
 });
+
+
+  it('worklist=1 activation lens shows intel worklist rows beyond listings page_size=200', async () => {
+    nav.pathname = '/listing-capture';
+    nav.search = 'tab=intelligence&activation=not_activated&worklist=1';
+    // Listings page only has the newest id (simulates page_size cap); intel has an older worklist row.
+    apiState.listings = [
+      {
+        id: 200,
+        customer_id: 1,
+        customer_name: 'Cust A',
+        product_id: 9,
+        product_name: 'SKU-NEW',
+        url: 'https://shop.example.test/new',
+        marketplace: 'shop',
+        status: 'active',
+        source: 'manual',
+        external_id: null,
+      },
+    ];
+    apiState.intel = [
+      {
+        listing_id: 1,
+        customer_id: 1,
+        product_id: null,
+        marketplace: 'shop',
+        url: 'https://shop.example.test/old',
+        observation_count: 5,
+        span_days: 21,
+        history_status: 'ready',
+        first_price: 100,
+        last_price: 120,
+        price_drift_pct: 0.2,
+        activation_status: 'not_activated',
+        case_price: 99,
+        case_id: 42,
+        worklist: true,
+      },
+      {
+        listing_id: 200,
+        customer_id: 1,
+        product_id: 9,
+        marketplace: 'shop',
+        url: 'https://shop.example.test/new',
+        observation_count: 2,
+        span_days: 14,
+        history_status: 'ready',
+        first_price: 50,
+        last_price: 50,
+        price_drift_pct: 0,
+        activation_status: 'price_consistent',
+        case_price: 50,
+        case_id: 43,
+        worklist: false,
+      },
+    ];
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('market-activation-lens')).toBeInTheDocument());
+    // Older worklist listing (id 1) must appear even though it is outside listings page 200.
+    await waitFor(() => expect(screen.getByText(/Case 42/i)).toBeInTheDocument());
+    expect(screen.queryByText(/Case 43/i)).toBeNull();
+    // Click the older worklist row (outside listings page 200); detail panel must resolve it
+    // from activationLensRows (not only gridRows / listings page_size=200).
+    const caseCell = screen.getByText(/Case 42/i);
+    fireEvent.click(caseCell.closest('tr') ?? caseCell);
+    await waitFor(() => expect(screen.getByTestId('entity-context-panel')).toBeInTheDocument());
+    expect(screen.getByTestId('entity-context-panel')).toHaveTextContent(/listing 1/i);
+  });
 
 describe('ListingUrl (N-0039)', () => {
   const url = 'https://shop-a.example.test/glide/ID98174082';

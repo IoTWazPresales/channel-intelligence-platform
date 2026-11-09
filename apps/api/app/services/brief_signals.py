@@ -32,6 +32,7 @@ _STALE_HOURS = 168
 _DSI_TEMPLATE = "distributor_sales_inventory"
 FAILED_IMPORTS_HREF = "/admin/imports?jobStatus=failed"
 CST_STEWARD_SLOTS_HREF = "/admin/cst-steward?tab=slots"
+PROMO_NOT_ACTIVATED_HREF = "/listing-capture?tab=intelligence&activation=not_activated&worklist=1"
 _OPEN_CPOR_STATUSES = tuple(s for s in CPOR_CASE_STATUS_SET if s not in {"settled", "cancelled", "rejected"})
 
 
@@ -123,6 +124,35 @@ def cst_late_missing_signal(*, late: int, missing: int) -> dict[str, Any] | None
         figures={"late": late_n, "missing": missing_n},
     )
 
+
+
+
+def promo_not_activated_signal(*, count: int) -> dict[str, Any] | None:
+    """Attention row for listings on the intelligence worklist that are not at promo price.
+
+    Count uses the same READY+not_activated rule as listing intelligence (BACKLOG-130),
+    via a bounded observation aggregate. Read-only; no new process flow.
+    """
+    n = max(0, int(count))
+    if n <= 0:
+        return None
+    if n == 1:
+        title = "1 listing is not at promo price"
+        detail = "A live case covers this listing, but the observed price is still above the case SRP."
+    else:
+        title = f"{n} listings are not at promo price"
+        detail = "Live cases cover these listings, but observed prices are still above the case SRP."
+    return _signal_row(
+        id="promo_not_activated",
+        rank=0,
+        title=title,
+        detail=detail,
+        meta="1 listing" if n == 1 else f"{n} listings",
+        meta_hot=True,
+        action_label="Open promotion activation",
+        action_href=PROMO_NOT_ACTIVATED_HREF,
+        figures={"count": n},
+    )
 
 def cst_late_missing_count_stmt() -> Select[Any]:
     """Late and missing customer sell-through slots. Account predicate when the filter is on."""
@@ -368,6 +398,114 @@ async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int,
     return failed_open, recon_rows, dsi, cst_counts
 
 
+
+
+def _promo_not_activated_worklist_count(
+    session: Any,
+    *,
+    tenant_id: str,
+    account_ids: frozenset[int] | None,
+) -> int:
+    """Worklist size with the same rule as `build_listing_intelligence` (ready + not_activated).
+
+    Bounded read: scope to tenant (and My-accounts) customers first, then only
+    observation aggregates (count / first / last fetched_at) plus the latest row's
+    `parse_flags`. Never loads `raw_snapshot` or full observation history.
+    Listing scope stays a SQL subquery/join so large registries do not expand past
+    the bind-parameter limit.
+    """
+    from sqlalchemy import func, select
+
+    from app.models.dimensions import DimCustomer
+    from app.models.listing_capture import CustomerListing, ListingObservation
+    from app.services.listing_capture.intelligence_v1 import MIN_SPAN_DAYS
+
+    cust_stmt = select(DimCustomer.id).where(DimCustomer.tenant_id == tenant_id)
+    if account_ids:
+        cust_stmt = cust_stmt.where(DimCustomer.id.in_(account_ids))
+    listing_subq = (
+        select(CustomerListing.id).where(CustomerListing.customer_id.in_(cust_stmt))
+    ).subquery()
+
+    stats = {
+        int(lid): (int(cnt), first_ts, last_ts)
+        for lid, cnt, first_ts, last_ts in session.execute(
+            select(
+                ListingObservation.listing_id,
+                func.count(ListingObservation.id),
+                func.min(ListingObservation.fetched_at),
+                func.max(ListingObservation.fetched_at),
+            )
+            .where(ListingObservation.listing_id.in_(select(listing_subq.c.id)))
+            .group_by(ListingObservation.listing_id)
+        ).all()
+    }
+    if not stats:
+        return 0
+
+    rn = func.row_number().over(
+        partition_by=ListingObservation.listing_id,
+        order_by=(ListingObservation.fetched_at.desc(), ListingObservation.id.desc()),
+    ).label("rn")
+    latest_subq = (
+        select(
+            ListingObservation.listing_id,
+            ListingObservation.parse_flags,
+            rn,
+        ).where(ListingObservation.listing_id.in_(select(listing_subq.c.id)))
+    ).subquery()
+    latest_flags = {
+        int(lid): flags
+        for lid, flags in session.execute(
+            select(latest_subq.c.listing_id, latest_subq.c.parse_flags).where(latest_subq.c.rn == 1)
+        ).all()
+    }
+
+    n = 0
+    for lid, (cnt, first_ts, last_ts) in stats.items():
+        if cnt < 2 or first_ts is None or last_ts is None:
+            continue
+        span_days = max(0, (last_ts - first_ts).days)
+        if span_days < MIN_SPAN_DAYS:
+            continue
+        flags = latest_flags.get(int(lid))
+        flags_dict = flags if isinstance(flags, dict) else {}
+        act = flags_dict.get("cpor_activation")
+        act = act if isinstance(act, dict) else {}
+        if act.get("status") == "not_activated":
+            n += 1
+    return n
+
+
+async def _promo_not_activated_count(user: dict | None) -> int | None:
+    """Worklist size for promo_not_activated; skipped (not an error) when the count cannot run.
+
+    Same activation rule as listing intelligence (BACKLOG-130 + >=14d ready). CustomerListing
+    has no tenant column, so the count is scoped to this tenant's customers first (and
+    My-accounts when on) before any observation read.
+    """
+    import asyncio
+    import logging
+
+    from app.core.my_accounts import request_my_account_ids
+    from app.core.tenant_scope import tenant_id_from_user
+    from app.db.session_sync import SessionLocal
+
+    tid = tenant_id_from_user(user if isinstance(user, dict) else None)
+    account_ids = request_my_account_ids.get()
+
+    def _work() -> int:
+        with SessionLocal() as session:
+            return _promo_not_activated_worklist_count(
+                session, tenant_id=tid, account_ids=account_ids
+            )
+
+    try:
+        return await asyncio.to_thread(_work)
+    except Exception:  # noqa: BLE001 - FLAG != BLOCK: Attention still loads without this row
+        logging.getLogger(__name__).exception("promo_not_activated attention count failed")
+        return None
+
 async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     # Cover, settlement, the open-inbound count and needs-look are separate
@@ -382,7 +520,11 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
             lambda s: _needs_look_summary(s, user),
         )
 
-    parts, st = await asyncio.gather(_parts(), _sell_through_attention(user))
+    parts, st, promo_count = await asyncio.gather(
+        _parts(),
+        _sell_through_attention(user),
+        _promo_not_activated_count(user),
+    )
     small, cover, settlement, inbound_raw, needs_look = parts
     failed_open, recon_rows, dsi, (cst_late, cst_missing) = small
     soh_recon_not_run = recon_rows == 0
@@ -470,6 +612,13 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
     for sig in sell_through_signals(st, slot_signal_shown=cst_signal is not None):
         sig["rank"] = rank
         signals.append(sig)
+        rank += 1
+
+    # Listing intelligence worklist (BACKLOG-130): promo live on a case but shelf price still high.
+    promo_signal = promo_not_activated_signal(count=int(promo_count or 0))
+    if promo_signal is not None:
+        promo_signal["rank"] = rank
+        signals.append(promo_signal)
         rank += 1
 
     if cover["pairs_below_threshold"] > 0:
@@ -583,6 +732,12 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         read_parts.append(f"**{cst_late + cst_missing}** customer sell-through reports late or missing")
     if st and st.get("restock"):
         read_parts.append(f"**{st['restock']}** SKUs at customers need restocking")
+    if promo_count:
+        read_parts.append(
+            f"**{promo_count}** listing not at promo price"
+            if int(promo_count) == 1
+            else f"**{promo_count}** listings not at promo price"
+        )
     if cover["pairs_below_threshold"] > 0:
         read_parts.append(f"**{cover['pairs_below_threshold']}** pairs under {int(REPLENISHMENT_WOC_THRESHOLD_WEEKS)}w cover")
     if settlement.get("open_cases"):
