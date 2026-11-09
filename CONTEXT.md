@@ -20,7 +20,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 - 2026-11-06 - **N-0118 partial re-key:** apply re-selects all rows pointing at a chain-level fact (not only site-named); chain-only lines re-upsert chain units; chain fact retires only when every pointing row is site-named and rewritten. Branch `feat/n0118-cst-apply-c57a`.
 
-- 2026-11-06 - **N-0118 site key collision:** `sl:{norm}` only for canonical ASCII-only labels (existing applied keys stable); any separator or non-ASCII uses `slh:` on raw UTF-8. Branch `feat/n0118-cst-apply-c57a`.
+- 2026-11-06 - **N-0118 site key collision:** `sl:{norm}` only for canonical ASCII-only labels; any separator or non-ASCII uses `slh:` on raw UTF-8. Existing keys change for site labels containing spaces, hyphens or non-ASCII characters (they move from `sl:` to `slh:`); plain ASCII letter/digit labels keep their existing keys. The only exposure is re-applying an import made before #60 after #60: that store's units could be counted twice. New imports are not affected. Warren's decision 2026-11-09: keep the `slh:` scheme, no backfill. Branch `feat/n0118-cst-apply-c57a`.
 
 - 2026-11-06 - **N-0118 review blockers (B1/B2):** `slh:` site keys when normalization is empty; chain retirement counts same-job staging lines only; unit + `cip_test` tests for punctuation / mixed / partial re-key. Branch `feat/n0118-cst-apply-c57a`.
 
