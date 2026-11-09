@@ -43,7 +43,7 @@ not link CST to distributor).
 | dsi_sellout | fact_sales_sellout | transaction_date (day) | product, customer (dsi_dealer), distributor (rows with no distributor excluded, as today) | units (units, additive; = sellout_units), value_ex_vat = units x unit_sellout_price_ex_tax_amount on priced rows (money, currency not recorded), priced_units, lines (count), dealers (distinct count) |
 | cst_sellthrough | fact_customer_sellthrough | period_start_date (floor = coarsest stored period_type in scope) | product, customer (cst_retailer), site | units (= cst_sellthrough_units), value (units_sold x unit_sell_price on priced rows, ex/inc VAT as each row's vat_basis says; see D-proposed 3), priced_units, reported_soh (semi-additive: latest per customer, site, product), stores_reporting (distinct) |
 | shipments | fact_inbound_shipment | ship_confirm_date (day) | product, distributor, customer (shipment_customer) | quantity (units), amount (money in currency_code; summed only within one currency, mixed currencies refused), lines |
-| distributor_stock | fact_inventory_distributor | as_of_date (snapshot) | product, distributor | reported_soh_units (semi-additive latest per distributor x product, no carry-forward), pairs_reporting |
+| distributor_stock | fact_inventory_distributor | as_of_date (snapshot) | product, distributor | on_hand (semi-additive; D-0119 carry-forward by period with carried_forward flag at read time) |
 | returns | fact_returns | transaction_date (day) | product, customer (dsi_dealer), distributor | return_units, lines. No tenant_id column: tenant comes through dim_product |
 | cpor_lines | cpor_case_line join cpor_case | cpor_case.window_start (day) | product, distributor, customer (cpor_account via case), promo_type | estimate_units, result_units, support_usd (ttl_support_usd), support_zar (ttl_support), lines, cases (distinct case). Superseded cases excluded (superseded_by_case_id IS NULL), voided status excluded, as the portfolio service does |
 | lineup_plan | fact_lineup_plan_item | period_start (day) | product, customer (lineup_customer) | planned_units, current_units. No tenant_id: tenant via dim_product |
@@ -186,8 +186,9 @@ they exist, otherwise show reported on-hand beside per-week sell-through with no
 3. CST sales value: rows carry their own vat_basis (96 inc VAT). Proposed: convert to the tenant
    sales-value VAT setting exactly as the sell-through overview does; no listing-price estimate for
    unpriced units.
-4. Distributor stock by period: latest reported count per distributor and product in each bucket, with
-   no carry-forward into a bucket with no report (shows "pairs reporting" beside it). Channel Ops derived
-   stock (channel_stock, weeks of cover) stays a governed handler and keeps refusing period.
+4. Distributor stock by period (D-0119, Warren 9 Nov 2026): always carry forward the last count into
+   a bucket with no new report; flag carried-forward values at read time. A pair never counted stays
+   empty (not zero-faked). Channel Ops derived stock (channel_stock, weeks of cover) stays a governed
+   handler and keeps refusing period.
 5. Shipment date for the period: ship confirm date (what the A1 slip formula names first). Alternative:
    POD date (landed).

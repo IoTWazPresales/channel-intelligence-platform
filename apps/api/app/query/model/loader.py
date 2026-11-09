@@ -142,6 +142,9 @@ class Measure:
     kind: str = "base"
     # False: the planner refuses a period breakdown or a period window for this measure.
     allows_period: bool = True
+    # D-0119: when True with a period breakdown, empty buckets carry the last count forward
+    # and the response flags those values (read-time; no stored column).
+    carry_forward: bool = False
 
 
 @dataclass(frozen=True)
@@ -441,6 +444,8 @@ def _parse_model(
             _need(additivity == "semi_additive", f"measure {full}: latest_sum must be semi_additive")
             _need(time is not None and time.on is None, f"measure {full}: latest_sum needs a base-table time column")
             latest_per = _column(tables, table, latest_per, f"measure {full} latest_per")
+        if mb.get("carry_forward"):
+            _need(agg == "latest_sum", f"measure {full}: carry_forward is only for latest_sum")
         measures[lid] = Measure(
             id=full,
             model=mid,
@@ -455,6 +460,7 @@ def _parse_model(
             additivity=additivity,
             legacy_key=(str(mb["legacy_key"]) if mb.get("legacy_key") else None),
             allows_period=mb.get("period", True) is not False,
+            carry_forward=bool(mb.get("carry_forward")),
         )
 
     return FactModel(

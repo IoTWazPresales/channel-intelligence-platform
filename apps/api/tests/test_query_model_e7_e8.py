@@ -37,8 +37,21 @@ def test_new_models_plan_on_their_own_facts():
         assert plan.ok, plan.refusals
     _, stock = _plan(["distributor_stock.on_hand"], ["distributor", "product"])
     assert stock.ok, stock.refusals
-    _, summed = _plan(["distributor_stock.on_hand"], ["period"], "month")
-    assert not summed.ok
+    # D-0119: period is allowed when period.from/to bound the carry-forward spine.
+    _, needs_bounds = _plan(["distributor_stock.on_hand"], ["period"], "month")
+    assert not needs_bounds.ok
+    _, carried = _plan(
+        ["distributor_stock.on_hand"],
+        ["period"],
+        "month",
+        period_from="2026-01-01",
+        period_to="2026-03-31",
+    )
+    assert carried.ok and carried.carry_forward_period, carried.refusals
+    # CST reported stock still refuses a period breakdown (no carry_forward flag).
+    _, cst_period = _plan(["cst_sellthrough.reported_soh"], ["period"], "month")
+    assert not cst_period.ok
+    assert cst_period.refusals[0].wall == "W-SNAPSHOT-NOT-SUMMED"
 
 
 def test_day_is_allowed_on_a_day_fact_and_refused_for_sell_through():

@@ -129,6 +129,8 @@ class Plan:
     governed: Any = None  # v1 MetricDef when the single measure is a governed metric
     governed_filters: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    # D-0119: execute carries last distributor stock counts into empty period buckets.
+    carry_forward_period: bool = False
 
     @property
     def ok(self) -> bool:
@@ -454,6 +456,26 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
             )
             continue
         if isinstance(m, Measure) and m.additivity == "semi_additive" and period_in:
+            if m.carry_forward:
+                # D-0119: reported stock may break down by period; empty buckets carry the
+                # last count forward and are flagged at read time (not a period sum).
+                if plan.period_from is None or plan.period_to is None:
+                    plan.refusals.append(
+                        Refusal(
+                            measure=m.id,
+                            reason=(
+                                f"{m.label} by period needs both period.from and period.to "
+                                "so carried-forward counts have a bounded spine."
+                            ),
+                        )
+                    )
+                    continue
+                plan.carry_forward_period = True
+                plan.notes.append(
+                    "D-0119: empty period buckets carry the last distributor stock count forward and are flagged."
+                )
+                plan.measures.append(m)
+                continue
             wall = dm.wall("W-SNAPSHOT-NOT-SUMMED")
             plan.refusals.append(
                 Refusal(measure=m.id, reason=wall.reason if wall else "Stock is never summed across dates.", wall="W-SNAPSHOT-NOT-SUMMED")
