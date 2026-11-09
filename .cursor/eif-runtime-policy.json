@@ -34,7 +34,12 @@
     "packages/ui/**",
     "docs/**",
     "CONTEXT.md",
-    "AGENTS.md"
+    "AGENTS.md",
+    ".worktrees/*/apps/api/**",
+    ".worktrees/*/apps/web/**",
+    ".worktrees/*/packages/ui/**",
+    ".worktrees/*/docs/**",
+    ".worktrees/*/CONTEXT.md"
   ],
   "control_plane_paths": [
     ".cursor/eif-runtime-policy.json",
@@ -141,7 +146,12 @@
     "packages/ui/**",
     "docs/**",
     "CONTEXT.md",
-    "AGENTS.md"
+    "AGENTS.md",
+    ".worktrees/*/apps/api/**",
+    ".worktrees/*/apps/web/**",
+    ".worktrees/*/packages/ui/**",
+    ".worktrees/*/docs/**",
+    ".worktrees/*/CONTEXT.md"
   ],
   "policy_id": "AUTONOMY-001",
   "policy_status": "accepted",
@@ -172,7 +182,7 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "24702288ffb4a878cc2205e420ec7181446b0a582825e9f8e7ab0bfee939fe6d"
+      "sha256": "ef5874cc70d57fad5c1f204d7bf050a6c62065ac859ed873d4a119825dcc3c11"
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",
