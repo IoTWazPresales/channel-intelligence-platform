@@ -1370,6 +1370,7 @@ def cost_suggest(case_id: int, line_id: int):
                 product_id=line.product_id,
                 as_of=as_of,
                 derived_mac=line.cost_basis,
+                tenant_id=case.tenant_id or "default",
             ),
         }
 

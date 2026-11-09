@@ -159,6 +159,7 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "reporting_cadence",
     "woc_min_velocity_days",
     "stock_gap_highlight_units",
+    "soh_tolerance_pct",
     "week_calendar",
     "business_calendar",
     "vat_rate_pct",
@@ -184,6 +185,10 @@ DEFAULT_SALES_VALUE_VAT_BASIS = "ex_vat"
 # N-0110: customer stock gap highlight, absolute units (Warren 2026-10-12). Editable.
 DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS = 1.0
 STOCK_GAP_HIGHLIGHT_UNITS_MAX = 1_000_000.0
+
+# D-0038: customer SOH cost-check tolerance as a fraction of derived MAC (0.10 = 10%).
+DEFAULT_SOH_TOLERANCE_PCT = 0.10
+SOH_TOLERANCE_PCT_MAX = 1.0
 
 # Governed metric overlay (P3-1). Only label / hidden / allowed_grains persist;
 # formula / source_facts / owner_surface / new metric ids are never stored.
@@ -950,6 +955,19 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
                 raise ValueError("stock_gap_highlight_units: must be more than 0 units")
             clean[key] = units
             continue
+        if key == "soh_tolerance_pct":
+            if raw is None or str(raw).strip() == "":
+                continue
+            try:
+                rate = float(str(raw).strip())
+            except (TypeError, ValueError) as exc:
+                raise ValueError("soh_tolerance_pct: a rate such as 0.10 is required") from exc
+            if rate > 1:
+                rate = rate / 100.0
+            if not (0 <= rate <= SOH_TOLERANCE_PCT_MAX):
+                raise ValueError("soh_tolerance_pct: must be between 0 and 1 (0.10 for 10 percent)")
+            clean[key] = rate
+            continue
         if raw is None or str(raw).strip() == "":
             continue
         val = str(raw).strip()
@@ -1002,6 +1020,7 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "reporting_cadence": reporting_cadence(tenant_id),
         "woc_min_velocity_days": woc_min_velocity_days(tenant_id),
         "stock_gap_highlight_units": stock_gap_highlight_units(tenant_id),
+        "soh_tolerance_pct": soh_tolerance_pct(tenant_id),
         "week_calendar": week_calendar(tenant_id),
         "business_calendar": business_calendar_config(tenant_id),
         "vat_rate_pct": vat_rate_pct(tenant_id),
@@ -1025,6 +1044,21 @@ def stock_gap_highlight_units(tenant_id: str = "default") -> float:
     if not (0 < units <= STOCK_GAP_HIGHLIGHT_UNITS_MAX):
         return DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS
     return units
+
+
+def soh_tolerance_pct(tenant_id: str = "default") -> float:
+    """Customer SOH cost-check tolerance as a fraction of derived MAC (D-0038; default 10 percent)."""
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = overrides.get("soh_tolerance_pct", DEFAULT_SOH_TOLERANCE_PCT)
+    try:
+        rate = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return DEFAULT_SOH_TOLERANCE_PCT
+    if rate > 1:
+        rate = rate / 100.0
+    if not (0 <= rate <= SOH_TOLERANCE_PCT_MAX):
+        return DEFAULT_SOH_TOLERANCE_PCT
+    return rate
 
 
 def business_calendar_config(tenant_id: str = "default") -> dict[str, Any]:

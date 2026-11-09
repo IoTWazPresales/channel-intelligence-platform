@@ -135,6 +135,22 @@ def test_stock_gap_highlight_units_default_save_and_reject() -> None:
         profile.save_tenant_profile_overrides("acme", {"stock_gap_highlight_units": "ten"})
 
 
+def test_soh_tolerance_pct_default_save_and_reject() -> None:
+    assert profile.soh_tolerance_pct("acme") == profile.DEFAULT_SOH_TOLERANCE_PCT
+    saved = profile.save_tenant_profile_overrides("acme", {"soh_tolerance_pct": "0.15"})
+    assert saved["soh_tolerance_pct"] == 0.15
+    assert profile.soh_tolerance_pct("acme") == 0.15
+    assert profile.profile_snapshot("acme")["soh_tolerance_pct"] == 0.15
+    # Percent-style values above 1 are stored as a fraction.
+    saved = profile.save_tenant_profile_overrides("acme", {"soh_tolerance_pct": "12"})
+    assert saved["soh_tolerance_pct"] == 0.12
+    assert profile.soh_tolerance_pct("acme") == 0.12
+    with pytest.raises(ValueError, match="soh_tolerance_pct"):
+        profile.save_tenant_profile_overrides("acme", {"soh_tolerance_pct": "-1"})
+    with pytest.raises(ValueError, match="soh_tolerance_pct"):
+        profile.save_tenant_profile_overrides("acme", {"soh_tolerance_pct": "ten"})
+
+
 def test_shipping_method_pattern_roundtrip_and_refusal() -> None:
     from app.services.imports.shipment_voyage import split_shipping_method, tenant_shipping_method_pattern
 
