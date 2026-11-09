@@ -1487,7 +1487,7 @@ export function MarketSurface() {
             >
               <Stack spacing={1} sx={{ p: 1.5 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Paste a JSON array of rows with competitor_sku, price (> 0), and optional observed_at / channel.
+                  Paste a JSON array of rows with competitor_sku, price (must be positive), and optional observed_at / channel.
                   Unknown SKUs are skipped; products are not created. Prices attach to competitor SKUs
                   whether or not a mapping is approved.
                 </Typography>
