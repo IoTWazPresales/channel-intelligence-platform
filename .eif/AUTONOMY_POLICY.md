@@ -19,6 +19,11 @@ change_paths:
 - docs/**
 - CONTEXT.md
 - AGENTS.md
+- .worktrees/*/apps/api/**
+- .worktrees/*/apps/web/**
+- .worktrees/*/packages/ui/**
+- .worktrees/*/docs/**
+- .worktrees/*/CONTEXT.md
 artifact_paths:
 - .eif/audit/**
 adjacent_scope:
