@@ -32,6 +32,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { COMPETITION_CAPABILITIES, LISTING_CAPABILITIES } from '@/features/market-listings/capabilities';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
+import { ListingCaptureHealth } from '@/features/market-listings/ListingCaptureHealth';
 import { ListingLinksLens } from '@/features/market-listings/ListingLinksLens';
 import { ListingOffersSupply } from '@/features/market-listings/ListingOffersSupply';
 import { ListingQualityLens } from '@/features/market-listings/ListingQualityLens';
@@ -799,6 +800,7 @@ export function MarketSurface() {
           </>
         }
       >
+        {pathname.startsWith('/competition') ? null : <ListingCaptureHealth />}
         {lens === 'listings' || lens === 'history' ? (
           <Stack spacing={2} sx={{ mt: 2 }} data-testid="market-listings-lens">
             <Typography variant="body2" color="text.secondary" data-testid="listing-last-check">
