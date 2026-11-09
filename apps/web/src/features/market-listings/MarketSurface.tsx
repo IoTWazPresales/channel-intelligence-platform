@@ -284,6 +284,7 @@ export function MarketSurface() {
   const customerFilter = search.get('customer');
   const productFilter = search.get('product');
   const activationFilter = search.get('activation');
+  const worklistFilter = search.get('worklist') === '1';
   const listingParam = search.get('listing');
   const [selectedListing, setSelectedListing] = useState<number | null>(
     listingParam && /^\d+$/.test(listingParam) ? Number(listingParam) : null,
@@ -1186,6 +1187,8 @@ export function MarketSurface() {
                     <TableBody>
                       {gridRows
                         .filter((l) => l.intel?.case_id)
+                        .filter((l) => !activationFilter || (l.intel?.activation_status ?? '') === activationFilter)
+                        .filter((l) => !worklistFilter || Boolean(l.intel?.worklist))
                         .map((l) => (
                           <TableRow
                             key={l.id}
@@ -1239,8 +1242,9 @@ export function MarketSurface() {
                     <PanelRow
                       severity="neutral"
                       primary="Attention (Brief)"
-                      secondary="Proposed signal promo_not_activated — derivable today, not yet wired"
-                      figure="proposed"
+                      secondary="Signal promo_not_activated — listings on the worklist that are not at promo price"
+                      figure="live"
+                      onClick={() => router.push('/brief')}
                     />
                     <PanelRow
                       severity="neutral"

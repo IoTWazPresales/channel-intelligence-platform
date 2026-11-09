@@ -3,7 +3,12 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.brief_signals import CST_STEWARD_SLOTS_HREF, cst_late_missing_signal
+from app.services.brief_signals import (
+    CST_STEWARD_SLOTS_HREF,
+    PROMO_NOT_ACTIVATED_HREF,
+    cst_late_missing_signal,
+    promo_not_activated_signal,
+)
 
 client = TestClient(app)
 
@@ -68,3 +73,18 @@ def test_fx_blocked_means_the_mode_is_missing_not_the_rate() -> None:
     assert out["open_cases"] == 5
     assert out["fx_blocked_cases"] == 1
     assert out["fx_rate_missing_cases"] == 2
+
+
+def test_promo_not_activated_signal_links_to_activation_lens() -> None:
+    none = promo_not_activated_signal(count=0)
+    assert none is None
+    one = promo_not_activated_signal(count=1)
+    assert one is not None
+    assert one["id"] == "promo_not_activated"
+    assert one["action_href"] == PROMO_NOT_ACTIVATED_HREF
+    assert one["title"] == "1 listing is not at promo price"
+    assert one["figures"] == {"count": 1}
+    many = promo_not_activated_signal(count=4)
+    assert many is not None
+    assert many["title"] == "4 listings are not at promo price"
+    assert many["meta"] == "4 listings"

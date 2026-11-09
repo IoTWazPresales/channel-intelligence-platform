@@ -32,6 +32,7 @@ _STALE_HOURS = 168
 _DSI_TEMPLATE = "distributor_sales_inventory"
 FAILED_IMPORTS_HREF = "/admin/imports?jobStatus=failed"
 CST_STEWARD_SLOTS_HREF = "/admin/cst-steward?tab=slots"
+PROMO_NOT_ACTIVATED_HREF = "/listing-capture?tab=intelligence&activation=not_activated&worklist=1"
 _OPEN_CPOR_STATUSES = tuple(s for s in CPOR_CASE_STATUS_SET if s not in {"settled", "cancelled", "rejected"})
 
 
@@ -123,6 +124,35 @@ def cst_late_missing_signal(*, late: int, missing: int) -> dict[str, Any] | None
         figures={"late": late_n, "missing": missing_n},
     )
 
+
+
+
+def promo_not_activated_signal(*, count: int) -> dict[str, Any] | None:
+    """Attention row for listings on the intelligence worklist that are not at promo price.
+
+    Count comes from ``build_listing_intelligence`` (BACKLOG-130 activation + ≥14d ready
+    worklist). Read-only; no new process flow.
+    """
+    n = max(0, int(count))
+    if n <= 0:
+        return None
+    if n == 1:
+        title = "1 listing is not at promo price"
+        detail = "A live case covers this listing, but the observed price is still above the case SRP."
+    else:
+        title = f"{n} listings are not at promo price"
+        detail = "Live cases cover these listings, but observed prices are still above the case SRP."
+    return _signal_row(
+        id="promo_not_activated",
+        rank=0,
+        title=title,
+        detail=detail,
+        meta="1 listing" if n == 1 else f"{n} listings",
+        meta_hot=True,
+        action_label="Open promotion activation",
+        action_href=PROMO_NOT_ACTIVATED_HREF,
+        figures={"count": n},
+    )
 
 def cst_late_missing_count_stmt() -> Select[Any]:
     """Late and missing customer sell-through slots. Account predicate when the filter is on."""
@@ -368,6 +398,47 @@ async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int,
     return failed_open, recon_rows, dsi, cst_counts
 
 
+
+
+async def _promo_not_activated_count(user: dict | None) -> int | None:
+    """Worklist size for promo_not_activated; skipped (not an error) when intelligence cannot run.
+
+    Uses the existing listing intelligence worklist (accepted activation rule). CustomerListing
+    has no tenant column, so the worklist is filtered to this tenant's customers via
+    DimCustomer.tenant_id. My-accounts, when on, further keeps only assigned customers.
+    """
+    import asyncio
+    import logging
+
+    from sqlalchemy import select
+
+    from app.core.my_accounts import request_my_account_ids
+    from app.core.tenant_scope import tenant_id_from_user
+    from app.db.session_sync import SessionLocal
+    from app.models.dimensions import DimCustomer
+    from app.services.listing_capture.intelligence_v1 import build_listing_intelligence
+
+    tid = tenant_id_from_user(user if isinstance(user, dict) else None)
+    account_ids = request_my_account_ids.get()
+
+    def _work() -> int:
+        with SessionLocal() as session:
+            payload = build_listing_intelligence(session)
+            worklist = list(payload.get("worklist") or [])
+            tenant_customer_ids = set(
+                session.scalars(select(DimCustomer.id).where(DimCustomer.tenant_id == tid)).all()
+            )
+            worklist = [r for r in worklist if int(r.get("customer_id") or 0) in tenant_customer_ids]
+            if account_ids:
+                worklist = [r for r in worklist if int(r.get("customer_id") or 0) in account_ids]
+            return len(worklist)
+
+    try:
+        return await asyncio.to_thread(_work)
+    except Exception:  # noqa: BLE001 - FLAG != BLOCK: Attention still loads without this row
+        logging.getLogger(__name__).exception("promo_not_activated attention count failed")
+        return None
+
 async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     # Cover, settlement, the open-inbound count and needs-look are separate
@@ -382,7 +453,11 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
             lambda s: _needs_look_summary(s, user),
         )
 
-    parts, st = await asyncio.gather(_parts(), _sell_through_attention(user))
+    parts, st, promo_count = await asyncio.gather(
+        _parts(),
+        _sell_through_attention(user),
+        _promo_not_activated_count(user),
+    )
     small, cover, settlement, inbound_raw, needs_look = parts
     failed_open, recon_rows, dsi, (cst_late, cst_missing) = small
     soh_recon_not_run = recon_rows == 0
@@ -470,6 +545,13 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
     for sig in sell_through_signals(st, slot_signal_shown=cst_signal is not None):
         sig["rank"] = rank
         signals.append(sig)
+        rank += 1
+
+    # Listing intelligence worklist (BACKLOG-130): promo live on a case but shelf price still high.
+    promo_signal = promo_not_activated_signal(count=int(promo_count or 0))
+    if promo_signal is not None:
+        promo_signal["rank"] = rank
+        signals.append(promo_signal)
         rank += 1
 
     if cover["pairs_below_threshold"] > 0:
@@ -583,6 +665,12 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         read_parts.append(f"**{cst_late + cst_missing}** customer sell-through reports late or missing")
     if st and st.get("restock"):
         read_parts.append(f"**{st['restock']}** SKUs at customers need restocking")
+    if promo_count:
+        read_parts.append(
+            f"**{promo_count}** listing not at promo price"
+            if int(promo_count) == 1
+            else f"**{promo_count}** listings not at promo price"
+        )
     if cover["pairs_below_threshold"] > 0:
         read_parts.append(f"**{cover['pairs_below_threshold']}** pairs under {int(REPLENISHMENT_WOC_THRESHOLD_WEEKS)}w cover")
     if settlement.get("open_cases"):
