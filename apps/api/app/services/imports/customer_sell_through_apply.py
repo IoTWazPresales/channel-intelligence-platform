@@ -119,6 +119,71 @@ def _skipped_on_apply(line: ImportCustomerSellthroughStagingLine, uploaded_on: A
     return bool(dated_after(line.period_start_date, uploaded_on))
 
 
+def _line_site_label(line: ImportCustomerSellthroughStagingLine) -> str | None:
+    """Site label the apply writes: the staging column, else the raw location token (verbatim).
+
+    A blank (whitespace-only) label falls back to the token too, matching ``site_named``.
+    """
+    site_label = getattr(line, "site_label", None)
+    if (site_label is None or not str(site_label).strip()) and line.raw_location_token:
+        site_label = str(line.raw_location_token).strip() or None
+    return site_label
+
+
+def _line_names_site(line: ImportCustomerSellthroughStagingLine) -> bool:
+    """Python twin of the ``site_named`` SQL test."""
+    return bool(
+        str(getattr(line, "site_label", None) or "").strip()
+        or str(getattr(line, "raw_location_token", None) or "").strip()
+        or getattr(line, "resolved_location_id", None) is not None
+    )
+
+
+def _owned_by(row: Any, job_id: int) -> bool:
+    """True when the fact row and every figure on it were set by ``job_id`` (N-0118 review B1)."""
+    from app.services.imports.customer_sell_through_supersede import figure_jobs
+
+    raw = getattr(row, "figure_import_jobs", None)
+    if not isinstance(raw, dict):
+        return False
+    if row.import_job_id is None or int(row.import_job_id) != int(job_id):
+        return False
+    try:
+        return all(int(v) == int(job_id) for v in figure_jobs(row).values())
+    except (TypeError, ValueError):
+        return False
+
+
+def _claimed_by_other_jobs(db: Session, fact_ids: set[int], job_id: int) -> set[int]:
+    """Facts another job has a claim on: a staging line of another job points at the fact, or
+    another job superseded or replaced a figure on it (a kept copy names that job)."""
+    if not fact_ids:
+        return set()
+    ids = sorted(int(i) for i in fact_ids)
+    claimed = {
+        int(fid)
+        for fid in db.scalars(
+            select(ImportCustomerSellthroughStagingLine.fact_sellthrough_row_id)
+            .where(ImportCustomerSellthroughStagingLine.fact_sellthrough_row_id.in_(ids))
+            .where(ImportCustomerSellthroughStagingLine.import_job_id != int(job_id))
+            .distinct()
+        ).all()
+        if fid is not None
+    }
+    claimed |= {
+        int(fid)
+        for fid in db.execute(
+            text(
+                "SELECT DISTINCT s.fact_id FROM fact_customer_sellthrough_superseded s "
+                "WHERE s.fact_id = ANY(:ids) AND s.superseded_by_import_job_id IS DISTINCT FROM :job"
+            ),
+            {"ids": ids, "job": int(job_id)},
+        ).scalars().all()
+        if fid is not None
+    }
+    return claimed
+
+
 @dataclass
 class ApplySummary:
     applied: int = 0
@@ -181,13 +246,13 @@ def _retire_rewritten_chain_facts(
             ready.append(int(fid))
     if not ready:
         return SupersedeSummary()
+    # A newer load's figure is never moved aside by an older one: skip a fact any other job set,
+    # superseded or replaced a figure on, or still points a staging line at.
+    claimed = _claimed_by_other_jobs(db, set(ready), int(job_id))
     stored = [
         row
         for row in db.scalars(select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(ready))).all()
-        # A newer load's figure is never moved aside by an older one: skip a fact any other job set.
-        if row.import_job_id is not None
-        and int(row.import_job_id) == int(job_id)
-        and all(int(v) == int(job_id) for v in figure_jobs(row).values())
+        if int(row.id) not in claimed and _owned_by(row, int(job_id))
     ]
     if not stored:
         return SupersedeSummary()
@@ -281,10 +346,17 @@ def apply_customer_sellthrough_staging(
     owned_by_job = and_(
         FactCustomerSellthrough.import_job_id == int(job_id),
         text(
-            "NOT EXISTS (SELECT 1 FROM jsonb_each_text("
+            "jsonb_typeof(COALESCE(fact_customer_sellthrough.figure_import_jobs, '{}'::jsonb)) = 'object' "
+            "AND NOT EXISTS (SELECT 1 FROM jsonb_each_text("
             "COALESCE(fact_customer_sellthrough.figure_import_jobs, '{}'::jsonb)) AS n0118_fj "
-            "WHERE n0118_fj.value <> :n0118_job_id)"
-        ).bindparams(n0118_job_id=str(int(job_id))),
+            "WHERE n0118_fj.value <> :n0118_job_id) "
+            "AND NOT EXISTS (SELECT 1 FROM fact_customer_sellthrough_superseded n0118_s "
+            "WHERE n0118_s.fact_id = fact_customer_sellthrough.id "
+            "AND n0118_s.superseded_by_import_job_id IS DISTINCT FROM :n0118_job_int) "
+            "AND NOT EXISTS (SELECT 1 FROM import_customer_sellthrough_staging_line n0118_o "
+            "WHERE n0118_o.fact_sellthrough_row_id = fact_customer_sellthrough.id "
+            "AND n0118_o.import_job_id IS DISTINCT FROM :n0118_job_int)"
+        ).bindparams(n0118_job_id=str(int(job_id)), n0118_job_int=int(job_id)),
     )
     candidate_select = (
         select(FactCustomerSellthrough.id)
@@ -307,7 +379,20 @@ def apply_customer_sellthrough_staging(
     chain_fact_lines: dict[int, set[int]] = defaultdict(set)
     rekey_fact_ids: set[int] = set()
     if candidate_fact_ids:
+        from app.services.imports.customer_sell_through_supersede import FIGURES, figure_jobs
+
         blocked: set[int] = set()
+        facts = {
+            int(f.id): f
+            for f in db.scalars(
+                select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(candidate_fact_ids))
+            ).all()
+        }
+        blocked |= {fid for fid in candidate_fact_ids if fid not in facts or not _owned_by(facts[fid], int(job_id))}
+        blocked |= _claimed_by_other_jobs(db, candidate_fact_ids, int(job_id))
+        target_keys: dict[str, set[int]] = defaultdict(set)
+        chain_only_figures: dict[int, set[str]] = defaultdict(set)
+        has_chain_only: set[int] = set()
         for row in db.scalars(
             select(stg)
             .where(stg.import_job_id == job_id)
@@ -320,6 +405,40 @@ def apply_customer_sellthrough_staging(
                 or row.apply_status not in ("applied", "duplicate")
                 or _skipped_on_apply(row, uploaded_on)
             ):
+                blocked.add(fid)
+                continue
+            if _line_names_site(row):
+                target_keys[
+                    customer_sellthrough_source_key(
+                        customer_id=int(row.resolved_customer_id),
+                        customer_location_id=(
+                            int(row.resolved_location_id) if row.resolved_location_id is not None else None
+                        ),
+                        product_id=int(row.resolved_product_id),
+                        period_start_date=row.period_start_date,
+                        site_label=_line_site_label(row),
+                    )
+                ].add(fid)
+            else:
+                has_chain_only.add(fid)
+                chain_only_figures[fid] |= {f for f in FIGURES if getattr(row, f, None) is not None}
+        # The site key a row moves to must not hold a figure another job set or claimed: the
+        # re-key would write this job's older figure over it.
+        if target_keys:
+            existing = list(
+                db.scalars(
+                    select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key.in_(list(target_keys)))
+                ).all()
+            )
+            foreign = _claimed_by_other_jobs(db, {int(f.id) for f in existing}, int(job_id))
+            for f in existing:
+                if int(f.id) in foreign or not _owned_by(f, int(job_id)):
+                    blocked |= target_keys[f.source_key]
+        # Review N8: chain-only rows re-state the chain key, and a figure none of them carries
+        # would keep its stored value (units that moved to a site row would stay on the chain
+        # row too). Such a fact is left as it is.
+        for fid in has_chain_only:
+            if fid in facts and not set(figure_jobs(facts[fid])) <= chain_only_figures[fid]:
                 blocked.add(fid)
         rekey_fact_ids = candidate_fact_ids - blocked
         for fid in blocked:
@@ -373,10 +492,7 @@ def apply_customer_sellthrough_staging(
         loc_id = int(line.resolved_location_id) if line.resolved_location_id is not None else None
         period = line.period_start_date
         # site_label: prefer explicit staging column; fall back to raw location token (verbatim).
-        # A blank (whitespace-only) label falls back to the token too, matching ``site_named``.
-        site_label = getattr(line, "site_label", None)
-        if (site_label is None or not str(site_label).strip()) and line.raw_location_token:
-            site_label = str(line.raw_location_token).strip() or None
+        site_label = _line_site_label(line)
         sk = customer_sellthrough_source_key(
             customer_id=cust_id,
             customer_location_id=loc_id,

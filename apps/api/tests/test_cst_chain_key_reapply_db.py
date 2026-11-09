@@ -404,6 +404,7 @@ def test_reapply_idempotent_when_site_label_is_punctuation_only(session: Session
     second = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
     assert second.errors == []
     assert second.applied == 0
+    session.expire_all()
     again = session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == site_key))
     assert again is not None and Decimal(again.units_sold) == Decimal("3")
 
@@ -663,3 +664,167 @@ def test_no_rekey_while_a_line_on_the_chain_fact_would_be_skipped(session: Sessi
         site_label="S1",
     )
     assert session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == site_key)) is None
+
+
+def _site_key(customer: int, product: int, site: str) -> str:
+    return customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=product,
+        period_start_date=WEEK,
+        site_label=site,
+    )
+
+
+def _fact(session: Session, key: str):
+    return session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == key))
+
+
+def test_reapply_skips_chain_fact_with_a_figure_set_by_another_job(session: Session) -> None:
+    """Review N7: the row names this job, but one figure on it was set by a newer job."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    source, customer, product, _other = _ids(session)
+    older = _job(source, "older-mixed.xlsx", T0)
+    newer = _job(source, "newer-mixed.xlsx", datetime(2026, 8, 8, tzinfo=timezone.utc))
+    session.add_all([older, newer])
+    session.flush()
+    fact = _chain_fact(customer, product, older.id, "9", {"units_sold": older.id, "reported_soh": newer.id})
+    fact.reported_soh = Decimal("7")
+    session.add(fact)
+    session.flush()
+    session.add_all(
+        [
+            _staged(older.id, 1, customer, product, "4", fact.id, "S1"),
+            _staged(older.id, 2, customer, product, "5", fact.id, "S2"),
+        ]
+    )
+    session.flush()
+
+    result = apply_customer_sellthrough_staging(session, older.id, recompute_stock_gap=False)
+    assert result.errors == []
+    assert result.applied == 0
+    assert result.superseded_rows == 0
+    session.expire_all()
+    stored = session.get(FactCustomerSellthrough, fact.id)
+    assert stored is not None
+    assert Decimal(stored.units_sold) == Decimal("9") and Decimal(stored.reported_soh) == Decimal("7")
+    assert _fact(session, _site_key(customer, product, "S1")) is None
+    assert _fact(session, _site_key(customer, product, "S2")) is None
+
+
+def _older_chain_state(session: Session, source: int, customer: int, product: int):
+    """What an earlier apply left: one chain fact holding two site-named rows (S1 4/1, S2 5/2)."""
+    older = _job(source, "older-chain.xlsx", T0)
+    newer = _job(source, "newer-site.xlsx", datetime(2026, 8, 8, tzinfo=timezone.utc))
+    session.add_all([older, newer])
+    session.flush()
+    chain = _chain_fact(customer, product, older.id, "9", {"units_sold": older.id, "reported_soh": older.id})
+    chain.reported_soh = Decimal("3")
+    session.add(chain)
+    session.flush()
+    session.add_all(
+        [
+            _staged(older.id, 1, customer, product, "4", chain.id, "S1", reported_soh=Decimal("1")),
+            _staged(older.id, 2, customer, product, "5", chain.id, "S2", reported_soh=Decimal("2")),
+        ]
+    )
+    session.flush()
+    return older, newer, chain
+
+
+def _newer_site_line(job_id: int, row: int, customer: int, product: int, site: str, **figures):
+    return ImportCustomerSellthroughStagingLine(
+        import_job_id=job_id,
+        source_row_number=row,
+        raw_row_payload={"site": site, "row": row, **{k: str(v) for k, v in figures.items()}},
+        resolved_customer_id=customer,
+        resolved_product_id=product,
+        period_start_date=WEEK,
+        period_type="weekly",
+        period_grain="week",
+        site_label=site,
+        resolution_status="resolved",
+        **figures,
+    )
+
+
+def test_older_reapply_after_newer_sales_only_site_load_keeps_newer_units(session: Session) -> None:
+    """Review r5 B1: a newer sales-only load at site grain partly superseded the chain fact; the
+    row still names the older job. Re-applying the older job must not write its units back."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    source, customer, product, _other = _ids(session)
+    older, newer, chain = _older_chain_state(session, source, customer, product)
+    session.add_all(
+        [
+            _newer_site_line(newer.id, 1, customer, product, "S1", units_sold=Decimal("6")),
+            _newer_site_line(newer.id, 2, customer, product, "S2", units_sold=Decimal("5")),
+        ]
+    )
+    session.flush()
+    loaded = apply_customer_sellthrough_staging(session, newer.id, recompute_stock_gap=False)
+    assert loaded.errors == [] and loaded.applied == 2
+    session.expire_all()
+    s1 = _fact(session, _site_key(customer, product, "S1"))
+    assert s1 is not None and Decimal(s1.units_sold) == Decimal("6") and int(s1.import_job_id) == newer.id
+    kept = session.execute(
+        text("select count(*) from fact_customer_sellthrough_superseded where fact_id = :f and superseded_by_import_job_id = :j"),
+        {"f": chain.id, "j": newer.id},
+    ).scalar()
+    assert kept >= 1  # precondition: the newer load superseded a figure on the chain fact
+
+    for _ in range(2):
+        again = apply_customer_sellthrough_staging(session, older.id, recompute_stock_gap=False)
+        assert again.errors == []
+        assert again.applied == 0
+        assert again.superseded_rows == 0
+    session.expire_all()
+    s1 = _fact(session, _site_key(customer, product, "S1"))
+    s2 = _fact(session, _site_key(customer, product, "S2"))
+    assert s1 is not None and Decimal(s1.units_sold) == Decimal("6") and int(s1.import_job_id) == newer.id
+    assert s2 is not None and Decimal(s2.units_sold) == Decimal("5") and int(s2.import_job_id) == newer.id
+    assert session.get(FactCustomerSellthrough, chain.id) is not None
+    newer_lines = session.scalars(
+        select(ImportCustomerSellthroughStagingLine).where(ImportCustomerSellthroughStagingLine.import_job_id == newer.id)
+    ).all()
+    assert {int(x.fact_sellthrough_row_id) for x in newer_lines} == {int(s1.id), int(s2.id)}
+
+
+def test_older_reapply_after_newer_stock_only_site_load_keeps_newer_on_hand(session: Session) -> None:
+    """Mirror case: the newer site-grain load carries on-hand only."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    source, customer, product, _other = _ids(session)
+    older, newer, chain = _older_chain_state(session, source, customer, product)
+    session.add_all(
+        [
+            _newer_site_line(newer.id, 1, customer, product, "S1", reported_soh=Decimal("7")),
+            _newer_site_line(newer.id, 2, customer, product, "S2", reported_soh=Decimal("8")),
+        ]
+    )
+    session.flush()
+    loaded = apply_customer_sellthrough_staging(session, newer.id, recompute_stock_gap=False)
+    assert loaded.errors == [] and loaded.applied == 2
+    session.expire_all()
+    kept = session.execute(
+        text("select count(*) from fact_customer_sellthrough_superseded where fact_id = :f and superseded_by_import_job_id = :j"),
+        {"f": chain.id, "j": newer.id},
+    ).scalar()
+    assert kept >= 1
+
+    again = apply_customer_sellthrough_staging(session, older.id, recompute_stock_gap=False)
+    assert again.errors == []
+    assert again.applied == 0
+    assert again.superseded_rows == 0
+    session.expire_all()
+    s1 = _fact(session, _site_key(customer, product, "S1"))
+    assert s1 is not None and Decimal(s1.reported_soh) == Decimal("7") and int(s1.import_job_id) == newer.id
+    assert "units_sold" not in (s1.figure_import_jobs or {})
+    assert session.get(FactCustomerSellthrough, chain.id) is not None
