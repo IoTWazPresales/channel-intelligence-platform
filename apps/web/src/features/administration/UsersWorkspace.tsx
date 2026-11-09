@@ -18,7 +18,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, InputHTMLAttributes, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UserRole } from '@cip/types';
 import type { ColDef } from 'ag-grid-community';
 
@@ -76,12 +76,12 @@ function AccountScopeControls({
       <RadioGroup value={scope} onChange={(ev) => onScope(ev.target.value as AccountScope)}>
         <FormControlLabel
           value="all"
-          control={<Radio inputProps={{ 'data-testid': allId }} />}
+          control={<Radio inputProps={{ 'data-testid': allId } as InputHTMLAttributes<HTMLInputElement>} />}
           label="All accounts in this tenant"
         />
         <FormControlLabel
           value="selected"
-          control={<Radio inputProps={{ 'data-testid': selectedId }} />}
+          control={<Radio inputProps={{ 'data-testid': selectedId } as InputHTMLAttributes<HTMLInputElement>} />}
           label="Selected accounts"
         />
       </RadioGroup>
@@ -100,7 +100,7 @@ function AccountScopeControls({
                 <Checkbox
                   checked={selectedIds.includes(account.id)}
                   onChange={(ev) => onToggle(account.id, account.name, ev.target.checked)}
-                  inputProps={{ 'data-testid': `users-account-option-${account.id}` }}
+                  inputProps={{ 'data-testid': `users-account-option-${account.id}` } as InputHTMLAttributes<HTMLInputElement>}
                 />
               }
               label={account.name}
