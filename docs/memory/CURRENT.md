@@ -1,8 +1,14 @@
 # CURRENT state
 
-**Last updated:** 2026-11-06 (N-0118 chain-key re-apply; Warren's decisions, 12:58 SAST: docs record only, the programme ledger was not edited)
+**Last updated:** 2026-11-10 (orphan/docs status refresh on tip `d0972d50`; docs record only — no programme ledger edit)
 
-**Branch:** `feat/n0118-cst-apply-c57a` from `feat/integrate-20261103` at `c57adbbe`.
+**Branch:** `feat/integrate-20261103` @ `d0972d50` (Merge #75).
+
+**Integration tip (read-only checkpoint):** Merges on this tip since the 2026-11-09 orphan pass include #60 (N-0118 CST re-key), #65 (BACKLOG-200), #66 (orphan/stage docs), #67/#70 (BACKLOG-221 + residual), #68 (N-0118 NB1/NB3), #69 (decisions), #71 (D-0025 BOM default unticked), #72 (BACKLOG-222 promo_not_activated), #73 (D-0119 stock carry-forward), #74 (D-0038 SOH tolerance), #75 (BACKLOG-006 omit list `line_ids`). Open PRs into this branch: none as of this note. Full orphan evidence: `docs/audits/ORPHAN_AND_STAGE_STATUS_20261110.md`.
+
+**Still held (do not start from this note):** migrations / `cip` writes (Stage 1b grants, N-0118 apply to cip, listing seed, N-0100 part B, BACKLOG-214, NB2 superseded index, D-0035 smoke-case removal, D-0034 cleanup). BACKLOG-051 reconciliation report remains Parked (TRIGGER not met). Do not push to main.
+
+**N-0118 / decisions body below** is the prior 2026-11-06–09 record and still governs those items unless a later note here says otherwise.
 
 **N-0118:** Re-applying a customer sell-through job re-keys staged rows that were stored on a chain-level source key while the staged row names a site or a location. The chain-level fact moves aside. A second apply changes nothing. Unmatched products stay staged. No master is created. **B1/B2 (2026-11-06):** punctuation-only or non-Latin site labels use `slh:` keys (never chain `0`); chain-level retirement counts only staging lines for the same job so a partial re-key does not delete the chain row early. **Partial re-key (2026-11-06, narrowed 2026-11-09):** apply re-selects every resolved line of this job on a chain-level fact (including chain-only rows) only while that fact still needs a re-key: this job owns the fact and all its figures, no other job superseded a figure on it or points a staging line at it, and the target site keys hold nothing another job set (a newer load is never overwritten or retired), at least one of its rows names a site or location, and none of its rows is unresolved or skipped so the chain key is re-written with only the units still on that key; retirement runs only when no chain-only line remains for that fact. **Site key collision:** `sl:{norm}` only when the raw label is plain ASCII A–Z/a–z/0–9 (case folds to norm); any separator or non-ASCII uses `slh:` on raw bytes so `A-1` / `A 1` / `店-A1` do not alias `A1`. Existing keys change for site labels containing spaces, hyphens or non-ASCII characters (they move from `sl:` to `slh:`); plain ASCII letter/digit labels keep their existing keys. The only exposure is re-applying an import made before #60 after #60: that store's units could be counted twice. New imports are not affected. Warren's decision 2026-11-09: keep the `slh:` scheme, no backfill. Proven on `cip_test` only (`current_database=cip_test`, transaction rolled back). Not run against `cip`. No migration.
 
