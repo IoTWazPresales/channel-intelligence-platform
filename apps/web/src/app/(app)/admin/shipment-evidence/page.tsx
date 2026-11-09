@@ -122,8 +122,6 @@ type ApplyImportResponse = {
   message?: string;
 };
 
-const SHIPMENT_DISTRIBUTOR_ENTITY = 'shipment_distributor';
-
 function unresolvedDistributorWarning(n: number): string | null {
   if (n <= 0) return null;
   return `${n} distributor mapping candidate(s) are still in needs_review. You are not blocked — resolve them in the steward panel when ready.`;
@@ -367,16 +365,18 @@ export default function ShipmentEvidenceAdminPage() {
   });
 
   // Derive the steward warning after a background apply completes (job at `loaded`).
+  // Use tab-counts (BACKLOG-006) instead of the non-paginated mapping-candidates list.
   useQuery({
     queryKey: ['shipment-apply-unresolved', parsedJobId],
     queryFn: async ({ signal }) => {
-      const cands = await apiGet<Array<{ entity_type: string; status: string }>>(
-        `/api/v1/shipment-evidence/import-jobs/${parsedJobId}/mapping-candidates`,
+      const res = await apiGet<{
+        import_job_id: number;
+        counts: Record<string, { open: number; needs_work: number; needs_review: number }>;
+      }>(
+        `/api/v1/shipment-evidence/import-jobs/${parsedJobId}/mapping-candidates/tab-counts`,
         { signal }
       );
-      const n = cands.filter(
-        (c) => c.entity_type === SHIPMENT_DISTRIBUTOR_ENTITY && (c.status || '').trim() === 'needs_review'
-      ).length;
+      const n = res.counts?.distributor?.needs_review ?? 0;
       setApplyStewardWarning(unresolvedDistributorWarning(n));
       return n;
     },
