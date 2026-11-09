@@ -532,16 +532,19 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if bid == "period":
             plan.refusals.append(Refusal(measure=None, reason="Filter dates with period.from / period.to."))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         r = _breakdown_refusal(dm, model, bid, allowed)
         if r is not None:
             plan.refusals.append(Refusal(measure=None, reason=f"Filter {bid!r}: {r.reason}", wall=r.wall))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         values, err = _coerce_values(bid, raw_val)
         if err is not None:
             plan.refusals.append(Refusal(measure=None, reason=err))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         plan.filters.append(ResolvedFilter(breakdown=bid, values=values or [], is_list=isinstance(raw_val, (list, tuple))))
 
@@ -560,6 +563,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                 )
             )
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
 
     # Sort: an id from this request only.
@@ -569,6 +573,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if by not in valid_ids and _norm_id(by) not in breakdowns:
             plan.refusals.append(Refusal(measure=None, reason=f"Sort by {by!r}: sort by one of the requested measures or breakdowns."))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         plan.sort_by = by if by in valid_ids else _norm_id(by)
     default_asc = plan.sort_by in breakdowns or (plan.sort_by is None and "period" in breakdowns)
@@ -576,6 +581,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
     if direction not in ("asc", "desc"):
         plan.refusals.append(Refusal(measure=None, reason="sort.dir is asc or desc."))
         plan.measures = []
+        plan.carry_forward_period = False
         return plan
     plan.sort_dir = direction
 
@@ -590,6 +596,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
         if lim < 1:
             plan.refusals.append(Refusal(measure=None, reason="limit must be a whole number of at least 1."))
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         if lim > MAX_LIMIT:
             plan.refusals.append(
@@ -599,6 +606,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                 )
             )
             plan.measures = []
+            plan.carry_forward_period = False
             return plan
         plan.limit = lim
 

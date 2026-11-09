@@ -202,3 +202,30 @@ def test_carry_forward_refuses_unsupported_breakdown():
     assert not plan.ok
     assert "bu" in plan.refusals[0].reason
 
+
+def test_carry_forward_bad_filter_clears_routing_flag():
+    _, plan = _plan(
+        ["distributor_stock.on_hand"],
+        ["period"],
+        "month",
+        period_from="2026-01-01",
+        period_to="2026-03-31",
+        filters={"bu": ["NB"]},
+    )
+    assert not plan.ok
+    assert plan.carry_forward_period is False
+    assert plan.measures == []
+
+
+def test_carry_forward_bad_limit_clears_routing_flag():
+    _, plan = _plan(
+        ["distributor_stock.on_hand"],
+        ["period"],
+        "month",
+        period_from="2026-01-01",
+        period_to="2026-03-31",
+        limit=0,
+    )
+    assert not plan.ok
+    assert plan.carry_forward_period is False
+

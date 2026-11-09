@@ -82,6 +82,8 @@ async def run_carry_forward_stock(
     from app.query.model.execute import _response
 
     assert plan.period_from is not None and plan.period_to is not None and plan.period_grain
+    if not plan.measures or "period" not in plan.breakdowns:
+        return _response(ok=False, refusals=plan.refusals, explain=build_explain(dm, plan, None, catalog_version=version))
     if plan.calendar is not None:
         return _response(
             ok=False,
