@@ -241,31 +241,31 @@ def apply_customer_sellthrough_staging(
         summary.errors.append(YEAR_PENDING_APPLY_MESSAGE)
         return summary
 
-    line = ImportCustomerSellthroughStagingLine
+    stg = ImportCustomerSellthroughStagingLine
     site_named = or_(
-        func.length(func.btrim(func.coalesce(line.site_label, ""))) > 0,
-        func.length(func.btrim(func.coalesce(line.raw_location_token, ""))) > 0,
-        line.resolved_location_id.is_not(None),
+        func.length(func.btrim(func.coalesce(stg.site_label, ""))) > 0,
+        func.length(func.btrim(func.coalesce(stg.raw_location_token, ""))) > 0,
+        stg.resolved_location_id.is_not(None),
     )
     # N-0118: resolved rows already stored on a chain-level fact are selected again so this path
     # can re-key site-named rows to site grain and re-state chain-only rows on the chain key
     # (partial re-key: chain totals must not include units that moved to a site row).
     lines = list(
         db.scalars(
-            select(line)
-            .outerjoin(FactCustomerSellthrough, line.fact_sellthrough_row_id == FactCustomerSellthrough.id)
-            .where(line.import_job_id == job_id)
-            .where(line.resolution_status == "resolved")
+            select(stg)
+            .outerjoin(FactCustomerSellthrough, stg.fact_sellthrough_row_id == FactCustomerSellthrough.id)
+            .where(stg.import_job_id == job_id)
+            .where(stg.resolution_status == "resolved")
             .where(
                 or_(
-                    line.apply_status.is_(None),
+                    stg.apply_status.is_(None),
                     and_(
-                        line.apply_status.in_(("applied", "duplicate")),
+                        stg.apply_status.in_(("applied", "duplicate")),
                         FactCustomerSellthrough.source_key.op("~")(CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY_SQL),
                     ),
                 )
             )
-            .order_by(line.source_row_number, line.id)
+            .order_by(stg.source_row_number, stg.id)
         ).all()
     )
     # Every staging line for *this job* that still points at those chain-level facts, including one
@@ -279,9 +279,9 @@ def apply_customer_sellthrough_staging(
     }
     if rekey_fact_ids:
         for line_id, fact_id in db.execute(
-            select(line.id, line.fact_sellthrough_row_id)
-            .where(line.fact_sellthrough_row_id.in_(rekey_fact_ids))
-            .where(line.import_job_id == int(job_id))
+            select(stg.id, stg.fact_sellthrough_row_id)
+            .where(stg.fact_sellthrough_row_id.in_(rekey_fact_ids))
+            .where(stg.import_job_id == int(job_id))
         ).all():
             if fact_id is not None:
                 chain_fact_lines[int(fact_id)].add(int(line_id))
@@ -460,7 +460,7 @@ def apply_customer_sellthrough_staging(
                     job_id=int(job_id),
                     chain_fact_lines=chain_fact_lines,
                     rewritten_line_ids=rewritten_line_ids,
-                    line_model=line,
+                    line_model=stg,
                     site_named=site_named,
                 )
             summary.superseded_rows = moved.rows + collapsed.rows
