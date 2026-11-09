@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
 from datetime import datetime, timezone
 
+from app.api.deps import get_db
 from app.models.dimensions import DimCompetitorBrand, DimCompetitorProduct, DimProduct
 from app.models.facts import FactCompetitorMapping, FactCompetitorPrice
 from app.services.competition.propose import propose_competitor_mappings
@@ -19,13 +19,13 @@ class ClearConfirmBody(BaseModel):
 
 
 class ProposeBody(BaseModel):
-    min_score: float = 0.55
-    max_per_product: int = 3
+    min_score: float = Field(default=0.55, ge=0, le=1)
+    max_per_product: int = Field(default=3, ge=1, le=20)
 
 
 class PriceImportRow(BaseModel):
     competitor_sku: str
-    price: float
+    price: float = Field(gt=0)
     observed_at: datetime | None = None
     channel: str | None = None
 
@@ -157,10 +157,6 @@ async def clear_comp_prices(body: ClearConfirmBody, db: AsyncSession = Depends(g
 async def propose_mappings(body: ProposeBody | None = None, db: AsyncSession = Depends(get_db)):
     """Score internal SKUs against competitor products and create pending mappings."""
     payload = body or ProposeBody()
-    if payload.min_score < 0 or payload.min_score > 1:
-        raise HTTPException(status_code=400, detail="min_score must be between 0 and 1")
-    if payload.max_per_product < 1 or payload.max_per_product > 20:
-        raise HTTPException(status_code=400, detail="max_per_product must be 1..20")
     return await propose_competitor_mappings(
         db, min_score=payload.min_score, max_per_product=payload.max_per_product
     )
@@ -174,6 +170,8 @@ async def import_comp_prices(body: PriceImportBody, db: AsyncSession = Depends(g
     """
     if not body.rows:
         raise HTTPException(status_code=400, detail="rows must not be empty")
+    if len(body.rows) > 500:
+        raise HTTPException(status_code=400, detail="at most 500 rows per import")
     created = 0
     skipped_unknown: list[str] = []
     for row in body.rows:
@@ -201,4 +199,3 @@ async def import_comp_prices(body: PriceImportBody, db: AsyncSession = Depends(g
     if created:
         await db.commit()
     return {"created": created, "skipped_unknown_skus": skipped_unknown}
-

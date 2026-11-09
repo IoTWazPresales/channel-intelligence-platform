@@ -58,11 +58,15 @@ async def propose_competitor_mappings(
     min_score: float = 0.55,
     max_per_product: int = 3,
 ) -> dict:
-    """Score every active internal product against competitor products.
+    """Score every internal product against competitor products.
 
     Creates `fact_competitor_mapping` rows with approval_status=pending for the
     top matches above min_score that do not already exist. Never invents a second
     scorer — always calls score_competitor_candidate.
+
+    In-request dedupe uses an existing-pair set. Concurrent proposes can still
+    create duplicate (product_id, competitor_product_id) rows until a unique
+    constraint migration lands (migrations are currently serial/HELD).
     """
     products = (await db.execute(select(DimProduct))).scalars().all()
     competitors = (await db.execute(select(DimCompetitorProduct))).scalars().all()

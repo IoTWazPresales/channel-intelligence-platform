@@ -586,7 +586,7 @@ export function MarketSurface() {
         `Imported ${res?.created ?? 0} price row(s)` +
           (skipped ? `; skipped ${skipped} unknown SKU(s)` : ""),
       );
-      void qc.invalidateQueries({ queryKey: ["competition-prices"] });
+      void qc.invalidateQueries({ queryKey: ['competition-prices'] });
     },
     onError: (err) => setToast(String((err as Error)?.message ?? "Price import failed")),
   });
@@ -1487,11 +1487,13 @@ export function MarketSurface() {
             >
               <Stack spacing={1} sx={{ p: 1.5 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Paste a JSON array of rows with competitor_sku, price, and optional observed_at / channel.
-                  Unknown SKUs are skipped; products are not created here.
+                  Paste a JSON array of rows with competitor_sku, price (> 0), and optional observed_at / channel.
+                  Unknown SKUs are skipped; products are not created. Prices attach to competitor SKUs
+                  whether or not a mapping is approved.
                 </Typography>
                 <Box
                   component="textarea"
+                  aria-label="Competitor price import JSON"
                   value={priceImportText}
                   onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setPriceImportText(e.target.value)}
                   rows={6}
@@ -1531,8 +1533,8 @@ export function MarketSurface() {
               />
             ) : (
               <Typography variant="body2" color="text.secondary">
-                No competitor prices loaded yet. Import observations above; they appear against approved
-                mappings, never as inferred impact.
+                No competitor prices loaded yet. Import observations above against existing competitor SKUs.
+                Mapping approval is separate; prices are observations, never inferred impact.
               </Typography>
             )}
           </Stack>
