@@ -1,4 +1,4 @@
-﻿"""D-0119: distributor reported stock carries forward across periods at read time.
+"""D-0119: distributor reported stock carries forward across periods at read time.
 
 Warren 9 Nov 2026: a period with no new count shows the last count and is flagged
 as carried forward. A pair that has never been counted stays empty (not zero).
@@ -77,13 +77,30 @@ def iter_bucket_starts(period_from: date, period_to: date, grain: str) -> list[d
     end_floor = bucket_floor(period_to, grain)
     out: list[date] = []
     cur = start
-    # Guard against runaway spines.
+    # Guard against runaway spines: refuse (raise) rather than silently truncate.
     for _ in range(5000):
         out.append(cur)
         if cur >= end_floor:
-            break
+            return out
         cur = next_bucket_start(cur, grain)
-    return out
+    raise ValueError(
+        f"period spine exceeds 5000 {grain} buckets from {period_from} to {period_to}; narrow the window"
+    )
+
+
+def _coalesce_same_date(history: Sequence[StockObservation]) -> list[StockObservation]:
+    """Sum on_hand for the same (distributor, product, as_of_date); keep one row per date."""
+    by_date: dict[date, float] = {}
+    dist_id = product_id = None
+    for obs in history:
+        dist_id = obs.distributor_id
+        product_id = obs.product_id
+        by_date[obs.as_of_date] = by_date.get(obs.as_of_date, 0.0) + float(obs.on_hand_units)
+    assert dist_id is not None and product_id is not None
+    return [
+        StockObservation(dist_id, product_id, d, units)
+        for d, units in sorted(by_date.items())
+    ]
 
 
 def _latest_on_or_before(
@@ -110,9 +127,9 @@ def carry_forward_pair_series(
     """
     if not buckets:
         return []
-    history = sorted(observations, key=lambda o: o.as_of_date)
-    if not history:
+    if not observations:
         return []
+    history = _coalesce_same_date(observations)
     dist_id = history[0].distributor_id
     product_id = history[0].product_id
     rows: list[dict[str, Any]] = []

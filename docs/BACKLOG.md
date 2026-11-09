@@ -3484,7 +3484,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Done (this PR)** — 2026-11-09 — eat/d0119-stock-carry-forward: read-time carry-forward of last distributor on-hand count into empty period buckets; response flag distributor_stock.on_hand_carried_forward. Channel Ops channel_stock / WoC still refuse period. No DB migration. |
+| **Status / parked** | **Done (this PR)** — 2026-11-09 — feat/d0119-stock-carry-forward: read-time carry-forward of last distributor on-hand count into empty period buckets; response flag distributor_stock.on_hand_carried_forward. Channel Ops channel_stock / WoC still refuse period. No DB migration. |
 | **Source** | docs/decisions/DECISIONS_20261109_WARREN.md D-0119 / WI-D0119-carry-forward |
 | **Idea** | A period with no new distributor stock count must show the last count and be flagged as carried forward; never start from zero for want of a fresh report; never invent zero when no count ever existed. |
 | **What the work is** | Query-model carry_forward on distributor_stock.on_hand; execute path builds a period spine at read time. |

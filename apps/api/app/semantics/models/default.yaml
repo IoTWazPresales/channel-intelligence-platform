@@ -343,7 +343,7 @@ models:
       # flagged as carried_forward at read time. Without period, still the latest stock date.
       # Channel Ops channel_stock / weeks_of_cover stay governed and still refuse period.
       on_hand:
-        label: Distributor on-hand units (carries forward across periods)
+        label: Distributor on-hand units
         unit: units
         agg: latest_sum
         column: on_hand_units

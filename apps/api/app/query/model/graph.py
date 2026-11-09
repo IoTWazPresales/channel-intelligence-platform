@@ -50,7 +50,10 @@ def period_start_refusal(model_label: str) -> str:
 def period_grains_for(dm: DataModel, m: Measure | Calculated) -> list[str]:
     """The period grains the planner accepts for ``m``: the one rule the catalog and the planner share."""
     base = base_inputs(dm, m)
-    if not base or any(not b.allows_period or b.additivity == "semi_additive" for b in base):
+    if not base or any(not b.allows_period for b in base):
+        return []
+    # Semi-additive measures refuse period unless D-0119 carry_forward is set.
+    if any(b.additivity == "semi_additive" and not b.carry_forward for b in base):
         return []
     model = dm.models[m.model]
     grains = list(dm.period.grains)
@@ -459,6 +462,17 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
             if m.carry_forward:
                 # D-0119: reported stock may break down by period; empty buckets carry the
                 # last count forward and are flagged at read time (not a period sum).
+                if m.id != "distributor_stock.on_hand":
+                    plan.refusals.append(
+                        Refusal(
+                            measure=m.id,
+                            reason=(
+                                f"{m.label} sets carry_forward, but only distributor_stock.on_hand "
+                                "is implemented for period carry-forward today."
+                            ),
+                        )
+                    )
+                    continue
                 if plan.period_from is None or plan.period_to is None:
                     plan.refusals.append(
                         Refusal(
@@ -470,9 +484,25 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                         )
                     )
                     continue
+                allowed_cf = {"period", "distributor", "product"}
+                extra = [b for b in breakdowns if b not in allowed_cf]
+                if extra:
+                    plan.refusals.append(
+                        Refusal(
+                            measure=m.id,
+                            reason=(
+                                "Distributor stock carry-forward by period only allows "
+                                "period, distributor and product breakdowns "
+                                f"(not {', '.join(extra)})."
+                            ),
+                        )
+                    )
+                    continue
                 plan.carry_forward_period = True
                 plan.notes.append(
-                    "D-0119: empty period buckets carry the last distributor stock count forward and are flagged."
+                    "D-0119: empty period buckets carry the last per distributor×product count "
+                    "forward and are flagged. Without period, on_hand still uses the latest "
+                    "distributor report date (latest_per)."
                 )
                 plan.measures.append(m)
                 continue
@@ -514,6 +544,23 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
             plan.measures = []
             return plan
         plan.filters.append(ResolvedFilter(breakdown=bid, values=values or [], is_list=isinstance(raw_val, (list, tuple))))
+
+    # D-0119 carry-forward path only honours distributor/product filters.
+    if plan.carry_forward_period:
+        bad_filters = [f.breakdown for f in plan.filters if f.breakdown not in {"distributor", "product"}]
+        if bad_filters:
+            plan.refusals.append(
+                Refusal(
+                    measure=None,
+                    reason=(
+                        "Distributor stock carry-forward by period only allows "
+                        "distributor and product filters "
+                        f"(not {', '.join(sorted(set(bad_filters)))})."
+                    ),
+                )
+            )
+            plan.measures = []
+            return plan
 
     # Sort: an id from this request only.
     valid_ids = [m.id for m in plan.measures]

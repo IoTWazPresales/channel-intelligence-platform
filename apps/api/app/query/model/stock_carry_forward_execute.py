@@ -13,7 +13,7 @@ from app.models.facts import FactInventoryDistributor
 from app.query.cache import DEFAULT_TTL_SECONDS, cache_key_v2, get_cached, set_cached
 from app.query.labels import attach_names
 from app.query.model.explain import build_explain
-from app.query.model.graph import Plan, V2Request
+from app.query.model.graph import Plan, Refusal, V2Request
 from app.query.model.loader import DataModel, Measure
 from app.query.model.stock_carry_forward import (
     StockObservation,
@@ -82,6 +82,21 @@ async def run_carry_forward_stock(
     from app.query.model.execute import _response
 
     assert plan.period_from is not None and plan.period_to is not None and plan.period_grain
+    if plan.calendar is not None:
+        return _response(
+            ok=False,
+            refusals=plan.refusals
+            + [
+                Refusal(
+                    measure="distributor_stock.on_hand",
+                    reason=(
+                        "Distributor stock carry-forward by period uses the platform calendar "
+                        "(Monday weeks, Gregorian months). This tenant's business calendar is not supported yet."
+                    ),
+                )
+            ],
+            explain=build_explain(dm, plan, None, catalog_version=version),
+        )
     columns = _columns_for(plan, dm)
     explain = build_explain(dm, plan, None, catalog_version=version)
     explain["notes"] = list(plan.notes) + [

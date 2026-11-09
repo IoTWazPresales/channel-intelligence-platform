@@ -1,4 +1,4 @@
-﻿"""Unit tests for D-0119 distributor stock carry-forward (no DB)."""
+"""Unit tests for D-0119 distributor stock carry-forward (no DB)."""
 
 from __future__ import annotations
 
@@ -100,3 +100,15 @@ def test_rollup_sums_products_and_flags_only_when_all_carried():
     assert rolled[0]["on_hand"] == 50.0
     assert rolled[0]["carried_forward"] is False
     assert rolled[0]["distributor_id"] == 1
+
+
+def test_same_date_rows_are_summed_before_carry():
+    obs = [
+        StockObservation(1, 10, date(2026, 1, 15), 3.0),
+        StockObservation(1, 10, date(2026, 1, 15), 7.0),
+    ]
+    rows = carry_forward_pair_series(obs, buckets=[date(2026, 1, 1)], grain="month")
+    assert len(rows) == 1
+    assert rows[0]["on_hand"] == 10.0
+    assert rows[0]["carried_forward"] is False
+

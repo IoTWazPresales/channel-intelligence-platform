@@ -189,3 +189,16 @@ def test_the_same_custom_calendar_request_compiles_to_the_same_sql():
     assert first == second
     assert "cumonth_0_from" in first
     assert "cyst_0_from" in first
+
+
+def test_carry_forward_refuses_unsupported_breakdown():
+    _, plan = _plan(
+        ["distributor_stock.on_hand"],
+        ["period", "bu"],
+        "month",
+        period_from="2026-01-01",
+        period_to="2026-03-31",
+    )
+    assert not plan.ok
+    assert "bu" in plan.refusals[0].reason
+
