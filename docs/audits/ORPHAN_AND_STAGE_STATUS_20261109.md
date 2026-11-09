@@ -4,13 +4,15 @@
 **Method:** re-read product code on the tip; do not trust the 2026-11-06 overnight orphan notes without a fresh hit.
 **CURRENT.md:** deferred — that file is in open PR #60. Status that would go there is recorded in `docs/BACKLOG.md` (BACKLOG-221 + this audit) per Warren's standing rule.
 
+**Encoding check (Claude note 1):** committed docs/BACKLOG.md and this audit are UTF-8 with 0 U+FFFD replacement chars; em dashes are U+2014 / en dashes U+2013 / arrows U+2192. The mojibake sequences in the review paste were a Windows console/cp437 artifact, not the tree.
+
 ## Stage status (planned Stage 1 vs tip)
 
 | Item | Class | Evidence |
 |------|-------|----------|
 | Docs BACKLOG-210 / 215 / 216 Done | **DONE** | Merged in Stage-1 group (#55/#56/#57) |
-| Pricing padding | **DONE** | Merged in Stage-1 group (#55/#56/#57) |
-| Shipment test fix | **DONE** | Merged in Stage-1 group (#55/#56/#57) |
+| Pricing padding | **DONE** | Stage-1 group (#55/#56/#57) — not attributed to a single PR; do not credit #55 alone |
+| Shipment test fix | **DONE** | #55 (303d9bf7 flush shipment sheet memory); listed with Stage-1 group (#55/#56/#57) |
 | D-0144 tenant mapping / `source_definition` | **DONE** | Migrations `20261103_0055` + `0060` + `tenant_mapping_scope.py` on tip |
 | BACKLOG-200 dead `MasterColumnPickerDialog` | **SAFE-NOW → PR open** | PR #65 (this stack base); deletions + BACKLOG Done |
 | N-0118 CST chain re-key / site grain | **WAITS-FOR-#60** | Open PR #60; touches CST apply + `docs/memory/CURRENT.md` |

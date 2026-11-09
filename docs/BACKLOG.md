@@ -3443,6 +3443,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | An ACZA workbook remains the whole open book at its report date. A line that leaves a later book is closed, not deleted. |
 | **Out of scope** | Loading the 27 Oct file in this change. Inventing the two lines without the file. |
 | **TRIGGER** | The 27 Oct ACZA workbook (or a later one with a BOM-not-ready sheet) is offered for import. |
+
 ---
 
 ## BACKLOG-221 — Competition match scorer + price import still unwired
@@ -3460,3 +3461,5 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | Manual approve/reject mapping remains; stored `fact_competitor_mapping.score` display stays. |
 | **Out of scope** | Store/DC product rule changes (D-0142/D-0143 already accepted); listing capture-health (already mounted). |
 | **TRIGGER** | Next competition / market-listings unit, or Warren asks to wire suggested matches / price import. |
+
+---
