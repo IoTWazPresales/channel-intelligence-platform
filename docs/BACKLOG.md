@@ -2923,7 +2923,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_C):** `7656f67e` (2026-09-18) already unified the master and planner column pickers, so the hold on "do not unify the pickers" no longer has a reason. **HELD** (2026-09-21 N-0030 audit: N-0029 AC — 'Do not unify MasterColumnPickerDialog and ColumnSelectorModal'; deleting the wrapper is that unification; N-0029 review rules) · **Open** · 2026-09-21 · found by the grid/column parity audit (§7.2) |
+| **Status / parked** | **Done** — 2026-11-09 — Dead wrapper and its only test deleted. MasterDataGridShell and CST alias hosts already import ColumnPickerDialog / MasterColumnPickerGroup from @/features/workbench-ui/ColumnPickerDialog directly. ColumnSelectorModal (planner, size=wide) untouched. N-0096 SWEEP_C had already lifted the N-0029 unify hold. Shipped in PR #65 (branch chore/backlog-200-dead-column-picker). CURRENT.md note deferred until #60 merges (CURRENT.md is in that PR); recorded here per standing rule. |
 | **Effort** | Trivial |
 | **Source** | `apps/web/src/components/masterGrid/MasterColumnPickerDialog.tsx`; its only referent is `MasterColumnPickerDialog.test.tsx` |
 | **Idea** | Delete the wrapper, or re-point `MasterDataGridShell` at it — but do not leave a component whose only caller is its own test. |
