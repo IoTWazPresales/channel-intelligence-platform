@@ -221,8 +221,9 @@ def test_reapply_rekeys_chain_level_facts_and_second_apply_changes_nothing(sessi
 
     first = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
     assert first.errors == []
-    # Two site re-keys plus the other_product chain row re-stated on its chain key.
-    assert first.applied == 3
+    # Two site re-keys. The other_product chain row has no site-named row on its fact, so it is
+    # not selected again (re-key is decided per fact) and stays exactly as stored.
+    assert first.applied == 2
     assert first.skipped_unresolved == 1
     assert first.superseded_rows == 1
     assert first.superseded_units == 3.0
@@ -243,6 +244,8 @@ def test_reapply_rekeys_chain_level_facts_and_second_apply_changes_nothing(sessi
             site_label="S2",
         ),
     }
+    # The upsert is a Core statement; reload ORM rows so every figure is read from the database.
+    session.expire_all()
     rows = {
         row.source_key: row
         for row in session.scalars(
@@ -306,6 +309,7 @@ def test_reapply_rekeys_chain_level_facts_and_second_apply_changes_nothing(sessi
     assert second.applied == 0
     assert second.superseded_rows == 0
     assert second.superseded_units == 0.0
+    session.expire_all()
     again = {
         row.source_key: row
         for row in session.scalars(
@@ -510,3 +514,152 @@ def test_partial_rekey_same_job_does_not_retire_chain_while_chain_only_line_rema
         ).scalar()
         == 0
     )
+
+
+def _chain_fact(customer: int, product: int, job_id: int, units: str, figure_jobs: dict | None = None):
+    return FactCustomerSellthrough(
+        source_key=customer_sellthrough_source_key(
+            customer_id=customer,
+            customer_location_id=None,
+            product_id=product,
+            period_start_date=WEEK,
+        ),
+        tenant_id=TENANT,
+        customer_id=customer,
+        product_id=product,
+        period_start_date=WEEK,
+        period_type="weekly",
+        period_grain="week",
+        units_sold=Decimal(units),
+        import_job_id=job_id,
+        figure_import_jobs=figure_jobs or {},
+    )
+
+
+def _staged(job_id: int, row: int, customer: int, product: int, units: str, fact_id: int, site: str | None, **kw):
+    return ImportCustomerSellthroughStagingLine(
+        import_job_id=job_id,
+        source_row_number=row,
+        raw_row_payload={"site": site, "units": units, "row": row},
+        resolved_customer_id=customer,
+        resolved_product_id=product,
+        period_start_date=kw.pop("period_start_date", WEEK),
+        period_type="weekly",
+        period_grain="week",
+        units_sold=Decimal(units),
+        site_label=site,
+        resolution_status="resolved",
+        apply_status="applied",
+        fact_sellthrough_row_id=fact_id,
+        **kw,
+    )
+
+
+def _job(source: int, name: str, created_at: datetime) -> ImportJob:
+    return ImportJob(
+        tenant_id=TENANT,
+        source_id=source,
+        template_slug="customer_sell_through",
+        import_mode="apply",
+        status="completed",
+        stage="loaded",
+        file_name=name,
+        created_at=created_at,
+    )
+
+
+def test_reapply_of_older_job_never_overwrites_or_retires_a_newer_jobs_chain_fact(session: Session) -> None:
+    """Review B1: once a newer load wrote the chain key, re-applying the older job leaves it alone."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    source, customer, product, _other = _ids(session)
+    older = _job(source, "older.xlsx", T0)
+    newer = _job(source, "newer.xlsx", datetime(2026, 8, 8, tzinfo=timezone.utc))
+    session.add_all([older, newer])
+    session.flush()
+
+    # The newer load now owns the chain fact the older job's rows still point at.
+    fact = _chain_fact(customer, product, newer.id, "20", {"units_sold": newer.id})
+    session.add(fact)
+    session.flush()
+    session.add_all(
+        [
+            _staged(older.id, 1, customer, product, "4", fact.id, "S1"),
+            _staged(older.id, 2, customer, product, "5", fact.id, None),
+            _staged(newer.id, 1, customer, product, "20", fact.id, None),
+        ]
+    )
+    session.flush()
+
+    result = apply_customer_sellthrough_staging(session, older.id, recompute_stock_gap=False)
+    assert result.errors == []
+    assert result.applied == 0
+    assert result.superseded_rows == 0
+
+    session.expire_all()
+    stored = session.get(FactCustomerSellthrough, fact.id)
+    assert stored is not None
+    assert Decimal(stored.units_sold) == Decimal("20")
+    assert int(stored.import_job_id) == newer.id
+    site_key = customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=product,
+        period_start_date=WEEK,
+        site_label="S1",
+    )
+    assert session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == site_key)) is None
+    newer_line = session.scalar(
+        select(ImportCustomerSellthroughStagingLine).where(ImportCustomerSellthroughStagingLine.import_job_id == newer.id)
+    )
+    assert newer_line is not None and newer_line.fact_sellthrough_row_id == fact.id
+    assert (
+        session.execute(
+            text("select count(*) from fact_customer_sellthrough_superseded where tenant_id = :t"),
+            {"t": TENANT},
+        ).scalar()
+        == 0
+    )
+
+
+def test_no_rekey_while_a_line_on_the_chain_fact_would_be_skipped(session: Session) -> None:
+    """Review N2: a skipped line keeps its fact off the re-key, so units never sit on both keys."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    source, customer, product, _other = _ids(session)
+    job = _job(source, "skipped.xlsx", T0)
+    session.add(job)
+    session.flush()
+    fact = _chain_fact(customer, product, job.id, "9")
+    session.add(fact)
+    session.flush()
+    session.add_all(
+        [
+            _staged(job.id, 1, customer, product, "4", fact.id, "S1"),
+            # Dated after the upload day: the apply loop leaves it staged.
+            _staged(job.id, 2, customer, product, "5", fact.id, "S2", period_start_date=date(2099, 1, 5)),
+        ]
+    )
+    session.flush()
+
+    for _ in range(2):
+        result = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+        assert result.errors == []
+        assert result.applied == 0
+        assert result.superseded_rows == 0
+
+    session.expire_all()
+    stored = session.get(FactCustomerSellthrough, fact.id)
+    assert stored is not None and Decimal(stored.units_sold) == Decimal("9")
+    site_key = customer_sellthrough_source_key(
+        customer_id=customer,
+        customer_location_id=None,
+        product_id=product,
+        period_start_date=WEEK,
+        site_label="S1",
+    )
+    assert session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == site_key)) is None

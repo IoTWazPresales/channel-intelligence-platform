@@ -107,6 +107,18 @@ def _merge_into(group: dict[str, Any], values: dict[str, Any]) -> None:
 logger = logging.getLogger(__name__)
 
 
+def _skipped_on_apply(line: ImportCustomerSellthroughStagingLine, uploaded_on: Any) -> bool:
+    """True when the apply loop would leave this staged line out (missing fields, or dated after upload)."""
+    if (
+        line.resolved_customer_id is None
+        or line.resolved_product_id is None
+        or line.period_start_date is None
+        or (line.units_sold is None and all(getattr(line, k, None) is None for k in _STOCK_FIELDS))
+    ):
+        return True
+    return bool(dated_after(line.period_start_date, uploaded_on))
+
+
 @dataclass
 class ApplySummary:
     applied: int = 0
@@ -169,7 +181,14 @@ def _retire_rewritten_chain_facts(
             ready.append(int(fid))
     if not ready:
         return SupersedeSummary()
-    stored = list(db.scalars(select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(ready))).all())
+    stored = [
+        row
+        for row in db.scalars(select(FactCustomerSellthrough).where(FactCustomerSellthrough.id.in_(ready))).all()
+        # A newer load's figure is never moved aside by an older one: skip a fact any other job set.
+        if row.import_job_id is not None
+        and int(row.import_job_id) == int(job_id)
+        and all(int(v) == int(job_id) for v in figure_jobs(row).values())
+    ]
     if not stored:
         return SupersedeSummary()
     figures = {int(row.id): list(figure_jobs(row)) for row in stored}
@@ -247,55 +266,79 @@ def apply_customer_sellthrough_staging(
         func.length(func.btrim(func.coalesce(stg.raw_location_token, ""))) > 0,
         stg.resolved_location_id.is_not(None),
     )
-    # N-0118: resolved rows already stored on a chain-level fact are selected again so this path
-    # can re-key site-named rows to site grain and re-state chain-only rows on the chain key
-    # (partial re-key: chain totals must not include units that moved to a site row).
-    # Only while this job still has a site-named row sitting on a chain-level fact: once every
-    # such row is on its site key there is nothing to re-key, and a second apply changes nothing.
-    on_chain_fact = and_(
-        stg.apply_status.in_(("applied", "duplicate")),
-        FactCustomerSellthrough.source_key.op("~")(CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY_SQL),
+    uploaded_on = upload_day(job) if job is not None else None
+    # N-0118: a chain-level fact (``ct:{customer}:0:{product}:{period}``) is re-keyed per fact, and
+    # only when all of this holds:
+    # - this job still owns the fact: its row and every figure on it were set by this job, so an
+    #   older job never overwrites or retires a newer load's figures (same rule as supersede);
+    # - at least one resolved staged row of this job on that fact names a site or location;
+    # - every staged row of this job on that fact will be rewritten in this run (none unresolved,
+    #   none skipped), so the chain total and its site rows never both hold the same units.
+    # Then all of this job's rows on the fact are selected again: site-named rows move to site
+    # keys and chain-only rows re-state the chain key with only the units still on it (partial
+    # re-key). Once nothing is left to re-key nothing is selected, so a second apply changes nothing.
+    already_applied = stg.apply_status.in_(("applied", "duplicate"))
+    owned_by_job = and_(
+        FactCustomerSellthrough.import_job_id == int(job_id),
+        text(
+            "NOT EXISTS (SELECT 1 FROM jsonb_each_text("
+            "COALESCE(fact_customer_sellthrough.figure_import_jobs, '{}'::jsonb)) AS n0118_fj "
+            "WHERE n0118_fj.value <> :n0118_job_id)"
+        ).bindparams(n0118_job_id=str(int(job_id))),
     )
-    rekey_pending = bool(
-        db.scalar(
-            select(func.count())
-            .select_from(stg)
-            .join(FactCustomerSellthrough, stg.fact_sellthrough_row_id == FactCustomerSellthrough.id)
+    candidate_select = (
+        select(FactCustomerSellthrough.id)
+        .join(stg, stg.fact_sellthrough_row_id == FactCustomerSellthrough.id)
+        .where(stg.import_job_id == job_id)
+        .where(stg.resolution_status == "resolved")
+        .where(already_applied)
+        .where(site_named)
+        .where(FactCustomerSellthrough.source_key.op("~")(CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY_SQL))
+        .where(owned_by_job)
+        .distinct()
+    )
+    candidate_fact_ids: set[int] = set()
+    # Cheap count first: a first apply (nothing stored yet) never runs the id read.
+    if int(db.scalar(select(func.count()).select_from(candidate_select.subquery())) or 0):
+        candidate_fact_ids = {int(fid) for fid in db.scalars(candidate_select).all()}
+    # Every staging line for *this job* that points at those facts, including one this run will
+    # not select. The fact moves aside only when this run rewrote all of them for this job (other
+    # jobs' staging must not widen the set or retire the fact early).
+    chain_fact_lines: dict[int, set[int]] = defaultdict(set)
+    rekey_fact_ids: set[int] = set()
+    if candidate_fact_ids:
+        blocked: set[int] = set()
+        for row in db.scalars(
+            select(stg)
             .where(stg.import_job_id == job_id)
-            .where(stg.resolution_status == "resolved")
-            .where(on_chain_fact)
-            .where(site_named)
+            .where(stg.fact_sellthrough_row_id.in_(candidate_fact_ids))
+        ).all():
+            fid = int(row.fact_sellthrough_row_id)
+            chain_fact_lines[fid].add(int(row.id))
+            if (
+                row.resolution_status != "resolved"
+                or row.apply_status not in ("applied", "duplicate")
+                or _skipped_on_apply(row, uploaded_on)
+            ):
+                blocked.add(fid)
+        rekey_fact_ids = candidate_fact_ids - blocked
+        for fid in blocked:
+            chain_fact_lines.pop(fid, None)
+    pending_filter = stg.apply_status.is_(None)
+    if rekey_fact_ids:
+        pending_filter = or_(
+            pending_filter,
+            and_(already_applied, stg.fact_sellthrough_row_id.in_(rekey_fact_ids)),
         )
-        or 0
-    )
-    pending_filter = or_(stg.apply_status.is_(None), on_chain_fact) if rekey_pending else stg.apply_status.is_(None)
     lines = list(
         db.scalars(
             select(stg)
-            .outerjoin(FactCustomerSellthrough, stg.fact_sellthrough_row_id == FactCustomerSellthrough.id)
             .where(stg.import_job_id == job_id)
             .where(stg.resolution_status == "resolved")
             .where(pending_filter)
             .order_by(stg.source_row_number, stg.id)
         ).all()
     )
-    # Every staging line for *this job* that still points at those chain-level facts, including one
-    # this query did not select. The fact moves aside only when this run rewrote all of them for
-    # this job (other jobs’ staging must not widen the set or retire the fact early).
-    chain_fact_lines: dict[int, set[int]] = defaultdict(set)
-    rekey_fact_ids = {
-        int(row.fact_sellthrough_row_id)
-        for row in lines
-        if row.apply_status in ("applied", "duplicate") and row.fact_sellthrough_row_id is not None
-    }
-    if rekey_fact_ids:
-        for line_id, fact_id in db.execute(
-            select(stg.id, stg.fact_sellthrough_row_id)
-            .where(stg.fact_sellthrough_row_id.in_(rekey_fact_ids))
-            .where(stg.import_job_id == int(job_id))
-        ).all():
-            if fact_id is not None:
-                chain_fact_lines[int(fact_id)].add(int(line_id))
 
     summary.skipped_unresolved = int(
         db.scalar(
@@ -308,7 +351,6 @@ def apply_customer_sellthrough_staging(
     )
 
     now = datetime.now(timezone.utc)
-    uploaded_on = upload_day(job) if job is not None else None
 
     # Group by source_key (D-0091): differing lines are summed, identical copies count once. Every
     # line in the group is remembered so it is marked and pointed at the resulting fact id.
@@ -331,8 +373,9 @@ def apply_customer_sellthrough_staging(
         loc_id = int(line.resolved_location_id) if line.resolved_location_id is not None else None
         period = line.period_start_date
         # site_label: prefer explicit staging column; fall back to raw location token (verbatim).
+        # A blank (whitespace-only) label falls back to the token too, matching ``site_named``.
         site_label = getattr(line, "site_label", None)
-        if site_label is None and line.raw_location_token:
+        if (site_label is None or not str(site_label).strip()) and line.raw_location_token:
             site_label = str(line.raw_location_token).strip() or None
         sk = customer_sellthrough_source_key(
             customer_id=cust_id,

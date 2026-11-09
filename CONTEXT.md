@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-09 - **N-0118 review fixes (PR #60):** the staging-model alias is no longer shadowed by the row loop (the supersede step had been failing). Chain-level re-key is decided per fact: only a fact this job still owns (row and every figure), with a site-named row of this job on it and no unresolved or skipped row, is re-selected, so a re-apply of an older job never overwrites or retires a newer load and a second apply changes nothing. Branch `feat/n0118-cst-apply-c57a`.
+
 - 2026-11-06 - **N-0118 partial re-key:** apply re-selects all rows pointing at a chain-level fact (not only site-named); chain-only lines re-upsert chain units; chain fact retires only when every pointing row is site-named and rewritten. Branch `feat/n0118-cst-apply-c57a`.
 
 - 2026-11-06 - **N-0118 site key collision:** `sl:{norm}` only for canonical ASCII-only labels (existing applied keys stable); any separator or non-ASCII uses `slh:` on raw UTF-8. Branch `feat/n0118-cst-apply-c57a`.
