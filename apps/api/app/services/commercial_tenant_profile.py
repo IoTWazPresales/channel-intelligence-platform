@@ -964,7 +964,7 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
                 raise ValueError("soh_tolerance_pct: a rate such as 0.10 is required") from exc
             if rate > 1:
                 rate = rate / 100.0
-            # Reject exactly 1.0 (ambiguous: 1% vs 100%). Use 0.01 for 1%, or 100 for 100% then /100.
+            # Reject exactly 1.0 (ambiguous: 1% vs 100%). Use 0.01 for 1 percent.
             if not (0 <= rate < SOH_TOLERANCE_PCT_MAX):
                 raise ValueError("soh_tolerance_pct: must be between 0 and 1 exclusive of 1 (0.10 for 10 percent; use 0.01 not 1 for 1 percent)")
             clean[key] = rate
