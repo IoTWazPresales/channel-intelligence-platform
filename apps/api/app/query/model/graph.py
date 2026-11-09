@@ -473,17 +473,9 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                         )
                     )
                     continue
-                if plan.period_from is None or plan.period_to is None:
-                    plan.refusals.append(
-                        Refusal(
-                            measure=m.id,
-                            reason=(
-                                f"{m.label} by period needs both period.from and period.to "
-                                "so carried-forward counts have a bounded spine."
-                            ),
-                        )
-                    )
-                    continue
+                # Unbounded period is allowed: execute derives the spine from the
+                # filtered observations' first/last as_of_date (catalog contract:
+                # every offered period grain must plan without period.from/to).
                 allowed_cf = {"period", "distributor", "product"}
                 extra = [b for b in breakdowns if b not in allowed_cf]
                 if extra:
@@ -498,6 +490,12 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                         )
                     )
                     continue
+                if plan.period_from is None or plan.period_to is None:
+                    plan.notes.append(
+                        "D-0119: period.from/to omitted; carry-forward spine will be "
+                        "derived at read time from the first and last distributor "
+                        "stock counts in scope."
+                    )
                 plan.carry_forward_period = True
                 plan.notes.append(
                     "D-0119: empty period buckets carry the last per distributor×product count "

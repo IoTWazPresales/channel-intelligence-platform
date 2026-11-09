@@ -172,3 +172,39 @@ async def test_never_counted_product_stays_empty():
     finally:
         await db.rollback()
         await db.close()
+
+@pytest.mark.anyio
+async def test_unbounded_period_derives_spine_from_data():
+    """Catalog offers period grains without from/to; execute derives the spine from first/last count."""
+    db = await _session_or_skip()
+    try:
+        dist, p1, _, _ = await _seed(db)
+        name = (await db.execute(text("select current_database()"))).scalar_one()
+        assert name == "cip_test"
+        resp = await run_v2(
+            db,
+            V2Request(
+                measures=["distributor_stock.on_hand"],
+                breakdowns=["period", "product"],
+                period_grain="month",
+                filters={"distributor": [dist.id], "product": [p1.id]},
+            ),
+            tenant_id=TENANT,
+            skip_cache=True,
+        )
+        assert resp["ok"], resp.get("refusals")
+        by = {r["bucket_start"]: r for r in resp["rows"]}
+        # Seed has Jan 15 (40) and Mar 10 (25); Feb gap carries Jan.
+        assert set(by) == {"2026-01-01", "2026-02-01", "2026-03-01"}
+        assert by["2026-01-01"]["distributor_stock.on_hand"] == 40.0
+        assert by["2026-01-01"]["distributor_stock.on_hand_carried_forward"] == 0.0
+        assert by["2026-02-01"]["distributor_stock.on_hand"] == 40.0
+        assert by["2026-02-01"]["distributor_stock.on_hand_carried_forward"] == 1.0
+        assert by["2026-03-01"]["distributor_stock.on_hand"] == 25.0
+        assert by["2026-03-01"]["distributor_stock.on_hand_carried_forward"] == 0.0
+        notes = (resp.get("explain") or {}).get("notes") or []
+        assert any("derived from data counts" in n for n in notes), notes
+    finally:
+        await db.rollback()
+        await db.close()
+

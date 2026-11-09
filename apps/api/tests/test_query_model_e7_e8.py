@@ -37,9 +37,10 @@ def test_new_models_plan_on_their_own_facts():
         assert plan.ok, plan.refusals
     _, stock = _plan(["distributor_stock.on_hand"], ["distributor", "product"])
     assert stock.ok, stock.refusals
-    # D-0119: period is allowed when period.from/to bound the carry-forward spine.
-    _, needs_bounds = _plan(["distributor_stock.on_hand"], ["period"], "month")
-    assert not needs_bounds.ok
+    # D-0119: period plans even without from/to; execute derives the spine from data.
+    _, unbounded = _plan(["distributor_stock.on_hand"], ["period"], "month")
+    assert unbounded.ok and unbounded.carry_forward_period, unbounded.refusals
+    assert any("derived at read time" in n for n in unbounded.notes), unbounded.notes
     _, carried = _plan(
         ["distributor_stock.on_hand"],
         ["period"],

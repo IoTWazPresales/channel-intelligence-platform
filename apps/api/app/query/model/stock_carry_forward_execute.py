@@ -81,7 +81,18 @@ async def run_carry_forward_stock(
 ) -> dict[str, Any]:
     from app.query.model.execute import _response
 
-    assert plan.period_from is not None and plan.period_to is not None and plan.period_grain
+    if plan.period_grain is None:
+        return _response(
+            ok=False,
+            refusals=plan.refusals
+            + [
+                Refusal(
+                    measure="distributor_stock.on_hand",
+                    reason="Distributor stock carry-forward by period needs a period grain.",
+                )
+            ],
+            explain=build_explain(dm, plan, None, catalog_version=version),
+        )
     if not plan.measures or "period" not in plan.breakdowns:
         return _response(ok=False, refusals=plan.refusals, explain=build_explain(dm, plan, None, catalog_version=version))
     if plan.calendar is not None:
@@ -122,9 +133,11 @@ async def run_carry_forward_stock(
     t0 = time.perf_counter()
     await db.execute(text(STATEMENT_TIMEOUT_SQL))
     f = FactInventoryDistributor
-    stmt = select(f.distributor_id, f.product_id, f.as_of_date, f.on_hand_units).where(
-        and_(f.tenant_id == tenant_id, f.as_of_date <= plan.period_to)
-    )
+    where_clauses = [f.tenant_id == tenant_id]
+    if plan.period_to is not None:
+        # Still load history on or before period_to so gaps can carry from earlier counts.
+        where_clauses.append(f.as_of_date <= plan.period_to)
+    stmt = select(f.distributor_id, f.product_id, f.as_of_date, f.on_hand_units).where(and_(*where_clauses))
     stmt = _apply_filters(stmt, plan)
     raw = (await db.execute(stmt)).all()
     observations = [
@@ -136,12 +149,66 @@ async def run_carry_forward_stock(
         )
         for r in raw
     ]
-    pair_rows = carry_forward_all(
-        observations,
-        period_from=plan.period_from,
-        period_to=plan.period_to,
-        grain=plan.period_grain,
-    )
+    period_from = plan.period_from
+    period_to = plan.period_to
+    derived_bounds = False
+    if observations and (period_from is None or period_to is None):
+        obs_dates = [o.as_of_date for o in observations]
+        if period_from is None:
+            period_from = min(obs_dates)
+            derived_bounds = True
+        if period_to is None:
+            period_to = max(obs_dates)
+            derived_bounds = True
+        explain["notes"] = list(explain.get("notes") or []) + [
+            f"D-0119: period spine derived from data counts "
+            f"({period_from.isoformat()} .. {period_to.isoformat()})."
+        ]
+    if (
+        not observations
+        or period_from is None
+        or period_to is None
+        or period_from > period_to
+    ):
+        # No counts in scope, still unbounded with empty data, or partial bounds that
+        # invert after derivation (e.g. period.from after every count): empty series.
+        ms = round((time.perf_counter() - t0) * 1000, 1)
+        explain["ms"] = ms
+        explain["row_count"] = 0
+        resp = _response(
+            ok=True,
+            columns=columns,
+            rows=[],
+            totals={_ON_HAND_ID: None, _FLAG_ID: None},
+            refusals=plan.refusals,
+            explain=explain,
+            cache={"hit": False, "ttl_seconds": DEFAULT_TTL_SECONDS, "key": key},
+            truncated=False,
+        )
+        set_cached(key, resp, ttl_seconds=DEFAULT_TTL_SECONDS)
+        return resp
+    try:
+        pair_rows = carry_forward_all(
+            observations,
+            period_from=period_from,
+            period_to=period_to,
+            grain=plan.period_grain,
+        )
+    except ValueError as exc:
+        # e.g. spine > 5000 buckets when day grain spans a long unbounded history
+        suffix = "; supply period.from and period.to to narrow the window." if derived_bounds else ""
+        return _response(
+            ok=False,
+            columns=columns,
+            refusals=plan.refusals
+            + [
+                Refusal(
+                    measure="distributor_stock.on_hand",
+                    reason=str(exc) + suffix,
+                )
+            ],
+            explain=explain,
+        )
     rolled = rollup_carry_rows(pair_rows, breakdowns=plan.breakdowns)
 
     rows: list[dict[str, Any]] = []

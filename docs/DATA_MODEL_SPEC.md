@@ -188,7 +188,8 @@ they exist, otherwise show reported on-hand beside per-week sell-through with no
    unpriced units.
 4. Distributor stock by period (D-0119, Warren 9 Nov 2026): always carry forward the last count into
    a bucket with no new report; flag carried-forward values at read time. A pair never counted stays
-   empty (not zero-faked). Channel Ops derived stock (channel_stock, weeks of cover) stays a governed
-   handler and keeps refusing period.
+   empty (not zero-faked). When period.from/to are omitted the spine is derived at read time from the
+   first and last counts in scope (so every catalog-offered period grain plans). Channel Ops derived
+   stock (channel_stock, weeks of cover) stays a governed handler and keeps refusing period.
 5. Shipment date for the period: ship confirm date (what the A1 slip formula names first). Alternative:
    POD date (landed).
