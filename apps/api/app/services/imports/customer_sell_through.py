@@ -76,6 +76,34 @@ STRUCTURE_MTD_DELTA = "mtd_delta"
 STRUCTURE_WIDE_EXTRACT = "wide_extract"
 
 _SITE_LABEL_KEY_RE = re.compile(r"[^A-Z0-9]+")
+# ``sl:{norm}`` is kept only for labels that are *already* plain ASCII alphanumerics (no spaces,
+# punctuation, or non-Latin). Anything else uses ``slh:`` over the raw UTF-8 bytes so two different
+# labels (``A-1`` vs ``A 1``, ``店-A1`` vs ``A1``) never collide just because they share the same
+# folded ``norm``.
+_RAW_SITE_LABEL_SL_NORM_RE = re.compile(r"^[A-Za-z0-9]+$")
+
+
+def _site_label_source_key_token(*, raw: str, norm: str) -> str:
+    """Stable site token for the source key when there is no location FK.
+
+    **Canonical** (ASCII letters and digits only): ``sl:{norm}`` with ``norm == raw.upper()`` —
+    unchanged from historical rows, including long labels digested to ``sl:{sha1_12}``.
+
+    **Non-canonical** (any separator, space, or non-ASCII): ``slh:{sha1_12}`` over the full raw
+    string so normalization is never used as an unintentional alias key.
+
+    Empty ``norm`` (punctuation-only scripts) still uses ``slh:`` over ``raw``.
+    """
+    if not norm:
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+        return f"slh:{digest}"
+    if _RAW_SITE_LABEL_SL_NORM_RE.fullmatch(raw) and raw.upper() == norm:
+        if len(norm) > 80:
+            digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
+            return f"sl:{digest}"
+        return f"sl:{norm}"
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+    return f"slh:{digest}"
 
 
 def _source_key_site_part(
@@ -87,6 +115,10 @@ def _source_key_site_part(
 
     Unmapped Game (and similar) site codes must not share loc=0 — that last-write-wins
     the week down to one store. FLAG ≠ BLOCK: we do not auto-create customer_location.
+
+    A non-empty site label whose alphanumeric normalization is empty (punctuation-only,
+    non-Latin scripts, etc.) must not use ``0`` — that would collide with the chain-level key
+    and a re-apply would overwrite the wrong fact.
     """
     if customer_location_id is not None:
         return str(int(customer_location_id))
@@ -94,12 +126,7 @@ def _source_key_site_part(
     if not raw:
         return "0"
     norm = _SITE_LABEL_KEY_RE.sub("_", raw.upper()).strip("_")
-    if not norm:
-        return "0"
-    if len(norm) > 80:
-        digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
-        return f"sl:{digest}"
-    return f"sl:{norm}"
+    return _site_label_source_key_token(raw=raw, norm=norm)
 
 
 def customer_sellthrough_source_key(
@@ -110,7 +137,7 @@ def customer_sellthrough_source_key(
     period_start_date: date,
     site_label: str | None = None,
 ) -> str:
-    """Natural upsert key: ``ct:{customer}:{loc|sl:SITE|0}:{product}:{period}``.
+    """Natural upsert key: ``ct:{customer}:{loc|sl|slh|0}:{product}:{period}``.
 
     Siteless reports (Amazon ASIN) stay ``…:0:…``. Site-named reports (Game G007)
     persist one fact per site×product×week without requiring a location master.
@@ -120,6 +147,18 @@ def customer_sellthrough_source_key(
         site_label=site_label,
     )
     return f"ct:{customer_id}:{loc_part}:{product_id}:{period_start_date.isoformat()}"
+
+
+# ``ct:{customer}:0:{product}:{period}`` — no location id and no site label in the key.
+_CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY = re.compile(
+    r"^ct:[0-9]+:0:[0-9]+:[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+)
+CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY_SQL = _CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY.pattern
+
+
+def is_chain_level_sellthrough_source_key(source_key: str | None) -> bool:
+    """True when the fact key is customer, product and period with no site."""
+    return bool(source_key and _CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY.fullmatch(source_key))
 
 
 def new_customer_sellthrough_staging_line(
