@@ -97,7 +97,7 @@ and cases remain **manually editable** when needed.
 - steward edit that puts retirement before launch: warn;
 - import warning `launch_after_end_of_life` stays **FLAG** (not a commit block).
 
-### D-0038 — add tolerance flag (future build)
+### D-0038 — add tolerance flag
 
 **Warren 9 Nov 2026:**
 
@@ -105,7 +105,7 @@ and cases remain **manually editable** when needed.
 - Flag stock **wherever it sits**.
 - Evetech is compared on **units only** (no cost supplied in their SOH/CST rows).
 
-**Build status:** not started (new work item below). Today's check remains report-only until this lands.
+**Build status:** Done on `feat/d0038-soh-tolerance-flag` — `soh_tolerance` flag when abs(delta)/abs(derived MAC) > tenant `soh_tolerance_pct` (default 0.10); site-sum kept (stock wherever it sits); no-cost rows stay units-only. VAT conversion still open (not in this decision).
 
 ### D-0025 — BOM Not Ready stays out; user picks sheets
 
@@ -150,7 +150,7 @@ Research context retained (not a contrary decision): PF is a product-line code i
 | ID | From | Work | Status |
 |----|------|------|--------|
 | WI-D0119-carry-forward | D-0119 | Distributor reported-stock by period: carry forward last count; flag carried-forward periods | Done (this PR) |
-| WI-D0038-soh-tolerance | D-0038 | Customer SOH check tolerance flag (default 10%, tenant setting); units-only for Evetech; flag stock wherever it sits | not started |
+| WI-D0038-soh-tolerance | D-0038 | Customer SOH check tolerance flag (default 10%, tenant setting); units-only for Evetech; flag stock wherever it sits | Done (this PR) |
 | WI-D0035-smoke-remove | D-0035 | Explicit reviewed removal of case 3 BATCH0-SMOKE-001 from `cip` | not started (cip write — held until dedicated step) |
 | WI-D0034-cleanup | D-0034 | Safe stale worktree + stale clone DB cleanup per N-0046 inventory | not started (separate safe execution) |
 | WI-D0025-bom-default | D-0025 / D-0046 | Sheet picker: **BOM Not Ready must default to unticked** (`_PREFERRED_SHEET_KEYS` in `shipment_evidence_import.py` still pre-selects it) | not started |

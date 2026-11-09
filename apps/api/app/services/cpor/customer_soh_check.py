@@ -1,4 +1,4 @@
-"""Customer SOH check source (D-062 / BACKLOG-135, N-0049).
+"""Customer SOH check source (D-062 / BACKLOG-135, N-0049; D-0038 tolerance).
 
 The customer's weekly SOH is the **check** on derived customer MAC, never its
 input (D-062). CST apply lands ``reported_soh`` / ``unit_mac`` / ``unit_cost`` on
@@ -7,12 +7,17 @@ input (D-062). CST apply lands ``reported_soh`` / ``unit_mac`` / ``unit_cost`` o
 
 Rule (customer x product, as of date D):
 - period = latest ``period_start_date`` <= D among CST rows with ``reported_soh``;
-- ``soh_units`` = sum of ``reported_soh`` over that period's rows (all sites);
+- ``soh_units`` = sum of ``reported_soh`` over that period's rows (all sites —
+  stock wherever it sits; D-0038);
 - ``soh_unit_cost`` = ``reported_soh``-weighted average of ``unit_mac`` else
   ``unit_cost`` (same preference as CPOR tier-1 cost) over rows carrying both;
-- ``delta`` = derived MAC - ``soh_unit_cost``. Reported only; no tolerance flag.
+- ``delta`` = derived MAC - ``soh_unit_cost``. When both sides exist, flag
+  ``soh_tolerance`` if abs(delta) / abs(derived MAC) exceeds the tenant
+  tolerance (default 10%; D-0038). Accounts with SOH units but no cost (e.g.
+  Evetech) stay units-only: no invented cost, no cost-tolerance flag.
 Flags: ``zero_soh`` (reported 0 on hand: no cost to check), ``no_soh_cost`` (SOH
-units without any cost field). ``vat_basis`` is passed through, not converted.
+units without any cost field), ``soh_tolerance`` (cost gap beyond tolerance).
+``vat_basis`` is passed through, not converted.
 No CST SOH row for the pair -> ``status: unavailable`` (never zero stock).
 """
 
@@ -29,6 +34,21 @@ from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.services.cpor.waterfall import _as_decimal
 
 SOURCE_TABLE = "fact_customer_sellthrough"
+# D-0038 default; live reads prefer commercial_tenant_profile.soh_tolerance_pct.
+DEFAULT_SOH_TOLERANCE_PCT = Decimal("0.10")
+FLAG_SOH_TOLERANCE = "soh_tolerance"
+
+
+def _resolve_tolerance_pct(
+    tolerance_pct: Decimal | float | int | str | None,
+    *,
+    tenant_id: str = "default",
+) -> Decimal:
+    if tolerance_pct is not None:
+        return _as_decimal(tolerance_pct)
+    from app.services.commercial_tenant_profile import soh_tolerance_pct
+
+    return _as_decimal(soh_tolerance_pct(tenant_id))
 
 
 def summarise_soh_rows(
@@ -36,6 +56,8 @@ def summarise_soh_rows(
     *,
     as_of: date,
     derived_mac: Decimal | float | int | str | None = None,
+    tolerance_pct: Decimal | float | int | str | None = None,
+    tenant_id: str = "default",
 ) -> dict[str, Any]:
     """Rows: (id, period_start_date, period_type, reported_soh, unit_mac, unit_cost, vat_basis) of one period."""
     rows = list(rows)
@@ -83,9 +105,26 @@ def summarise_soh_rows(
         flags=flags,
     )
     if derived_mac is not None:
-        out["derived_mac"] = float(_as_decimal(derived_mac))
+        mac = _as_decimal(derived_mac)
+        out["derived_mac"] = float(mac)
         if soh_cost is not None:
-            out["delta"] = float(_as_decimal(derived_mac) - soh_cost)
+            delta = mac - soh_cost
+            out["delta"] = float(delta)
+            tol = _resolve_tolerance_pct(tolerance_pct, tenant_id=tenant_id)
+            out["tolerance_pct"] = float(tol)
+            denom = abs(mac)
+            if denom > 0:
+                gap = abs(delta) / denom
+                out["gap_pct"] = float(gap)
+                if gap > tol:
+                    flags.append(FLAG_SOH_TOLERANCE)
+            elif abs(delta) > 0:
+                # Zero derived MAC with a non-zero SOH cost: always outside tolerance.
+                out["gap_pct"] = None
+                flags.append(FLAG_SOH_TOLERANCE)
+            else:
+                out["gap_pct"] = 0.0
+            # flags list is already bound into out["flags"] from the earlier update.
     return out
 
 
@@ -96,6 +135,8 @@ def customer_soh_check(
     product_id: int,
     as_of: date,
     derived_mac: Decimal | float | int | str | None = None,
+    tolerance_pct: Decimal | float | int | str | None = None,
+    tenant_id: str = "default",
 ) -> dict[str, Any]:
     """Latest CST SOH for the pair as of ``as_of``, compared to ``derived_mac`` when given. Read-only."""
     pair = (
@@ -121,4 +162,10 @@ def customer_soh_check(
         .where(*pair, FactCustomerSellthrough.period_start_date == latest)
         .order_by(FactCustomerSellthrough.id.asc())
     ).all()
-    return summarise_soh_rows(rows, as_of=as_of, derived_mac=derived_mac)
+    return summarise_soh_rows(
+        rows,
+        as_of=as_of,
+        derived_mac=derived_mac,
+        tolerance_pct=tolerance_pct,
+        tenant_id=tenant_id,
+    )
