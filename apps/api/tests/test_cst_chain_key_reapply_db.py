@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import Text, create_engine, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -828,3 +828,274 @@ def test_older_reapply_after_newer_stock_only_site_load_keeps_newer_on_hand(sess
     assert s1 is not None and Decimal(s1.reported_soh) == Decimal("7") and int(s1.import_job_id) == newer.id
     assert "units_sold" not in (s1.figure_import_jobs or {})
     assert session.get(FactCustomerSellthrough, chain.id) is not None
+
+
+# --- N-0118 review follow-up: NB1 (chunked lookups) and NB3 (one whitespace rule) ---
+
+from sqlalchemy import event, literal  # noqa: E402
+
+from app.services.imports import customer_sell_through_apply as apply_mod  # noqa: E402
+
+_NB13_SITES = ("NB13A", "NB13B", "NB13C", "NB13D", "NB13E")
+
+
+def _nb13_setup(session: Session, file_name: str):
+    """One chain fact this job owns, holding five site-named rows (units 1..5)."""
+    source, customer, product, _other = _ids(session)
+    keys = [_site_key(customer, product, site) for site in _NB13_SITES]
+    taken = session.scalar(
+        select(func.count()).select_from(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key.in_(keys))
+    )
+    if taken:
+        pytest.skip("cip_test already holds a fixture site key for the fixture week")
+    job = _job(source, file_name, T0)
+    session.add(job)
+    session.flush()
+    chain = _chain_fact(customer, product, job.id, "15")
+    session.add(chain)
+    session.flush()
+    session.add_all(
+        [_staged(job.id, i + 1, customer, product, str(i + 1), chain.id, site) for i, site in enumerate(_NB13_SITES)]
+    )
+    session.flush()
+    return source, customer, product, job, chain, keys
+
+
+def _record_key_binds(session: Session, keys: list[str]):
+    """How many of ``keys`` each SELECT binds; returns (counts, stop)."""
+    wanted = set(keys)
+    counts: list[int] = []
+    conn = session.connection()
+
+    def before(_conn, _cursor, statement, parameters, _context, _executemany):
+        if not str(statement).lstrip().upper().startswith("SELECT"):
+            return
+        values = parameters.values() if isinstance(parameters, dict) else (parameters or ())
+        n = sum(1 for v in values if isinstance(v, str) and v in wanted)
+        if n:
+            counts.append(n)
+
+    event.listen(conn, "before_cursor_execute", before)
+    return counts, lambda: event.remove(conn, "before_cursor_execute", before)
+
+
+def test_rekey_reads_target_site_keys_in_chunks(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """NB1: five target site keys with a lookup chunk of 2 are read in three statements, and the
+    re-key is the same as unchunked: five site facts, the chain fact moved aside, then nothing."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    monkeypatch.setattr(apply_mod, "_LOOKUP_CHUNK_SIZE", 2)
+    _source, customer, product, job, chain, keys = _nb13_setup(session, "nb13-chunks.xlsx")
+    chain_id = int(chain.id)
+
+    counts, stop = _record_key_binds(session, keys)
+    try:
+        # A small apply chunk too, so no other SELECT of this run binds more than two keys.
+        first = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False, chunk_size=2)
+    finally:
+        stop()
+    assert first.errors == []
+    assert first.applied == 5
+    assert first.superseded_rows == 1
+    assert first.superseded_units == 15.0
+    assert counts, "the target site keys were never looked up"
+    assert max(counts) <= 2, counts
+    assert len([n for n in counts if n]) >= 3, counts
+
+    session.expire_all()
+    assert session.get(FactCustomerSellthrough, chain_id) is None
+    for i, key in enumerate(keys):
+        row = _fact(session, key)
+        assert row is not None and Decimal(row.units_sold) == Decimal(i + 1)
+        assert int(row.import_job_id) == job.id
+
+    second = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert second.errors == [] and second.applied == 0 and second.superseded_rows == 0
+
+
+def test_target_key_in_a_later_chunk_still_blocks_the_rekey(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """NB1 + NB4: the only protection here is the target-key check. The last site key (third
+    chunk of 2) already holds a newer job's fact, so the chain fact is left exactly as stored."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    monkeypatch.setattr(apply_mod, "_LOOKUP_CHUNK_SIZE", 2)
+    source, customer, product, job, chain, keys = _nb13_setup(session, "nb13-blocked.xlsx")
+    newer = _job(source, "nb13-newer.xlsx", datetime(2026, 8, 8, tzinfo=timezone.utc))
+    session.add(newer)
+    session.flush()
+    assert sorted(keys)[-1] == keys[-1]  # NB13E sorts last, so it is in the last chunk
+    foreign = FactCustomerSellthrough(
+        source_key=keys[-1],
+        tenant_id=TENANT,
+        customer_id=customer,
+        product_id=product,
+        period_start_date=WEEK,
+        period_type="weekly",
+        period_grain="week",
+        units_sold=Decimal("42"),
+        site_label=_NB13_SITES[-1],
+        import_job_id=newer.id,
+        figure_import_jobs={"units_sold": newer.id},
+    )
+    session.add(foreign)
+    session.flush()
+
+    result = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert result.errors == []
+    assert result.applied == 0
+    assert result.superseded_rows == 0
+    session.expire_all()
+    stored = session.get(FactCustomerSellthrough, chain.id)
+    assert stored is not None and Decimal(stored.units_sold) == Decimal("15")
+    for key in keys[:-1]:
+        assert _fact(session, key) is None
+    kept = session.get(FactCustomerSellthrough, foreign.id)
+    assert kept is not None and Decimal(kept.units_sold) == Decimal("42") and int(kept.import_job_id) == newer.id
+
+
+def test_claimed_by_other_jobs_reads_fact_ids_in_chunks(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """NB1: the staging half of the claim check finds claims in every chunk of fact ids."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    monkeypatch.setattr(apply_mod, "_LOOKUP_CHUNK_SIZE", 2)
+    source, customer, product, _other = _ids(session)
+    keys = [_site_key(customer, product, site) for site in _NB13_SITES]
+    if session.scalar(
+        select(func.count()).select_from(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key.in_(keys))
+    ):
+        pytest.skip("cip_test already holds a fixture site key for the fixture week")
+    job = _job(source, "nb13-claims.xlsx", T0)
+    other = _job(source, "nb13-claims-other.xlsx", datetime(2026, 8, 8, tzinfo=timezone.utc))
+    session.add_all([job, other])
+    session.flush()
+    facts = []
+    for site, key in zip(_NB13_SITES, keys):
+        fact = _chain_fact(customer, product, job.id, "1")
+        fact.source_key = key
+        fact.site_label = site
+        facts.append(fact)
+    session.add_all(facts)
+    session.flush()
+    ids = sorted(int(f.id) for f in facts)
+    session.add_all(
+        [
+            _staged(other.id, 1, customer, product, "1", ids[0], _NB13_SITES[0]),
+            _staged(other.id, 2, customer, product, "1", ids[-1], _NB13_SITES[-1]),
+            _staged(job.id, 1, customer, product, "1", ids[2], _NB13_SITES[2]),
+        ]
+    )
+    session.flush()
+    assert apply_mod._claimed_by_other_jobs(session, set(ids), job.id) == {ids[0], ids[-1]}
+
+
+_NB3_SAMPLES = (
+    None,
+    "",
+    " ",
+    "\t",
+    "\n\r",
+    "\x0b\x0c",
+    "\x1c\x1f",
+    "\x85",
+    "\u00a0",
+    "\u1680",
+    "\u2003",
+    "\u2028\u2029",
+    "\u202f\u205f",
+    "\u3000",
+    " \u00a0\t\u3000 ",
+    "\u200b",  # zero-width space: not whitespace to Python, so it names a site on both sides
+    "S1",
+    " S1\u00a0",
+    "\tG007\u3000",
+)
+
+
+def test_sql_blank_site_test_matches_python_strip(session: Session) -> None:
+    """NB3: SQL ``btrim`` with the shared set strips exactly what Python ``strip()`` strips."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    for sample in _NB3_SAMPLES:
+        sql_present = session.execute(select(apply_mod._site_text_present(literal(sample, type_=Text)))).scalar()
+        assert bool(sql_present) == bool(str(sample or "").strip()), repr(sample)
+        if sample is not None:
+            stripped = session.execute(select(func.btrim(literal(sample, type_=Text), apply_mod._PY_WHITESPACE))).scalar()
+            assert stripped == sample.strip(), repr(sample)
+
+
+@pytest.mark.parametrize("label", ["\t", "\u00a0", "\u3000", " \u2003 "])
+def test_whitespace_only_site_label_leaves_the_chain_fact_alone(session: Session, label: str) -> None:
+    """NB3: a whitespace-only label is chain-only to both SQL and Python, so a re-apply neither
+    re-keys nor retires the chain fact (before: SQL saw a site, Python did not, and the retire
+    step moved the fact and its units aside)."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    source, customer, product, _other = _ids(session)
+    job = _job(source, "nb3-blank.xlsx", T0)
+    session.add(job)
+    session.flush()
+    chain = _chain_fact(customer, product, job.id, "9")
+    session.add(chain)
+    session.flush()
+    line = _staged(job.id, 1, customer, product, "9", chain.id, label)
+    session.add(line)
+    session.flush()
+
+    for _ in range(2):
+        result = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+        assert result.errors == []
+        assert result.applied == 0
+        assert result.superseded_rows == 0
+    session.expire_all()
+    stored = session.get(FactCustomerSellthrough, chain.id)
+    assert stored is not None and Decimal(stored.units_sold) == Decimal("9")
+    again = session.get(ImportCustomerSellthroughStagingLine, line.id)
+    assert again is not None and again.fact_sellthrough_row_id == chain.id
+    assert (
+        session.execute(
+            text("select count(*) from fact_customer_sellthrough_superseded where tenant_id = :t"),
+            {"t": TENANT},
+        ).scalar()
+        == 0
+    )
+
+
+def test_whitespace_label_with_location_token_rekeys_to_the_token(session: Session) -> None:
+    """NB3: a blank label falls back to the location token on both sides, so the row re-keys to
+    the token's site key and the chain fact moves aside once."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    source, customer, product, _other = _ids(session)
+    key = _site_key(customer, product, _NB13_SITES[0])
+    if _fact(session, key) is not None:
+        pytest.skip("cip_test already holds the fixture site key")
+    job = _job(source, "nb3-token.xlsx", T0)
+    session.add(job)
+    session.flush()
+    chain = _chain_fact(customer, product, job.id, "9")
+    session.add(chain)
+    session.flush()
+    chain_id = int(chain.id)
+    session.add(_staged(job.id, 1, customer, product, "9", chain_id, "\u00a0\t", raw_location_token=_NB13_SITES[0]))
+    session.flush()
+
+    first = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert first.errors == [] and first.applied == 1 and first.superseded_rows == 1
+    session.expire_all()
+    assert session.get(FactCustomerSellthrough, chain_id) is None
+    row = _fact(session, key)
+    assert row is not None and Decimal(row.units_sold) == Decimal("9") and row.site_label == _NB13_SITES[0]
+    second = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
+    assert second.errors == [] and second.applied == 0 and second.superseded_rows == 0
