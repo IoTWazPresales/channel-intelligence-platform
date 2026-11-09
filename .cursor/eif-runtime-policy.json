@@ -161,7 +161,13 @@
     "**/vendor/**",
     "dist/**",
     "build/**",
-    "**/generated/**"
+    "**/generated/**",
+    ".worktrees/*/.cursor/**",
+    ".worktrees/*/.claude/**",
+    ".worktrees/*/CLAUDE.md",
+    ".worktrees/*/.eif/**",
+    ".worktrees/*/dist/**",
+    ".worktrees/*/build/**"
   ],
   "runtime_mode": "local",
   "schema_version": 3,
@@ -182,7 +188,7 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "ef5874cc70d57fad5c1f204d7bf050a6c62065ac859ed873d4a119825dcc3c11"
+      "sha256": "b86a03183836be0364ebf4ab206d968b485360be8c24b427e83cd62408185a93"
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",
@@ -190,7 +196,7 @@
     },
     "manifest": {
       "path": ".eif/PROJECT_MANIFEST.md",
-      "sha256": "d825bc51b332b089b480124906c6b15c0ed9a4f795f86024aaaa70dd7c95067b"
+      "sha256": "6303fe24287d2fa6268f7447d739a1b2d71289192180f0e05917ae2e94355e35"
     }
   },
   "state_root": ".eif"
