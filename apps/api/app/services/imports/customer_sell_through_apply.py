@@ -250,21 +250,32 @@ def apply_customer_sellthrough_staging(
     # N-0118: resolved rows already stored on a chain-level fact are selected again so this path
     # can re-key site-named rows to site grain and re-state chain-only rows on the chain key
     # (partial re-key: chain totals must not include units that moved to a site row).
+    # Only while this job still has a site-named row sitting on a chain-level fact: once every
+    # such row is on its site key there is nothing to re-key, and a second apply changes nothing.
+    on_chain_fact = and_(
+        stg.apply_status.in_(("applied", "duplicate")),
+        FactCustomerSellthrough.source_key.op("~")(CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY_SQL),
+    )
+    rekey_pending = bool(
+        db.scalar(
+            select(func.count())
+            .select_from(stg)
+            .join(FactCustomerSellthrough, stg.fact_sellthrough_row_id == FactCustomerSellthrough.id)
+            .where(stg.import_job_id == job_id)
+            .where(stg.resolution_status == "resolved")
+            .where(on_chain_fact)
+            .where(site_named)
+        )
+        or 0
+    )
+    pending_filter = or_(stg.apply_status.is_(None), on_chain_fact) if rekey_pending else stg.apply_status.is_(None)
     lines = list(
         db.scalars(
             select(stg)
             .outerjoin(FactCustomerSellthrough, stg.fact_sellthrough_row_id == FactCustomerSellthrough.id)
             .where(stg.import_job_id == job_id)
             .where(stg.resolution_status == "resolved")
-            .where(
-                or_(
-                    stg.apply_status.is_(None),
-                    and_(
-                        stg.apply_status.in_(("applied", "duplicate")),
-                        FactCustomerSellthrough.source_key.op("~")(CHAIN_LEVEL_SELLTHROUGH_SOURCE_KEY_SQL),
-                    ),
-                )
-            )
+            .where(pending_filter)
             .order_by(stg.source_row_number, stg.id)
         ).all()
     )

@@ -486,6 +486,8 @@ def test_partial_rekey_same_job_does_not_retire_chain_while_chain_only_line_rema
     assert first.applied == 2
     assert first.superseded_rows == 0
 
+    # The upsert is a Core statement; reload ORM rows so the chain fact is read from the database.
+    session.expire_all()
     chain = session.scalar(select(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key == chain_key))
     assert chain is not None
     assert Decimal(chain.units_sold) == Decimal("5")
