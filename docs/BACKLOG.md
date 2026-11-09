@@ -1617,7 +1617,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partial** — 2026-11-09 — Steward panel already uses /mapping-candidates/paginated + /tab-counts. After-apply steward warning on shipment-evidence page switched from non-paginated list to /tab-counts (this PR). Non-paginated list endpoint remains for compatibility; omitting context.line_ids from list payload still open. · was Parked 2026-06-01 |
+| **Status / parked** | **Done** — 2026-11-10 — Paginate/tab-counts landed earlier (#70). List + paginated mapping-candidates responses now omit `context.line_ids` while keeping top-level `row_count`; DB context still stores `line_ids` for steward apply (`_line_ids_from_context`). Non-paginated list endpoint retained for compatibility with the same slim context. · was Partial 2026-11-09 / Parked 2026-06-01 |
 | **Effort** | Medium (API + web) |
 | **Source** | `CONTEXT.md` (Jun 1 steward perf: “Unchanged: … mapping-candidates payload shape”); `apps/api/app/api/v1/endpoints/shipment_evidence.py` (`list_shipment_import_job_mapping_candidates` returns full `context` per row); contrast `apps/api/app/schemas/dsi_mapping_candidates.py` (paginated DSI list) |
 | **Idea** | Reduce steward panel load time (~3–5s GET for large jobs) by paginating candidates and/or omitting `context.line_ids` from list payload while keeping `row_count` (and fetch line scope only on steward apply server-side). |

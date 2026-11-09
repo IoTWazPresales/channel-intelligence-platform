@@ -252,6 +252,10 @@ async def list_shipment_import_job_mapping_candidates(
         cr = await db.execute(select(DimCustomer).where(DimCustomer.id.in_(sug_cust_ids)))
         for c in cr.scalars().all():
             cust_names[int(c.id)] = {"customer_code": c.code or "", "customer_name": c.name or ""}
+    from app.services.imports.shipment_mapping_candidates_list import (
+        context_for_list_payload,
+    )
+
     out: list[dict[str, Any]] = []
     for r in rows:
         sid = int(r.suggested_entity_id) if r.suggested_entity_id is not None else None
@@ -279,7 +283,7 @@ async def list_shipment_import_job_mapping_candidates(
                 "match_reason": r.match_reason,
                 "confidence_score": float(r.confidence_score) if r.confidence_score is not None else None,
                 "status": r.status,
-                "context": r.context,
+                "context": context_for_list_payload(r.context),
                 "created_at": r.created_at.isoformat() if r.created_at is not None else None,
                 "updated_at": r.updated_at.isoformat() if r.updated_at is not None else None,
             }

@@ -26,6 +26,23 @@ def is_shipment_mapping_candidate_terminal_status(status: str | None) -> bool:
     return (status or "").strip() in SHIPMENT_CANDIDATE_TERMINAL_STATUSES
 
 
+
+def context_for_list_payload(context: Any) -> dict[str, Any] | None:
+    """List/paginated response context without line_ids (BACKLOG-006).
+
+    Steward apply still reads line_ids from the DB-stored candidate.context via
+    shipment_evidence_steward_ops._line_ids_from_context. row_count stays on the
+    candidate item. Does not mutate the ORM context.
+    """
+    if context is None:
+        return None
+    if not isinstance(context, dict):
+        return None
+    out = dict(context)
+    out.pop("line_ids", None)
+    return out
+
+
 def _serialize_candidate(
     r: ImportEntityMappingCandidate,
     *,
@@ -56,7 +73,7 @@ def _serialize_candidate(
         "match_reason": r.match_reason,
         "confidence_score": float(r.confidence_score) if r.confidence_score is not None else None,
         "status": r.status,
-        "context": r.context,
+        "context": context_for_list_payload(r.context),
         "created_at": r.created_at.isoformat() if r.created_at is not None else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at is not None else None,
     }
