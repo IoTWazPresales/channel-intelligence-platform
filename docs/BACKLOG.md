@@ -41,6 +41,17 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 ---
 
+
+---
+
+## Stage + orphan status register (2026-11-09)
+
+**Status:** Open as the living pointer · full evidence in `docs/audits/ORPHAN_AND_STAGE_STATUS_20261109.md`.
+**Stage 1 safe PRs:** DONE on tip (#55 / #56 / #57; D-0144 via `0055`/`0060` + `tenant_mapping_scope`).
+**Open into `feat/integrate-20261103`:** #60 (CST re-key / CURRENT — do not touch its 7 paths); #65 (BACKLOG-200 dead column picker — base of this docs stack).
+**Orphan re-check:** store-dc UI + listing capture-health mounts are **no longer orphans**; competition `score_competitor_candidate` + suggested-match/price-import wiring remain — see **BACKLOG-221**.
+**CURRENT.md notes for this sweep:** parked here until #60 merges (CURRENT.md is in that PR).
+
 ## BACKLOG-135 — Land customer SOH (CST) into a usable fact for CPOR MAC check
 
 | Field | Detail |
@@ -3433,3 +3444,22 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Out of scope** | Loading the 27 Oct file in this change. Inventing the two lines without the file. |
 | **TRIGGER** | The 27 Oct ACZA workbook (or a later one with a BOM-not-ready sheet) is offered for import. |
 
+---
+
+## BACKLOG-221 — Competition match scorer + price import still unwired
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** — 2026-11-09 — Orphan re-check on tip `1aa9df5b`: `score_competitor_candidate` has no production caller outside `services/competition`; `MarketSurface` still says suggested matches are not offered and competitor price import is absent. Store/DC UI and `ListingCaptureHealth` mounts are **not** orphans (cleared same day). Tracked in `docs/audits/ORPHAN_AND_STAGE_STATUS_20261109.md`. Docs record in open PR #66 (branch docs/orphan-stage-status-20261109, stacked on #65). CURRENT.md note deferred until #60 merges. |
+| **Effort** | S–M (wire into existing competition router + market lenses; no new flow) |
+| **Source** | 2026-11-06 overnight orphan audit §3; re-verified 2026-11-09 against tip |
+| **Idea** | Wire candidate proposal / suggested matches into the existing competition surfaces, and land competitor price import against approved mappings — reuse `score_competitor_candidate`; do not add an AI adapter or a parallel pipeline. |
+| **Why it matters / deferrable** | Scorer and substrate exist; operators still cannot propose matches or import prices from the live screen. Deferrable only while competition mapping stays steward-manual. |
+| **Resume-context** | `apps/api/app/services/competition/matching.py`; `services/competition/__init__.py`; `apps/web/src/features/market-listings/MarketSurface.tsx` (suggested-matches copy; no price-import copy); competition list endpoints already read stored scores. |
+| **What the work is** | Call the scorer from the competition proposal path; surface suggested matches on the mapping screen; add the missing price-import path into the existing substrate. Prefer extending `MarketSurface` / competition router over new routes. |
+| **Regression traps** | Do not invent a second matcher. Do not touch CST apply files or `docs/memory/CURRENT.md` while #60 is open. Keep retailer names out of code and tests. |
+| **Behavior to retain** | Manual approve/reject mapping remains; stored `fact_competitor_mapping.score` display stays. |
+| **Out of scope** | Store/DC product rule changes (D-0142/D-0143 already accepted); listing capture-health (already mounted). |
+| **TRIGGER** | Next competition / market-listings unit, or Warren asks to wire suggested matches / price import. |
+
+---
