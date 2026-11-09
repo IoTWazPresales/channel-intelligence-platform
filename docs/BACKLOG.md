@@ -44,13 +44,16 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 ---
 
-## Stage + orphan status register (2026-11-09)
+## Stage + orphan status register (2026-11-10)
 
-**Status:** Open as the living pointer · full evidence in `docs/audits/ORPHAN_AND_STAGE_STATUS_20261109.md`.
+**Status:** Living pointer refreshed — full evidence in `docs/audits/ORPHAN_AND_STAGE_STATUS_20261110.md` (2026-11-09 pass retained at `docs/audits/ORPHAN_AND_STAGE_STATUS_20261109.md`).
+**Tip:** `feat/integrate-20261103` @ `d0972d50` (Merge #75).
 **Stage 1 safe PRs:** DONE on tip (#55 / #56 / #57; D-0144 via `0055`/`0060` + `tenant_mapping_scope`).
-**Open into `feat/integrate-20261103`:** #60 (CST re-key / CURRENT — do not touch its 7 paths); #65 (BACKLOG-200 dead column picker — base of this docs stack).
-**Orphan re-check:** store-dc UI + listing capture-health mounts are **no longer orphans**; competition `score_competitor_candidate` + suggested-match/price-import wiring remain — see **BACKLOG-221**.
-**CURRENT.md notes for this sweep:** parked here until #60 merges (CURRENT.md is in that PR).
+**Open into `feat/integrate-20261103`:** none (2026-11-10).
+**Merged since 2026-11-09 orphan pass:** #60, #65, #66, #67, #68, #69, #70, #71, #72, #73, #74, #75.
+**Orphan re-check:** competition propose + price-import wiring **Done** (#67 / BACKLOG-221); B006 slim `line_ids` **Done** (#75); B200 dead picker **Done** (#65); store-dc UI + listing capture-health still mounted. No new production orphans found this pass.
+**CURRENT.md:** updated in this docs PR (was parked for #60; #60 merged as `46c98213`).
+
 
 ## BACKLOG-135 — Land customer SOH (CST) into a usable fact for CPOR MAC check
 
@@ -3484,7 +3487,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Done (this PR)** — 2026-11-09 — feat/d0119-stock-carry-forward: read-time carry-forward of last distributor on-hand count into empty period buckets; response flag distributor_stock.on_hand_carried_forward. Channel Ops channel_stock / WoC still refuse period. No DB migration. |
+| **Status / parked** | **Done** — 2026-11-09 — Merged #73 (`44cafc15`). Read-time carry-forward of last distributor on-hand count into empty period buckets; response flag `distributor_stock.on_hand_carried_forward`. Channel Ops channel_stock / WoC still refuse period. No DB migration. Leftovers: web chrome for the flag; non-standard calendars refused for now; past-count read speed-up. |
 | **Source** | docs/decisions/DECISIONS_20261109_WARREN.md D-0119 / WI-D0119-carry-forward |
 | **Idea** | A period with no new distributor stock count must show the last count and be flagged as carried forward; never start from zero for want of a fresh report; never invent zero when no count ever existed. |
 | **What the work is** | Query-model carry_forward on distributor_stock.on_hand; execute path builds a period spine at read time. |
