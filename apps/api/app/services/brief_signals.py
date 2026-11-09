@@ -130,8 +130,8 @@ def cst_late_missing_signal(*, late: int, missing: int) -> dict[str, Any] | None
 def promo_not_activated_signal(*, count: int) -> dict[str, Any] | None:
     """Attention row for listings on the intelligence worklist that are not at promo price.
 
-    Count comes from ``build_listing_intelligence`` (BACKLOG-130 activation + ≥14d ready
-    worklist). Read-only; no new process flow.
+    Count uses the same READY+not_activated rule as listing intelligence (BACKLOG-130),
+    via a bounded observation aggregate. Read-only; no new process flow.
     """
     n = max(0, int(count))
     if n <= 0:
@@ -400,38 +400,111 @@ async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int,
 
 
 
-async def _promo_not_activated_count(user: dict | None) -> int | None:
-    """Worklist size for promo_not_activated; skipped (not an error) when intelligence cannot run.
+def _promo_not_activated_worklist_count(
+    session: Any,
+    *,
+    tenant_id: str,
+    account_ids: frozenset[int] | None,
+) -> int:
+    """Worklist size with the same rule as ``build_listing_intelligence`` (ready + not_activated).
 
-    Uses the existing listing intelligence worklist (accepted activation rule). CustomerListing
-    has no tenant column, so the worklist is filtered to this tenant's customers via
-    DimCustomer.tenant_id. My-accounts, when on, further keeps only assigned customers.
+    Bounded read: scope to tenant (and My-accounts) customers first, then only
+    observation aggregates (count / first / last fetched_at) plus the latest row's
+    ``parse_flags``. Never loads ``raw_snapshot`` or full observation history.
+    """
+    from sqlalchemy import func, select
+
+    from app.models.dimensions import DimCustomer
+    from app.models.listing_capture import CustomerListing, ListingObservation
+    from app.services.listing_capture.intelligence_v1 import MIN_SPAN_DAYS
+
+    customer_ids = set(
+        session.scalars(select(DimCustomer.id).where(DimCustomer.tenant_id == tenant_id)).all()
+    )
+    if account_ids:
+        customer_ids &= set(account_ids)
+    if not customer_ids:
+        return 0
+
+    listing_ids = list(
+        session.scalars(
+            select(CustomerListing.id).where(CustomerListing.customer_id.in_(customer_ids))
+        ).all()
+    )
+    if not listing_ids:
+        return 0
+
+    stats = {
+        int(lid): (int(cnt), first_ts, last_ts)
+        for lid, cnt, first_ts, last_ts in session.execute(
+            select(
+                ListingObservation.listing_id,
+                func.count(ListingObservation.id),
+                func.min(ListingObservation.fetched_at),
+                func.max(ListingObservation.fetched_at),
+            )
+            .where(ListingObservation.listing_id.in_(listing_ids))
+            .group_by(ListingObservation.listing_id)
+        ).all()
+    }
+
+    rn = func.row_number().over(
+        partition_by=ListingObservation.listing_id,
+        order_by=(ListingObservation.fetched_at.desc(), ListingObservation.id.desc()),
+    ).label("rn")
+    latest_subq = (
+        select(
+            ListingObservation.listing_id,
+            ListingObservation.parse_flags,
+            rn,
+        ).where(ListingObservation.listing_id.in_(listing_ids))
+    ).subquery()
+    latest_flags = {
+        int(lid): flags
+        for lid, flags in session.execute(
+            select(latest_subq.c.listing_id, latest_subq.c.parse_flags).where(latest_subq.c.rn == 1)
+        ).all()
+    }
+
+    n = 0
+    for lid in listing_ids:
+        cnt, first_ts, last_ts = stats.get(int(lid), (0, None, None))
+        if cnt < 2 or first_ts is None or last_ts is None:
+            continue
+        span_days = max(0, (last_ts - first_ts).days)
+        if span_days < MIN_SPAN_DAYS:
+            continue
+        flags = latest_flags.get(int(lid))
+        flags_dict = flags if isinstance(flags, dict) else {}
+        act = flags_dict.get("cpor_activation")
+        act = act if isinstance(act, dict) else {}
+        if act.get("status") == "not_activated":
+            n += 1
+    return n
+
+
+async def _promo_not_activated_count(user: dict | None) -> int | None:
+    """Worklist size for promo_not_activated; skipped (not an error) when the count cannot run.
+
+    Same activation rule as listing intelligence (BACKLOG-130 + >=14d ready). CustomerListing
+    has no tenant column, so the count is scoped to this tenant's customers first (and
+    My-accounts when on) before any observation read.
     """
     import asyncio
     import logging
 
-    from sqlalchemy import select
-
     from app.core.my_accounts import request_my_account_ids
     from app.core.tenant_scope import tenant_id_from_user
     from app.db.session_sync import SessionLocal
-    from app.models.dimensions import DimCustomer
-    from app.services.listing_capture.intelligence_v1 import build_listing_intelligence
 
     tid = tenant_id_from_user(user if isinstance(user, dict) else None)
     account_ids = request_my_account_ids.get()
 
     def _work() -> int:
         with SessionLocal() as session:
-            payload = build_listing_intelligence(session)
-            worklist = list(payload.get("worklist") or [])
-            tenant_customer_ids = set(
-                session.scalars(select(DimCustomer.id).where(DimCustomer.tenant_id == tid)).all()
+            return _promo_not_activated_worklist_count(
+                session, tenant_id=tid, account_ids=account_ids
             )
-            worklist = [r for r in worklist if int(r.get("customer_id") or 0) in tenant_customer_ids]
-            if account_ids:
-                worklist = [r for r in worklist if int(r.get("customer_id") or 0) in account_ids]
-            return len(worklist)
 
     try:
         return await asyncio.to_thread(_work)

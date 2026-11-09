@@ -451,6 +451,48 @@ export function MarketSurface() {
     });
   }, [gridRows, customerFilter, productFilter, activationFilter]);
 
+  /** Activation lens rows. When Brief deep-links with worklist=1, prefer the full
+   * intelligence worklist (not the listings page_size=200) so the table matches the count. */
+  const activationLensRows: GridRow[] = useMemo(() => {
+    if (worklistFilter) {
+      const byId = new Map(gridRows.map((l) => [l.id, l]));
+      return (intel?.items ?? [])
+        .filter((r) => Boolean(r.worklist))
+        .filter((r) => !activationFilter || (r.activation_status ?? '') === activationFilter)
+        .filter((r) => !customerFilter || String(r.customer_id) === customerFilter)
+        .filter((r) => !productFilter || String(r.product_id ?? '') === productFilter)
+        .map((r) => {
+          const existing = byId.get(r.listing_id);
+          if (existing) return existing;
+          return {
+            id: r.listing_id,
+            customer_id: r.customer_id,
+            customer_name: customerName.get(r.customer_id) ?? null,
+            product_id: r.product_id,
+            product_name: null,
+            product_sku: null,
+            url: r.url || '',
+            marketplace: r.marketplace || '',
+            status: 'active',
+            source: 'intelligence',
+            external_id: null,
+            intel: r,
+          };
+        });
+    }
+    return gridRows
+      .filter((l) => l.intel?.case_id)
+      .filter((l) => !activationFilter || (l.intel?.activation_status ?? '') === activationFilter);
+  }, [
+    worklistFilter,
+    intel,
+    gridRows,
+    activationFilter,
+    customerFilter,
+    productFilter,
+    customerName,
+  ]);
+
   const counts = {
     active: listings.filter((l) => l.status === 'active').length,
     problems: listings.filter((l) => l.status === 'dead_link' || l.status === 'out_of_stock').length,
@@ -1185,11 +1227,7 @@ export function MarketSurface() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {gridRows
-                        .filter((l) => l.intel?.case_id)
-                        .filter((l) => !activationFilter || (l.intel?.activation_status ?? '') === activationFilter)
-                        .filter((l) => !worklistFilter || Boolean(l.intel?.worklist))
-                        .map((l) => (
+                      {activationLensRows.map((l) => (
                           <TableRow
                             key={l.id}
                             hover

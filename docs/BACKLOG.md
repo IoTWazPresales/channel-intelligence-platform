@@ -3475,7 +3475,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **What the work is** | Count via `build_listing_intelligence` worklist; `_signal_row` + href; MarketSurface filter + live copy. |
 | **Regression traps** | Do not invent a second activation rule; keep retailer names out of code; Brief must still load if intelligence count fails (FLAG ≠ BLOCK). |
 | **Behavior to retain** | Existing Brief signals and ranking; listing intelligence worklist semantics. |
-| **Out of scope** | `listing_price_change` / `competitor_mapping_pending` proposed signals; destination-side My-accounts filter on listing endpoints (count already scoped). |
+| **Out of scope** | listing_price_change / competitor_mapping_pending proposed signals. Follow-up: listing-capture /listings + /intelligence still lack tenant + My-accounts predicates (Brief count is scoped; destination table uses the same browser My-accounts header only where those APIs honour it). |
 | **TRIGGER** | Fired and closed 2026-11-09 with this PR. |
 
 ---
