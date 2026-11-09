@@ -25,7 +25,7 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -555,6 +555,42 @@ export function MarketSurface() {
       void qc.invalidateQueries({ queryKey: ['competition-mappings'] });
     },
   });
+  const proposeMaps = useMutation({
+    mutationFn: () => apiPost<{ created: number }>("/api/v1/competition/mappings/propose", {}),
+    onSuccess: (res) => {
+      setToast(`Proposed ${res?.created ?? 0} pending competitor mapping(s).`);
+      void qc.invalidateQueries({ queryKey: ["competition-mappings"] });
+    },
+    onError: (err) => setToast(String((err as Error)?.message ?? "Propose failed")),
+  });
+  const [priceImportText, setPriceImportText] = useState("[]");
+  const importPrices = useMutation({
+    mutationFn: async () => {
+      let rows: unknown;
+      try {
+        rows = JSON.parse(priceImportText);
+      } catch {
+        throw new Error(
+          "Price import JSON must be an array of {competitor_sku, price, observed_at?, channel?}",
+        );
+      }
+      if (!Array.isArray(rows)) throw new Error("Price import JSON must be an array");
+      return apiPost<{ created: number; skipped_unknown_skus: string[] }>(
+        "/api/v1/competition/prices/import",
+        { rows },
+      );
+    },
+    onSuccess: (res) => {
+      const skipped = res?.skipped_unknown_skus?.length ?? 0;
+      setToast(
+        `Imported ${res?.created ?? 0} price row(s)` +
+          (skipped ? `; skipped ${skipped} unknown SKU(s)` : ""),
+      );
+      void qc.invalidateQueries({ queryKey: ['competition-prices'] });
+    },
+    onError: (err) => setToast(String((err as Error)?.message ?? "Price import failed")),
+  });
+
 
   const listingCols = useMemo<ColDef<GridRow>[]>(
     () => [
@@ -1371,13 +1407,14 @@ export function MarketSurface() {
                   ]}
                   summary={`${mappingRows.length} mappings · our SKU ↔ competitor SKU`}
                   trailing={
-                    <Tooltip title="A scorer exists, but nothing proposes candidates from this screen yet." arrow>
-                      <span>
-                        <Button size="small" variant="outlined" disabled>
-                          Propose candidates
-                        </Button>
-                      </span>
-                    </Tooltip>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={proposeMaps.isPending}
+                      onClick={() => proposeMaps.mutate()}
+                    >
+                      {proposeMaps.isPending ? "Proposing…" : "Propose candidates"}
+                    </Button>
                   }
                 />
                 <ModuleDataSection
@@ -1393,7 +1430,7 @@ export function MarketSurface() {
                   empty={{
                     title: 'No competitor mappings yet',
                     description:
-                      'A mapping pairs our SKU with a competitor SKU and is approved or rejected here. Suggested matches are not offered on this screen yet. Import a file, or add a match from Import Center.',
+                      'A mapping pairs our SKU with a competitor SKU and is approved or rejected here. Use Propose candidates to score competitor products with the existing matcher, then approve or reject. You can also add a match from Import Center.',
                     primary: { label: 'Import Center', href: '/admin/imports' },
                   }}
                   loadingLabel="Loading competitor mappings…"
@@ -1442,30 +1479,65 @@ export function MarketSurface() {
         ) : null}
 
         {lens === 'competitor-prices' ? (
-          prices && prices.length > 0 ? (
-            <Box sx={{ mt: 2 }}>
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <Panel
+              title="Import competitor prices"
+              subtitle="JSON array of observations against existing competitor SKUs"
+              flush
+            >
+              <Stack spacing={1} sx={{ p: 1.5 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Paste a JSON array of rows with competitor_sku, price (must be positive), and optional observed_at / channel.
+                  Unknown SKUs are skipped; products are not created. Prices attach to competitor SKUs
+                  whether or not a mapping is approved.
+                </Typography>
+                <Box
+                  component="textarea"
+                  aria-label="Competitor price import JSON"
+                  value={priceImportText}
+                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setPriceImportText(e.target.value)}
+                  rows={6}
+                  sx={{
+                    width: "100%",
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    fontSize: 12,
+                    p: 1,
+                    borderRadius: 1,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    bgcolor: "background.paper",
+                  }}
+                />
+                <Box>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={importPrices.isPending}
+                    onClick={() => importPrices.mutate()}
+                  >
+                    {importPrices.isPending ? "Importing…" : "Import prices"}
+                  </Button>
+                </Box>
+              </Stack>
+            </Panel>
+            {priceRows.length > 0 ? (
               <EnterpriseDataGrid<PriceRow>
-                rowData={prices}
+                rowData={priceRows}
                 columnDefs={[
-                  { field: 'competitor_sku', headerName: 'Comp SKU', pinned: 'left' },
-                  { field: 'observed_at', headerName: 'Observed' },
-                  { field: 'price', headerName: 'Price', type: 'numericColumn' },
-                  { field: 'channel', headerName: 'Channel' },
+                  { field: "competitor_sku", headerName: "Comp SKU", pinned: "left" },
+                  { field: "observed_at", headerName: "Observed" },
+                  { field: "price", headerName: "Price", type: "numericColumn" },
+                  { field: "channel", headerName: "Channel" },
                 ]}
                 height={380}
               />
-            </Box>
-          ) : (
-            <SubstrateOrPlanned
-              status="substrate"
-              title="Competitor prices are not imported yet"
-              body="There is no import for competitor prices, so this view stays empty rather than showing a chart. When prices are imported, they appear against approved mappings as observations, never as inferred impact."
-              related={[
-                { label: 'Competitor mappings', href: '/competition?tab=mappings' },
-                { label: 'Import Center', href: '/admin/imports' },
-              ]}
-            />
-          )
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No competitor prices loaded yet. Import observations above against existing competitor SKUs.
+                Mapping approval is separate; prices are observations, never inferred impact.
+              </Typography>
+            )}
+          </Stack>
         ) : null}
 
         {lens === 'competitor-listings' ? (
