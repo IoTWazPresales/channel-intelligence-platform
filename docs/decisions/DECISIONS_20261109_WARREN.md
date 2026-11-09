@@ -119,7 +119,9 @@ and cases remain **manually editable** when needed.
 - Sheet-selection feature **is already built**:
   - API: `default_selected_sheets`, `selected_sheets_for_job`, `initial_sheet_selection`, `remember_selected_sheets` in `apps/api/app/services/imports/shipment_evidence_import.py` / `shipment_field_mapping.py`.
   - UI: "Choose sheets to import" dialog (`data-testid="shipment-sheet-picker"`) in `apps/web/src/app/(app)/admin/imports/page.tsx` when `sheet_selection_confirmed` is false and more than one sheet is available.
-- **BOM Not Ready is not excluded by default today.** `_PREFERRED_SHEET_KEYS` still includes `"bom not ready"`, so that tab starts selected and can be ingested as `acza_workbook_bom_not_ready` (`shipment_evidence_report_detect.py`). The operator can uncheck it. Aligning defaults with this decision (and with D-0046 of 1 Oct 2026) is remaining product work under BACKLOG-046 / N-0072 — not done in this docs PR.
+- **BOM Not Ready is not excluded by default today.** `_PREFERRED_SHEET_KEYS` in `apps/api/app/services/imports/shipment_evidence_import.py` still includes `"bom not ready"`, so that tab starts selected and can be ingested as `acza_workbook_bom_not_ready` (`shipment_evidence_report_detect.py`). The operator can uncheck it. Aligning defaults with this decision (and with D-0046 of 1 Oct 2026) is remaining product work under BACKLOG-046 / N-0072 — not done in this docs PR.
+
+**Follow-up (not yet started):** `'BOM Not Ready'` must **default to unticked** in the sheet picker. Today `_PREFERRED_SHEET_KEYS` in `shipment_evidence_import.py` still pre-selects it. See WI-D0025-bom-default below.
 
 ### D-0020 — deferred to end of build
 
@@ -131,18 +133,15 @@ and cases remain **manually editable** when needed.
 
 ---
 
-## Still pending Warren
+### D-0041 — Qty column; BU thresholds unchanged
 
-### D-0041 — PF Qty vs Total Qty; BU resolver thresholds
+**Warren 9 Nov 2026, 17:39 SAST:**
 
-Still **PENDING Warren**. Research summary for the follow-up question (not a decision):
+- Lineup imports **always use the `Qty` column**. **`Total Qty` is not used.**
+- This matches current code: `lineup_header_mapping.py` aliases `quantity_units` <- `["qty", "quantity", "units", "forecast_qty"]` and does not map `Total Qty`.
+- **BU resolver thresholds stay unchanged:** `PRODUCT_DERIVED_MIN_RESOLVED_FRACTION = 0.25` and `LIKELY_NOT_LINEUP_RESOLUTION_RATE = 0.05` in `lineup_business_unit_resolution.py` (BACKLOG-055).
 
-- **PF** is used in the repo as a **product-line code** (folder/grain alongside NB/NX/NR/…; e.g. `Product Lineup/PF/…` in `docs/STATE_AUDIT_2026-08-02.md`). No source in the repo expands the letters into words.
-- **BACKLOG-105** / STATE_AUDIT proof on file `Copy of ACZA 1H 2025 Consumer Lineup - Gaming Desktop PD 13 Feb 2025.xlsx`: source row 1 had `Qty=0.15`, `Total Qty=1`, `May (TBC)=1`. Code aliases map header `Qty` → `quantity_units` (`lineup_header_mapping.py`: `["qty", "quantity", "units", "forecast_qty"]`) and do **not** map `Total Qty`. Stored quantities were the uniform half of the mis-mapped `Qty` cell, not `Total Qty`.
-- Newer local Gaming Desktop samples checked on 9 Nov (Q2 2026 / Q4 copies under Documents\Lineup Files) only exposed a `Qty` header on the probed sheets — no `Total Qty` column on those files.
-- **BU thresholds (BACKLOG-055)** in `lineup_business_unit_resolution.py`: `LIKELY_NOT_LINEUP_RESOLUTION_RATE = 0.05` flags `bu_likely_not_lineup` when under 5% of rows resolve to products; `PRODUCT_DERIVED_MIN_RESOLVED_FRACTION = 0.25` means the product-derived BU tier only wins when at least 25% of rows resolve. Both are provisional guesses, not empirical archive rates.
-
-Await Warren's choice on which quantity column the PF/desktop family should use, and whether to keep or retune the 0.25 / 0.05 thresholds.
+Research context retained (not a contrary decision): PF is a product-line code in-repo (e.g. `Product Lineup/PF/…` in `docs/STATE_AUDIT_2026-08-02.md`); no source expands the letters. STATE_AUDIT / BACKLOG-105 noted a PF Gaming Desktop file where `Qty` cells were fractional while `Total Qty` held unit totals — Warren still chooses **`Qty`** for all lineup imports.
 
 ---
 
@@ -154,7 +153,7 @@ Await Warren's choice on which quantity column the PF/desktop family should use,
 | WI-D0038-soh-tolerance | D-0038 | Customer SOH check tolerance flag (default 10%, tenant setting); units-only for Evetech; flag stock wherever it sits | not started |
 | WI-D0035-smoke-remove | D-0035 | Explicit reviewed removal of case 3 BATCH0-SMOKE-001 from `cip` | not started (cip write — held until dedicated step) |
 | WI-D0034-cleanup | D-0034 | Safe stale worktree + stale clone DB cleanup per N-0046 inventory | not started (separate safe execution) |
-| WI-D0025-bom-default | D-0025 / D-0046 | Align shipment default sheet selection so BOM Not Ready does not start selected / is not ingested unless the operator explicitly chooses it | not started (feature exists; default still includes BOM) |
+| WI-D0025-bom-default | D-0025 / D-0046 | Sheet picker: **BOM Not Ready must default to unticked** (`_PREFERRED_SHEET_KEYS` in `shipment_evidence_import.py` still pre-selects it) | not started |
 
 ---
 
