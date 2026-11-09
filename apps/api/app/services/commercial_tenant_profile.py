@@ -188,7 +188,7 @@ STOCK_GAP_HIGHLIGHT_UNITS_MAX = 1_000_000.0
 
 # D-0038: customer SOH cost-check tolerance as a fraction of derived MAC (0.10 = 10%).
 DEFAULT_SOH_TOLERANCE_PCT = 0.10
-SOH_TOLERANCE_PCT_MAX = 1.0
+SOH_TOLERANCE_PCT_MAX = 1.0  # exclusive upper bound in save/read (same shape as vat_rate_pct)
 
 # Governed metric overlay (P3-1). Only label / hidden / allowed_grains persist;
 # formula / source_facts / owner_surface / new metric ids are never stored.
@@ -964,8 +964,9 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
                 raise ValueError("soh_tolerance_pct: a rate such as 0.10 is required") from exc
             if rate > 1:
                 rate = rate / 100.0
-            if not (0 <= rate <= SOH_TOLERANCE_PCT_MAX):
-                raise ValueError("soh_tolerance_pct: must be between 0 and 1 (0.10 for 10 percent)")
+            # Reject exactly 1.0 (ambiguous: 1% vs 100%). Use 0.01 for 1%, or 100 for 100% then /100.
+            if not (0 <= rate < SOH_TOLERANCE_PCT_MAX):
+                raise ValueError("soh_tolerance_pct: must be between 0 and 1 exclusive of 1 (0.10 for 10 percent; use 0.01 not 1 for 1 percent)")
             clean[key] = rate
             continue
         if raw is None or str(raw).strip() == "":
@@ -1056,7 +1057,7 @@ def soh_tolerance_pct(tenant_id: str = "default") -> float:
         return DEFAULT_SOH_TOLERANCE_PCT
     if rate > 1:
         rate = rate / 100.0
-    if not (0 <= rate <= SOH_TOLERANCE_PCT_MAX):
+    if not (0 <= rate < SOH_TOLERANCE_PCT_MAX):
         return DEFAULT_SOH_TOLERANCE_PCT
     return rate
 

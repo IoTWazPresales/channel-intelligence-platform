@@ -139,3 +139,36 @@ def test_tolerance_exact_boundary_is_not_flagged():
     assert out["delta"] == -10.0
     assert abs(out["gap_pct"] - 0.10) < 1e-9
     assert FLAG_SOH_TOLERANCE not in out["flags"]
+
+
+def test_zero_derived_mac_with_nonzero_soh_cost_flags():
+    out = summarise_soh_rows(
+        [_row(1, Decimal("2"), unit_cost=Decimal("50"))],
+        as_of=AS_OF,
+        derived_mac=Decimal("0"),
+        tolerance_pct=Decimal("0.10"),
+    )
+    assert out["delta"] == -50.0
+    assert out["gap_pct"] is None
+    assert FLAG_SOH_TOLERANCE in out["flags"]
+
+
+def test_tolerance_uses_tenant_default_when_pct_omitted(monkeypatch, tmp_path):
+    # Point tenant profiles at an empty dir so the default 10% is used.
+    monkeypatch.setenv("LOCAL_STORAGE_PATH", str(tmp_path))
+    # Reload is unnecessary: helper reads Settings each call via load path.
+    from app.services import commercial_tenant_profile as ctp
+
+    # Ensure helper returns default even if Settings already cached a path —
+    # monkeypatch the loader directly for a deterministic unit test.
+    monkeypatch.setattr(ctp, "load_tenant_profile_overrides", lambda tenant_id="default": {})
+    out = summarise_soh_rows(
+        [_row(1, Decimal("10"), unit_cost=Decimal("100"))],
+        as_of=AS_OF,
+        derived_mac=Decimal("80"),
+        # tolerance_pct omitted -> tenant default 10%
+        tenant_id="default",
+    )
+    assert out["tolerance_pct"] == 0.10
+    assert FLAG_SOH_TOLERANCE in out["flags"]
+

@@ -97,7 +97,7 @@ and cases remain **manually editable** when needed.
 - steward edit that puts retirement before launch: warn;
 - import warning `launch_after_end_of_life` stays **FLAG** (not a commit block).
 
-### D-0038 — add tolerance flag (future build)
+### D-0038 — add tolerance flag
 
 **Warren 9 Nov 2026:**
 

@@ -148,6 +148,8 @@ def test_soh_tolerance_pct_default_save_and_reject() -> None:
     with pytest.raises(ValueError, match="soh_tolerance_pct"):
         profile.save_tenant_profile_overrides("acme", {"soh_tolerance_pct": "-1"})
     with pytest.raises(ValueError, match="soh_tolerance_pct"):
+        profile.save_tenant_profile_overrides("acme", {"soh_tolerance_pct": "1"})
+    with pytest.raises(ValueError, match="soh_tolerance_pct"):
         profile.save_tenant_profile_overrides("acme", {"soh_tolerance_pct": "ten"})
 
 

@@ -124,7 +124,7 @@ def summarise_soh_rows(
                 flags.append(FLAG_SOH_TOLERANCE)
             else:
                 out["gap_pct"] = 0.0
-            out["flags"] = flags
+            # flags list is already bound into out["flags"] from the earlier update.
     return out
 
 
