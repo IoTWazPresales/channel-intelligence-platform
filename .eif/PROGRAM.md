@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2868
+**Snapshot revision:** 2921
 
 ## Outcome (verbatim)
 
@@ -75,7 +75,7 @@ _none_
 | N-0051 | Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134) | feature | complete | complete | yes |  | full loop |
 | N-0052 | Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly) | feature | complete | complete | yes |  | full loop |
 | N-0053 | Stage 2.5: line identifier 'both' as two columns | feature | complete | complete | yes |  | full loop |
-| N-0054 | Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158) | feature | blocked | blocked | yes |  | full loop |
+| N-0054 | Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158) | feature | deferred | deferred | yes |  | full loop |
 | N-0055 | Stage 3.3: tenant scoping sweep | feature | complete | complete | yes |  | full loop |
 | N-0056 | Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face) | feature | complete | complete | yes |  | full loop |
 | N-0057 | Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190) | feature | complete | complete | yes |  | full loop |
@@ -93,7 +93,7 @@ _none_
 | N-0069 | Stage 8: steward and import engine follow-ons (trigger-gated umbrella) | feature | proposed | proposed | yes |  | full loop |
 | N-0070 | Stage 10: multi-tenant productisation (P6) | feature | proposed | proposed | yes |  | full loop |
 | N-0071 | Stage 4.6: open->shipped fact double-count policy (BACKLOG-062), undecided | feature | complete | complete | yes |  | full loop |
-| N-0072 | Stage 4.7: ACZA workbook non-operational sheets allowlist (BACKLOG-046), undecided | feature | blocked | blocked | yes |  | full loop |
+| N-0072 | Stage 4.7: ACZA workbook non-operational sheets allowlist (BACKLOG-046), undecided | feature | ready | ready | yes |  | full loop |
 | N-0073 | Always-on stack on this PC: one supervisor starts and restarts Redis, worker+beat, API, web and the Cloudflare tunnel at logon | feature | complete | complete | yes |  | full loop |
 | N-0074 | Stable public address: named Cloudflare tunnel on a domain Warren owns (replaces the changing trycloudflare address) | feature | deferred | deferred | yes |  | full loop |
 | N-0075 | Account invite email: link to the system plus a first-login password | feature | complete | complete | yes |  | full loop |
@@ -121,7 +121,7 @@ _none_
 | N-0097 | Lineup follow-ons: PF quantity columns, workbench identifier split, supersession hardening, margin amounts | feature | proposed | proposed | yes |  | full loop |
 | N-0098 | Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5) | feature | proposed | proposed | yes |  | full loop |
 | N-0099 | Independent second-look verification of self-verified closed nodes before the branch goes to main | feature | proposed | proposed | yes |  | full loop |
-| N-0100 | CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136) | feature | blocked | blocked | yes |  | full loop |
+| N-0100 | CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136) | feature | ready | ready | yes |  | full loop |
 | N-0101 | N-0085 U1: listing polling on under the supervisor, restock seen again, dead-link back-off, per-site 403/429 pause, run time limit | feature | complete | complete | yes |  | full loop |
 | N-0102 | N-0085 U2: per-retailer page reader framework (Takealot, Evetech, Amazon), N-0078 fields, registry migrations, discovery for Takealot and Evetech | feature | proposed | proposed | yes |  | full loop |
 | N-0103 | N-0085 U6: Proposed listings steward worklist with bulk confirm, and a per-customer Coverage lens | feature | proposed | proposed | yes |  | full loop |
@@ -138,6 +138,6 @@ _none_
 | N-0114 | Chart fixes: axis titles with units, legends, full names, horizontal bars for long labels, top N and sort, unit formatting on every dashboard and report chart | feature | in_progress | in_progress | yes |  | full loop |
 | N-0115 | Data model under the builder: fact models with measures, shared breakdowns, declared walls, calculated measures and one query compiler replacing one hand-written query per metric | inception | in_progress | in_progress | yes |  | full loop |
 | N-0116 | Dashboard builder on the new data model: dashboard and widget filters, full visual set, click to filter, view rows, widget tools, migration of saved dashboards and reports, three starter dashboards | feature | in_progress | in_progress | yes |  | full loop |
-| N-0117 | Store and DC replenishment | inception | blocked | blocked | yes |  | full loop |
+| N-0117 | Store and DC replenishment | inception | ready | ready | yes |  | full loop |
 | N-0118 | Load staged-but-unloaded store-level sell-through | feature | proposed | proposed | yes |  | full loop |
 | N-0119 | On the water: voyage fields, port conditions and the Shipments map (retroactive record) | feature | proposed | proposed | yes | yes | full loop |
