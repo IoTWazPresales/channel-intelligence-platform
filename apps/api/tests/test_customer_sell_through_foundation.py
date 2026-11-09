@@ -20,6 +20,7 @@ from app.services.imports.customer_sell_through import (
     _handle_wide_extract,
     customer_report_config_defaults,
     customer_sellthrough_source_key,
+    is_chain_level_sellthrough_source_key,
     new_customer_sellthrough_staging_line,
     process_customer_sell_through,
 )
@@ -63,6 +64,117 @@ def test_source_key_unmapped_site_label_is_distinct_from_chain() -> None:
     )
     assert other == "ct:57:sl:G018:5376:2026-05-25"
     assert key != other
+    assert is_chain_level_sellthrough_source_key(key) is False
+    assert is_chain_level_sellthrough_source_key(other) is False
+
+
+def test_source_key_ascii_lowercase_canonical_uses_sl_norm() -> None:
+    key = customer_sellthrough_source_key(
+        customer_id=57,
+        customer_location_id=None,
+        product_id=5376,
+        period_start_date=date(2026, 5, 25),
+        site_label="g007",
+    )
+    assert key == "ct:57:sl:G007:5376:2026-05-25"
+
+
+def test_source_key_separators_do_not_alias_same_sl_norm() -> None:
+    """A-1 and A 1 fold to the same norm but must not share a key (non-canonical → slh:)."""
+    k_dash = customer_sellthrough_source_key(
+        customer_id=5,
+        customer_location_id=None,
+        product_id=6,
+        period_start_date=date(2026, 8, 1),
+        site_label="A-1",
+    )
+    k_space = customer_sellthrough_source_key(
+        customer_id=5,
+        customer_location_id=None,
+        product_id=6,
+        period_start_date=date(2026, 8, 1),
+        site_label="A 1",
+    )
+    assert k_dash.startswith("ct:5:slh:") and k_dash.endswith(":6:2026-08-01")
+    assert k_space.startswith("ct:5:slh:") and k_space.endswith(":6:2026-08-01")
+    assert k_dash != k_space
+
+
+def test_source_key_punctuation_only_label_is_distinct_from_chain() -> None:
+    """Labels that normalize to empty must not use chain key ``…:0:…``."""
+    k_dash = customer_sellthrough_source_key(
+        customer_id=1,
+        customer_location_id=None,
+        product_id=2,
+        period_start_date=date(2026, 6, 1),
+        site_label="---",
+    )
+    k_hash = customer_sellthrough_source_key(
+        customer_id=1,
+        customer_location_id=None,
+        product_id=2,
+        period_start_date=date(2026, 6, 1),
+        site_label="###",
+    )
+    chain = customer_sellthrough_source_key(
+        customer_id=1,
+        customer_location_id=None,
+        product_id=2,
+        period_start_date=date(2026, 6, 1),
+    )
+    assert k_dash.startswith("ct:1:slh:") and k_dash.endswith(":2:2026-06-01")
+    assert k_hash.startswith("ct:1:slh:") and k_hash.endswith(":2:2026-06-01")
+    assert k_dash != k_hash
+    assert is_chain_level_sellthrough_source_key(k_dash) is False
+    assert is_chain_level_sellthrough_source_key(chain) is True
+
+
+def test_source_key_non_latin_and_mixed_labels_distinct() -> None:
+    k_cjk = customer_sellthrough_source_key(
+        customer_id=3,
+        customer_location_id=None,
+        product_id=4,
+        period_start_date=date(2026, 7, 1),
+        site_label="店舗あ",
+    )
+    k_mixed = customer_sellthrough_source_key(
+        customer_id=3,
+        customer_location_id=None,
+        product_id=4,
+        period_start_date=date(2026, 7, 1),
+        site_label="店-A1",
+    )
+    k_plain_a1 = customer_sellthrough_source_key(
+        customer_id=3,
+        customer_location_id=None,
+        product_id=4,
+        period_start_date=date(2026, 7, 1),
+        site_label="A1",
+    )
+    assert k_cjk.startswith("ct:3:slh:")
+    assert k_mixed.startswith("ct:3:slh:")
+    assert k_plain_a1 == "ct:3:sl:A1:4:2026-07-01"
+    assert len({k_cjk, k_mixed, k_plain_a1}) == 3
+
+
+def test_chain_level_source_key_is_customer_product_period_only() -> None:
+    chain = customer_sellthrough_source_key(
+        customer_id=10,
+        customer_location_id=None,
+        product_id=20,
+        period_start_date=date(2026, 5, 1),
+    )
+    located = customer_sellthrough_source_key(
+        customer_id=10,
+        customer_location_id=55,
+        product_id=20,
+        period_start_date=date(2026, 5, 1),
+    )
+    assert chain == "ct:10:0:20:2026-05-01"
+    assert is_chain_level_sellthrough_source_key(chain) is True
+    assert is_chain_level_sellthrough_source_key(located) is False
+    assert is_chain_level_sellthrough_source_key(None) is False
+    assert is_chain_level_sellthrough_source_key("ct:10:0:20:2026-05-01:extra") is False
 
 
 def test_staging_line_defaults_to_pending() -> None:
