@@ -1147,17 +1147,25 @@ def _openpyxl_sheet_to_dataframe(ws: Any) -> pd.DataFrame:
     return pd.DataFrame(list(data_rows), columns=header, dtype=object)
 
 
-_PREFERRED_SHEET_KEYS = frozenset({"shipped", "unship", "unshipped", "bom not ready"})
+_PREFERRED_SHEET_KEYS = frozenset({"shipped", "unship", "unshipped"})
+# D-0025 / D-0046: "BOM Not Ready" stays selectable in the picker but must start unticked.
+_DEFAULT_EXCLUDED_SHEET_KEYS = frozenset({"bom not ready"})
 
 
 def default_selected_sheets(sheet_names: list[str]) -> list[str]:
-    """Sheets to import before the operator confirms. Shipped, Unship and BOM not ready start on.
+    """Sheets to import before the operator confirms. Shipped and Unship start on; BOM Not Ready does not.
 
-    A workbook with none of those names keeps every sheet, so a one-tab file is not dropped.
+    A workbook with none of the preferred names keeps every sheet except default-excluded ones
+    (BOM Not Ready). If that would leave nothing, keep every sheet so a one-tab file is not dropped.
+    An operator who ticks BOM Not Ready (or has it remembered) still gets it via selected_sheets.
     """
     started = time.perf_counter()
     preferred = [name for name in sheet_names if name.strip().lower() in _PREFERRED_SHEET_KEYS]
-    chosen = preferred if preferred else list(sheet_names)
+    if preferred:
+        chosen = preferred
+    else:
+        kept = [name for name in sheet_names if name.strip().lower() not in _DEFAULT_EXCLUDED_SHEET_KEYS]
+        chosen = kept if kept else list(sheet_names)
     _log_shipment_stage(0, "default_selected_sheets", started)
     return chosen
 
