@@ -1099,3 +1099,142 @@ def test_whitespace_label_with_location_token_rekeys_to_the_token(session: Sessi
     assert row is not None and Decimal(row.units_sold) == Decimal("9") and row.site_label == _NB13_SITES[0]
     second = apply_customer_sellthrough_staging(session, job.id, recompute_stock_gap=False)
     assert second.errors == [] and second.applied == 0 and second.superseded_rows == 0
+
+
+# --- N-0118 review follow-up NB-a / NB-b: the supersede module reads and moves ids in chunks ---
+
+from app.services.imports import customer_sell_through_supersede as supersede_mod  # noqa: E402
+
+
+def _record_int_binds(session: Session, ids: list[int], verbs: tuple[str, ...]):
+    """How many of ``ids`` each statement starting with one of ``verbs`` binds; returns (counts, stop)."""
+    wanted = {int(i) for i in ids}
+    counts: list[tuple[str, int]] = []
+    conn = session.connection()
+
+    def before(_conn, _cursor, statement, parameters, _context, _executemany):
+        head = str(statement).lstrip().upper()
+        verb = next((v for v in verbs if head.startswith(v)), None)
+        if verb is None:
+            return
+        values = parameters.values() if isinstance(parameters, dict) else (parameters or ())
+        n = sum(1 for v in values if isinstance(v, int) and not isinstance(v, bool) and v in wanted)
+        if n:
+            counts.append((verb, n))
+
+    event.listen(conn, "before_cursor_execute", before)
+    return counts, lambda: event.remove(conn, "before_cursor_execute", before)
+
+
+def _five_site_facts(session: Session, file_name: str):
+    source, customer, product, _other = _ids(session)
+    keys = [_site_key(customer, product, site) for site in _NB13_SITES]
+    if session.scalar(
+        select(func.count()).select_from(FactCustomerSellthrough).where(FactCustomerSellthrough.source_key.in_(keys))
+    ):
+        pytest.skip("cip_test already holds a fixture site key for the fixture week")
+    job = _job(source, file_name, T0)
+    newer = _job(source, file_name.replace(".xlsx", "-newer.xlsx"), datetime(2026, 8, 8, tzinfo=timezone.utc))
+    session.add_all([job, newer])
+    session.flush()
+    facts = []
+    for i, (site, key) in enumerate(zip(_NB13_SITES, keys)):
+        fact = _chain_fact(customer, product, job.id, str(i + 1), {"units_sold": job.id})
+        fact.source_key = key
+        fact.site_label = site
+        facts.append(fact)
+    session.add_all(facts)
+    session.flush()
+    return job, newer, facts, keys
+
+
+def test_move_to_superseded_moves_ids_in_chunks(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """NB-a: five fact ids with a chunk of 2 are copied and deleted in chunks of at most two ids,
+    and the result is the same as one move: every row copied once with its figures, then gone."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    monkeypatch.setattr(supersede_mod, "_ID_CHUNK_SIZE", 2)
+    job, newer, facts, _keys = _five_site_facts(session, "nba-move.xlsx")
+    ids = sorted(int(f.id) for f in facts)
+    # Two figure groups, so chunking runs inside each group.
+    figures = {fid: (["units_sold"] if i % 2 == 0 else ["units_sold", "reported_soh"]) for i, fid in enumerate(ids)}
+
+    counts, stop = _record_int_binds(session, ids, ("INSERT", "DELETE"))
+    try:
+        summary = supersede_mod.move_to_superseded(
+            session, ids, by_job_id=newer.id, reason=supersede_mod.REASON_RESTATED, figures=figures
+        )
+    finally:
+        stop()
+    assert summary.rows == 5
+    assert summary.units == 15.0
+    assert summary.from_jobs == [job.id]
+    assert counts, "no chunked statement bound the fact ids"
+    assert max(n for _verb, n in counts) <= 2, counts
+    assert len([1 for verb, _n in counts if verb == "INSERT"]) >= 3, counts
+    assert len([1 for verb, _n in counts if verb == "DELETE"]) >= 3, counts
+    assert sum(n for verb, n in counts if verb == "DELETE") == 5, counts
+
+    session.expire_all()
+    for fid in ids:
+        assert session.get(FactCustomerSellthrough, fid) is None
+    kept = session.execute(
+        text(
+            "select fact_id, figures from fact_customer_sellthrough_superseded "
+            "where superseded_by_import_job_id = :j order by fact_id"
+        ),
+        {"j": newer.id},
+    ).all()
+    assert [int(r[0]) for r in kept] == ids
+    assert {int(r[0]): list(r[1]) for r in kept} == figures
+
+
+def test_move_to_superseded_with_no_ids_writes_nothing(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    monkeypatch.setattr(supersede_mod, "_ID_CHUNK_SIZE", 2)
+    summary = supersede_mod.move_to_superseded(session, [], by_job_id=1, reason=supersede_mod.REASON_RESTATED)
+    assert summary.rows == 0 and summary.units == 0.0 and summary.from_jobs == []
+
+
+def test_same_key_read_is_chunked_whatever_the_apply_chunk(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """NB-b: the same-key read binds at most a chunk of keys even when the caller passes all five
+    at once, and every replaced figure is still kept."""
+    name = session.execute(text("select current_database()")).scalar()
+    print(f"current_database={name}", flush=True)
+    if name != "cip_test":
+        pytest.skip("cip_test only")
+    monkeypatch.setattr(supersede_mod, "_ID_CHUNK_SIZE", 2)
+    job, newer, facts, keys = _five_site_facts(session, "nbb-samekey.xlsx")
+    incoming = {key: {"units_sold": Decimal("100")} for key in keys}
+
+    counts, stop = _record_key_binds(session, keys)
+    try:
+        summary = supersede_mod.record_same_key_replacements(session, job_id=newer.id, incoming=incoming)
+    finally:
+        stop()
+    assert summary.partial_rows == 5
+    assert summary.figures == {"units_sold": 5}
+    assert counts and max(counts) <= 2, counts
+    assert len(counts) >= 3, counts
+    kept = session.execute(
+        text(
+            "select count(*) from fact_customer_sellthrough_superseded "
+            "where superseded_by_import_job_id = :j and reason = :r"
+        ),
+        {"j": newer.id, "r": supersede_mod.REASON_SAME_KEY},
+    ).scalar()
+    assert kept == 5
+
+
+def test_id_chunks_are_sorted_distinct_and_guard_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(supersede_mod, "_ID_CHUNK_SIZE", 2)
+    assert list(supersede_mod._id_chunks([5, 3, 1, 3, 4])) == [[1, 3], [4, 5]]
+    assert list(supersede_mod._id_chunks(["b", "a", "c"])) == [["a", "b"], ["c"]]
+    assert list(supersede_mod._id_chunks([])) == []
+    monkeypatch.setattr(supersede_mod, "_ID_CHUNK_SIZE", 0)
+    assert list(supersede_mod._id_chunks([2, 1])) == [[1], [2]]

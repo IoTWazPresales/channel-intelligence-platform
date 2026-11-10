@@ -51,6 +51,19 @@ REASON_FUTURE_WEEK = "week_not_yet_happened"
 # Figures superseded independently (N-0111). Units are a flow; the other three are stock.
 FIGURES: tuple[str, ...] = ("units_sold", "reported_soh", "in_transit_units", "on_order_units")
 
+# N-0118 review NB-a / NB-b: psycopg3 sends at most 65,535 bind parameters in one statement, and an
+# expanding ``IN :ids`` (or ``.in_(...)``) binds one per value. Moves by fact id and the same-key
+# read go in chunks of this many values (read at call time, so a test can lower it).
+_ID_CHUNK_SIZE = 5000
+
+
+def _id_chunks(values: Iterable[Any]) -> Iterable[list[Any]]:
+    """Distinct ``values``, sorted, in lists of at most ``_ID_CHUNK_SIZE``."""
+    size = max(1, int(_ID_CHUNK_SIZE))
+    items = sorted(set(values))
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
+
 
 @dataclass
 class SupersedeSummary:
@@ -128,8 +141,10 @@ def move_to_superseded(
         by_figures[tuple(figs) if figs else None].append(fid)
     moved: list[Any] = []
     for figs, group in by_figures.items():
-        moved.extend(
-            db.execute(
+        # NB-a: one INSERT ... SELECT and one DELETE per chunk of ids, so a large move stays under
+        # the bind-parameter limit. Each chunk deletes exactly the rows its INSERT copied.
+        for chunk in _id_chunks(group):
+            copied = db.execute(
                 text(
                     """
                     INSERT INTO fact_customer_sellthrough_superseded (
@@ -145,13 +160,16 @@ def move_to_superseded(
                     RETURNING id, fact_id, units_sold, import_job_id, product_id
                     """
                 ).bindparams(bindparam("ids", expanding=True)),
-                {"job_id": int(by_job_id), "reason": reason, "ids": group, "figures": list(figs) if figs else None},
+                {"job_id": int(by_job_id), "reason": reason, "ids": chunk, "figures": list(figs) if figs else None},
             ).all()
-        )
-    db.execute(
-        text("DELETE FROM fact_customer_sellthrough WHERE id IN :ids").bindparams(bindparam("ids", expanding=True)),
-        {"ids": [int(r[1]) for r in moved]},
-    )
+            if copied:
+                db.execute(
+                    text("DELETE FROM fact_customer_sellthrough WHERE id IN :ids").bindparams(
+                        bindparam("ids", expanding=True)
+                    ),
+                    {"ids": [int(r[1]) for r in copied]},
+                )
+            moved.extend(copied)
     summary.rows = len(moved)
     summary.units = float(sum(float(r[2] or 0) for r in moved))
     summary.from_jobs = sorted({int(r[3]) for r in moved if r[3] is not None})
@@ -213,11 +231,16 @@ def record_same_key_replacements(
     if not incoming:
         return summary
     f = FactCustomerSellthrough
-    stored = db.execute(
-        select(f.id, f.source_key, f.import_job_id, f.figure_import_jobs, *[getattr(f, x) for x in FIGURES]).where(
-            f.source_key.in_(list(incoming))
-        )
-    ).all()
+    # NB-b: read the stored rows in chunks of keys, whatever the caller's apply chunk size.
+    stored = [
+        row
+        for chunk in _id_chunks(incoming)
+        for row in db.execute(
+            select(f.id, f.source_key, f.import_job_id, f.figure_import_jobs, *[getattr(f, x) for x in FIGURES]).where(
+                f.source_key.in_(chunk)
+            )
+        ).all()
+    ]
     for row in stored:
         values = incoming[row.source_key]
         held = figure_jobs(row._mapping)
