@@ -5,13 +5,14 @@ Revises: 20260818_0019
 Create Date: 2026-09-02
 
 Additive only: nullable columns on cpor_case. No data loss. Reversible downgrade drops columns.
+
+Idempotent: ``20260801_0001`` create_all already has these columns on a fresh database.
 """
 
 from __future__ import annotations
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260902_0020"
@@ -21,31 +22,29 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "cpor_case",
-        sa.Column("fx_mode", sa.String(length=16), nullable=True),
-    )
-    op.add_column(
-        "cpor_case",
-        sa.Column(
-            "fx_declared_at",
-            sa.DateTime(timezone=True),
-            nullable=True,
-        ),
-    )
-    op.add_column(
-        "cpor_case",
-        sa.Column("fx_declared_by", sa.String(length=128), nullable=True),
-    )
-    op.create_check_constraint(
-        "ck_cpor_case_fx_mode",
-        "cpor_case",
-        "fx_mode IS NULL OR fx_mode IN ('booked', 'floating')",
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_mode VARCHAR(16)")
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_declared_at TIMESTAMP WITH TIME ZONE")
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_declared_by VARCHAR(128)")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'ck_cpor_case_fx_mode'
+              AND conrelid = 'public.cpor_case'::regclass
+          ) THEN
+            ALTER TABLE cpor_case
+              ADD CONSTRAINT ck_cpor_case_fx_mode
+              CHECK (fx_mode IS NULL OR fx_mode IN ('booked', 'floating'));
+          END IF;
+        END $$;
+        """
     )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_cpor_case_fx_mode", "cpor_case", type_="check")
-    op.drop_column("cpor_case", "fx_declared_by")
-    op.drop_column("cpor_case", "fx_declared_at")
-    op.drop_column("cpor_case", "fx_mode")
+    op.execute("ALTER TABLE cpor_case DROP CONSTRAINT IF EXISTS ck_cpor_case_fx_mode")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_declared_by")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_declared_at")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_mode")

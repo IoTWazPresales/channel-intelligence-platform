@@ -18,15 +18,15 @@ all three tables) cover new columns, and none of these tables has row security, 
 change is needed. Downgrade drops the columns and restores the 0046 checks; it FAILS LOUDLY (raises)
 when any row uses a new visual, instead of rewriting data. Needs the table owner (on cip: ``postgres``):
 run with DATABASE_URL_SYNC_MIGRATE set to the owner.
+
+Idempotent: ``create_all`` already has these columns on a fresh database (ADD COLUMN IF NOT EXISTS).
 """
 
 from __future__ import annotations
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import postgresql
 
 revision: str = "20261023_0048"
 down_revision: Union[str, Sequence[str], None] = "20261022_0047"
@@ -48,13 +48,12 @@ def _drop(table: str, name: str) -> None:
 
 
 def upgrade() -> None:
-    op.add_column("dashboard_widget", sa.Column("definition_v2", postgresql.JSONB(), nullable=True))
-    op.add_column("saved_report", sa.Column("definition_v2", postgresql.JSONB(), nullable=True))
-    op.add_column(
-        "dashboard",
-        sa.Column("filters_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+    op.execute("ALTER TABLE dashboard_widget ADD COLUMN IF NOT EXISTS definition_v2 JSONB")
+    op.execute("ALTER TABLE saved_report ADD COLUMN IF NOT EXISTS definition_v2 JSONB")
+    op.execute(
+        "ALTER TABLE dashboard ADD COLUMN IF NOT EXISTS filters_json JSONB NOT NULL DEFAULT '{}'::jsonb"
     )
-    op.add_column("dashboard", sa.Column("template_key", sa.Text(), nullable=True))
+    op.execute("ALTER TABLE dashboard ADD COLUMN IF NOT EXISTS template_key TEXT")
     for table, name in TABLES:
         _drop(table, name)
         op.execute(f"ALTER TABLE {table} ADD CONSTRAINT {name} CHECK (visual IN {NEW})")
@@ -78,7 +77,7 @@ def downgrade() -> None:
     for table, name in TABLES:
         _drop(table, name)
         op.execute(f"ALTER TABLE {table} ADD CONSTRAINT {name} CHECK (visual IN {OLD})")
-    op.drop_column("dashboard", "template_key")
-    op.drop_column("dashboard", "filters_json")
-    op.drop_column("saved_report", "definition_v2")
-    op.drop_column("dashboard_widget", "definition_v2")
+    op.execute("ALTER TABLE dashboard DROP COLUMN IF EXISTS template_key")
+    op.execute("ALTER TABLE dashboard DROP COLUMN IF EXISTS filters_json")
+    op.execute("ALTER TABLE saved_report DROP COLUMN IF EXISTS definition_v2")
+    op.execute("ALTER TABLE dashboard_widget DROP COLUMN IF EXISTS definition_v2")

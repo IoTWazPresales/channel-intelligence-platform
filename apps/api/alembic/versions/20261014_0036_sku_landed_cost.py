@@ -7,13 +7,14 @@ Create Date: 2026-10-14
 N-0080: the headline margin is measured against PM controlled cost. Landed cost is a
 separate figure shown beside it and never folded into the margin. Same currency as
 controlled_cost_currency_code. Null means not recorded. Additive; existing rows unchanged.
+
+Idempotent: ``20260801_0001`` create_all already has the column.
 """
 
 from __future__ import annotations
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20261014_0036"
@@ -23,21 +24,29 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "commercial_sku_assumption",
-        sa.Column("landed_cost_amount", sa.Numeric(18, 4), nullable=True),
+    op.execute(
+        "ALTER TABLE commercial_sku_assumption ADD COLUMN IF NOT EXISTS landed_cost_amount NUMERIC(18, 4)"
     )
-    op.create_check_constraint(
-        "ck_commercial_sku_assumption_landed_cost_positive",
-        "commercial_sku_assumption",
-        "landed_cost_amount IS NULL OR landed_cost_amount > 0",
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'ck_commercial_sku_assumption_landed_cost_positive'
+              AND conrelid = 'public.commercial_sku_assumption'::regclass
+          ) THEN
+            ALTER TABLE commercial_sku_assumption
+              ADD CONSTRAINT ck_commercial_sku_assumption_landed_cost_positive
+              CHECK (landed_cost_amount IS NULL OR landed_cost_amount > 0);
+          END IF;
+        END $$;
+        """
     )
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "ck_commercial_sku_assumption_landed_cost_positive",
-        "commercial_sku_assumption",
-        type_="check",
+    op.execute(
+        "ALTER TABLE commercial_sku_assumption DROP CONSTRAINT IF EXISTS ck_commercial_sku_assumption_landed_cost_positive"
     )
-    op.drop_column("commercial_sku_assumption", "landed_cost_amount")
+    op.execute("ALTER TABLE commercial_sku_assumption DROP COLUMN IF EXISTS landed_cost_amount")
