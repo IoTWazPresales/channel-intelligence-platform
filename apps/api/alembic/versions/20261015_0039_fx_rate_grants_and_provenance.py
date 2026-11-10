@@ -16,13 +16,14 @@ Adds three nullable provenance columns on ``cpor_case``. They sit beside
   fx_override_reason   why an operator replaced the stored rate
 
 Additive; no row is rewritten. Downgrade drops the columns and revokes the grants.
+
+Idempotent: ``20260801_0001`` create_all already has the provenance columns.
 """
 
 from __future__ import annotations
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20261015_0039"
@@ -33,37 +34,33 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.execute(
-        sa.text(
-            """
-            DO $$
-            BEGIN
-              IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cip') THEN
-                EXECUTE 'GRANT SELECT, INSERT, UPDATE ON fx_daily_rate TO cip';
-                EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE fx_daily_rate_id_seq TO cip';
-              END IF;
-            END $$;
-            """
-        )
+        """
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cip') THEN
+            EXECUTE 'GRANT SELECT, INSERT, UPDATE ON fx_daily_rate TO cip';
+            EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE fx_daily_rate_id_seq TO cip';
+          END IF;
+        END $$;
+        """
     )
-    op.add_column("cpor_case", sa.Column("fx_booked_source", sa.String(length=32), nullable=True))
-    op.add_column("cpor_case", sa.Column("fx_booked_rate_date", sa.Date(), nullable=True))
-    op.add_column("cpor_case", sa.Column("fx_override_reason", sa.Text(), nullable=True))
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_booked_source VARCHAR(32)")
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_booked_rate_date DATE")
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_override_reason TEXT")
 
 
 def downgrade() -> None:
-    op.drop_column("cpor_case", "fx_override_reason")
-    op.drop_column("cpor_case", "fx_booked_rate_date")
-    op.drop_column("cpor_case", "fx_booked_source")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_override_reason")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_booked_rate_date")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_booked_source")
     op.execute(
-        sa.text(
-            """
-            DO $$
-            BEGIN
-              IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cip') THEN
-                EXECUTE 'REVOKE ALL ON SEQUENCE fx_daily_rate_id_seq FROM cip';
-                EXECUTE 'REVOKE ALL ON fx_daily_rate FROM cip';
-              END IF;
-            END $$;
-            """
-        )
+        """
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cip') THEN
+            EXECUTE 'REVOKE ALL ON SEQUENCE fx_daily_rate_id_seq FROM cip';
+            EXECUTE 'REVOKE ALL ON fx_daily_rate FROM cip';
+          END IF;
+        END $$;
+        """
     )

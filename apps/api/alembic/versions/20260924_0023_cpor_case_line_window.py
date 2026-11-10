@@ -17,6 +17,9 @@ can coexist. The constraint keeps its name so the historical-import upsert
 
 Downgrade refuses (no data loss) if any (case, product, distributor,
 pod_quarter) now holds more than one window.
+
+Idempotent: ``20260801_0001`` create_all already has the columns, the
+``window_order`` check, and ``uq_cpor_case_line_grain`` including ``window_start``.
 """
 
 from __future__ import annotations
@@ -32,28 +35,65 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 _GRAIN_OLD = ["case_id", "product_id", "distributor_id", "pod_quarter"]
-_GRAIN_NEW = [*_GRAIN_OLD, "window_start"]
 
 
 def upgrade() -> None:
-    op.add_column("cpor_case_line", sa.Column("window_start", sa.Date(), nullable=True))
-    op.add_column("cpor_case_line", sa.Column("window_end", sa.Date(), nullable=True))
+    op.execute("ALTER TABLE cpor_case_line ADD COLUMN IF NOT EXISTS window_start DATE")
+    op.execute("ALTER TABLE cpor_case_line ADD COLUMN IF NOT EXISTS window_end DATE")
+    # Only fill rows this revision just added. create_all rows already have their own window.
     op.execute(
         sa.text(
             "UPDATE cpor_case_line AS l "
             "SET window_start = c.window_start, window_end = c.window_end "
-            "FROM cpor_case AS c WHERE c.id = l.case_id"
+            "FROM cpor_case AS c "
+            "WHERE c.id = l.case_id AND l.window_start IS NULL"
         )
     )
-    op.alter_column("cpor_case_line", "window_start", nullable=False)
-    op.alter_column("cpor_case_line", "window_end", nullable=False)
-    op.create_check_constraint(
-        op.f("ck_cpor_case_line_window_order"),
-        "cpor_case_line",
-        "window_end >= window_start",
+    op.execute("ALTER TABLE cpor_case_line ALTER COLUMN window_start SET NOT NULL")
+    op.execute("ALTER TABLE cpor_case_line ALTER COLUMN window_end SET NOT NULL")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'ck_cpor_case_line_window_order'
+              AND conrelid = 'public.cpor_case_line'::regclass
+          ) THEN
+            ALTER TABLE cpor_case_line
+              ADD CONSTRAINT ck_cpor_case_line_window_order
+              CHECK (window_end >= window_start);
+          END IF;
+        END $$;
+        """
     )
-    op.drop_constraint("uq_cpor_case_line_grain", "cpor_case_line", type_="unique")
-    op.create_unique_constraint("uq_cpor_case_line_grain", "cpor_case_line", _GRAIN_NEW)
+    # Rebuild the grain only when it does not already include window_start.
+    # create_all's UniqueConstraint is already the new grain; dropping it would
+    # only recreate the same constraint.
+    op.execute(
+        """
+        DO $$
+        DECLARE
+          grain text[];
+        BEGIN
+          SELECT array_agg(a.attname::text ORDER BY k.ord)
+            INTO grain
+          FROM pg_constraint c
+          JOIN unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) ON true
+          JOIN pg_attribute a
+            ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+          WHERE c.conname = 'uq_cpor_case_line_grain'
+            AND c.conrelid = 'public.cpor_case_line'::regclass
+            AND c.contype = 'u';
+          IF grain IS DISTINCT FROM ARRAY['case_id', 'product_id', 'distributor_id', 'pod_quarter', 'window_start']::text[] THEN
+            ALTER TABLE cpor_case_line DROP CONSTRAINT IF EXISTS uq_cpor_case_line_grain;
+            ALTER TABLE cpor_case_line
+              ADD CONSTRAINT uq_cpor_case_line_grain
+              UNIQUE (case_id, product_id, distributor_id, pod_quarter, window_start);
+          END IF;
+        END $$;
+        """
+    )
 
 
 def downgrade() -> None:
@@ -71,8 +111,10 @@ def downgrade() -> None:
             f"downgrade refused: {collisions} (case, product, distributor, pod_quarter) groups "
             "hold more than one line window; the pre-0023 grain cannot store them"
         )
-    op.drop_constraint("uq_cpor_case_line_grain", "cpor_case_line", type_="unique")
+    op.execute("ALTER TABLE cpor_case_line DROP CONSTRAINT IF EXISTS uq_cpor_case_line_grain")
     op.create_unique_constraint("uq_cpor_case_line_grain", "cpor_case_line", _GRAIN_OLD)
-    op.drop_constraint(op.f("ck_cpor_case_line_window_order"), "cpor_case_line", type_="check")
-    op.drop_column("cpor_case_line", "window_end")
-    op.drop_column("cpor_case_line", "window_start")
+    op.execute("ALTER TABLE cpor_case_line DROP CONSTRAINT IF EXISTS ck_cpor_case_line_window_order")
+    # create_all names the same check window_order. Drop it or DROP COLUMN fails.
+    op.execute("ALTER TABLE cpor_case_line DROP CONSTRAINT IF EXISTS window_order")
+    op.execute("ALTER TABLE cpor_case_line DROP COLUMN IF EXISTS window_end")
+    op.execute("ALTER TABLE cpor_case_line DROP COLUMN IF EXISTS window_start")

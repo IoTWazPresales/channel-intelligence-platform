@@ -25,7 +25,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.execute(
         """
-        CREATE TABLE user_customer_account (
+        CREATE TABLE IF NOT EXISTS user_customer_account (
             id bigserial PRIMARY KEY,
             tenant_id text NOT NULL REFERENCES tenant (id) ON DELETE CASCADE,
             user_id bigint NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
@@ -37,7 +37,7 @@ def upgrade() -> None:
         """
     )
     op.execute(
-        "CREATE INDEX ix_user_customer_account_user_id ON user_customer_account (user_id)"
+        "CREATE INDEX IF NOT EXISTS ix_user_customer_account_user_id ON user_customer_account (user_id)"
     )
 
 

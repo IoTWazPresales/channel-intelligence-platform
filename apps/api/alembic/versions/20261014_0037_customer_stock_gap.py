@@ -16,13 +16,16 @@ position beside it and the unit gap. Neither number is rewritten.
   report period. It is derived and recomputed; it never edits fact rows.
 
 Additive; existing rows unchanged.
+
+Idempotent: ``20260801_0001`` create_all already has the columns and
+``customer_stock_position``. ``20261006_0024`` may already have created the
+``cip_pl_*`` policies on that table.
 """
 
 from __future__ import annotations
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20261014_0037"
@@ -31,19 +34,58 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 _ROW_TABLES = ("import_customer_sellthrough_staging_line", "fact_customer_sellthrough")
+_ROW_COLUMNS = (
+    ("period_grain", "varchar(8)"),
+    ("period_week", "smallint"),
+    ("period_year", "smallint"),
+    ("week_start_date", "date"),
+    ("in_transit_units", "numeric(18, 4)"),
+    ("on_order_units", "numeric(18, 4)"),
+)
+
+
+def _add_check_if_missing(table: str, name: str, expression: str) -> None:
+    op.execute(
+        f"""
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = '{name}'
+              AND conrelid = 'public.{table}'::regclass
+          ) THEN
+            ALTER TABLE {table} ADD CONSTRAINT {name} CHECK ({expression});
+          END IF;
+        END $$;
+        """
+    )
+
+
+def _add_policy_if_missing(name: str, statement: str) -> None:
+    op.execute(
+        f"""
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+              AND tablename = 'customer_stock_position'
+              AND policyname = '{name}'
+          ) THEN
+            EXECUTE $policy${statement}$policy$;
+          END IF;
+        END $$;
+        """
+    )
 
 
 def upgrade() -> None:
     for table in _ROW_TABLES:
-        op.add_column(table, sa.Column("period_grain", sa.String(8), nullable=True))
-        op.add_column(table, sa.Column("period_week", sa.SmallInteger(), nullable=True))
-        op.add_column(table, sa.Column("period_year", sa.SmallInteger(), nullable=True))
-        op.add_column(table, sa.Column("week_start_date", sa.Date(), nullable=True))
-        op.add_column(table, sa.Column("in_transit_units", sa.Numeric(18, 4), nullable=True))
-        op.add_column(table, sa.Column("on_order_units", sa.Numeric(18, 4), nullable=True))
-        op.create_check_constraint(
-            f"ck_{table}_period_grain"[:63],
+        for column, col_type in _ROW_COLUMNS:
+            op.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
+        _add_check_if_missing(
             table,
+            f"ck_{table}_period_grain"[:63],
             "period_grain IS NULL OR period_grain IN ('day', 'week', 'month')",
         )
 
@@ -85,25 +127,56 @@ def upgrade() -> None:
             ON customer_stock_position (tenant_id, customer_id, period_end_date)
         """
     )
+    # CREATE TABLE IF NOT EXISTS skips these when create_all already built the table.
+    _add_check_if_missing(
+        "customer_stock_position",
+        "ck_customer_stock_position_grain",
+        "period_grain IN ('day', 'week', 'month')",
+    )
+    _add_check_if_missing(
+        "customer_stock_position",
+        "ck_customer_stock_position_status",
+        "status IN ('compared', 'first_report')",
+    )
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'uq_customer_stock_position_period'
+              AND conrelid = 'public.customer_stock_position'::regclass
+          ) THEN
+            ALTER TABLE customer_stock_position
+              ADD CONSTRAINT uq_customer_stock_position_period
+              UNIQUE (tenant_id, customer_id, product_id, period_grain, period_start_date);
+          END IF;
+        END $$;
+        """
+    )
     # Same product-line row security as every other product table (20261006_0024, D-0056).
     op.execute("ALTER TABLE customer_stock_position ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE customer_stock_position FORCE ROW LEVEL SECURITY")
-    op.execute(
+    _add_policy_if_missing(
+        "cip_pl_select",
         "CREATE POLICY cip_pl_select ON customer_stock_position FOR SELECT "
-        "USING (cip_product_id_visible((product_id)::bigint))"
+        "USING (cip_product_id_visible((product_id)::bigint))",
     )
-    op.execute(
+    _add_policy_if_missing(
+        "cip_pl_insert",
         "CREATE POLICY cip_pl_insert ON customer_stock_position FOR INSERT "
-        "WITH CHECK (cip_product_id_editable((product_id)::bigint))"
+        "WITH CHECK (cip_product_id_editable((product_id)::bigint))",
     )
-    op.execute(
+    _add_policy_if_missing(
+        "cip_pl_update",
         "CREATE POLICY cip_pl_update ON customer_stock_position FOR UPDATE "
         "USING (cip_product_id_editable((product_id)::bigint)) "
-        "WITH CHECK (cip_product_id_editable((product_id)::bigint))"
+        "WITH CHECK (cip_product_id_editable((product_id)::bigint))",
     )
-    op.execute(
+    _add_policy_if_missing(
+        "cip_pl_delete",
         "CREATE POLICY cip_pl_delete ON customer_stock_position FOR DELETE "
-        "USING (cip_product_id_editable((product_id)::bigint))"
+        "USING (cip_product_id_editable((product_id)::bigint))",
     )
     op.execute(
         """
@@ -121,7 +194,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS customer_stock_position")
     for table in _ROW_TABLES:
-        op.drop_constraint(f"ck_{table}_period_grain"[:63], table, type_="check")
+        check_name = f"ck_{table}_period_grain"[:63]
+        op.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {check_name}")
         for col in (
             "on_order_units",
             "in_transit_units",
@@ -130,4 +204,4 @@ def downgrade() -> None:
             "period_week",
             "period_grain",
         ):
-            op.drop_column(table, col)
+            op.execute(f"ALTER TABLE {table} DROP COLUMN IF EXISTS {col}")

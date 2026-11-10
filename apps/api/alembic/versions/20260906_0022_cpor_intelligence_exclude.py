@@ -7,13 +7,14 @@ Create Date: 2026-09-06
 Additive boolean, default false. Seeds the seven identified smoke/B4/operator-named
 fixture cases. Does not delete rows. Reversible: downgrade drops the column;
 operators can also clear the flag in product UI after this lands.
+
+Idempotent: ``20260801_0001`` create_all already has the column.
 """
 
 from __future__ import annotations
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260906_0022"
@@ -35,28 +36,18 @@ _SEED_CODES = (
 
 
 def upgrade() -> None:
-    op.add_column(
-        "cpor_case",
-        sa.Column(
-            "intelligence_exclude",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.false(),
-        ),
+    op.execute(
+        "ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS intelligence_exclude BOOLEAN DEFAULT false NOT NULL"
     )
-    op.create_index(
-        "ix_cpor_case_intelligence_exclude",
-        "cpor_case",
-        ["intelligence_exclude"],
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_cpor_case_intelligence_exclude ON cpor_case (intelligence_exclude)"
     )
     quoted = ", ".join("'" + code.replace("'", "''") + "'" for code in _SEED_CODES)
     op.execute(
-        sa.text(
-            f"UPDATE cpor_case SET intelligence_exclude = TRUE WHERE case_code IN ({quoted})"
-        )
+        f"UPDATE cpor_case SET intelligence_exclude = TRUE WHERE case_code IN ({quoted})"
     )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_cpor_case_intelligence_exclude", table_name="cpor_case")
-    op.drop_column("cpor_case", "intelligence_exclude")
+    op.execute("DROP INDEX IF EXISTS ix_cpor_case_intelligence_exclude")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS intelligence_exclude")
