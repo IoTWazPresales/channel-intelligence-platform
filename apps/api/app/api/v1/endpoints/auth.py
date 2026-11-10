@@ -24,6 +24,7 @@ from app.core.password import (
 )
 from app.core.product_line_scope import widen_product_line_catalog
 from app.core.security import Role, get_current_user, normalize_role, require_roles
+from app.core.user_job import normalize_job
 from app.models.dimensions import DimCustomer
 from app.models.iam import AppUser, AuthSession, Tenant
 from app.models.product_line_access import TenantColumnGrain, UserProductLineAccess
@@ -78,11 +79,17 @@ class CreateUserRequest(BaseModel):
     tenant_id: str = "default"
     account_scope: str = "all"
     customer_ids: list[int] = Field(default_factory=list)
+    job: str | None = None
 
     @field_validator("account_scope")
     @classmethod
     def _scope(cls, v: str) -> str:
         return _account_scope(v)
+
+    @field_validator("job", mode="before")
+    @classmethod
+    def _job(cls, v: object) -> str | None:
+        return normalize_job(v)
 
     @field_validator("email")
     @classmethod
@@ -126,9 +133,14 @@ async def me(
             user_id=int(uid),
         )
     cleared = header_clears_my_accounts(request.headers)
+    job: str | None = None
+    if uid.isdigit():
+        row = await db.get(AppUser, int(uid))
+        job = row.job if row is not None else None
     return {
         "id": user["id"],
         "role": user["role"].value if isinstance(user["role"], Role) else user["role"],
+        "job": job,
         "tenant_id": user.get("tenant_id"),
         "email": user.get("email"),
         "display_name": user.get("display_name"),
@@ -238,6 +250,7 @@ async def list_users(
                 "email": u.email,
                 "display_name": u.display_name,
                 "role": u.role,
+                "job": u.job,
                 "tenant_id": u.tenant_id,
                 "is_active": u.is_active,
             }
@@ -272,6 +285,7 @@ async def create_user(
         password_hash=hash_password(chosen),
         display_name=body.display_name.strip(),
         role=body.role.value,
+        job=body.job,
         is_active=True,
     )
     db.add(user)
@@ -297,7 +311,12 @@ async def create_user(
         action="user_create",
         target_type="app_user",
         target_id=str(user.id),
-        detail={"role": user.role, "invite_sent": invite_sent, "account_count": len(chosen_accounts)},
+        detail={
+            "role": user.role,
+            "job": user.job,
+            "invite_sent": invite_sent,
+            "account_count": len(chosen_accounts),
+        },
     )
     await db.commit()
     await db.refresh(user)
@@ -305,11 +324,48 @@ async def create_user(
         "id": str(user.id),
         "email": user.email,
         "role": user.role,
+        "job": user.job,
         "tenant_id": user.tenant_id,
         "display_name": user.display_name,
         "is_active": user.is_active,
         "invite_sent": invite_sent,
     }
+
+
+class UserJobBody(BaseModel):
+    job: str | None = None
+
+    @field_validator("job", mode="before")
+    @classmethod
+    def _job(cls, v: object) -> str | None:
+        return normalize_job(v)
+
+
+@router.put("/users/{user_id}/job")
+async def put_user_job(
+    user_id: int,
+    body: UserJobBody,
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    """N-0100 part B: set or clear a user's job. The role is never changed here."""
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    user = await db.get(AppUser, user_id)
+    if user is None or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    previous = user.job
+    user.job = body.job
+    await record_platform_audit(
+        db,
+        admin,
+        area="admin",
+        action="user_job",
+        target_type="app_user",
+        target_id=str(user.id),
+        detail={"job": body.job, "previous_job": previous},
+    )
+    await db.commit()
+    return {"user_id": str(user.id), "job": body.job, "role": user.role}
 
 
 class AccountAssignmentBody(BaseModel):

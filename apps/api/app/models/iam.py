@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -22,7 +22,14 @@ class Tenant(Base):
 
 class AppUser(Base):
     __tablename__ = "app_user"
-    __table_args__ = (UniqueConstraint("tenant_id", "email", name="uq_app_user_tenant_email"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "email", name="uq_app_user_tenant_email"),
+        # N-0100 part B (20261110_0061): a job is not a role.
+        CheckConstraint(
+            "job IS NULL OR job IN ('account_manager', 'product_manager', 'finance', 'country_manager', 'admin')",
+            name="ck_app_user_job",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     tenant_id: Mapped[str] = mapped_column(
@@ -32,6 +39,8 @@ class AppUser(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(Text, nullable=False)
+    # N-0100 part B: one of app.core.user_job.JOBS, or None. Separate from role.
+    job: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
