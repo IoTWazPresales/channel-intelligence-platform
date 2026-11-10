@@ -3312,7 +3312,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-10-16 · Warren (N-0111 repair 2): no partial un-merge. |
+| **Status / parked** | **Identity split done** · 2026-11-10 · serial DB queue step 8. Customers 1152 and 4145 are no longer merged into OPEN_CHANNEL (`customer_status` `unverified`, `merged_into_customer_id` null). Distributors 12 and 51 were never merged. No fact, alias, or shipment row was moved: both customers had zero foreign keys, and the 2026-08-08 absorb did not store the repointed row ids. Raw text was not treated as proof. Other OPEN_CHANNEL losers 19 and 5013 stay merged. Clone `cip_queue_s6` then `cip` (`current_database() cip`, alembic `20261110_0061`): dry run 2, apply 2, second dry run 0. Backup `cip-apply-logs\20261110-step8\dim-customer-20261110.dump` (sha256 `26c858cff1e5d76759f9b8625099a0cb5105bc09f26a1435fa2711ed74a9530d`). Writer `apps/api/scripts/ops/split_compuspeed_syntech_identity.py`. The 2026-10-16 park still governs any later fact-row move: no partial un-merge, and a name in raw text is not an owner. |
 | **Effort** | A reviewed un-merge path (clone first) plus Warren naming which rows belong to each distributor. |
 | **Source** | N-0095 acceptance (Compuspeed LTD 1152 and SYNTECH DISTRIBUTION (PTY) LTD 4145 are real distributors, not OPEN_CHANNEL); N-0111 repair D-0111. Trace: `.eif/audit/PROGRAMME_20261016/n0111_repair/N0111_UNMERGE_TRACE.md`. Count: `.eif/audit/PROGRAMME_20261016/n0111_repair2/probe_unmerge_raw_cip.txt`. |
 | **Idea** | Give 1152 and 4145 back their own rows. The 2026-08-08 absorb recorded only the loser ids, so the pre-merge owner of most rows is not stored. |

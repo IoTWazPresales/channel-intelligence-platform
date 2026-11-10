@@ -16,7 +16,9 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-10 - **Serial queue step 7 D4 text:** read-only on `cip`. `20261103_0056` is present (three line columns nullable, observation index present, current view has no line `pod_date`). Stale `0052` / "not run" text corrected. No `cip` write. No main.
+- 2026-11-10 - **Serial queue step 8 Compuspeed/Syntech:** identity split on `cip` after clone `cip_queue_s6`. Customers 1152 and 4145 are `unverified` and no longer merged into OPEN_CHANNEL. Distributors 12 and 51 were already separate. No fact rows moved (no stored before-image). Alembic stays `20261110_0061`. No main.
+
+- 2026-11-10 - **Serial queue step 7 D4 text:** read-only on `cip`. `20261103_0056` is present (three line columns nullable, observation index present, current view has no line `pod_date`). Stale `0052` / "not run" text corrected. No `cip` write. No main. Commit `34c69fd4`.
 
 - 2026-11-10 - **Serial queue step 6 BACKLOG-139:** `repair_n0048_cpor_case_status_drift.py` applied on `cip` after clone `cip_queue_s6` (4 `workflow_status` rows, `status` unchanged, smoke case kept, alembic stays `20261110_0061`). Backup `cip-apply-logs\20261110-step6\cpor-case-20261110.dump`. Docs record. No main. Commit `a8702859`.
 
