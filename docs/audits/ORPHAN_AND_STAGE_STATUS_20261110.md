@@ -22,6 +22,9 @@
 | Decisions record (16 items) | **DONE** | #69 (`docs/decisions/DECISIONS_20261109_WARREN.md`) |
 | Store/DC UI controls | **DONE (wiring)** | unchanged since 2026-11-09 |
 | Listing capture health | **DONE (mount)** | `ListingCaptureHealth` still mounted from `MarketSurface` |
+| Stage 1b grants on cip | **DONE** | `20261105_0058`–`0060` applied 2026-11-05 14:51 SAST; docs were stale at 0057 |
+| D-0035 smoke-case removal | **leave in** | Warren 2026-11-10: leave smoke case in cip |
+| Committed `.cip-alembic-smoke-pg` data dir | **DONE (this PR)** | Untracked + gitignored; no history rewrite |
 | Open PRs into `feat/integrate-20261103` | **none** | GitHub list 2026-11-10 |
 
 ## Orphan re-check (true leftovers)
@@ -38,7 +41,7 @@
 2. **BACKLOG-051 post-apply import reconciliation report** — still **Parked**; no `GET /import-jobs/{id}/reconciliation` (unrelated SOH/PO reconciliation tables/endpoints exist). Greenfield API+UI+export; TRIGGER not fired.
 3. **BACKLOG-223 leftovers** — web chrome for carried-forward flag; non-standard calendars refused; past-count read speed-up.
 4. **D-0038 leftovers** — decimal boundary tests / VAT basis still called out on BACKLOG-135.
-5. **HELD** — migrations / `cip` writes: Stage 1b grants, N-0118 apply to cip, listing seed, N-0100 part B, BACKLOG-214, NB2 index, D-0035 smoke-case removal, D-0034 cleanup.
+5. **HELD** — migrations / `cip` writes: N-0118 apply to cip, listing seed, N-0100 part B, BACKLOG-214, NB2 index, D-0034 cleanup. Stage 1b grants **DONE** (`20261105_0058`–`0060` applied 2026-11-05 14:51 SAST). D-0035: leave smoke case in (Warren 2026-11-10).
 6. **BACKLOG-136** — new KAM/PM/finance/approver roles accepted; route checks not built.
 7. **docs/memory/ROADMAP.md** — still lists BACKLOG-006 as Parked (legacy phased file; prefer BACKLOG.md / docs/ROADMAP.md). Not rewritten in this pass (status truth lives in BACKLOG.md).
 

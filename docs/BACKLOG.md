@@ -52,7 +52,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 **Open into `feat/integrate-20261103`:** none (2026-11-10).
 **Merged since 2026-11-09 orphan pass:** #60, #65, #66, #67, #68, #69, #70, #71, #72, #73, #74, #75.
 **Orphan re-check:** competition propose + price-import wiring **Done** (#67 / BACKLOG-221); B006 slim `line_ids` **Done** (#75); B200 dead picker **Done** (#65); store-dc UI + listing capture-health still mounted. No new production orphans found this pass.
-**CURRENT.md:** updated in this docs PR (was parked for #60; #60 merged as `46c98213`).
+**CURRENT.md:** updated in this docs PR (was parked for #60; #60 merged as `46c98213`). Stage 1b grants **Done** on cip (`20261105_0058`–`0060`, applied 2026-11-05 14:51 SAST). D-0035: leave smoke case in (Warren 2026-11-10). BACKLOG-224 (untrack committed `.cip-alembic-smoke-pg/`) **Done** (this PR).
 
 
 ## BACKLOG-135 — Land customer SOH (CST) into a usable fact for CPOR MAC check
@@ -3494,3 +3494,14 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Out of scope** | DB migration / stored carry column; Channel Ops derived stock period breakdown; customer CST reported_soh period series; web chart chrome for the flag (no distributor_stock-by-period widget yet). |
 | **TRIGGER** | Merge of the D-0119 PR into the integration branch, then any widget that charts distributor on-hand by period. |
 
+---
+
+## BACKLOG-224 — Remove committed local Postgres data dir from the public repo
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** — 2026-11-10 — Untracked `apps/api/.cip-alembic-smoke-pg/` (1,288 files, added in `fdda87e3`) with `git rm -r --cached`; added explicit gitignore path `apps/api/.cip-alembic-smoke-pg/`. No history rewrite. On-disk copy in the main checkout left in place. Warren chose not to rotate passwords. |
+| **Source** | 2026-11-10 security review: the folder is a local Postgres data directory committed to the public `IoTWazPresales/channel-intelligence-platform` repo. |
+| **Idea** | Stop tracking the data directory and ignore it so a local alembic smoke cluster can still be created, but is never committed again. |
+| **Out of scope** | History rewrite / force-push; password rotation; deleting the on-disk folder in the main checkout. |
+| **TRIGGER** | Fired and closed 2026-11-10 with this PR. |
