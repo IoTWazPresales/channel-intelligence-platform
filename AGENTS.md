@@ -121,6 +121,31 @@ you are in local mode. Use direct dev commands instead. Never assume.
 
 ---
 
+## Cursor cloud agents and the EIF guard
+
+Every tool call goes through the EIF guard (`.cursor/hooks.json` -> `.cursor/hooks/eif_guard.cmd`; on Linux that file
+hands over to `eif_guard.sh`). The hooks are fail-closed: if the guard cannot decide, the call is blocked.
+
+**Status (2026-11-10, BACKLOG-225):** a Linux cloud VM still gets a deny on every actionable call. The launcher now
+runs, but the accepted policy is bound to Warren's Windows checkout (`IDENTITY_MISMATCH` / `FOREIGN_READ`), and some
+runtime digests only match CRLF checkouts (`RUNTIME_INTEGRITY` / `POLICY_INTEGRITY`). Fixing that is an EIF policy
+decision for Warren. Until it is made, do EIF-governed coding on Warren's PC.
+
+**What a cloud agent must do:**
+1. First call: read a small file (for example `README.md`) and look at the guard's reply.
+2. If it is denied with `HOOK_*`, `RUNTIME_INTEGRITY`, `POLICY_INTEGRITY`, `IDENTITY_*`, `FOREIGN_READ` or
+   `SESSION_PUSH_REQUIRED`, **stop**. Report the exact `reason_code` and message, then end the run. Do not retry in a loop.
+3. If it is denied with `SESSION_CLOSURE_REQUIRED`, run exactly the command in the message, bare, from the project root,
+   then repeat the denied call. If `python` is not on PATH, the same command with `python3` is accepted
+   (`python3 -B .cursor/hooks/eif_guard.py --verify-closure <session-key> <request-id>`). The branch must have a pushed
+   upstream. A new local branch with none gets `SESSION_PUSH_REQUIRED`: stop and report it.
+4. Never chmod, rename, delete, edit or "repair" anything under `.cursor/hooks/`, `.cursor/hooks.json`,
+   `.cursor/eif-runtime-*.json`, `.eif/` policy files, `.claude/` or `CLAUDE.md`. Never set environment variables or
+   change Cursor settings to skip hooks, and never ask a subagent to do any of these. A guard denial is the answer, not a
+   puzzle to route around.
+
+---
+
 ## Running Services
 
 ### Local (no Docker)

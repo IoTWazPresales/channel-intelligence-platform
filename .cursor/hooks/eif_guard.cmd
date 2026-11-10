@@ -1,3 +1,4 @@
+:; exec /bin/sh "$(dirname -- "$0")/eif_guard.sh" "$@"; exit 126 #
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
 set "SCRIPT=%~dp0eif_guard.py"
