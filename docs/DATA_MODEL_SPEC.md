@@ -168,12 +168,13 @@ As built (N-0115 implementation, corrections to the text above):
   `cpor_case` (`tenant_via: case`), a third structural path beside `tenant_column` and `tenant_via: dim_product`.
 - The store breakdown id is `site_label` (the v1 dimension id, label "Store / site"), so v1 refuse_examples
   map one to one.
-- Value measures (DSI decision 2, CST decision 3), customer stock cover, restock flags, CPOR "open" and
-  CPOR "value" are not built; they are listed under `pending:` in the model file and in the v2 catalog.
+- Value measures (DSI decision 2, CST decision 3), restock flags, CPOR "open" and CPOR "value" are not
+  built; they are listed under `pending:` in the model file and in the v2 catalog. Customer stock cover
+  is built as `cst_sellthrough.stock_cover` (the sell-through overview's weeks-of-cover rule).
 
 Not invented tonight (each is a proposed decision): which CPOR status is "open" and which value a CPOR
-"value" means; customer stock cover and restock flags (reuse the sell-through code's own definitions if
-they exist, otherwise show reported on-hand beside per-week sell-through with no derived cover).
+"value" means; restock flags. Customer stock cover reuses the sell-through overview: reported stock
+divided by that customer's own sell-through per week in the 4 weeks up to its latest stock report.
 
 ## 11. Proposed decisions for Warren (not picked)
 

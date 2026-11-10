@@ -1,4 +1,4 @@
-"""N-0116 S14: three starter dashboards, defined in code and created on demand (spec s.7).
+"""N-0116 S14: starter dashboards, defined in code and created on demand (spec s.7).
 
 Nothing is seeded: ``POST /dashboards/from-template {key}`` creates a personal dashboard for the
 caller with ``template_key`` set, the starter's ``filters_json`` and its widgets. Every widget's
@@ -94,13 +94,12 @@ TEMPLATES: tuple[Template, ...] = (
             TemplateWidget("Top products", "hbar", (f"{CST}.units",), ("product",), layout=(8, 5, 4, 8), display=_TOP15),
             TemplateWidget(
                 "Stock beside sell-through, by product", "table",
-                (f"{CST}.units", f"{CST}.units_per_week", f"{CST}.reported_soh"), ("product",),
+                (f"{CST}.units", f"{CST}.units_per_week", f"{CST}.reported_soh", f"{CST}.stock_cover"), ("product",),
                 layout=(0, 13, 12, 10), sort=(f"{CST}.units", "desc"),
             ),
             TemplateWidget("Sell-through by store / site", "hbar", (f"{CST}.units",), ("site_label",), layout=(0, 23, 12, 8), display=_TOP15),
         ),
         left_out=(
-            LeftOut("Stock cover", pending=f"{CST}.stock_cover"),
             LeftOut("Restock flags", pending=f"{CST}.restock_flag"),
             LeftOut("Sales value", pending=f"{CST}.value"),
             LeftOut(
@@ -112,9 +111,9 @@ TEMPLATES: tuple[Template, ...] = (
     ),
     Template(
         key="sellthrough_stock",
-        title="Sell-through & stock across customers",  # D4 (proposed): no cover figure exists yet
+        title="Sell-through & stock across customers",
         description=(
-            "Sell-through and latest reported stock for each retailer, side by side, and the monthly trend."
+            "Sell-through, latest reported stock and weeks of cover for each retailer, side by side, and the monthly trend."
         ),
         filters_json={
             "date": {"preset": "last_52_weeks", "from": None, "to": None},
@@ -135,12 +134,12 @@ TEMPLATES: tuple[Template, ...] = (
             ),
             TemplateWidget(
                 "Stock beside sell-through, by customer", "table",
-                (f"{CST}.units", f"{CST}.units_per_week", f"{CST}.reported_soh", f"{CST}.stores_reporting"), ("customer",),
+                (f"{CST}.units", f"{CST}.units_per_week", f"{CST}.reported_soh", f"{CST}.stock_cover", f"{CST}.stores_reporting"),
+                ("customer",),
                 layout=(0, 13, 12, 8), sort=(f"{CST}.units", "desc"),
             ),
         ),
         left_out=(
-            LeftOut("Stock cover in weeks", pending=f"{CST}.stock_cover"),
             LeftOut("Restock flags", pending=f"{CST}.restock_flag"),
             LeftOut("Sales value", pending=f"{CST}.value"),
         ),
@@ -176,6 +175,52 @@ TEMPLATES: tuple[Template, ...] = (
             LeftOut("Open cases", pending="cpor.open_cases"),
             LeftOut("Case value", pending="cpor.value"),
             LeftOut("Cases as a pie", reason="Cases is a distinct count, so its parts do not add up to a whole; bars are used."),
+        ),
+    ),
+    Template(
+        key="my_accounts",
+        title="My accounts",
+        description=(
+            "Sell-through, reported stock and weeks of cover for the customer accounts assigned to you. "
+            "While My accounts is on, every figure stays inside that list. Clear My accounts and this shows "
+            "the wider book your role and product lines allow. Assignments are changed by an admin, not by this dashboard."
+        ),
+        filters_json={
+            "date": {"preset": "last_52_weeks", "from": None, "to": None},
+            "compare": "previous_period",
+            **_EMPTY_VALUES,
+            "required": [],
+        },
+        widgets=(
+            TemplateWidget("Sell-through units", "kpi", (f"{CST}.units",), layout=(0, 0, 3, 5), display=_KPI_SPARK),
+            TemplateWidget("Units per week", "kpi", (f"{CST}.units_per_week",), layout=(3, 0, 3, 5), display=_KPI_COMPARE),
+            TemplateWidget(
+                "Reported stock on hand (latest report)", "kpi", (f"{CST}.reported_soh",), layout=(6, 0, 3, 5),
+                display={**_KPI_PLAIN, "caption": "as of latest report on or before {to}"},
+            ),
+            TemplateWidget(
+                "Weeks of cover", "kpi", (f"{CST}.stock_cover",), layout=(9, 0, 3, 5),
+                display={**_KPI_PLAIN, "caption": "4 weeks of sell-through up to each customer's latest stock report"},
+            ),
+            TemplateWidget("Sell-through by account", "hbar", (f"{CST}.units",), ("customer",), layout=(0, 5, 6, 8), display=_TOP15),
+            TemplateWidget(
+                "Weeks of cover by account", "hbar", (f"{CST}.stock_cover",), ("customer",), layout=(6, 5, 6, 8), display=_TOP15,
+            ),
+            TemplateWidget(
+                "Stock, cover and sell-through by account", "table",
+                (f"{CST}.units", f"{CST}.units_per_week", f"{CST}.reported_soh", f"{CST}.stock_cover"),
+                ("customer",),
+                layout=(0, 13, 12, 8), sort=(f"{CST}.units", "desc"),
+            ),
+            TemplateWidget("Sell-through units by week", "line", (f"{CST}.units",), ("period",), "week", (0, 21, 12, 8)),
+        ),
+        left_out=(
+            LeftOut("Restock flags", pending=f"{CST}.restock_flag"),
+            LeftOut("Sales value", pending=f"{CST}.value"),
+            LeftOut(
+                "A saved copy of the account list",
+                reason="The list is whoever is assigned at the moment you open the dashboard. Clear lasts for this sign-in only.",
+            ),
         ),
     ),
 )

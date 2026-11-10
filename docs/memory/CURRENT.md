@@ -1,8 +1,12 @@
 # CURRENT state
 
-**Last updated:** 2026-11-10 13:22 SAST (serial DB queue: N-0108 re-time recorded; N-0118 re-apply, the listing site-pattern seed and N-0100 part B1 migration `20261110_0061` applied to `cip`; docs record only, no programme ledger edit)
+**Last updated:** 2026-11-10 (lane D: weeks of cover and the My accounts starter; Rand sales value and CPOR open/value are a proposal only)
 
-**Branch:** `feat/integrate-20261103` @ `c87847e8` (Merge #80).
+**Branch:** `cursor/lane-d-brief-dashboards-3efe`
+
+**Lane D (this worktree):** `cst_sellthrough.stock_cover` is weeks of cover by the sell-through overview rule (reported stock divided by that customer's own sell-through per week in the 4 weeks up to its latest stock report on or before period.to; grouped cover is the ratio of those sums). Template `my_accounts` is the fourth starter: no required customer, the existing My accounts filter narrows it while it is on, and Clear shows the wider book for the rest of the sign-in. Proposed definitions, not implemented: `docs/proposals/2026-11-10-rand-sales-value-and-cpor-measures.md`. BACKLOG-217 stays open (independent E4/E10 review, restock flags, sales value, CPOR open/value, concurrency). No write to `cip`. D-0141's filter default is still held. Not merged.
+
+**Integration checkpoint this note used to pin:** `feat/integrate-20261103` @ `c87847e8` (Merge #80). This worktree was cut from the later integrate tip `a3d0a9cd`.
 
 **Integration tip (read-only checkpoint):** Merges on this tip since the 2026-11-09 orphan pass include #60 (N-0118 CST re-key), #65 (BACKLOG-200), #66 (orphan/stage docs), #67/#70 (BACKLOG-221 + residual), #68 (N-0118 NB1/NB3), #69 (decisions), #71 (D-0025 BOM default unticked), #72 (BACKLOG-222 promo_not_activated), #73 (D-0119 stock carry-forward), #74 (D-0038 SOH tolerance), #75 (BACKLOG-006 omit list `line_ids`), #76 (orphan/docs status refresh). Open PRs into this branch: none as of this note. Full orphan evidence: `docs/audits/ORPHAN_AND_STAGE_STATUS_20261110.md`.
 

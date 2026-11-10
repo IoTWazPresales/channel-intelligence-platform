@@ -402,6 +402,76 @@ async def test_reported_stock_follows_the_sell_through_overview_rule():
 
 
 @pytest.mark.anyio
+async def test_weeks_of_cover_follows_the_sell_through_overview_rule():
+    """Stock / the customer's own 4-week rate, anchored on its latest stock date.
+
+    Seed (period.to 2026-04-30), weekly rows are 7 days and March is 31:
+    A1 latest stock 2026-03-30 (soh 25). Window 2026-03-03..03-30.
+      03-02 week overlaps 6/7 of 10 units, 03-09 week is all 3, 03-30 week overlaps 1/7 of 9.
+      rate = 45/14, cover = 25 * 14 / 45.
+    A2 latest stock 2026-03-01 (soh 12). Window touches only 1 day of the March row (30 units).
+      rate = 30/124, cover = 12 * 62 / 15.
+    Portfolio cover is the ratio of those sums, 37 * 217 / 750.
+    """
+    db = await _session_or_skip()
+    try:
+        s = await _seed(db)
+        r = await _v2(
+            db, ["cst_sellthrough.stock_cover"], ["customer"],
+            period_from="2026-03-01", period_to="2026-04-30",
+        )
+        assert r["ok"], r.get("refusals")
+        got = {row["customer_id"]: row["cst_sellthrough.stock_cover"] for row in r["rows"]}
+        assert got[s.cA1.id] == pytest.approx(25 * 14 / 45)
+        assert got[s.cA2.id] == pytest.approx(12 * 62 / 15)
+        assert r["totals"]["cst_sellthrough.stock_cover"] == pytest.approx(37 * 217 / 750)
+        plain = await _v2(
+            db, ["cst_sellthrough.stock_cover"], [],
+            period_from="2026-03-01", period_to="2026-04-30",
+        )
+        assert plain["rows"][0]["cst_sellthrough.stock_cover"] == pytest.approx(37 * 217 / 750)
+
+        by_product = await _v2(
+            db, ["cst_sellthrough.stock_cover"], ["product"],
+            period_from="2026-03-01", period_to="2026-04-30",
+        )
+        products = {row["product_id"]: row["cst_sellthrough.stock_cover"] for row in by_product["rows"]}
+        # pA1 soh 20+12, rates 17/7 and 15/62. pA2 soh 5, rate 11/14.
+        assert products[s.pA1.id] == pytest.approx(32 * 434 / 1159)
+        assert products[s.pA2.id] == pytest.approx(70 / 11)
+
+        # Stock with no sales in the 4 weeks up to that report stays out of both sides.
+        extra = DimCustomer(code=_key("cx"), name=f"Dealer extra {TAG}", tenant_id=TA)
+        db.add(extra)
+        await db.flush()
+        db.add(
+            FactCustomerSellthrough(
+                source_key=_key("cst"), tenant_id=TA, customer_id=extra.id, product_id=s.pA1.id,
+                period_start_date=date(2026, 4, 6), period_type="weekly", period_grain="week",
+                units_sold=0, reported_soh=100,
+            )
+        )
+        db.add(
+            FactCustomerSellthrough(
+                source_key=_key("cst"), tenant_id=TA, customer_id=extra.id, product_id=s.pA1.id,
+                period_start_date=date(2026, 1, 5), period_type="weekly", period_grain="week",
+                units_sold=50, reported_soh=None,
+            )
+        )
+        await db.flush()
+        held = await _v2(
+            db, ["cst_sellthrough.stock_cover"], ["customer"],
+            period_from="2026-03-01", period_to="2026-04-30",
+        )
+        assert held["totals"]["cst_sellthrough.stock_cover"] == pytest.approx(37 * 217 / 750)
+        extra_row = next(row for row in held["rows"] if row["customer_id"] == extra.id)
+        assert extra_row["cst_sellthrough.stock_cover"] is None
+    finally:
+        await db.rollback()
+        await db.close()
+
+
+@pytest.mark.anyio
 async def test_cpor_measures_follow_the_portfolio_service():
     from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 

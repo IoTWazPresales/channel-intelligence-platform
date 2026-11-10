@@ -229,11 +229,11 @@ async def test_from_template_makes_three_personal_dashboards_every_widget_planne
     r = await client.get("/api/v1/dashboards/templates", headers=_h(uid))
     assert r.status_code == 200
     listing = {t["key"]: t for t in r.json()["items"]}
-    assert list(listing) == ["account_overview", "sellthrough_stock", "cpor_cases"]
+    assert list(listing) == ["account_overview", "sellthrough_stock", "cpor_cases", "my_accounts"]
     assert listing["sellthrough_stock"]["title"] == "Sell-through & stock across customers"
 
     dm, v1 = default_model(), load_catalog()
-    sizes = {"account_overview": 8, "sellthrough_stock": 6, "cpor_cases": 8}
+    sizes = {"account_overview": 8, "sellthrough_stock": 6, "cpor_cases": 8, "my_accounts": 8}
     for key, n in sizes.items():
         r = await client.post("/api/v1/dashboards/from-template", json={"key": key}, headers=_h(uid))
         assert r.status_code == 200, r.text

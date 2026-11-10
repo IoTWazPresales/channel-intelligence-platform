@@ -25,7 +25,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Date, Numeric, and_, bindparam, cast, func, literal_column, or_, select
+from sqlalchemy import Date, Integer, Numeric, and_, bindparam, case, cast, func, literal, literal_column, or_, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import ColumnElement, Select
 
@@ -187,6 +187,8 @@ class Compiled:
     weeks_in_window: Decimal | None
     first_bucket_start: date | None
     notes: list[str] = field(default_factory=list)
+    stock_cover_total: Select | None = None
+    stock_cover_id: str | None = None
 
     def sql_text(self) -> str:
         """Rows statement with bound parameter NAMES (never values)."""
@@ -368,6 +370,103 @@ def _measure_expr(ctx: _Ctx, m: Measure, window: ColumnElement[bool] | None, lat
     if m.agg in {"avg", "min", "max"}:
         return agg
     return func.coalesce(agg, literal_column("0"))
+
+
+# Same window as sell_through_overview.RECENT_WEEKS: 4 weeks inclusive, so 27 days back from the anchor.
+_COVER_WEEKS = 4
+_COVER_WINDOW_DAYS = _COVER_WEEKS * 7 - 1
+# A monthly row can start this far before the anchor and still overlap the 4-week window.
+_COVER_LOOKBACK_DAYS = _COVER_WINDOW_DAYS + 31
+
+
+def _stock_cover_source(
+    ctx: _Ctx,
+    plan: Plan,
+    bds: list[_Breakdown],
+    fr: Any,
+    latest: Any,
+    conds: list[ColumnElement[bool]],
+) -> Any:
+    """One row per requested breakdown: stock / 4-week rate, zero-rate customers left out.
+
+    Inner grain is the customer (and the breakdown). The outer row is the ratio of those sums,
+    which is the overview's portfolio weeks of cover, not an average of ratios.
+    """
+    f = ctx.f
+    model = ctx.model
+    assert model.time is not None and latest is not None
+    tcol = f.c[model.time.column]
+    ptype = func.lower(func.coalesce(f.c.period_type, ""))
+    start_month = cast(func.date_trunc(literal_column("'month'"), tcol), Date)
+    next_month = cast(
+        func.date_trunc(literal_column("'month'"), tcol) + literal_column("interval '1 month'"),
+        Date,
+    )
+    month_days = cast(next_month - start_month, Integer)
+    days = case((ptype.like("da%"), 1), (ptype.like("month%"), month_days), else_=7)
+    if plan.period_to is not None:
+        as_of = bindparam("cover_as_of", value=plan.period_to, type_=Date)
+        anchor = func.least(as_of, latest.c.d)
+        cap: ColumnElement[bool] | None = tcol <= as_of
+    else:
+        anchor = latest.c.d
+        cap = None
+    win_start = cast(anchor - literal_column(f"interval '{_COVER_WINDOW_DAYS} days'"), Date)
+    period_end = tcol + (days - literal(1))
+    lo = func.greatest(win_start, tcol)
+    hi = func.least(anchor, period_end)
+    overlap = case((hi >= lo, cast(hi - lo, Integer) + literal(1)), else_=literal(0))
+    zero = cast(literal(0), Numeric)
+    rate_piece = case(
+        (
+            overlap > 0,
+            cast(func.coalesce(f.c.units_sold, 0), Numeric)
+            * cast(overlap, Numeric)
+            / func.nullif(cast(days, Numeric), 0)
+            / literal(_COVER_WEEKS),
+        ),
+        else_=zero,
+    )
+    soh_piece = case(
+        (and_(tcol == latest.c.d, f.c.reported_soh.is_not(None)), cast(f.c.reported_soh, Numeric)),
+        else_=zero,
+    )
+    inner_cols: list[Any] = [f.c.customer_id.label("_cover_customer")]
+    inner_group: list[Any] = [f.c.customer_id]
+    key_names: list[str] = []
+    for b in bds:
+        if b.kind == "period":
+            continue
+        if b.kind in ("entity", "reference"):
+            name = f"{b.id}_id"
+        else:
+            name = b.id
+        inner_cols.append(b.key_expr.label(name))
+        inner_group.append(b.key_expr)
+        key_names.append(name)
+    inner_cols.append(func.coalesce(func.sum(soh_piece), literal(0)).label("soh"))
+    inner_cols.append(func.coalesce(func.sum(rate_piece), literal(0)).label("rate"))
+    cover_where = list(conds)
+    if cap is not None:
+        cover_where.append(cap)
+    cover_where.append(
+        or_(
+            tcol == latest.c.d,
+            tcol >= cast(latest.c.d - literal_column(f"interval '{_COVER_LOOKBACK_DAYS} days'"), Date),
+        )
+    )
+    inner = (
+        select(*inner_cols).select_from(fr).where(*cover_where).group_by(*inner_group).subquery("cover_customer")
+    )
+    soh_sum = func.sum(inner.c.soh).filter(inner.c.rate > 0)
+    rate_sum = func.sum(inner.c.rate).filter(inner.c.rate > 0)
+    weeks = cast(soh_sum, Numeric) / func.nullif(cast(rate_sum, Numeric), 0)
+    outer_cols = [inner.c[name] for name in key_names]
+    outer_cols.append(weeks.label("weeks"))
+    outer = select(*outer_cols)
+    if key_names:
+        outer = outer.group_by(*[inner.c[name] for name in key_names])
+    return outer.subquery("stock_cover")
 
 
 def _num(x: Any) -> Any:
@@ -613,8 +712,29 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
         else:
             key_cols.append(b.id)
 
+    cover_sq = None
+    stock_cover_total = None
+    stock_cover_id = None
+    if any(getattr(m, "kind", None) == "stock_cover" for m in plan.measures):
+        stock_cover_id = next(m.id for m in plan.measures if getattr(m, "kind", None) == "stock_cover")
+        assert latest is not None
+        cover_sq = _stock_cover_source(ctx, plan, bds, fr, latest, conds)
+        stock_cover_total = select(_stock_cover_source(ctx, plan, [], fr, latest, conds).c.weeks)
+        ctx.join_notes.append(
+            "Weeks of cover: reported stock divided by sell-through per week in the 4 weeks "
+            "to each customer's latest stock report on or before period.to"
+        )
+
     prev = None
     from_final: Any = agg
+    if cover_sq is not None:
+        if key_cols:
+            from_final = from_final.outerjoin(
+                cover_sq,
+                and_(*[agg.c[k].is_not_distinct_from(cover_sq.c[k]) for k in key_cols]),
+            )
+        else:
+            from_final = from_final.outerjoin(cover_sq, literal_column("true"))
     if plan.needs_prev and grain:
         prev = agg.alias("prev")
         if ctx.calendar is None:
@@ -625,7 +745,7 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
             )
         on = [prev.c.bucket_start == prev_bucket]
         on.extend(prev.c[k].is_not_distinct_from(agg.c[k]) for k in key_cols if k != "bucket_start")
-        from_final = agg.outerjoin(prev, and_(*on))
+        from_final = from_final.outerjoin(prev, and_(*on))
 
     yearago = None
     if plan.needs_prior_year and grain:
@@ -685,6 +805,9 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
             return expr_for(m.inputs[0]) - expr_for(m.inputs[1])
         if m.kind == "per_week_rate":
             return _num(expr_for(a)) / func.nullif(weeks_expr(), 0)
+        if m.kind == "stock_cover":
+            assert cover_sq is not None
+            return cover_sq.c.weeks
         raise ValueError(m.kind)
 
     breakdown_labels: list[str] = []
@@ -759,6 +882,13 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
     notes = []
     if first_bucket is not None and plan.period_from is not None and plan.period_from != first_bucket:
         notes.append("period.from falls inside a bucket: the first bucket is partial; its previous bucket is whole.")
+    if stock_cover_id:
+        notes.append(
+            "Weeks of cover follows the sell-through overview: reported stock divided by that "
+            "customer's sell-through per week in the 4 weeks up to its latest stock report on or "
+            "before period.to. A customer with no sales in those 4 weeks is left out. period.from "
+            "does not move the figure."
+        )
     return Compiled(
         rows=rows_q,
         totals=totals_q,
@@ -771,4 +901,6 @@ def compile_plan(dm: DataModel, plan: Plan, *, tenant_id: str, calendar: Any = N
         weeks_in_window=weeks_in_window,
         first_bucket_start=first_bucket,
         notes=notes,
+        stock_cover_total=stock_cover_total,
+        stock_cover_id=stock_cover_id,
     )
