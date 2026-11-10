@@ -238,7 +238,68 @@ def test_slow_and_unsold_are_labels_only(world: World):
     assert slow["suggestions"] == ["promote", "move", "return"]
     assert unsold["suggestions"] == ["promote", "move", "return"]
     assert slow["suggestion_executed"] is False
+    assert slow["executed_actions"] == []
     assert world.counts()[:2] == before[:2]
+
+
+def test_an_open_stock_action_marks_that_suggestion_executed(world: World):
+    from uuid import uuid4
+
+    from app.models.cpor import CporCase, CporCaseLine
+
+    customer = world.customer("SDC-C")
+    product = world.product("SDC-SLOW")
+    site = world.code("SDC-SITE-A")
+    world.weeks(customer, product, [10, 10, 10, 10], soh=120, site=site)
+    case = CporCase(
+        case_code=f"SDC-{uuid4().hex[:12]}",
+        case_name="Move aged stock",
+        tenant_id=world.tenant,
+        customer_id=customer.id,
+        promotion_type="Stock PP (In-Direct)",
+        window_start=date(2026, 1, 1),
+        window_end=date(2026, 3, 31),
+        status="draft",
+        origin="stock_action",
+        notes="stock_action=move;not_a_support_claim=true",
+        intelligence_exclude=True,
+        currency_code="ZAR",
+        channel="reseller",
+    )
+    world.db.add(case)
+    world.db.flush()
+    world.db.add(
+        CporCaseLine(
+            case_id=case.id,
+            product_id=product.id,
+            srp=100,
+            vat_rate=0.15,
+            dealer_margin_pct=0.12,
+            estimate_qty=120,
+            window_start=case.window_start,
+            window_end=case.window_end,
+        )
+    )
+    world.db.flush()
+    before = world.counts()
+    view = build_customer_view(world.db, world.tenant, customer.id)
+    line = _line(view, site, product.id)
+    assert line["suggestion_executed"] is True
+    assert line["executed_actions"] == ["move"]
+    assert line["suggestions"] == ["promote", "move", "return"]
+    assert world.counts()[:2] == before[:2]
+
+
+def test_approved_competitor_join_executes(world: World):
+    from sqlalchemy import text
+
+    from app.services.cpor.promo_plan_builder import _approved_competitor_prices
+
+    name = world.db.execute(text("select current_database()")).scalar()
+    print("current_database()", name)
+    assert name == "cip_test"
+    prices = _approved_competitor_prices(world.db, -1)
+    assert prices == []
 
 
 def test_customer_can_override_the_suggestion_thresholds(world: World):

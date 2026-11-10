@@ -17,6 +17,7 @@ export const ORIGIN_LABEL: Record<string, string> = {
   manual: 'Manual',
   historical_import: 'Historical import',
   native: 'Manual',
+  stock_action: 'Stock action',
 };
 
 export function stageTone(s: string): 'danger' | 'warning' | 'success' | 'info' | 'neutral' {

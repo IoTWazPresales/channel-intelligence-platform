@@ -1,6 +1,8 @@
 # CURRENT state
 
-**Last updated:** 2026-11-10 13:22 SAST (serial DB queue: N-0108 re-time recorded; N-0118 re-apply, the listing site-pattern seed and N-0100 part B1 migration `20261110_0061` applied to `cip`; docs record only, no programme ledger edit)
+**Last updated:** 2026-11-10 (lane B CPOR). Serial DB queue note below is unchanged.
+
+**Lane B CPOR:** branch `cursor/lane-b2-cpor-cases-ea30` off `feat/integrate-20261103`. Leigh can list slow or unsold stock, raise one draft promotion per customer, or record promote, move, or return. Promote is a Stock PP draft (`proposed_by_cip`). Move and return stay drafts with origin `stock_action` and `intelligence_exclude`; they are not support claims. Opening the list does not write. Observed customer×SKU cover is a flag and does not set quantity or the customer term. Competitor price is the minimum of the latest approved maps, or an honest empty. Focused pytest passed on `cip_test` (`current_database()` = cip_test), including the competitor join. Not merged. Do not push main.
 
 **Branch:** `feat/integrate-20261103` @ `c87847e8` (Merge #80).
 

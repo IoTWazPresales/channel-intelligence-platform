@@ -23,6 +23,20 @@ EVIDENCE_KINDS = ("pattern", "stock_behaviour", "direct_shipment")
 CANDIDATE_STATUSES = ("open", "confirmed", "rejected")
 SUGGESTIONS = ("promote", "move", "return")
 
+
+def stock_action_in_notes(notes: str | None) -> str | None:
+    """Read a promote, move, or return marker. Anything else is not an action."""
+    if not notes:
+        return None
+    for token in str(notes).replace("\n", ";").split(";"):
+        token = token.strip()
+        if not token.startswith("stock_action="):
+            continue
+        action = token.split("=", 1)[1].strip().split()[0]
+        if action in SUGGESTIONS:
+            return action
+    return None
+
 DEFAULT_LEAD_TIME_MIN_DELIVERIES = 5
 DEFAULT_SLOW_COVER_MULTIPLE = 2.0
 DEFAULT_STOCK_BEHAVIOUR_MIN_SOH = 1.0

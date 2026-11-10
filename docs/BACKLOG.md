@@ -2633,7 +2633,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: `fact_competitor_price` 0 · `customer_listing` 218 · `listing_observation` 168; buildable with honest empties; Stage 7.1) · **Parked** · 2026-09-14 · N-0026 UNCOVERED |
+| **Status / parked** | **Built** on `cursor/lane-b2-cpor-cases-ea30` (2026-11-10). Trigger fired: Warren asked to join Market onto the planner line. Listing and the minimum latest approved competitor price show on the draft line. No rows, or prices with no approved map, stay an honest empty. Not merged. |
 | **Effort** | Medium (join + grain + honesty when empty) |
 | **Source** | D-0008; `.eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md`. Live `cip`: `fact_competitor_price` 0 rows; `customer_listing` 218 rows on 3 customers; `listing_observation` 168. |
 | **Idea** | Show listing activation and competitor-SKU prices on each `cpor_case_line` without inventing facts. Product competition only. |
@@ -2650,7 +2650,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-14 · N-0026 UNCOVERED |
+| **Status / parked** | **Built** on `cursor/lane-b2-cpor-cases-ea30` (2026-11-10). Trigger fired: Warren asked to surface observed cover on propose. Customer×SKU weeks are a flag only (`observed_cover_high` at twice the target). Quantity and `commercial_customer_term` are unchanged. Not merged. |
 | **Effort** | Medium (grain: distributor×product week vs customer-term target) |
 | **Source** | `.eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md`. `weeks_of_cover_observation` 194349 rows; `commercial_customer_term.target_cover_weeks` all null (11 terms). |
 | **Idea** | Use observed cover/SOH as a proposal constraint or flag, distinct from target cover weeks. |

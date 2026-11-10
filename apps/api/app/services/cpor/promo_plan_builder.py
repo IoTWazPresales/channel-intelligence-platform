@@ -18,9 +18,11 @@ from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupL
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.derived import WeeksOfCoverObservation
-from app.models.dimensions import DimCustomer, DimProduct
-from app.models.facts import FactCompetitorPrice
+from app.models.dimensions import DimCompetitorBrand, DimCompetitorProduct, DimCustomer, DimProduct
+from app.models.fact_customer_sellthrough import FactCustomerSellthrough
+from app.models.facts import FactCompetitorMapping, FactCompetitorPrice
 from app.models.listing_capture import CustomerListing, ListingObservation
+from app.services.store_dc.rules import DEFAULT_SLOW_COVER_MULTIPLE, is_slow, is_weekly, weekly_rate, weeks_of_cover
 from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.lineup import FactLineupPlanItem
 from app.services import commercial_tenant_profile as tenant_profile
@@ -544,14 +546,97 @@ def _collect_line_specs(
     return specs, source
 
 
+def customer_sku_cover_from_rows(
+    rows: list[Any],
+    *,
+    target_weeks: float | None,
+    multiple: float = DEFAULT_SLOW_COVER_MULTIPLE,
+) -> dict[str, Any]:
+    """Customer × product cover from reported sell-through. Not stored, and not a target."""
+    weekly: dict[Any, float] = {}
+    latest_soh: dict[str, tuple[Any, float]] = {}
+    for row in rows:
+        period, grain, kind, units, soh, site = row[0], row[1], row[2], row[3], row[4], row[5]
+        site_key = (site or "").strip()
+        if soh is not None:
+            previous = latest_soh.get(site_key)
+            if previous is None or period >= previous[0]:
+                latest_soh[site_key] = (period, float(soh))
+        if is_weekly(grain, kind):
+            weekly[period] = weekly.get(period, 0.0) + float(units or 0)
+    soh_total = sum(item[1] for item in latest_soh.values()) if latest_soh else None
+    periods = sorted(weekly)
+    rate = weekly_rate([weekly[period] for period in periods[-4:]]) if periods else None
+    weeks = weeks_of_cover(soh_total, rate)
+    flag = None
+    if weeks is not None:
+        flag = (
+            "high_cover"
+            if target_weeks is not None and is_slow(weeks, float(target_weeks), multiple)
+            else "observed_cover"
+        )
+    return {
+        "weeks": None if weeks is None else round(float(weeks), 4),
+        "flag": flag,
+        "grain": "customer_sku",
+        "writes_target_cover": False,
+        "soh_units": None if soh_total is None else round(float(soh_total), 4),
+        "weekly_rate": None if rate is None else round(float(rate), 4),
+        "note": (
+            "Observed customer and product cover is a flag only. "
+            "It does not change the cover target and it is not stored."
+        ),
+    }
+
+
+def _approved_competitor_prices(session: Session, product_id: int) -> list[dict[str, Any]]:
+    """Latest approved competitor price per brand and SKU. Empty when nothing is mapped."""
+    price_rows = session.execute(
+        select(
+            DimCompetitorBrand.name,
+            DimCompetitorProduct.sku,
+            DimCompetitorProduct.name,
+            FactCompetitorPrice.price,
+            FactCompetitorPrice.observed_at,
+        )
+        .select_from(FactCompetitorMapping)
+        .join(DimCompetitorProduct, DimCompetitorProduct.id == FactCompetitorMapping.competitor_product_id)
+        .join(DimCompetitorBrand, DimCompetitorBrand.id == DimCompetitorProduct.brand_id)
+        .join(
+            FactCompetitorPrice,
+            FactCompetitorPrice.competitor_product_id == DimCompetitorProduct.id,
+        )
+        .where(
+            FactCompetitorMapping.product_id == int(product_id),
+            FactCompetitorMapping.approval_status == "approved",
+        )
+        .order_by(FactCompetitorPrice.observed_at.desc())
+    ).all()
+    seen: set[tuple[Any, ...]] = set()
+    prices: list[dict[str, Any]] = []
+    for brand, sku, name, price, observed in price_rows:
+        if price is None:
+            continue
+        key = (brand, sku, name)
+        if key in seen:
+            continue
+        seen.add(key)
+        label = " ".join(part for part in (str(brand or "").strip(), str(name or sku or "").strip()) if part)
+        prices.append({"label": label, "price": float(price), "observed": str(observed)[:10]})
+    return prices
+
+
 def load_promotion_line_evidence(
     session: Session,
     *,
     customer_id: int | None,
     product_id: int,
     distributor_id: int | None,
+    target_weeks: float | None = None,
+    tenant_id: str = "default",
+    slow_multiple: float = DEFAULT_SLOW_COVER_MULTIPLE,
 ) -> dict[str, Any]:
-    """Listing and cover for one plan line. Competitor price is never invented."""
+    """Listing, approved competitor prices, and customer × product cover for one plan line."""
     listing: dict[str, Any] = {
         "listed": False,
         "listing_count": 0,
@@ -562,17 +647,22 @@ def load_promotion_line_evidence(
         "data_unavailable": True,
         "row_count": 0,
         "price": None,
-        "note": (
-            "No competitor price is attached to this product. "
-            "An empty fact is not filled in, and there is no approved map from this product to a competitor SKU."
-        ),
+        "prices": [],
+        "mapped": False,
+        "note": "No competitor price is stored. An empty fact is not filled in.",
     }
     cover: dict[str, Any] = {
         "weeks": None,
         "flag": None,
-        "grain": "distributor_product",
+        "grain": "customer_sku",
         "writes_target_cover": False,
-        "note": "Observed cover is a flag only. It does not change the customer cover target.",
+        "distributor_product_weeks": None,
+        "soh_units": None,
+        "weekly_rate": None,
+        "note": (
+            "Observed customer and product cover is a flag only. "
+            "It does not change the cover target and it is not stored."
+        ),
     }
     try:
         if customer_id is not None:
@@ -599,8 +689,40 @@ def load_promotion_line_evidence(
         competitor["row_count"] = row_count
         competitor["data_unavailable"] = row_count == 0
         if row_count > 0:
-            competitor["note"] = (
-                "Competitor prices exist and stay off this product. There is no approved product map."
+            prices = _approved_competitor_prices(session, int(product_id))
+            competitor["prices"] = prices
+            competitor["mapped"] = bool(prices)
+            if prices:
+                competitor["price"] = min(item["price"] for item in prices)
+                competitor["note"] = (
+                    "Approved competitor prices for this product. "
+                    "This is product competition, not a comparison of customers."
+                )
+            else:
+                competitor["note"] = (
+                    "Competitor prices are stored, and none are on an approved map for this product."
+                )
+        if customer_id is not None:
+            sellthrough_rows = session.execute(
+                select(
+                    FactCustomerSellthrough.period_start_date,
+                    FactCustomerSellthrough.period_grain,
+                    FactCustomerSellthrough.period_type,
+                    FactCustomerSellthrough.units_sold,
+                    FactCustomerSellthrough.reported_soh,
+                    FactCustomerSellthrough.site_label,
+                ).where(
+                    FactCustomerSellthrough.tenant_id == tenant_id,
+                    FactCustomerSellthrough.customer_id == int(customer_id),
+                    FactCustomerSellthrough.product_id == int(product_id),
+                )
+            ).all()
+            cover.update(
+                customer_sku_cover_from_rows(
+                    sellthrough_rows,
+                    target_weeks=target_weeks,
+                    multiple=slow_multiple,
+                )
             )
         woc_stmt = select(WeeksOfCoverObservation.weeks_of_cover).where(
             WeeksOfCoverObservation.product_id == int(product_id)
@@ -611,8 +733,7 @@ def load_promotion_line_evidence(
             woc_stmt.order_by(WeeksOfCoverObservation.cover_as_of_date.desc()).limit(1)
         ).all()
         if woc_rows and woc_rows[0][0] is not None:
-            cover["weeks"] = float(woc_rows[0][0])
-            cover["flag"] = "observed_cover"
+            cover["distributor_product_weeks"] = float(woc_rows[0][0])
     except Exception:
         logger.exception(
             "promotion line evidence read failed customer_id=%s product_id=%s distributor_id=%s",
@@ -648,6 +769,7 @@ def _compose_suggestion_row(
     top_comparables: list[dict[str, Any]],
     window_start: date | None = None,
     window_end: date | None = None,
+    tenant_id: str = "default",
 ) -> dict[str, Any]:
     pid = int(spec["product_id"])
     did = spec.get("distributor_id")
@@ -716,6 +838,17 @@ def _compose_suggestion_row(
         )
     )
     seed_line_id = spec.get("seed_line_id")
+    evidence = load_promotion_line_evidence(
+        session,
+        customer_id=int(customer_id) if customer_id is not None else None,
+        product_id=pid,
+        distributor_id=int(did) if did is not None else None,
+        target_weeks=float(weeks) if weeks is not None else None,
+        tenant_id=tenant_id,
+    )
+    flags = list(intake_json.get("flags") or [])
+    if (evidence.get("observed_cover") or {}).get("flag") == "high_cover":
+        flags.append("observed_cover_high")
     return {
         "row_key": _row_key(
             product_id=pid,
@@ -741,14 +874,9 @@ def _compose_suggestion_row(
             "override_weeks": float(cover_override) if cover_override is not None else None,
         },
         "volume": volume,
-        "promotion_evidence": load_promotion_line_evidence(
-            session,
-            customer_id=int(customer_id) if customer_id is not None else None,
-            product_id=pid,
-            distributor_id=int(did) if did is not None else None,
-        ),
+        "promotion_evidence": evidence,
         "intake_weighted": intake_json,
-        "flags": list(intake_json.get("flags") or []),
+        "flags": flags,
         "editable_fields": list(EDITABLE_PLANNER_FIELDS),
         "display_only_fields": [
             "bucket_a_on_hand",
@@ -774,6 +902,7 @@ def build_promo_plan_draft(
     comparable_limit: int = 10,
     extra_lines: list[dict[str, Any]] | None = None,
     line_specs: list[dict[str, Any]] | None = None,
+    tenant_id: str = "default",
 ) -> dict[str, Any]:
     """Compose a promotion-plan draft for operator review / case authoring.
 
@@ -918,6 +1047,7 @@ def build_promo_plan_draft(
             top_comparables=top,
             window_start=window_start,
             window_end=window_end,
+            tenant_id=tenant_id,
         )
         for spec in specs
     ]
@@ -990,7 +1120,7 @@ def build_promo_plan_draft(
             "Budget uses B2 lineup-derived reservation when planned_support_usd omitted",
             "Dirty-flag is client-owned; Refresh must not clobber dirty cells",
             "Customer+period product set is lineup then same-customer history; never other customers",
-            "Listing joins by customer and product. Competitor price stays empty unless a mapped fact exists. Observed cover is a flag and does not write the customer cover target.",
+            "Listing joins by customer and product. Competitor price is the latest approved map, or empty. Observed customer and product cover is a flag and does not write the cover target or the quantity.",
         ],
         "uncovered": [
             "uplift_from_claim_evidence",
@@ -1046,6 +1176,10 @@ def create_case_from_promo_draft(
     confirm_over_budget: bool = False,
     actor: str | None = None,
     lines: list[dict[str, Any]] | None = None,
+    stock_action: str | None = None,
+    case_origin: str | None = None,
+    case_name_override: str | None = None,
+    intelligence_exclude: bool = False,
     generate_case_code,
     record_event,
     recompute_case_line,
@@ -1070,6 +1204,7 @@ def create_case_from_promo_draft(
         planned_revenue_usd=planned_revenue_usd,
         horizon_weeks=horizon_weeks,
         line_specs=None,
+        tenant_id=tenant_id,
     )
     seed = session.get(CporCase, int(seed_case_id)) if seed_case_id is not None else None
     if seed_case_id is not None and seed is None:
@@ -1138,6 +1273,15 @@ def create_case_from_promo_draft(
 
     if channel not in CPOR_CHANNEL_SET:
         channel = "reseller"
+    if case_origin:
+        origin = case_origin
+    if case_name_override:
+        case_name = case_name_override
+    if stock_action:
+        marker = f"stock_action={stock_action}"
+        if intelligence_exclude:
+            marker += ";not_a_support_claim=true"
+        notes = marker + ("\n" + notes if notes else "")
 
     actor_s = actor or "b4_promo_draft"
     code = generate_case_code(session)
@@ -1158,6 +1302,7 @@ def create_case_from_promo_draft(
         created_by=actor_s,
         export_version=1,
         workflow_status="draft",
+        intelligence_exclude=bool(intelligence_exclude),
     )
     session.add(case)
     session.flush()
@@ -1220,6 +1365,24 @@ def create_case_from_promo_draft(
                 "cover_not_persisted_to_customer_term": True,
             },
         }
+        draft_line = next(
+            (
+                row
+                for row in (draft.get("lines") or [])
+                if int(row.get("product_id") or 0) == pid
+            ),
+            None,
+        )
+        evidence = (draft_line or {}).get("promotion_evidence")
+        if evidence and (evidence.get("observed_cover") or {}).get("flag") == "high_cover":
+            flags = list(cost_evidence.get("flags") or [])
+            if "observed_cover_high" not in flags:
+                flags.append("observed_cover_high")
+            cost_evidence["flags"] = flags
+        if evidence:
+            cost_evidence["promotion_evidence"] = evidence
+        if stock_action:
+            cost_evidence["stock_action"] = stock_action
 
         line = CporCaseLine(
             case_id=case.id,

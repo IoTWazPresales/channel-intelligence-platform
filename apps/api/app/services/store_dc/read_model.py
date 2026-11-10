@@ -30,6 +30,7 @@ from app.services.store_dc.rules import (
     norm_label,
     onward_leg,
     slow_multiple,
+    stock_action_in_notes,
     suggestion_labels,
     unsold_window_weeks,
     weekly_rate,
@@ -99,6 +100,27 @@ def _weekly_totals(rows: list[_Fact]) -> list[tuple[date, float]]:
     return sorted(buckets.items())
 
 
+def _open_stock_actions(db: Session, tenant_id: str, customer_id: int) -> dict[int, set[str]]:
+    """Open promote, move, or return markers for this customer. A read, not a write."""
+    from app.models.cpor import CporCase, CporCaseLine
+
+    rows = db.execute(
+        select(CporCaseLine.product_id, CporCase.notes)
+        .join(CporCase, CporCase.id == CporCaseLine.case_id)
+        .where(
+            CporCase.tenant_id == tenant_id,
+            CporCase.customer_id == int(customer_id),
+            CporCase.status.in_(("draft", "proposed", "approved", "active")),
+        )
+    ).all()
+    found: dict[int, set[str]] = defaultdict(set)
+    for product_id, notes in rows:
+        action = stock_action_in_notes(notes)
+        if action and product_id is not None:
+            found[int(product_id)].add(action)
+    return found
+
+
 def _line(
     rows: list[_Fact],
     *,
@@ -108,6 +130,7 @@ def _line(
     multiple: float,
     unsold_weeks: float,
     leg: dict[str, Any],
+    executed_actions: set[str] | None = None,
 ) -> dict[str, Any]:
     weeks = _weekly_totals(rows)
     rate_n = min(4, len(weeks))
@@ -121,6 +144,7 @@ def _line(
     window_units = sum(units for _, units in weeks[-unsold_n:]) if weeks else 0.0
     slow = is_slow(woc, cover["target_weeks"], multiple)
     unsold = is_unsold(soh, window_units, len(weeks), unsold_weeks)
+    taken = set(executed_actions or ())
     return {
         "product_id": product_id,
         "sku": product.sku if product else None,
@@ -137,7 +161,8 @@ def _line(
         "slow": slow,
         "unsold": unsold,
         "suggestions": suggestion_labels(slow=slow, unsold=unsold),
-        "suggestion_executed": False,
+        "suggestion_executed": bool(taken),
+        "executed_actions": sorted(taken),
         "cover_min_weeks": cover["min_weeks"],
         "cover_target_weeks": cover["target_weeks"],
     }
@@ -162,9 +187,19 @@ def _site_block(
     multiple: float,
     unsold_weeks: float,
     leg: dict[str, Any],
+    executed: dict[int, set[str]] | None = None,
 ) -> dict[str, Any]:
     lines = [
-        _line(group, product=products.get(pid), product_id=pid, cover=cover, multiple=multiple, unsold_weeks=unsold_weeks, leg=leg)
+        _line(
+            group,
+            product=products.get(pid),
+            product_id=pid,
+            cover=cover,
+            multiple=multiple,
+            unsold_weeks=unsold_weeks,
+            leg=leg,
+            executed_actions=None if executed is None else executed.get(pid),
+        )
         for pid, group in sorted(_group_products(rows).items())
     ]
     need_values = [ln["need_units"] for ln in lines if ln["need_units"] is not None]
@@ -427,6 +462,7 @@ def build_customer_view(db: Session, tenant_id: str, customer_id: int) -> dict[s
     customer = db.get(DimCustomer, customer_id)
     if customer is None or customer.tenant_id != tenant_id:
         raise LookupError(str(customer_id))
+    executed = _open_stock_actions(db, tenant_id, customer_id)
     cfg_row = tenant_config(db, tenant_id)
     min_deliveries = int(cfg_row["lead_time_min_deliveries"])
     dcs = _confirmed_dcs(db, tenant_id, customer_id)
@@ -491,6 +527,7 @@ def build_customer_view(db: Session, tenant_id: str, customer_id: int) -> dict[s
                     multiple=own_multiple,
                     unsold_weeks=own_unsold,
                     leg=leg,
+                    executed=executed,
                 )
             )
     collapsed = None
@@ -511,6 +548,7 @@ def build_customer_view(db: Session, tenant_id: str, customer_id: int) -> dict[s
             multiple=own_multiple,
             unsold_weeks=own_unsold,
             leg=leg,
+            executed=executed,
         )
     grain = "store" if sites or labeled else "account"
     lead_times = []
