@@ -8,6 +8,8 @@ import type { UserRole } from '@cip/types';
 export type CurrentUser = {
   id: string;
   role: UserRole | string;
+  /** N-0100 part B: what the person does; not a role, grants nothing. */
+  job?: string | null;
   tenant_id?: string | null;
   email?: string | null;
   display_name?: string | null;

@@ -32,6 +32,7 @@ type ListedUser = {
   email: string;
   display_name: string;
   role: string;
+  job?: string | null;
   tenant_id: string;
   is_active: boolean;
   invite_sent?: boolean;
@@ -43,6 +44,24 @@ type UsersResponse = {
 };
 
 const ROLES: UserRole[] = ['admin', 'steward', 'planner', 'viewer'];
+
+/** N-0100 part B: a job is what the person does. It is not a role and grants no access. */
+const JOBS: { value: string; label: string }[] = [
+  { value: 'account_manager', label: 'Account manager' },
+  { value: 'product_manager', label: 'Product manager' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'country_manager', label: 'Country manager' },
+  { value: 'admin', label: 'Admin' },
+];
+const NO_JOB = '';
+
+function jobLabel(job: string | null | undefined): string {
+  if (!job) return 'No job';
+  return JOBS.find((j) => j.value === job)?.label ?? job;
+}
+
+const JOB_NOTE =
+  'A job says what the person does. It does not change what they can see or edit; the role and product lines still decide that.';
 
 type AccountChoice = { id: number; name: string };
 type AccountScope = 'all' | 'selected';
@@ -120,6 +139,9 @@ export function UsersWorkspace() {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState<UserRole>('viewer');
+  const [job, setJob] = useState<string>(NO_JOB);
+  const [jobUserId, setJobUserId] = useState('');
+  const [jobDraft, setJobDraft] = useState<string>(NO_JOB);
   const [formError, setFormError] = useState<string | null>(null);
   const [formOk, setFormOk] = useState<string | null>(null);
   const [accessUserId, setAccessUserId] = useState('');
@@ -205,6 +227,7 @@ export function UsersWorkspace() {
         email,
         display_name: displayName,
         role,
+        job: job || null,
         tenant_id: me?.tenant_id || 'default',
         account_scope: createScope,
         customer_ids: createScope === 'selected' ? createAccountIds : [],
@@ -219,6 +242,7 @@ export function UsersWorkspace() {
       setEmail('');
       setDisplayName('');
       setRole('viewer');
+      setJob(NO_JOB);
       setCreateScope('all');
       setCreateAccountIds([]);
       await qc.invalidateQueries({ queryKey: ['auth', 'users'] });
@@ -310,6 +334,19 @@ export function UsersWorkspace() {
     },
   });
 
+  const saveJob = useMutation({
+    mutationFn: () => apiPut(`/api/v1/auth/users/${jobUserId}/job`, { job: jobDraft || null }),
+    onSuccess: async () => {
+      setFormError(null);
+      setFormOk('Job saved. Access is unchanged.');
+      await qc.invalidateQueries({ queryKey: ['auth', 'users'] });
+    },
+    onError: (err) => {
+      setFormOk(null);
+      setFormError(safeDisplayError(err));
+    },
+  });
+
   const saveAccounts = useMutation({
     mutationFn: () =>
       apiPut(`/api/v1/auth/users/${accountUserId}/accounts`, {
@@ -375,6 +412,7 @@ export function UsersWorkspace() {
       { field: 'email', headerName: 'Email', flex: 1, minWidth: 180 },
       { field: 'display_name', headerName: 'Name', flex: 1, minWidth: 140 },
       { field: 'role', headerName: 'Role', minWidth: 110 },
+      { field: 'job', headerName: 'Job', minWidth: 140, valueFormatter: (p) => jobLabel(p.value) },
       {
         field: 'is_active',
         headerName: 'Active',
@@ -496,6 +534,27 @@ export function UsersWorkspace() {
               ))}
             </Select>
           </FormControl>
+          <FormControl fullWidth>
+            <InputLabel id="users-job-label" shrink>
+              Job
+            </InputLabel>
+            <Select
+              labelId="users-job-label"
+              label="Job"
+              displayEmpty
+              notched
+              value={job}
+              onChange={(ev) => setJob(String(ev.target.value))}
+              inputProps={{ 'data-testid': 'users-job' }}
+            >
+              <MenuItem value={NO_JOB}>No job</MenuItem>
+              {JOBS.map((j) => (
+                <MenuItem key={j.value} value={j.value}>
+                  {j.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <AccountScopeControls
             scope={createScope}
             onScope={setCreateScope}
@@ -514,6 +573,74 @@ export function UsersWorkspace() {
               data-testid="users-create-submit"
             >
               {createMutation.isPending ? 'Sending invite…' : 'Create and send invite'}
+            </Button>
+          </Box>
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 3, mb: 3 }} data-testid="users-job-editor">
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+          Job
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="users-job-note">
+          {JOB_NOTE}
+        </Typography>
+        <Stack spacing={2} maxWidth={640}>
+          <FormControl fullWidth>
+            <InputLabel id="users-job-user-label">User</InputLabel>
+            <Select
+              labelId="users-job-user-label"
+              label="User"
+              value={jobUserId}
+              onChange={(ev) => {
+                const id = String(ev.target.value);
+                setJobUserId(id);
+                const found = (usersQuery.data?.users ?? []).find((u) => u.id === id);
+                setJobDraft(found?.job || NO_JOB);
+              }}
+              inputProps={{ 'data-testid': 'users-job-user' }}
+            >
+              {(usersQuery.data?.users ?? []).map((u) => (
+                <MenuItem key={u.id} value={u.id}>
+                  {u.display_name || u.email}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth>
+            <InputLabel id="users-job-edit-label" shrink>
+              Job
+            </InputLabel>
+            <Select
+              labelId="users-job-edit-label"
+              label="Job"
+              displayEmpty
+              notched
+              value={jobDraft}
+              disabled={!jobUserId}
+              onChange={(ev) => setJobDraft(String(ev.target.value))}
+              inputProps={{ 'data-testid': 'users-job-edit' }}
+            >
+              <MenuItem value={NO_JOB}>No job</MenuItem>
+              {JOBS.map((j) => (
+                <MenuItem key={j.value} value={j.value}>
+                  {j.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Box>
+            <Button
+              variant="contained"
+              disabled={!jobUserId || saveJob.isPending}
+              data-testid="users-job-save"
+              onClick={() => {
+                setFormError(null);
+                setFormOk(null);
+                saveJob.mutate();
+              }}
+            >
+              {saveJob.isPending ? 'Saving…' : 'Save job'}
             </Button>
           </Box>
         </Stack>
