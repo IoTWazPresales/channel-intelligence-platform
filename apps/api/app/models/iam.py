@@ -27,7 +27,9 @@ class AppUser(Base):
         # N-0100 part B (20261110_0061): a job is not a role.
         CheckConstraint(
             "job IS NULL OR job IN ('account_manager', 'product_manager', 'finance', 'country_manager', 'admin')",
-            name="ck_app_user_job",
+            # The "ck" naming convention prefixes ck_app_user_, so the database name is ck_app_user_job
+            # (the name migration 20261110_0061 creates).
+            name="job",
         ),
     )
 

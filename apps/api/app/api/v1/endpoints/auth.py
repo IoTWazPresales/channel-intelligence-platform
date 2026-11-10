@@ -355,6 +355,7 @@ async def put_user_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     previous = user.job
     user.job = body.job
+    user.updated_at = datetime.now(timezone.utc)
     await record_platform_audit(
         db,
         admin,

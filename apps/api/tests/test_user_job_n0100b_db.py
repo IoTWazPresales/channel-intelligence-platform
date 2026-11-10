@@ -171,6 +171,30 @@ async def test_create_user_stores_the_job(tx) -> None:
 
 
 @pytest.mark.anyio
+async def test_create_user_refuses_an_unknown_job(tx) -> None:
+    client, session = tx
+    admin = await _user(session, "n0100b-admin6@example.test", role="admin")
+    r = await client.post(
+        "/api/v1/auth/users",
+        json={"email": "n0100b-bad-new@example.test", "display_name": "Bad", "role": "viewer", "job": "planner"},
+        headers=_h(admin),
+    )
+    assert r.status_code == 422
+    n = (await session.execute(text("select count(*) from app_user where email = 'n0100b-bad-new@example.test'"))).scalar_one()
+    assert n == 0
+
+
+def test_model_check_name_matches_the_migration() -> None:
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.schema import CreateTable
+
+    from app.models.iam import AppUser
+
+    ddl = str(CreateTable(AppUser.__table__).compile(dialect=postgresql.dialect()))
+    assert "CONSTRAINT ck_app_user_job CHECK" in ddl
+
+
+@pytest.mark.anyio
 async def test_the_database_refuses_a_job_outside_the_five(tx) -> None:
     _client, session = tx
     with pytest.raises(IntegrityError):
