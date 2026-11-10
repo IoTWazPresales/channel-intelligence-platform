@@ -1,12 +1,17 @@
 # CURRENT state
 
-**Last updated:** 2026-11-10 (untrack `apps/api/.cip-alembic-smoke-pg/`; cip Alembic record corrected to `20261105_0060`; docs record only — no programme ledger edit)
+**Last updated:** 2026-11-10 12:40 SAST (serial DB queue: N-0108 re-time recorded; N-0118 re-apply of jobs 913 and 912 applied to `cip`; docs record only, no programme ledger edit)
 
-**Branch:** `feat/integrate-20261103` @ `5a94a97d` (Merge #76).
+**Branch:** `feat/integrate-20261103` @ `52449695` (Merge #78).
 
 **Integration tip (read-only checkpoint):** Merges on this tip since the 2026-11-09 orphan pass include #60 (N-0118 CST re-key), #65 (BACKLOG-200), #66 (orphan/stage docs), #67/#70 (BACKLOG-221 + residual), #68 (N-0118 NB1/NB3), #69 (decisions), #71 (D-0025 BOM default unticked), #72 (BACKLOG-222 promo_not_activated), #73 (D-0119 stock carry-forward), #74 (D-0038 SOH tolerance), #75 (BACKLOG-006 omit list `line_ids`), #76 (orphan/docs status refresh). Open PRs into this branch: none as of this note. Full orphan evidence: `docs/audits/ORPHAN_AND_STAGE_STATUS_20261110.md`.
 
-**Still held (do not start from this note):** migrations / `cip` writes (N-0118 apply to cip, listing seed, N-0100 part B, BACKLOG-214, NB2 superseded index, D-0034 cleanup). Stage 1b grants are done (`20261105_0058`–`20261105_0060` already on cip). D-0035: leave smoke case in (Warren 2026-11-10). BACKLOG-051 reconciliation report remains Parked (TRIGGER not met). Do not push to main.
+**Still held (do not start from this note):** migrations / `cip` writes (listing seed, N-0100 part B, BACKLOG-214, NB2 superseded index, D-0034 cleanup). Stage 1b grants are done (`20261105_0058`–`20261105_0060` already on cip). D-0035: leave smoke case in (Warren 2026-11-10). BACKLOG-051 reconciliation report remains Parked (TRIGGER not met). Do not push to main.
+
+**Serial DB queue (Warren 2026-11-10 12:03 SAST, card t190s1118):** run in order, one at a time; every `cip` write has a table backup under `C:\Users\warren_eliason\cip-apply-logs\20261110-<step>\`, a clone proof first, `current_database()` printed, and this file updated straight after. Logs: `C:\Users\warren_eliason\cip-run-logs\jobN\`.
+- **Step 0 (done):** BACKLOG-214 uncommitted work saved to branches `wip/backlog-214-c57a` (`f36a27b9`, 8 migrations) and `wip/backlog-214-e5d4` (`5b57def9`, 7 migrations + `apps/api/_prove_b214.py`). No PR. Worktrees kept; `.pg_b214/` and the four recon `_prove_b214_*.py` scripts left uncommitted.
+- **Step 1 N-0108 re-time (done, read-only on `cip`, 2026-11-10 12:06):** latest-observation read on the tip (#44): old DISTINCT ON vs new lateral, same rows every scope (2,481 / 2,481 / 1,099 `NB`). Seconds old->new: unset 2.952->0.340, `*` 0.511->0.218, `NB` 0.378->0.268. Handlers on the tip: Brief 2.145 / 0.779 / 1.194 s, Cover 0.867 / 0.940 / 0.984 s (the 2026-11-0x probe had Cover `NB` 8.559 s). Transaction read-only, rolled back.
+- **Step 2 N-0118 (done, applied to `cip` 2026-11-10 12:37 SAST):** #78 (`52449695`) chunks `move_to_superseded` and the same-key read. `SHOW server_encoding` on `cip` = UTF8. Clone `cip_n0118_clone` (pg_dump of `cip`, table counts equal except `task_run`): PASS. Then `cip` (`current_database=cip`): job 913 (customer 11) applied 1,599 lines -> 1,544 site facts on 68 sites, units 91, on-hand 1,535; the 51 chain-key facts (units 1, on-hand 15) moved to `fact_customer_sellthrough_superseded` (`restated_by_newer_load`). Job 912 (customer 12) applied 4,320 lines -> 4,237 site facts on 104 sites, units 196, on-hand 3,957; the 82 chain-key facts (units 3, on-hand 31) moved aside. 358 and 1,072 unmatched lines stay staged. A second apply of each changed nothing (rolled back). Other customers' facts, other weeks of 11/12, earlier superseded records and master counts unchanged (md5). Jobs 900, 906, 907 not applied (LOAD_PLAN steps 2-3). Backup `cip-apply-logs\20261110-step2-n0118\cip-tables-20261110-123642.dump` (sha256 `5dbee14a...cf05`). Script `cip-run-logs\jobN\n0118_reapply.py`.
 
 **N-0118 / decisions body below** is the prior 2026-11-06–09 record and still governs those items unless a later note here says otherwise.
 
