@@ -9,15 +9,17 @@ Rule (customer x product, as of date D):
 - period = latest ``period_start_date`` <= D among CST rows with ``reported_soh``;
 - ``soh_units`` = sum of ``reported_soh`` over that period's rows (all sites —
   stock wherever it sits; D-0038);
-- ``soh_unit_cost`` = ``reported_soh``-weighted average of ``unit_mac`` else
-  ``unit_cost`` (same preference as CPOR tier-1 cost) over rows carrying both;
+- ``soh_unit_cost`` = ex-VAT ``reported_soh``-weighted average of ``unit_mac`` else
+  ``unit_cost`` (same preference as CPOR tier-1 cost). Incl-VAT costs are divided
+  by 1.15 first. A cost with an unknown VAT basis is left out;
 - ``delta`` = derived MAC - ``soh_unit_cost``. When both sides exist, flag
   ``soh_tolerance`` if abs(delta) / abs(derived MAC) exceeds the tenant
-  tolerance (default 10%; D-0038). Accounts with SOH units but no cost (e.g.
-  Evetech) stay units-only: no invented cost, no cost-tolerance flag.
+  tolerance (default 10%; D-0038). Accounts with SOH units but no cost stay
+  units-only: no invented cost, no cost-tolerance flag.
 Flags: ``zero_soh`` (reported 0 on hand: no cost to check), ``no_soh_cost`` (SOH
-units without any cost field), ``soh_tolerance`` (cost gap beyond tolerance).
-``vat_basis`` is passed through, not converted.
+units without any cost field), ``soh_tolerance`` (cost gap beyond tolerance),
+``vat_basis_unknown`` (a cost whose basis is missing or neither ex-VAT nor incl-VAT).
+``vat_basis`` on the result stays the source value. The compared cost is ex-VAT.
 No CST SOH row for the pair -> ``status: unavailable`` (never zero stock).
 """
 
@@ -36,7 +38,21 @@ from app.services.cpor.waterfall import _as_decimal
 SOURCE_TABLE = "fact_customer_sellthrough"
 # D-0038 default; live reads prefer commercial_tenant_profile.soh_tolerance_pct.
 DEFAULT_SOH_TOLERANCE_PCT = Decimal("0.10")
+# Decided 2026-11-10: the SOH check compares ex-VAT. Incl-VAT costs divide by 1.15.
+VAT_INCL_DIVISOR = Decimal("1.15")
+COMPARED_VAT = "ex_vat"
 FLAG_SOH_TOLERANCE = "soh_tolerance"
+FLAG_VAT_BASIS_UNKNOWN = "vat_basis_unknown"
+
+
+def _vat_kind(basis: str | None) -> str:
+    """``ex`` / ``inc`` / ``unknown``. Only the bases the sell-through files actually store."""
+    raw = str(basis or "").strip().lower()
+    if raw == "ex_vat" or raw.startswith("ex_"):
+        return "ex"
+    if raw.startswith("inc"):
+        return "inc"
+    return "unknown"
 
 
 def _resolve_tolerance_pct(
@@ -76,6 +92,7 @@ def summarise_soh_rows(
     den = Decimal("0")
     fields: set[str] = set()
     vat_bases: set[str] = set()
+    unknown_cost = False
     for _id, _period, _ptype, soh, unit_mac, unit_cost, vat_basis in rows:
         if vat_basis:
             vat_bases.add(str(vat_basis))
@@ -85,7 +102,15 @@ def summarise_soh_rows(
         if cost is None:
             continue
         fields.add("unit_mac" if unit_mac is not None else "unit_cost")
-        num += soh_d * _as_decimal(cost)
+        kind = _vat_kind(None if vat_basis is None else str(vat_basis))
+        if kind == "unknown":
+            # A cost with no known basis must not be treated as ex-VAT or incl-VAT.
+            unknown_cost = True
+            continue
+        cost_d = _as_decimal(cost)
+        if kind == "inc":
+            cost_d = cost_d / VAT_INCL_DIVISOR
+        num += soh_d * cost_d
         den += soh_d
 
     soh_cost = num / den if den > 0 else None
@@ -93,6 +118,8 @@ def summarise_soh_rows(
         flags.append("zero_soh")  # nothing on hand: no SOH-weighted cost to check against
     if not fields:
         flags.append("no_soh_cost")
+    if unknown_cost:
+        flags.append(FLAG_VAT_BASIS_UNKNOWN)
     out.update(
         status="available",
         period_start_date=rows[0][1].isoformat(),
@@ -100,6 +127,7 @@ def summarise_soh_rows(
         row_count=len(rows),
         soh_units=float(units),
         soh_unit_cost=float(soh_cost) if soh_cost is not None else None,
+        soh_cost_vat=COMPARED_VAT if soh_cost is not None else None,
         cost_field=("mixed" if len(fields) > 1 else next(iter(fields))) if fields else None,
         vat_basis=(next(iter(vat_bases)) if len(vat_bases) == 1 else sorted(vat_bases)) or None,
         flags=flags,

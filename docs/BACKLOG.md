@@ -59,10 +59,10 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partial** (2026-09-24 N-0049: SOH check reads CST only - `services/cpor/customer_soh_check.py`, `soh_check` on line cost-suggest; `fact_inventory_customer` not a source. 2026-11-09 D-0038: tolerance flag landed — default 10% of derived MAC via tenant profile `soh_tolerance_pct`, flag `soh_tolerance`; site-sum kept; no-cost rows units-only. Open: VAT basis, `/inventory` page copy) · **Measured** (2026-09-21 N-0030 audit: `fact_inventory_customer` **0** rows, `fact_customer_sellthrough` **1,823**; Stage 4.3) · 2026-08-20 |
+| **Status / parked** | **Partial** (2026-09-24 N-0049: SOH check reads CST only - `services/cpor/customer_soh_check.py`, `soh_check` on line cost-suggest; `fact_inventory_customer` not a source. 2026-11-09 D-0038: tolerance flag landed — default 10% of derived MAC via tenant profile `soh_tolerance_pct`, flag `soh_tolerance`; site-sum kept; no-cost rows units-only. 2026-11-10: VAT basis done — compare ex-VAT, divide incl-VAT by 1.15, flag `vat_basis_unknown` and leave that cost out; `/inventory` copy says hand-entered stock and points retailer files to Sell-through. Still open: the `/inventory` URL redirects to stock cover, so that address does not show the page.) · **Measured** (2026-09-21 N-0030 audit: `fact_inventory_customer` **0** rows, `fact_customer_sellthrough` **1,823**; Stage 4.3) · 2026-08-20 |
 | **Effort** | Medium |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.1 / D-062. Warren: `fact_inventory_customer` is empty; customer SOH is arriving and not landing. |
-| **Idea** | Customer weekly SOH (actual cost) is the **check** on derived customer MAC, not the input. Evetech has no SOH file. Tree today: CST apply writes `reported_soh` / `unit_cost` / `unit_mac` to **`fact_customer_sellthrough`**. `fact_inventory_customer` has no writer; `/inventory` still names that table. Decide whether the MAC check reads CST facts or a real `fact_inventory_customer` writer is required — then implement **one** landing path. |
+| **Idea** | Customer weekly SOH (actual cost) is the **check** on derived customer MAC, not the input. Evetech has no SOH file. Tree today: CST apply writes `reported_soh` / `unit_cost` / `unit_mac` to **`fact_customer_sellthrough`**. `fact_inventory_customer` has no importer writer; `/inventory` is a hand-entry grid on that table and says so. Decide whether the MAC check reads CST facts or a real `fact_inventory_customer` writer is required — then implement **one** landing path. |
 | **Why it matters / deferrable** | Without a landed SOH cost, D-062 cannot run. Deferrable until settlement unit starts; CST ingest already exists. |
 | **What the work is** | (1) Confirm grain: customer×SKU×week cost on CST vs inventory fact. (2) If CST is canonical, point the MAC-check at `fact_customer_sellthrough` and stop claiming `fact_inventory_customer`. (3) If inventory fact is required, add a set-based writer from CST — no second parse. |
 | **Regression traps** | SOH is derived-not-stored for **channel** stock; retailer-reported SOH is a checkpoint only. Never treat CST SOH as the MAC author (D-062). Never silently pro-rate a boundary week. |
@@ -960,11 +960,11 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_A): not Resolved.** The API `over_plan_intake_*` aliases stand, but `5e8c89fa` (2026-10-05) put the UI label back to "Deal-stock landing" (`PlanVsExecutedView.tsx`). Which name stands is Warren's call. **Resolved 2026-08-01** — UI label **Over-plan intake**; exception “Over-ships / over-plan intake”; API `over_plan_intake_*` aliases |
+| **Status / parked** | **Resolved 2026-11-10** — decided name is **Over-plan intake**. Tile label and the about-this-figure sentence in `PlanVsExecutedView.tsx` say that. Formula unchanged (Σ max(shipped − planned, 0)). API `deal_stock_*` keys kept, with `over_plan_intake_*` aliases. **Correction 2026-10-15 (N-0096, SWEEP_A)** had found `5e8c89fa` put the label back to "Deal-stock landing"; that label is gone. **Resolved 2026-08-01** — same UI name; exception “Over-ships / over-plan intake”. |
 | **Effort** | Trivial (UI string + tooltip; optional test ids) |
 | **Source** | `docs/COMMERCIAL_SEMANTICS.md` A1-02; Warren 2026-08-01 (end POD collision) |
 | **Idea** | Rename scorecard label “Deal-stock landing” to **Over-plan intake** (and exception copy “Over-ships / deal-stock” accordingly) so it cannot be read as POD landing. |
-| **Why it matters / deferrable** | Docs already renamed; live UI still says landing. Deferrable to next A1 touch. |
+| **Why it matters / deferrable** | Docs already used the name. The live tile said landing again after 2026-10-15; the 2026-11-10 label matches the docs. |
 | **What the work is** | `PlanVsExecutedView.tsx` (+ tests if they assert the string). |
 | **Regression traps** | Do not change the formula (still Σ max(S−P,0)); do not add POD. |
 | **Behavior to retain** | Same units/value secondary line. |

@@ -153,6 +153,84 @@ def test_zero_derived_mac_with_nonzero_soh_cost_flags():
     assert FLAG_SOH_TOLERANCE in out["flags"]
 
 
+def test_incl_vat_unit_cost_is_divided_by_1_15_before_compare():
+    # 115 incl-VAT is 100 ex-VAT. Compared with a 100 ex-VAT MAC the gap is zero.
+    out = summarise_soh_rows(
+        [_row(1, Decimal("10"), unit_cost=Decimal("115"), vat="inc_vat")],
+        as_of=AS_OF,
+        derived_mac=Decimal("100"),
+        tolerance_pct=Decimal("0.10"),
+    )
+    assert out["soh_unit_cost"] == 100.0
+    assert out["soh_cost_vat"] == "ex_vat"
+    assert out["vat_basis"] == "inc_vat"
+    assert out["delta"] == 0.0
+    assert "vat_basis_unknown" not in out["flags"]
+    assert FLAG_SOH_TOLERANCE not in out["flags"]
+
+
+def test_mixed_vat_bases_are_weighted_after_ex_vat_conversion():
+    rows = [
+        _row(1, Decimal("10"), unit_mac=Decimal("230"), unit_cost=Decimal("1"), vat="inc_vat"),
+        _row(2, Decimal("10"), unit_cost=Decimal("80"), vat="ex_vat"),
+    ]
+    out = summarise_soh_rows(rows, as_of=AS_OF, derived_mac=Decimal("140"), tolerance_pct=Decimal("0.10"))
+    # unit_mac wins on the incl row: 230 / 1.15 = 200. Then (10*200 + 10*80) / 20 = 140.
+    assert out["soh_unit_cost"] == 140.0
+    assert out["soh_cost_vat"] == "ex_vat"
+    assert out["cost_field"] == "mixed"
+    assert out["delta"] == 0.0
+    assert "vat_basis_unknown" not in out["flags"]
+
+
+def test_unknown_vat_basis_is_flagged_and_excluded_from_the_ex_vat_cost():
+    out = summarise_soh_rows(
+        [_row(1, Decimal("10"), unit_cost=Decimal("115"), vat=None)],
+        as_of=AS_OF,
+        derived_mac=Decimal("100"),
+        tolerance_pct=Decimal("0.10"),
+    )
+    assert "vat_basis_unknown" in out["flags"]
+    assert out["soh_unit_cost"] is None
+    assert out["soh_cost_vat"] is None
+    assert "delta" not in out
+    assert FLAG_SOH_TOLERANCE not in out["flags"]
+    assert "no_soh_cost" not in out["flags"]
+
+
+def test_blank_and_unrecognised_vat_basis_are_unknown():
+    for vat in ("", "  ", "gross"):
+        out = summarise_soh_rows(
+            [_row(1, Decimal("4"), unit_mac=Decimal("50"), vat=vat)],
+            as_of=AS_OF,
+            derived_mac=Decimal("50"),
+            tolerance_pct=Decimal("0.10"),
+        )
+        assert "vat_basis_unknown" in out["flags"], vat
+        assert out["soh_unit_cost"] is None
+        assert "delta" not in out
+
+
+def test_unknown_basis_cost_is_left_out_of_a_known_ex_vat_average():
+    rows = [
+        _row(1, Decimal("10"), unit_cost=Decimal("115"), vat="inc_vat"),
+        _row(2, Decimal("10"), unit_cost=Decimal("999"), vat=None),
+    ]
+    out = summarise_soh_rows(rows, as_of=AS_OF, derived_mac=Decimal("100"), tolerance_pct=Decimal("0.10"))
+    assert out["soh_units"] == 20.0
+    assert out["soh_unit_cost"] == 100.0
+    assert out["soh_cost_vat"] == "ex_vat"
+    assert "vat_basis_unknown" in out["flags"]
+    assert out["delta"] == 0.0
+    assert FLAG_SOH_TOLERANCE not in out["flags"]
+
+
+def test_units_without_a_cost_do_not_raise_an_unknown_vat_flag():
+    out = summarise_soh_rows([_row(1, Decimal("7"), vat=None)], as_of=AS_OF, derived_mac=Decimal("50"))
+    assert out["flags"] == ["no_soh_cost"]
+    assert out["soh_unit_cost"] is None
+
+
 def test_tolerance_uses_tenant_default_when_pct_omitted(monkeypatch):
     from app.services import commercial_tenant_profile as ctp
 

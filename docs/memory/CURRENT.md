@@ -1,6 +1,8 @@
 # CURRENT state
 
-**Last updated:** 2026-11-10 13:22 SAST (serial DB queue: N-0108 re-time recorded; N-0118 re-apply, the listing site-pattern seed and N-0100 part B1 migration `20261110_0061` applied to `cip`; docs record only, no programme ledger edit)
+**Last updated:** 2026-11-10 (lane F: BACKLOG-135 ex-VAT SOH check and `/inventory` copy; BACKLOG-091 Over-plan intake label). Prior note: 2026-11-10 13:22 SAST (serial DB queue: N-0108 re-time recorded; N-0118 re-apply, the listing site-pattern seed and N-0100 part B1 migration `20261110_0061` applied to `cip`; docs record only, no programme ledger edit).
+
+**Lane F:** The customer stock check compares ex-VAT. An incl-VAT cost (`vat_basis` starting with `inc`) is divided by 1.15 before the weighted cost and the MAC gap. A cost with a missing or unrecognised VAT basis is flagged `vat_basis_unknown` and left out of that figure. `soh_unit_cost` is ex-VAT when present (`soh_cost_vat` = `ex_vat`). `/inventory` says the grid is hand-entered stock and sends retailer files to Sell-through (`/channel-intelligence`). The old `/inventory` address still redirects to stock cover, so that copy is the page component, not the redirected URL. Plan vs Executed shows **Over-plan intake** (same overship-vs-plan figure; not proof of delivery).
 
 **Branch:** `feat/integrate-20261103` @ `c87847e8` (Merge #80).
 
