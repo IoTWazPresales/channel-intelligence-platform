@@ -16,8 +16,8 @@ job and payload hash) are filled from the same parsed row. Observations are buil
 | **Steward state** (changes after validate; the line is the authority and the current view reads it over the observation) | `product_id`, `product_resolution_status/_token/_detail`, `distributor_id`, `distributor_resolution_status/_token`, `customer_id`, `customer_resolution_status`, `resolved_customer_id`, `resolved_distributor_id`, `purchase_order_id`, `crad_date`, `corpus_superseded_at` | still written on the line |
 | **Payload mirror** (read from the observation after D4) | `report_type`, `line_state`, `raw_source_row`, `operating_unit`, `bill_to_raw`, `ship_to_raw`, `order_no`, `customer_po`, `order_line`, `delivery_no`, `invoice_line`, `item_code`, `sales_model_name`, `customer_item`, `ean_code`, `upc_code`, `mpor_item_no`, `quantity`, `unit_price`, `amount`, `currency_code`, `ship_confirm_date`, `schedule_ship_date`, `promise_date`, `exwork_date`, `erd_date`, `est_pod_date`, `pod_date`, `customer_dealer_token`, and the voyage fields (`WATER_FIELDS`) | **no longer written**; columns kept, rows already on cip keep their old values |
 
-`report_type`, `line_state` and `raw_source_row` are `NOT NULL` on the line today. They cannot be left out of an insert until the
-constraint is relaxed, so D4 adds one migration (section 6). `crad_date`, `resolved_*` and the steward columns have no
+`report_type`, `line_state` and `raw_source_row` were `NOT NULL` on the line. D4 adds one migration (section 6) so an insert can
+leave them out. On `cip` they are nullable (read-only check 2026-11-10). `crad_date`, `resolved_*` and the steward columns have no
 observation twin, which is why they stay.
 
 ## 2. Writers of the payload mirror columns
@@ -84,10 +84,14 @@ open-book close are not touched. Only the source of the payload fed to `_row_val
 
 ## 6. Migration
 
-`20261103_0052` (down_revision `20261102_0051`; **not run on cip**): drop `NOT NULL` from `report_type`, `line_state`,
-`raw_source_row` on `shipment_evidence_line`; index `ix_shipment_ev_obs_evidence_line (evidence_line_id, id DESC)` (the lookup of a line's
-latest observation had no index); re-issue `shipment_evidence_current` without the line `pod_date` term. Apply the migration
-**before** deploying the code: the new loader inserts lines without those three columns.
+`20261103_0056` (down_revision `20261103_0055`). It drops `NOT NULL` from `report_type`, `line_state` and `raw_source_row` on
+`shipment_evidence_line`; adds index `ix_shipment_ev_obs_evidence_line (evidence_line_id, id DESC)` on
+`shipment_evidence_observation`; re-issues `shipment_evidence_current` without the line `pod_date` term. An earlier draft of this
+section called the revision `20261103_0052` and said it was not run on `cip`. That text was stale. Read-only on `cip` 2026-11-10
+(`current_database() cip`, alembic `20261110_0061`): those three columns are nullable, the index is present, and the view does not
+reference `sel.pod_date` (it still mentions `pod_date` from the observation). This check wrote nothing. Apply the migration before
+deploying the loader that inserts lines without those three columns; on `cip` that order already happened. The clone proof
+`apps/api/scripts/ops/prove_shipment_single_write_clone.py` was not run in this pass. D5 is not done.
 
 ## 7. Out of scope
 

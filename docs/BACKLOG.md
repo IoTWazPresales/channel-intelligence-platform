@@ -1885,7 +1885,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Implemented on `feat/shipment-single-write` (2026-11-03). Columns kept. Clone proof script is `apps/api/scripts/ops/prove_shipment_single_write_clone.py` and has not been run. D5 stays parked. |
+| **Status / parked** | **Schema on `cip`** · 2026-11-10 read-only (serial queue step 7). Migration `20261103_0056` is applied (`cip` alembic `20261110_0061`): `shipment_evidence_line.report_type`, `line_state` and `raw_source_row` are nullable; index `ix_shipment_ev_obs_evidence_line` is `(evidence_line_id, id DESC)`; view `shipment_evidence_current` does not reference `sel.pod_date`. The single-write loader is on `feat/integrate-20261103`. Columns kept. `prove_shipment_single_write_clone.py` was not run in this pass. D5 stays parked. The path map's earlier `20261103_0052` / "not run on cip" sentence was stale. |
 | **Source** | `docs/SHIPMENT_BITEMPORAL_PLAN_D.md` D4; `docs/SHIPMENT_EVIDENCE_D4_PATH_MAP.md` |
 | **Idea** | Dual-write still populates `shipment_evidence_line` for steward job scope; stop persisting columns that mirror observation payload once all write paths read observations for history. |
 | **TRIGGER** | 30-day soak after Plan D cutover with zero steward regressions; Warren approves D4 start. |

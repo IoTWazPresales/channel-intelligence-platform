@@ -16,7 +16,8 @@ Plan D step D4 (BACKLOG-057-D4, node N-0098). The shipment loader writes the par
 
 Apply this migration BEFORE deploying the D4 code (the new loader inserts lines without the three relaxed columns).
 The downgrade restores NOT NULL (it fails if a D4 line has no payload; back-fill from the observation first), drops the
-index and re-issues the 0026 view. NOT APPLIED to ``cip``.
+index and re-issues the 0026 view. Applied on ``cip`` (read-only check 2026-11-10: the three columns are nullable, the
+index exists, and ``shipment_evidence_current`` has no line ``pod_date`` term). Alembic head is past this revision.
 """
 
 from __future__ import annotations
