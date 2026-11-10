@@ -6,13 +6,14 @@ Create Date: 2026-09-05
 
 Additive only. Does not rewrite roe_snapshot (booked/declared case rate).
 Reversible downgrade drops the new table and columns.
+
+Idempotent: ``20260801_0001`` create_all already has the table and columns.
 """
 
 from __future__ import annotations
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260905_0021"
@@ -22,51 +23,50 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "fx_daily_rate",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("rate_date", sa.Date(), nullable=False),
-        sa.Column(
-            "quote_pair",
-            sa.String(length=16),
-            nullable=False,
-            server_default="USDZAR",
-        ),
-        sa.Column("rate", sa.Numeric(18, 6), nullable=False),
-        sa.Column("source", sa.String(length=64), nullable=False),
-        sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("is_fallback", sa.Boolean(), nullable=False, server_default=sa.false()),
+    # Same column types op.create_table emitted (SERIAL id, VARCHAR defaults).
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fx_daily_rate (
+            id SERIAL NOT NULL,
+            rate_date DATE NOT NULL,
+            quote_pair VARCHAR(16) DEFAULT 'USDZAR' NOT NULL,
+            rate NUMERIC(18, 6) NOT NULL,
+            source VARCHAR(64) NOT NULL,
+            fetched_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            is_fallback BOOLEAN DEFAULT false NOT NULL,
+            PRIMARY KEY (id)
+        )
+        """
     )
-    op.create_index("ix_fx_daily_rate_rate_date", "fx_daily_rate", ["rate_date"])
-    op.create_unique_constraint(
-        "uq_fx_daily_rate_date_quote",
-        "fx_daily_rate",
-        ["rate_date", "quote_pair"],
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_fx_daily_rate_rate_date ON fx_daily_rate (rate_date)"
     )
-
-    op.add_column(
-        "cpor_case",
-        sa.Column("fx_proposed_rate", sa.Numeric(18, 6), nullable=True),
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'uq_fx_daily_rate_date_quote'
+              AND conrelid = 'public.fx_daily_rate'::regclass
+          ) THEN
+            ALTER TABLE fx_daily_rate
+              ADD CONSTRAINT uq_fx_daily_rate_date_quote UNIQUE (rate_date, quote_pair);
+          END IF;
+        END $$;
+        """
     )
-    op.add_column(
-        "cpor_case",
-        sa.Column("fx_proposed_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.add_column(
-        "cpor_case",
-        sa.Column("fx_proposed_by", sa.String(length=128), nullable=True),
-    )
-    op.add_column(
-        "cpor_case",
-        sa.Column("fx_proposed_source", sa.String(length=64), nullable=True),
-    )
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_proposed_rate NUMERIC(18, 6)")
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_proposed_at TIMESTAMP WITH TIME ZONE")
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_proposed_by VARCHAR(128)")
+    op.execute("ALTER TABLE cpor_case ADD COLUMN IF NOT EXISTS fx_proposed_source VARCHAR(64)")
 
 
 def downgrade() -> None:
-    op.drop_column("cpor_case", "fx_proposed_source")
-    op.drop_column("cpor_case", "fx_proposed_by")
-    op.drop_column("cpor_case", "fx_proposed_at")
-    op.drop_column("cpor_case", "fx_proposed_rate")
-    op.drop_constraint("uq_fx_daily_rate_date_quote", "fx_daily_rate", type_="unique")
-    op.drop_index("ix_fx_daily_rate_rate_date", table_name="fx_daily_rate")
-    op.drop_table("fx_daily_rate")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_proposed_source")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_proposed_by")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_proposed_at")
+    op.execute("ALTER TABLE cpor_case DROP COLUMN IF EXISTS fx_proposed_rate")
+    op.execute("ALTER TABLE fx_daily_rate DROP CONSTRAINT IF EXISTS uq_fx_daily_rate_date_quote")
+    op.execute("DROP INDEX IF EXISTS ix_fx_daily_rate_rate_date")
+    op.execute("DROP TABLE IF EXISTS fx_daily_rate")
