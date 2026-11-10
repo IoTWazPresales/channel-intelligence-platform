@@ -39,6 +39,9 @@ test-results/
 blob-report/
 
 # Alembic (optional local)
+# Local disposable Postgres data dir used for alembic smoke
+# (created at runtime; never commit).
+apps/api/.cip-alembic-smoke-pg/
 # Turbo / pnpm
 .turbo/
 

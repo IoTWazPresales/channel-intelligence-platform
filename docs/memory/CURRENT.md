@@ -1,12 +1,12 @@
 # CURRENT state
 
-**Last updated:** 2026-11-10 (orphan/docs status refresh on tip `d0972d50`; docs record only — no programme ledger edit)
+**Last updated:** 2026-11-10 (untrack `apps/api/.cip-alembic-smoke-pg/`; cip Alembic record corrected to `20261105_0060`; docs record only — no programme ledger edit)
 
-**Branch:** `feat/integrate-20261103` @ `d0972d50` (Merge #75).
+**Branch:** `feat/integrate-20261103` @ `5a94a97d` (Merge #76).
 
-**Integration tip (read-only checkpoint):** Merges on this tip since the 2026-11-09 orphan pass include #60 (N-0118 CST re-key), #65 (BACKLOG-200), #66 (orphan/stage docs), #67/#70 (BACKLOG-221 + residual), #68 (N-0118 NB1/NB3), #69 (decisions), #71 (D-0025 BOM default unticked), #72 (BACKLOG-222 promo_not_activated), #73 (D-0119 stock carry-forward), #74 (D-0038 SOH tolerance), #75 (BACKLOG-006 omit list `line_ids`). Open PRs into this branch: none as of this note. Full orphan evidence: `docs/audits/ORPHAN_AND_STAGE_STATUS_20261110.md`.
+**Integration tip (read-only checkpoint):** Merges on this tip since the 2026-11-09 orphan pass include #60 (N-0118 CST re-key), #65 (BACKLOG-200), #66 (orphan/stage docs), #67/#70 (BACKLOG-221 + residual), #68 (N-0118 NB1/NB3), #69 (decisions), #71 (D-0025 BOM default unticked), #72 (BACKLOG-222 promo_not_activated), #73 (D-0119 stock carry-forward), #74 (D-0038 SOH tolerance), #75 (BACKLOG-006 omit list `line_ids`), #76 (orphan/docs status refresh). Open PRs into this branch: none as of this note. Full orphan evidence: `docs/audits/ORPHAN_AND_STAGE_STATUS_20261110.md`.
 
-**Still held (do not start from this note):** migrations / `cip` writes (Stage 1b grants, N-0118 apply to cip, listing seed, N-0100 part B, BACKLOG-214, NB2 superseded index, D-0035 smoke-case removal, D-0034 cleanup). BACKLOG-051 reconciliation report remains Parked (TRIGGER not met). Do not push to main.
+**Still held (do not start from this note):** migrations / `cip` writes (N-0118 apply to cip, listing seed, N-0100 part B, BACKLOG-214, NB2 superseded index, D-0034 cleanup). Stage 1b grants are done (`20261105_0058`–`20261105_0060` already on cip). D-0035: leave smoke case in (Warren 2026-11-10). BACKLOG-051 reconciliation report remains Parked (TRIGGER not met). Do not push to main.
 
 **N-0118 / decisions body below** is the prior 2026-11-06–09 record and still governs those items unless a later note here says otherwise.
 
@@ -21,7 +21,9 @@
 
 **Branch (previous checkpoint):** `feat/integrate-20261103`.
 
-**Alembic:** `cip` is now at `20261104_0057` (applied by Warren on 2026-11-04). That revision replaces `cip_inbound_shipment_lineage()` so a product-less inbound row is resolved from its evidence line. The line index and the identity index already exist. Code head is the same revision.
+**Alembic:** `cip` is at `20261105_0060`. Revisions `20261105_0058`, `20261105_0059` and `20261105_0060` were applied 2026-11-05 14:51 SAST under Warren's go-ahead, with snapshots in `C:\Users\warren_eliason\cip-apply-logs\`. Those revisions add the missing table grants (Stage 1b, done) and make the source-code key unique per tenant. Code head is the same revision. Prior revision `20261104_0057` (applied by Warren on 2026-11-04) replaces `cip_inbound_shipment_lineage()` so a product-less inbound row is resolved from its evidence line. The line index and the identity index already exist.
+
+**Public-repo cleanup (2026-11-10):** `apps/api/.cip-alembic-smoke-pg/` (a local Postgres data directory, 1,288 files, added in `fdda87e3`) is untracked and gitignored. History is not rewritten. The on-disk folder in the main checkout is left in place. No passwords were rotated.
 
 **Proven on cip, read-only, before that apply:** the lateral latest-observation read matches the old `DISTINCT ON` row for row (unset and `*` 2,481 rows; `NB` 1,099). That statement is about 0.22–0.29s, against about 0.37–0.66s before. Warm second pass of the handlers: unset cover 1.247s and brief 1.107s; `*` cover 1.279s and brief 1.215s. `NB` cover 2.641s and brief 1.899s while the old lineage helper was still installed (0.741s for 765 rows). The replacement lookup returned the same 765 rows in 0.092s.
 
