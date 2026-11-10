@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-10 - **Lane B CPOR cases:** slow or unsold stock can raise a draft promotion, or a move or return that is not a support claim. Customer×SKU observed cover is a flag and does not set quantity or the customer term. Competitor price is the latest approved map or an honest empty. Branch `cursor/lane-b2-cpor-cases-ea30`.
+- 2026-11-10 - **Lane B CPOR cases:** slow or unsold stock can raise a draft promotion, or a move or return that is not a support claim. Customer×SKU observed cover is a flag and does not set quantity or the customer term. Competitor price is the latest approved map or an honest empty. Branch `cursor/lane-b2-cpor-cases-ea30`. Commit `a6c1ced5`.
 
 - 2026-11-09 - **N-0118 review fixes (PR #60):** the staging-model alias is no longer shadowed by the row loop (the supersede step had been failing). Chain-level re-key is decided per fact: a fact is re-selected (and later retired) only when this job set the row and every figure on it (map must be a JSON object), no other job superseded or replaced a figure on it, no other job's staging line points at it, the site keys its rows move to hold nothing another job set, it has a site-named row of this job and no unresolved or skipped row, and its chain-only rows carry every figure it holds (else units could sit on both keys). A re-apply of an older job therefore leaves a newer load alone, and a second apply changes nothing. If a chunk fails mid re-key, the chain fact is not retired and a re-run finishes it. Branch `feat/n0118-cst-apply-c57a`.
 
