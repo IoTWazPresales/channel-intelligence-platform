@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-11 - **Lane A review fixes (not merged):** branch `cursor/lane-a-listings-7c39`. Keep an existing first-party seller when discovery would infer the customer name, so own stock stays Own. A site with no reader is not watched. A rejected feed proposal counts as not found. JSON-escaped seller names are decoded before Own versus Competition. Sites & sellers intro no longer has an unescaped apostrophe. Tests on `cip_test` only. PR #88 into `feat/integrate-20261103`. Not merged.
+- 2026-11-11 - **Lane A review fixes (not merged):** branch `cursor/lane-a-listings-7c39`. Keep an existing first-party seller when discovery would infer the customer name, so own stock stays Own. A site with no reader is not watched. A rejected feed proposal counts as not found. JSON-escaped seller names are decoded before Own versus Competition. Sites & sellers intro no longer has an unescaped apostrophe. Tests on `cip_test` only. PR #88 into `feat/integrate-20261103`. Not merged. Commit `a0f672ab`.
 
 - 2026-11-10 - **Lane A listings (not merged):** branch `cursor/lane-a-listings-7c39` from `feat/integrate-20261103` @ `a3d0a9cd`. Discovery fills a reporting customer's own `html_page` seller from the customer name; a buy-box site is not stamped with that name. A different seller on the buy box is Competition. Coverage tab reads `capture_health.coverage`. General HTML reader tests cover the five page shapes. No migration. No `cip` write. N-0102 and N-0076 not done. PR into `feat/integrate-20261103`; not merged. Commit `28eda97c`.
 
