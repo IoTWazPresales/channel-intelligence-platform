@@ -531,7 +531,7 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                         measure=m.id,
                         reason=(
                             "Weeks of cover is each customer's reported stock divided by that "
-                            "customer's sell-through in the 4 weeks up to its latest stock report. "
+                            "customer's sell-through in the 4 weeks ending on its last reported day. "
                             f"It is not split by {', '.join(local)}."
                         ),
                     )

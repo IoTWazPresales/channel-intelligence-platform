@@ -170,11 +170,11 @@ As built (N-0115 implementation, corrections to the text above):
   map one to one.
 - Value measures (DSI decision 2, CST decision 3), restock flags, CPOR "open" and CPOR "value" are not
   built; they are listed under `pending:` in the model file and in the v2 catalog. Customer stock cover
-  is built as `cst_sellthrough.stock_cover` (the sell-through overview's weeks-of-cover rule).
+  is built as `cst_sellthrough.stock_cover` (the sell-through overview's weeks-of-cover rule: the sales window ends on the customer's last reported day, not the period start).
 
 Not invented tonight (each is a proposed decision): which CPOR status is "open" and which value a CPOR
 "value" means; restock flags. Customer stock cover reuses the sell-through overview: reported stock
-divided by that customer's own sell-through per week in the 4 weeks up to its latest stock report.
+divided by that customer's own sell-through per week in the 4 weeks ending on its last reported day (the end of that weekly or monthly report, not the period start).
 
 ## 11. Proposed decisions for Warren (not picked)
 

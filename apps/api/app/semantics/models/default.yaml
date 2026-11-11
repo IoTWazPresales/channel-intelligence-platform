@@ -423,7 +423,7 @@ calculated:
   # that customer's own sell-through per week in the 4 weeks ending on that report (partial weeks
   # count by their overlapping days). Customers with no sales in those 4 weeks are left out of both
   # sides. period.from does not move it. Not a period series and not split by store.
-  cst_sellthrough.stock_cover: {kind: stock_cover, inputs: [cst_sellthrough.reported_soh, cst_sellthrough.units], label: "Weeks of cover (4 weeks to latest stock report)", unit: weeks}
+  cst_sellthrough.stock_cover: {kind: stock_cover, inputs: [cst_sellthrough.reported_soh, cst_sellthrough.units], label: "Weeks of cover (4 weeks to last reported day)", unit: weeks}
 
 # Declared once. A request that hits a wall is refused with the reason. An exact match on a v1
 # refuse_example for the measure's legacy metric returns that example's own text (verbatim; the

@@ -1,10 +1,10 @@
 # CURRENT state
 
-**Last updated:** 2026-11-10 (lane D: weeks of cover and the My accounts starter; Rand sales value and CPOR open/value are a proposal only)
+**Last updated:** 2026-11-11 (lane D: weeks of cover anchors on the last reported day; Rand sales value and CPOR open/value stay a proposal)
 
 **Branch:** `cursor/lane-d-brief-dashboards-3efe`
 
-**Lane D (this worktree):** `cst_sellthrough.stock_cover` is weeks of cover by the sell-through overview rule (reported stock divided by that customer's own sell-through per week in the 4 weeks up to its latest stock report on or before period.to; grouped cover is the ratio of those sums). Template `my_accounts` is the fourth starter: no required customer, the existing My accounts filter narrows it while it is on, and Clear shows the wider book for the rest of the sign-in. Proposed definitions, not implemented: `docs/proposals/2026-11-10-rand-sales-value-and-cpor-measures.md`. BACKLOG-217 stays open (independent E4/E10 review, restock flags, sales value, CPOR open/value, concurrency). No write to `cip`. D-0141's filter default is still held. Not merged.
+**Lane D (this worktree):** `cst_sellthrough.stock_cover` is weeks of cover by the sell-through overview rule (reported stock divided by that customer's own sell-through per week in the 4 weeks ending on its last reported day — the end of that weekly or monthly report, not the period start — capped by period.to; grouped cover is the ratio of those sums). Template `my_accounts` is the fourth starter: no required customer, the existing My accounts filter narrows it while it is on, and Clear shows the wider book for the rest of the sign-in. Proposed definitions, not implemented: `docs/proposals/2026-11-10-rand-sales-value-and-cpor-measures.md`. BACKLOG-217 stays open (independent E4/E10 review, restock flags, sales value, CPOR open/value, concurrency). No write to `cip`. D-0141's filter default is still held. Not merged.
 
 **Integration checkpoint this note used to pin:** `feat/integrate-20261103` @ `c87847e8` (Merge #80). This worktree was cut from the later integrate tip `a3d0a9cd`.
 

@@ -200,7 +200,7 @@ TEMPLATES: tuple[Template, ...] = (
             ),
             TemplateWidget(
                 "Weeks of cover", "kpi", (f"{CST}.stock_cover",), layout=(9, 0, 3, 5),
-                display={**_KPI_PLAIN, "caption": "4 weeks of sell-through up to each customer's latest stock report"},
+                display={**_KPI_PLAIN, "caption": "4 weeks of sell-through ending on each customer's last reported day"},
             ),
             TemplateWidget("Sell-through by account", "hbar", (f"{CST}.units",), ("customer",), layout=(0, 5, 6, 8), display=_TOP15),
             TemplateWidget(
