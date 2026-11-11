@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-11 - **Lane B review fixes:** lineup price stays on the target customer; a stock action covers the sites it names; auto-propose is not capped at the 200-row board; confirmed DC stock is read from stores and need_from_distributor; an explicit line keeps promotion evidence. Branch `cursor/lane-b2-cpor-cases-ea30`. Not merged.
+- 2026-11-11 - **Lane B review fixes:** lineup price stays on the target customer; a stock action covers the sites it names; auto-propose is not capped at the 200-row board; confirmed DC stock is read from stores and need_from_distributor; an explicit line keeps promotion evidence. Branch `cursor/lane-b2-cpor-cases-ea30`. Commit `997e16f6`. Not merged.
 
 - 2026-11-10 - **Lane B CPOR cases:** slow or unsold stock can raise a draft promotion, or a move or return that is not a support claim. Customer×SKU observed cover is a flag and does not set quantity or the customer term. Competitor price is the latest approved map or an honest empty. Branch `cursor/lane-b2-cpor-cases-ea30`. Commit `a6c1ced5`.
 
