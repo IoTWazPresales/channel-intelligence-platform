@@ -21,6 +21,7 @@ from app.services.listing_capture.adapters import (
     adapter_module,
     configured_adapter,
     missing_fields,
+    seller_role_label,
 )
 from app.services.listing_capture.marketplace_vocab import (
     LISTING_SOURCE_SET,
@@ -868,13 +869,7 @@ def observation_to_dict(obs: ListingObservation, listing: CustomerListing | None
         "shoppers_price": float(obs.extracted_price) if obs.extracted_price is not None else None,
         "buy_box_seller": getattr(obs, "buy_box_seller", None),
         "buy_box_own": getattr(obs, "buy_box_own", None),
-        "buy_box_label": (
-            "Own"
-            if getattr(obs, "buy_box_own", None) is True
-            else "Competition"
-            if getattr(obs, "buy_box_own", None) is False
-            else None
-        ),
+        "buy_box_label": seller_role_label(getattr(obs, "buy_box_own", None)),
         "offer_count": getattr(obs, "offer_count", None),
         "extracted_availability": obs.extracted_availability,
         "extracted_promo_badge": obs.extracted_promo_badge,

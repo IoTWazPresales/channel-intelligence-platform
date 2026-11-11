@@ -28,6 +28,15 @@ def normalize_seller(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
 
 
+def seller_role_label(is_own_seller: bool | None) -> str | None:
+    """Own when this seller is the customer's. Competition when another seller holds the buy box."""
+    if is_own_seller is True:
+        return "Own"
+    if is_own_seller is False:
+        return "Competition"
+    return None
+
+
 @dataclass(frozen=True)
 class SiteSeller:
     customer_id: int

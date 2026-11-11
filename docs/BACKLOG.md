@@ -4,6 +4,8 @@
 
 **Entry template:** ID + title · status/parked-date · effort · the idea · why it matters (and why deferrable) · what the work is · regression traps / hard constraints · behavior to retain · out-of-scope · **TRIGGER**
 
+**Shipped on `cursor/lane-a-listings-7c39` (not a parked item):** the Market Coverage tab (N-0103), discovery filling a reporting customer's own HTML-site seller from the customer name, the Competition label when another seller holds that site's buy box, and general-HTML-reader tests for the remaining page shapes (N-0104/5/6). No custom reader. N-0102 and N-0076 are not done. BACKLOG-183 stays parked: this does not join listings onto a promotion plan line.
+
 ---
 
 ## VERIFY-debt register (charter v1.3 amendment 7)

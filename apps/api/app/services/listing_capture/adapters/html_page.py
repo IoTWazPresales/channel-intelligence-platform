@@ -1,7 +1,9 @@
 """Page reader for sites whose product page is ordinary HTML (JSON-LD offer or a shown price).
 
-Fetches the stored listing URL itself. The seller is the site's ``first_party_seller`` (a single
-seller site); a page that lists several sellers needs a reader that keeps each offer.
+Fetches the stored listing URL itself. When the page names a seller, that name is the buy-box
+seller. Otherwise the seller is the site's ``first_party_seller`` (the store's own stock).
+A different seller on the customer's own site is competition. A page that lists several priced
+offers still needs a reader that keeps each offer.
 """
 
 from __future__ import annotations
@@ -18,6 +20,22 @@ ADAPTER_KEY = "html_page"
 REQUIRED_FIELDS: tuple[str, ...] = ()
 READS_STORED_URL = True
 _HttpGet = Callable[[str], tuple[int, str]]
+_SELLER_OBJECT = re.compile(
+    r'"seller"\s*:\s*\{[^{}]*?"(?:name|display_name)"\s*:\s*"([^"\\]*)"',
+    flags=re.IGNORECASE,
+)
+_SELLER_STRING = re.compile(r'"seller"\s*:\s*"([^"\\]*)"', flags=re.IGNORECASE)
+
+
+def seller_from_page(text: str) -> str | None:
+    """The seller the page itself names, or None when it names none."""
+    if not text:
+        return None
+    match = _SELLER_OBJECT.search(text) or _SELLER_STRING.search(text)
+    if not match:
+        return None
+    name = match.group(1).strip()
+    return name or None
 
 
 def request_headers(site: "SiteConfig") -> dict[str, str]:
@@ -50,9 +68,11 @@ def parse(
 
     parsed = parse_snapshot_text(body, marketplace=site.site_key, parser_version=parser_version)
     if parsed.parse_status == "ok":
+        named = seller_from_page(body)
+        seller_name = named if named else (site.first_party_seller or None)
         parsed.offers = [
             {
-                "seller_name": (site.first_party_seller or None),
+                "seller_name": seller_name,
                 "seller_id": None,
                 "price": parsed.price,
                 "availability": parsed.availability,
@@ -86,7 +106,7 @@ def quality_fields(text: str, *, site: "SiteConfig") -> dict[str, Any]:
         title = unescape(og.group(1))
     image_urls = set(re.findall(r"https?:\\?/\\?/[^\"'\s>]+\.(?:jpg|jpeg|png|webp)", text, flags=re.I))
     review_raw = _embedded_field(text, "reviewCount") or _embedded_field(text, "ratingCount")
-    seller = (site.first_party_seller or "").strip()
+    seller = seller_from_page(text) or (site.first_party_seller or "").strip()
     return {
         "title": title,
         "brand": _embedded_field(text, "brand") or "",

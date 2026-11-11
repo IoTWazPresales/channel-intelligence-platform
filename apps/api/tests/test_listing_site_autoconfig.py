@@ -35,14 +35,25 @@ _KEPT_PRODUCT = "https://shop-a.example.test/kept/{page_id}"
 _KEPT_PAGE_ID = r"^https://shop-a\.example\.test/kept/([^/]+)$"
 
 
-@pytest.fixture()
-def db_session():
+def _sync_url() -> str:
+    """Point the sync URL at cip_test when settings still name cip. Never print the URL."""
+    from sqlalchemy.engine import make_url
+
     from app.core.config import get_settings
 
     get_settings.cache_clear()
     url = get_settings().database_url_sync
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    parsed = make_url(url)
+    if (parsed.database or "").casefold() == "cip":
+        parsed = parsed.set(database="cip_test")
+    return parsed.render_as_string(hide_password=False)
+
+
+@pytest.fixture()
+def db_session():
+    url = _sync_url()
     eng = create_engine(url)
     try:
         conn = eng.connect()
@@ -396,16 +407,21 @@ def test_excluded_customers_keep_their_reason(db_session: Session) -> None:
     report = autoconfigure_sites(db_session, tenant_id=tenant, http_get=lambda url, headers=None: (_ for _ in ()).throw(AssertionError(url)))
     reasons = {row["customer_id"]: row["reason"] for row in report["excluded"]}
     assert reasons[no_key.id] == "no_site_key"
-    assert reasons[no_seller.id] == "no_seller_data"
+    assert no_seller.id not in reasons
+    assert no_seller.id in {row["customer_id"] for row in report["configured"]}
     buckets = [value for value in report.values() if isinstance(value, list)]
     assert silent.id not in {row["customer_id"] for bucket in buckets for row in bucket}
     seller_site = _site(db_session, tenant, "shop-a")
+    db_session.refresh(seller_site)
     assert seller_site.adapter_key == "html_page"
-    assert seller_site.sellers == []
+    assert seller_site.first_party_seller == no_seller.name
+    assert seller_site.sellers[0].seller_names == [no_seller.name]
+    assert seller_site.sellers[0].seller_ids == []
     health = capture_health(db_session, tenant_id=tenant)
     health_reasons = {(row["customer_id"], row["reason"]) for row in health["exclusions"]}
     assert (no_key.id, "no_site_key") in health_reasons
-    assert (no_seller.id, "no_seller_data") in health_reasons
+    assert all(row["customer_id"] != no_seller.id for row in health["exclusions"])
+    assert isinstance(health["coverage"], dict)
 
 
 def test_missing_adapter_and_seller_reports_both_reasons(db_session: Session) -> None:
@@ -486,14 +502,50 @@ def test_bad_seller_seed_shapes_leave_the_other_customers_configured(db_session:
     report = autoconfigure_sites(db_session, tenant_id=tenant)
     reasons = {row["customer_id"]: row["reason"] for row in report["excluded"]}
     assert reasons[broken.id] == "seller_seed_invalid"
-    assert reasons[blank.id] == "no_seller_data"
-    assert reasons[blanks.id] == "no_seller_data"
-    assert {row["customer_id"] for row in report["configured"]} >= {named.id, good.id}
+    assert blank.id not in reasons
+    assert blanks.id not in reasons
+    assert {row["customer_id"] for row in report["configured"]} >= {named.id, good.id, blank.id, blanks.id}
     assert _site(db_session, tenant, "shop-c").sellers[0].seller_names == ["Counter"]
     assert _site(db_session, tenant, "shop-c").sellers[0].seller_ids == ["sid-9"]
     assert _site(db_session, tenant, "shop-w").sellers[0].seller_names == ["Good Seller"]
-    assert _site(db_session, tenant, "shop-a").sellers == []
+    shop_a = _site(db_session, tenant, "shop-a")
+    db_session.refresh(shop_a)
+    assert shop_a.first_party_seller == blank.name
+    assert shop_a.sellers[0].seller_names == [blank.name]
+    shop_b = _site(db_session, tenant, "shop-b")
+    db_session.refresh(shop_b)
+    assert shop_b.first_party_seller == blanks.name
+    assert shop_b.sellers[0].seller_names == [blanks.name]
     assert db_session.scalar(text("select id from listing_site where tenant_id = :t and site_key = 'shop-z'"), {"t": tenant}) is None
+
+
+def test_buy_box_site_does_not_take_the_customer_name(db_session: Session) -> None:
+    """A marketplace reader keeps an empty seller. Discovery must not stamp the customer name."""
+    tenant = f"t-bb-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "box")
+    _report(
+        db_session,
+        customer,
+        {
+            "marketplace": "market-b",
+            "site": {
+                "adapter_key": "rest_buybox_json",
+                "product_url_pattern": "https://market-b.example.test/x/ID{page_id}",
+                "page_id_pattern": r"ID(\d{5,12})",
+                "details_url_pattern": "https://api.market-b.example.test/rest/details/ID{page_id}?platform=desktop",
+            },
+        },
+    )
+    report = autoconfigure_sites(db_session, tenant_id=tenant)
+    reasons = {row["customer_id"]: row["reason"] for row in report["excluded"]}
+    assert reasons[customer.id] == "no_seller_data"
+    assert all(row["customer_id"] != customer.id for row in report["configured"])
+    site = _site(db_session, tenant, "market-b")
+    db_session.refresh(site)
+    assert site.adapter_key == "rest_buybox_json"
+    assert not (site.first_party_seller or "").strip()
+    assert site.sellers == []
+    assert customer.name not in (site.first_party_seller or "")
 
 
 def test_absent_compact_flag_follows_stored_external_ids(db_session: Session) -> None:
