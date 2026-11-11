@@ -1,8 +1,9 @@
 """Fill empty listing-site configuration from each reporting customer's own data.
 
 On the customer's own site (the general HTML reader), discovery writes that customer's
-name as the first-party seller. It is not typed on Sites & sellers. A buy-box site
-keeps whatever seller names the seed already has.
+name as the first-party seller when the site does not already name one. An existing
+first-party name is kept and becomes the seller identity, so own stock stays Own.
+It is not typed on Sites & sellers. A buy-box site keeps whatever seller names the seed already has.
 
 A reporting customer is ``customer_report_config.reports_expected``. The site key is
 ``feed_profile_json.listing_seed.marketplace`` when that seed names one, otherwise each
@@ -512,11 +513,14 @@ def _seller_names_for_customer(
     row: ListingSite | None,
     seed: dict[str, Any],
 ) -> tuple[list[str], list[str], bool]:
-    """Seed names win. On the customer's own site, discovery uses the customer name."""
+    """Seed names win. An existing first-party name wins over the inferred customer name."""
     names, ids = _seed_seller(seed)
     if names or ids:
         return names, ids, False
     if _is_customer_own_site(row, seed):
+        existing = str(getattr(row, "first_party_seller", "") or "").strip() if row is not None else ""
+        if existing:
+            return [existing], [], False
         name = str(getattr(customer, "name", "") or "").strip()
         if name:
             return [name], [], True

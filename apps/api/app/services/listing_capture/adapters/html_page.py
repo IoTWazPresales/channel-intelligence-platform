@@ -8,6 +8,7 @@ offers still needs a reader that keeps each offer.
 
 from __future__ import annotations
 
+import json
 import re
 from html import unescape
 from typing import TYPE_CHECKING, Any, Callable
@@ -20,11 +21,24 @@ ADAPTER_KEY = "html_page"
 REQUIRED_FIELDS: tuple[str, ...] = ()
 READS_STORED_URL = True
 _HttpGet = Callable[[str], tuple[int, str]]
+_JSON_STRING = r'"((?:\\.|[^"\\])*)"'
 _SELLER_OBJECT = re.compile(
-    r'"seller"\s*:\s*\{[^{}]*?"(?:name|display_name)"\s*:\s*"([^"\\]*)"',
+    rf'"seller"\s*:\s*\{{[^{{}}]*?"(?:name|display_name)"\s*:\s*{_JSON_STRING}',
     flags=re.IGNORECASE,
 )
-_SELLER_STRING = re.compile(r'"seller"\s*:\s*"([^"\\]*)"', flags=re.IGNORECASE)
+_SELLER_STRING = re.compile(rf'"seller"\s*:\s*{_JSON_STRING}', flags=re.IGNORECASE)
+
+
+def _decode_json_string(raw: str) -> str | None:
+    """Undo JSON string escapes so a match compares the seller the page named."""
+    try:
+        decoded = json.loads(f'"{raw}"')
+    except json.JSONDecodeError:
+        decoded = raw
+    if not isinstance(decoded, str):
+        return None
+    name = decoded.strip()
+    return name or None
 
 
 def seller_from_page(text: str) -> str | None:
@@ -34,8 +48,7 @@ def seller_from_page(text: str) -> str | None:
     match = _SELLER_OBJECT.search(text) or _SELLER_STRING.search(text)
     if not match:
         return None
-    name = match.group(1).strip()
-    return name or None
+    return _decode_json_string(match.group(1))
 
 
 def request_headers(site: "SiteConfig") -> dict[str, str]:

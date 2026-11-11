@@ -107,8 +107,8 @@ export function ListingSitesLens() {
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="listing-sites-lens">
       <Typography variant="body2" color="text.secondary">
-        Sites and link patterns are saved here. A reporting customer's own seller on their site is filled by
-        discovery and is not typed on this page. A site with no page reader is not fetched.
+        Sites and link patterns are saved here. Discovery fills the own seller for a reporting customer.
+        It is not typed on this page. A site with no page reader is not fetched.
       </Typography>
       {sites.data?.data_unavailable ? <Alert severity="warning">Sites could not be loaded.</Alert> : null}
       {error ? <Alert severity="error">{error}</Alert> : null}

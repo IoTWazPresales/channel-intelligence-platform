@@ -108,12 +108,13 @@ def _listing(
     *,
     status: str,
     url: str,
+    marketplace: str = "shop-a",
 ) -> CustomerListing:
     row = CustomerListing(
         customer_id=int(customer.id),
         product_id=int(product.id),
         url=url,
-        marketplace="shop-a",
+        marketplace=marketplace,
         status=status,
         source="manual",
     )
@@ -210,7 +211,7 @@ def test_coverage_partitions_each_reported_product_once(db_session: Session) -> 
     _obs(db_session, failed, "parse_failed", when=now)
     _listing(db_session, customer, failing_dead, status="dead_link", url=f"https://shop-a.example.test/dead/{failing_dead.id}")
 
-    site = ListingSite(tenant_id=tenant, site_key="shop-a", display_name="Shop A")
+    site = ListingSite(tenant_id=tenant, site_key="shop-a", display_name="Shop A", adapter_key="html_page")
     db_session.add(site)
     db_session.flush()
     _queue(db_session, tenant, site, customer, watched_priority, QUEUE_OPEN)
@@ -265,3 +266,108 @@ def test_coverage_failure_leaves_the_session_usable(db_session: Session, monkeyp
     payload = customer_coverage(db_session, "t-down")
     assert payload == {"data_unavailable": True, "customers": []}
     assert db_session.execute(text("select 1")).scalar_one() == 1
+
+
+def test_a_site_with_no_reader_is_not_watched(db_session: Session) -> None:
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "counter")
+    db_session.add(CustomerReportConfig(customer_id=int(customer.id), reports_expected=True))
+    db_session.flush()
+    live = _product(db_session, tenant)
+    dead = _product(db_session, tenant)
+    _sell(db_session, tenant, customer, live)
+    _sell(db_session, tenant, customer, dead)
+    ok = _listing(db_session, customer, live, status="active", url=f"https://shop-a.example.test/ok/{live.id}")
+    _obs(db_session, ok, "ok", when=datetime.now(timezone.utc))
+    _listing(db_session, customer, dead, status="dead_link", url=f"https://shop-a.example.test/dead/{dead.id}")
+    db_session.add(ListingSite(tenant_id=tenant, site_key="shop-a", display_name="Shop A"))
+    db_session.flush()
+
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["watched"] == 0
+    assert row["failing"] == 1
+    assert row["not_searched"] == 1
+    assert row["awaiting_steward"] == 0
+    assert row["not_found"] == 0
+    assert row["reported"] == 2
+
+
+def test_watched_matches_site_key_without_case(db_session: Session) -> None:
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "counter")
+    db_session.add(CustomerReportConfig(customer_id=int(customer.id), reports_expected=True))
+    db_session.flush()
+    product = _product(db_session, tenant)
+    _sell(db_session, tenant, customer, product)
+    listing = _listing(
+        db_session,
+        customer,
+        product,
+        status="active",
+        url=f"https://shop-a.example.test/ok/{product.id}",
+        marketplace="Shop-A",
+    )
+    _obs(db_session, listing, "ok", when=datetime.now(timezone.utc))
+    db_session.add(
+        ListingSite(tenant_id=tenant, site_key="shop-a", display_name="Shop A", adapter_key="html_page")
+    )
+    db_session.flush()
+
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["watched"] == 1
+    assert row["not_searched"] == 0
+
+
+def test_a_rejected_feed_proposal_counts_as_not_found(db_session: Session) -> None:
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "counter")
+    db_session.add(CustomerReportConfig(customer_id=int(customer.id), reports_expected=True))
+    db_session.flush()
+    rejected_product = _product(db_session, tenant)
+    both = _product(db_session, tenant)
+    _sell(db_session, tenant, customer, rejected_product)
+    _sell(db_session, tenant, customer, both)
+    db_session.add(
+        CstListingSeed(
+            customer_id=int(customer.id),
+            marketplace="shop-a",
+            external_id=f"rej-{rejected_product.id}",
+            product_id=int(rejected_product.id),
+            status="rejected",
+        )
+    )
+    db_session.add(
+        CstListingSeed(
+            customer_id=int(customer.id),
+            marketplace="shop-a",
+            external_id=f"rej-both-{both.id}",
+            product_id=int(both.id),
+            status="rejected",
+        )
+    )
+    db_session.add(
+        CstListingSeed(
+            customer_id=int(customer.id),
+            marketplace="shop-a",
+            external_id=f"prop-both-{both.id}",
+            product_id=int(both.id),
+            status="proposed",
+        )
+    )
+    db_session.add(
+        CstListingSeed(
+            customer_id=int(customer.id),
+            marketplace="shop-a",
+            external_id=f"rej-open-{uuid.uuid4().hex[:6]}",
+            product_id=None,
+            status="rejected",
+        )
+    )
+    db_session.flush()
+
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["not_found"] == 2
+    assert row["awaiting_steward"] == 1
+    assert row["not_searched"] == 0
+    assert row["watched"] == 0
+    assert row["reported"] == 3

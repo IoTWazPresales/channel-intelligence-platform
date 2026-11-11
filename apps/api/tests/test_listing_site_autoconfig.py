@@ -548,6 +548,36 @@ def test_buy_box_site_does_not_take_the_customer_name(db_session: Session) -> No
     assert customer.name not in (site.first_party_seller or "")
 
 
+def test_existing_first_party_seller_is_kept_when_discovery_infers_the_customer(db_session: Session) -> None:
+    """An existing first-party name stays the seller identity. The customer name must not relabel it."""
+    from app.services.listing_capture.adapters import seller_role_label
+    from app.services.listing_capture.sites import create_site, site_config_from_row
+
+    tenant = f"t-keep-fp-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "keepown")
+    row = create_site(
+        db_session,
+        tenant_id=tenant,
+        site_key="shop-a",
+        fields={
+            "display_name": "Kept",
+            "adapter_key": "html_page",
+            "first_party_seller": "Kept Counter",
+        },
+        actor="steward@x",
+    )
+    _report(db_session, customer, {"marketplace": "shop-a", "site": {"adapter_key": "html_page"}})
+    report = autoconfigure_sites(db_session, tenant_id=tenant)
+    assert [item["customer_id"] for item in report["configured"]] == [customer.id]
+    db_session.refresh(row)
+    assert row.first_party_seller == "Kept Counter"
+    assert [seller.seller_names for seller in row.sellers] == [["Kept Counter"]]
+    assert customer.name not in row.sellers[0].seller_names
+    config = site_config_from_row(row)
+    assert seller_role_label(config.is_own_seller(int(customer.id), name="Kept Counter")) == "Own"
+    assert seller_role_label(config.is_own_seller(int(customer.id), name=customer.name)) == "Competition"
+
+
 def test_absent_compact_flag_follows_stored_external_ids(db_session: Session) -> None:
     tenant = f"t-compact-{uuid.uuid4().hex[:6]}"
     compacted = _customer(db_session, tenant, "compacted")

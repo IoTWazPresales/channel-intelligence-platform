@@ -85,3 +85,12 @@ def test_a_page_with_no_price_fails_on_the_general_reader():
     assert parsed.parse_status == "parse_failed"
     assert parsed.flags.get("reason") == "no_price_found"
     assert not getattr(parsed, "offers", None)
+
+
+def test_json_escaped_seller_names_are_decoded_before_own_or_competition():
+    own_page = '"seller":{"name":"North\\u00a0Counter"},"price":1299.00,"priceCurrency":"ZAR"'
+    assert seller_from_page(own_page) == "North\u00a0Counter"
+    assert _label(own_page) == "Own"
+    other_page = '"seller":"Harbour\\u0020Stall","price":88.50,"priceCurrency":"ZAR"'
+    assert seller_from_page(other_page) == "Harbour Stall"
+    assert _label(other_page) == "Competition"

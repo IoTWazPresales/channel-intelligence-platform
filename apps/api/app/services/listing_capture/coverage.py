@@ -2,10 +2,10 @@
 
 One product sits in one bucket:
 
-- watched: a listing is being checked and the latest read did not fail
+- watched: a listing is being checked on a site that has a reader, and the latest read did not fail
 - failing: the listing is a dead link or the latest read failed, and nothing is being watched
 - awaiting steward: an open link-queue row or a proposed feed row, and no listing yet
-- not found: the queue says the product is not on the site, or a steward rejected the only candidate
+- not found: the queue says the product is not on the site, a steward rejected the only candidate, or a feed proposal was rejected
 - not searched: the customer reported the product and none of the above has happened
 
 ``reported`` is the sum of those buckets. A sell-through read that fails is reported as
@@ -27,6 +27,9 @@ from app.models.dimensions import DimCustomer
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing, ListingObservation
 from app.models.listing_link import QUEUE_NOT_ON_SITE, QUEUE_OPEN, QUEUE_REJECTED, ListingLinkQueue
+from app.models.listing_site import ListingSite
+from app.services.listing_capture.adapters import configured_adapter
+from app.services.listing_capture.sites import site_config_from_row
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +162,7 @@ def _states(
     products: set[tuple[int, int]],
 ) -> dict[tuple[int, int], _State]:
     states = {key: _State() for key in products}
+    readable = _readable_site_keys(session, tenant_id)
     listings = list(
         session.execute(
             select(
@@ -166,13 +170,14 @@ def _states(
                 CustomerListing.customer_id,
                 CustomerListing.product_id,
                 CustomerListing.status,
+                CustomerListing.marketplace,
             )
             .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
             .where(DimCustomer.tenant_id == tenant_id)
         ).all()
     )
     latest = _latest_parse(session, [int(row[0]) for row in listings if row[0] is not None])
-    for listing_id, customer_id, product_id, status in listings:
+    for listing_id, customer_id, product_id, status, marketplace in listings:
         if customer_id is None or int(customer_id) not in names:
             continue
         key = (int(customer_id), int(product_id)) if product_id is not None else None
@@ -181,7 +186,8 @@ def _states(
         state = states[key]
         parse_status = latest.get(int(listing_id))
         listing_status = str(status or "")
-        if listing_status in _WATCHED and parse_status != "parse_failed":
+        market = str(marketplace or "").strip().casefold()
+        if listing_status in _WATCHED and parse_status != "parse_failed" and market in readable:
             state.watched = True
         elif listing_status == "dead_link" or parse_status == "parse_failed":
             state.failing = True
@@ -211,8 +217,11 @@ def _states(
         state = states.get(key)
         if state is None:
             continue
-        if str(status or "") == "proposed":
+        feed_status = str(status or "")
+        if feed_status == "proposed":
             state.proposed = True
+        elif feed_status == "rejected":
+            state.rejected = True
     return states
 
 
@@ -222,16 +231,35 @@ def _count_unlinked_seeds(
     names: dict[int, tuple[str, str, bool]],
     counts: dict[int, dict[str, int]],
 ) -> None:
-    """A feed row with no product still needs a steward. It is not a watched listing."""
+    """A feed row with no product is still a coverage row. Proposed awaits a steward; rejected is not found."""
     for customer_id, status in session.execute(
         select(CstListingSeed.customer_id, CstListingSeed.status)
         .join(DimCustomer, DimCustomer.id == CstListingSeed.customer_id)
         .where(DimCustomer.tenant_id == tenant_id, CstListingSeed.product_id.is_(None))
     ).all():
         cid = int(customer_id)
-        if cid not in names or str(status or "") != "proposed":
+        if cid not in names:
             continue
-        counts[cid]["awaiting_steward"] += 1
+        feed_status = str(status or "")
+        if feed_status == "proposed":
+            counts[cid]["awaiting_steward"] += 1
+        elif feed_status == "rejected":
+            counts[cid]["not_found"] += 1
+
+
+def _readable_site_keys(session: Session, tenant_id: str) -> set[str]:
+    """Site keys whose reader is configured. A site with no reader is not watched."""
+    keys: set[str] = set()
+    rows = session.scalars(select(ListingSite).where(ListingSite.tenant_id == tenant_id)).all()
+    for row in rows:
+        if not isinstance(row, ListingSite):
+            continue
+        if configured_adapter(site_config_from_row(row)) is None:
+            continue
+        key = str(row.site_key or "").strip().casefold()
+        if key:
+            keys.add(key)
+    return keys
 
 
 def _latest_parse(session: Session, listing_ids: list[int]) -> dict[int, str]:
