@@ -1161,6 +1161,40 @@ def _write_specs_from_draft_or_payload(
     return out
 
 
+def _promotion_evidence_for_written_line(
+    session: Session,
+    *,
+    draft_line: dict[str, Any] | None,
+    spec: dict[str, Any],
+    customer_id: int,
+    product_id: int,
+    distributor_id: int | None,
+    tenant_id: str,
+) -> dict[str, Any] | None:
+    """Evidence for a line that is being written.
+
+    A draft row already carries evidence when the product was discovered.
+    An explicit line that the draft omitted keeps the evidence supplied with
+    it, or the evidence read for that product. The discovered set is not the
+    only source.
+    """
+    evidence = (draft_line or {}).get("promotion_evidence")
+    if evidence:
+        return evidence
+    supplied = spec.get("promotion_evidence")
+    if isinstance(supplied, dict) and supplied:
+        return supplied
+    weeks, _source = resolve_target_cover_weeks_sync(session, int(customer_id))
+    return load_promotion_line_evidence(
+        session,
+        customer_id=int(customer_id),
+        product_id=int(product_id),
+        distributor_id=int(distributor_id) if distributor_id is not None else None,
+        target_weeks=float(weeks) if weeks is not None else None,
+        tenant_id=tenant_id,
+    )
+
+
 def create_case_from_promo_draft(
     session: Session,
     *,
@@ -1373,7 +1407,15 @@ def create_case_from_promo_draft(
             ),
             None,
         )
-        evidence = (draft_line or {}).get("promotion_evidence")
+        evidence = _promotion_evidence_for_written_line(
+            session,
+            draft_line=draft_line,
+            spec=spec,
+            customer_id=case.customer_id,
+            product_id=pid,
+            distributor_id=int(did) if did is not None else None,
+            tenant_id=case.tenant_id,
+        )
         if evidence and (evidence.get("observed_cover") or {}).get("flag") == "high_cover":
             flags = list(cost_evidence.get("flags") or [])
             if "observed_cover_high" not in flags:
@@ -1383,6 +1425,11 @@ def create_case_from_promo_draft(
             cost_evidence["promotion_evidence"] = evidence
         if stock_action:
             cost_evidence["stock_action"] = stock_action
+            if "site_labels" in spec:
+                cost_evidence["site_labels"] = [
+                    None if raw is None or str(raw).strip() == "" else str(raw).strip()
+                    for raw in (spec.get("site_labels") or [])
+                ]
 
         line = CporCaseLine(
             case_id=case.id,

@@ -37,6 +37,23 @@ def stock_action_in_notes(notes: str | None) -> str | None:
             return action
     return None
 
+
+def stock_action_covers_site(evidence: dict | None, site_label: str | None) -> bool:
+    """Whether a recorded action includes this site.
+
+    Lines written before a site was stored cover every site. A recorded list
+    covers only the sites in that list. An empty label is the account grain.
+    """
+    if not isinstance(evidence, dict) or "site_labels" not in evidence:
+        return True
+    wanted = (site_label or "").strip() or None
+    for raw in evidence.get("site_labels") or []:
+        recorded = None if raw is None or str(raw).strip() == "" else str(raw).strip()
+        if recorded == wanted:
+            return True
+    return False
+
+
 DEFAULT_LEAD_TIME_MIN_DELIVERIES = 5
 DEFAULT_SLOW_COVER_MULTIPLE = 2.0
 DEFAULT_STOCK_BEHAVIOUR_MIN_SOH = 1.0

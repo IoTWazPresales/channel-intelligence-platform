@@ -30,6 +30,7 @@ from app.services.store_dc.rules import (
     norm_label,
     onward_leg,
     slow_multiple,
+    stock_action_covers_site,
     stock_action_in_notes,
     suggestion_labels,
     unsold_window_weeks,
@@ -100,12 +101,18 @@ def _weekly_totals(rows: list[_Fact]) -> list[tuple[date, float]]:
     return sorted(buckets.items())
 
 
-def _open_stock_actions(db: Session, tenant_id: str, customer_id: int) -> dict[int, set[str]]:
-    """Open promote, move, or return markers for this customer. A read, not a write."""
+def _open_stock_actions(
+    db: Session, tenant_id: str, customer_id: int
+) -> dict[int, list[tuple[str, dict | None]]]:
+    """Open promote, move, or return markers for this customer. A read, not a write.
+
+    Each hit keeps the line's site list. A line written before sites were stored
+    has no list and still covers every site.
+    """
     from app.models.cpor import CporCase, CporCaseLine
 
     rows = db.execute(
-        select(CporCaseLine.product_id, CporCase.notes)
+        select(CporCaseLine.product_id, CporCase.notes, CporCaseLine.cost_evidence_json)
         .join(CporCase, CporCase.id == CporCaseLine.case_id)
         .where(
             CporCase.tenant_id == tenant_id,
@@ -113,12 +120,39 @@ def _open_stock_actions(db: Session, tenant_id: str, customer_id: int) -> dict[i
             CporCase.status.in_(("draft", "proposed", "approved", "active")),
         )
     ).all()
-    found: dict[int, set[str]] = defaultdict(set)
-    for product_id, notes in rows:
+    found: dict[int, list[tuple[str, dict | None]]] = defaultdict(list)
+    for product_id, notes, evidence in rows:
         action = stock_action_in_notes(notes)
         if action and product_id is not None:
-            found[int(product_id)].add(action)
+            found[int(product_id)].append((action, evidence if isinstance(evidence, dict) else None))
     return found
+
+
+def _taken_actions(
+    executed: dict[int, list[tuple[str, dict | None]]] | None,
+    product_id: int,
+    site_label: str | None,
+) -> set[str] | None:
+    if executed is None:
+        return None
+    taken: set[str] = set()
+    for action, evidence in executed.get(int(product_id), ()):
+        if stock_action_covers_site(evidence, site_label):
+            taken.add(action)
+    return taken
+
+
+def _executed_for(
+    executed: dict[int, list[tuple[str, dict | None]]] | None,
+    viewed_customer_id: int | None,
+    owner_id: int | None,
+) -> dict[int, list[tuple[str, dict | None]]] | None:
+    """Open actions apply only to the customer who owns the stock."""
+    if executed is None or viewed_customer_id is None or owner_id is None:
+        return None
+    if int(owner_id) != int(viewed_customer_id):
+        return None
+    return executed
 
 
 def _line(
@@ -187,7 +221,7 @@ def _site_block(
     multiple: float,
     unsold_weeks: float,
     leg: dict[str, Any],
-    executed: dict[int, set[str]] | None = None,
+    executed: dict[int, list[tuple[str, dict | None]]] | None = None,
 ) -> dict[str, Any]:
     lines = [
         _line(
@@ -198,7 +232,7 @@ def _site_block(
             multiple=multiple,
             unsold_weeks=unsold_weeks,
             leg=leg,
-            executed_actions=None if executed is None else executed.get(pid),
+            executed_actions=_taken_actions(executed, pid, site_label),
         )
         for pid, group in sorted(_group_products(rows).items())
     ]
@@ -365,6 +399,8 @@ def _dc_section(
     distributors: list[dict[str, Any]],
     lead_index: dict[tuple[int, str], dict[str, Any]],
     min_deliveries: int,
+    executed: dict[int, list[tuple[str, dict | None]]] | None = None,
+    viewed_customer_id: int | None = None,
 ) -> dict[str, Any]:
     served = served_customer_ids(db, tenant_id, candidate)
     owner_cfg = configs.get(candidate.customer_id) if candidate.customer_id else None
@@ -388,6 +424,7 @@ def _dc_section(
         multiple=owner_multiple,
         unsold_weeks=owner_unsold,
         leg=inbound,
+        executed=_executed_for(executed, viewed_customer_id, candidate.customer_id),
     )
     stores = []
     store_need_by_product: dict[int, float] = defaultdict(float)
@@ -412,6 +449,7 @@ def _dc_section(
                 multiple=slow_multiple(configs.get(cid)),
                 unsold_weeks=unsold_window_weeks(configs.get(cid), cust_cover["min_weeks"]),
                 leg=onward_leg(),
+                executed=_executed_for(executed, viewed_customer_id, cid),
             )
             stores.append(block)
             for line in block["lines"]:
@@ -419,6 +457,7 @@ def _dc_section(
                     store_need_by_product[line["product_id"]] += float(line["need_units"])
     dc_soh_by_product = {ln["product_id"]: ln["stock_on_hand"] for ln in dc_block["lines"]}
     dc_rate_by_product = {ln["product_id"]: ln["weekly_rate"] for ln in dc_block["lines"]}
+    dc_detail = {ln["product_id"]: ln for ln in dc_block["lines"]}
     product_ids = set(store_need_by_product) | set(dc_soh_by_product)
     from_distributor = []
     for pid in sorted(product_ids):
@@ -432,20 +471,29 @@ def _dc_section(
         else:
             units = round(max(0.0, asking + rate * (owner_cover["target_weeks"] + lead_weeks) - soh), 2)
             reason = "stores_plus_cover" if lead_weeks == 0 else "stores_plus_cover_and_lead_time"
+        detail = dc_detail.get(pid) or {}
         from_distributor.append(
             {
                 "product_id": pid,
-                "sku": products[pid].sku if pid in products else None,
+                "sku": products[pid].sku if pid in products else detail.get("sku"),
+                "product_name": detail.get("product_name"),
                 "stores_asking": asking,
                 "stock_on_hand": soh,
                 "need_units": units,
                 "need_reason": reason,
                 "lead_time_label": inbound["lead_time_label"],
+                "weeks_of_cover": detail.get("weeks_of_cover"),
+                "slow": bool(detail.get("slow")),
+                "unsold": bool(detail.get("unsold")),
+                "suggestions": list(detail.get("suggestions") or []),
+                "suggestion_executed": bool(detail.get("suggestion_executed")),
+                "executed_actions": list(detail.get("executed_actions") or []),
             }
         )
     stock_values = [ln["stock_on_hand"] for ln in dc_block["lines"] if ln["stock_on_hand"] is not None]
     return {
         "candidate_id": candidate.id,
+        "customer_id": candidate.customer_id,
         "site_label": candidate.site_label,
         "serves": [{"customer_id": cid, "customer_name": names.get(cid)} for cid in served],
         "stock_on_hand": None if not stock_values else round(sum(stock_values), 2),
@@ -498,6 +546,8 @@ def build_customer_view(db: Session, tenant_id: str, customer_id: int) -> dict[s
             distributors=distributors,
             lead_index=lead_index,
             min_deliveries=min_deliveries,
+            executed=executed,
+            viewed_customer_id=customer_id,
         )
         for dc in dcs
     ]

@@ -11,7 +11,7 @@ from app.services.cpor.promo_plan_builder import (
     customer_sku_cover_from_rows,
     load_promotion_line_evidence,
 )
-from app.services.store_dc.rules import stock_action_in_notes
+from app.services.store_dc.rules import stock_action_covers_site, stock_action_in_notes
 from app.services.store_dc.stock_actions import auto_propose_from_intelligence, execute_aged_stock_action
 
 
@@ -397,14 +397,14 @@ def test_auto_propose_skips_a_line_without_a_price_and_opens_one_draft(monkeypat
     calls = []
     monkeypatch.setattr(
         actions,
-        "list_aged_stock",
-        lambda *_a, **_k: {
-            "lines": [
+        "_collect_aged_stock",
+        lambda *_a, **_k: (
+            [
                 {"customer_id": 3, "product_id": 9, "stock_on_hand": 12, "suggestions": ["promote"]},
                 {"customer_id": 3, "product_id": 10, "stock_on_hand": 4, "suggestions": ["promote"]},
             ],
-            "truncated": False,
-        },
+            False,
+        ),
     )
     monkeypatch.setattr(actions, "_open_case_id", lambda *_a, **_k: None)
 
@@ -526,3 +526,407 @@ def test_create_case_stamps_move_before_commit_and_keeps_cover_off_the_term(monk
     assert "observed_cover_high" in line.cost_evidence_json["flags"]
     assert line.cost_evidence_json["promotion_evidence"]["observed_cover"]["writes_target_cover"] is False
     assert line.cost_evidence_json["planner"]["cover_not_persisted_to_customer_term"] is True
+
+
+def test_a_recorded_site_does_not_cover_every_site():
+    assert stock_action_covers_site(None, "North") is True
+    assert stock_action_covers_site({}, "North") is True
+    assert stock_action_covers_site({"site_labels": ["North"]}, "North") is True
+    assert stock_action_covers_site({"site_labels": ["North"]}, "South") is False
+    assert stock_action_covers_site({"site_labels": ["North"]}, None) is False
+    assert stock_action_covers_site({"site_labels": [None]}, None) is True
+    assert stock_action_covers_site({"site_labels": [None]}, "North") is False
+
+
+def test_lineup_price_stays_on_the_target_customer(monkeypatch):
+    import app.services.store_dc.stock_actions as actions
+    from sqlalchemy.dialects import postgresql
+
+    monkeypatch.setattr(
+        actions,
+        "load_promotion_line_evidence",
+        lambda *_a, **_k: {"listing": {"last_observed_price": None}},
+    )
+    seen = []
+
+    class Session:
+        def execute(self, statement, *_a, **_k):
+            seen.append(statement)
+            return _Result(scalar=80)
+
+    price = actions._srp_for_line(Session(), customer_id=3, product_id=9, tenant_id="tenant-a")
+    sql = str(seen[0].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})).lower()
+    assert price == 80.0
+    assert "customer_id" in sql
+    assert "superseded_by_case_id" in sql
+    assert "cancelled" in sql
+    assert "msrp_local" in sql
+    assert "dap_evidence" not in sql
+
+
+def _two_site_view():
+    line = {
+        "product_id": 9,
+        "stock_on_hand": 12,
+        "suggestions": ["promote", "move", "return"],
+        "slow": True,
+        "unsold": False,
+    }
+    return {
+        "account": None,
+        "sites": [
+            {"site_label": "North", "customer_id": 3, "lines": [dict(line)]},
+            {"site_label": "South", "customer_id": 3, "lines": [dict(line)]},
+        ],
+        "dc_sections": [],
+    }
+
+
+def test_one_sites_stock_action_does_not_suppress_another_site(monkeypatch):
+    import app.services.store_dc.stock_actions as actions
+
+    calls = []
+    monkeypatch.setattr(actions, "build_customer_view", lambda *_a, **_k: _two_site_view())
+    monkeypatch.setattr(actions, "_srp_for_line", lambda *_a, **_k: 100.0)
+    monkeypatch.setattr(
+        actions,
+        "create_case_from_promo_draft",
+        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 6, "case_code": "CPOR-6", "href": "/x"},
+    )
+
+    class OpenNorth:
+        def execute(self, *_a, **_k):
+            return _OpenResult([(5, "stock_action=promote", {"site_labels": ["North"], "stock_action": "promote"})])
+
+    south = execute_aged_stock_action(
+        OpenNorth(),
+        tenant_id="tenant-a",
+        customer_id=3,
+        product_id=9,
+        action="promote",
+        actor="planner",
+        site_label="South",
+        **_writers(),
+    )
+    assert south["created"] is True
+    assert calls[0]["lines"][0]["estimate_qty"] == 12
+    assert calls[0]["lines"][0]["site_labels"] == ["South"]
+
+    north = execute_aged_stock_action(
+        OpenNorth(),
+        tenant_id="tenant-a",
+        customer_id=3,
+        product_id=9,
+        action="promote",
+        actor="planner",
+        site_label="North",
+        **_writers(),
+    )
+    assert north["created"] is False
+    assert north["reason"] == "already_open"
+    assert len(calls) == 1
+
+
+def test_account_grain_is_not_suppressed_by_a_named_site(monkeypatch):
+    import app.services.store_dc.stock_actions as actions
+
+    calls = []
+    view = {
+        "account": {
+            "site_label": None,
+            "customer_id": 3,
+            "lines": [{"product_id": 9, "stock_on_hand": 4, "suggestions": ["promote"]}],
+        },
+        "sites": [
+            {
+                "site_label": "North",
+                "customer_id": 3,
+                "lines": [{"product_id": 9, "stock_on_hand": 12, "suggestions": ["promote"]}],
+            }
+        ],
+        "dc_sections": [],
+    }
+    monkeypatch.setattr(actions, "build_customer_view", lambda *_a, **_k: view)
+    monkeypatch.setattr(actions, "_srp_for_line", lambda *_a, **_k: 50.0)
+    monkeypatch.setattr(
+        actions,
+        "create_case_from_promo_draft",
+        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 7, "case_code": "CPOR-7", "href": "/x"},
+    )
+
+    class OpenNorth:
+        def execute(self, *_a, **_k):
+            return _OpenResult([(5, "stock_action=promote", {"site_labels": ["North"]})])
+
+    account = execute_aged_stock_action(
+        OpenNorth(),
+        tenant_id="tenant-a",
+        customer_id=3,
+        product_id=9,
+        action="promote",
+        actor="planner",
+        **_writers(),
+    )
+    assert account["created"] is True
+    assert calls[0]["lines"][0]["estimate_qty"] == 4
+    assert calls[0]["lines"][0]["site_labels"] == [None]
+
+
+def test_auto_propose_keeps_a_site_the_open_case_does_not_cover(monkeypatch):
+    import app.services.store_dc.stock_actions as actions
+
+    calls = []
+    monkeypatch.setattr(
+        actions,
+        "_collect_aged_stock",
+        lambda *_a, **_k: (
+            [
+                {"customer_id": 3, "product_id": 9, "site_label": "North", "stock_on_hand": 10, "suggestions": ["promote"]},
+                {"customer_id": 3, "product_id": 9, "site_label": "South", "stock_on_hand": 7, "suggestions": ["promote"]},
+            ],
+            False,
+        ),
+    )
+    monkeypatch.setattr(
+        actions,
+        "_open_case_id",
+        lambda *_a, **kwargs: 5 if kwargs.get("site_label") == "North" else None,
+    )
+    monkeypatch.setattr(actions, "_srp_for_line", lambda *_a, **_k: 90.0)
+    monkeypatch.setattr(
+        actions,
+        "create_case_from_promo_draft",
+        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 12, "case_code": "CPOR-12", "href": "/x"},
+    )
+    auto_propose_from_intelligence(
+        SimpleNamespace(),
+        tenant_id="tenant-a",
+        actor="planner",
+        customer_id=3,
+        period_label="2026Q4",
+        **_writers(),
+    )
+    assert calls[0]["lines"][0]["estimate_qty"] == 7
+    assert calls[0]["lines"][0]["site_labels"] == ["South"]
+
+
+def test_auto_propose_is_not_capped_at_the_display_list(monkeypatch):
+    import app.services.store_dc.stock_actions as actions
+    from app.services.store_dc.stock_actions import list_aged_stock
+
+    rows = [
+        {"product_id": i, "stock_on_hand": 1, "suggestions": ["promote"], "site_label": None}
+        for i in range(1, 202)
+    ]
+    monkeypatch.setattr(
+        actions,
+        "build_customer_view",
+        lambda *_a, **_k: {"account": {"site_label": None, "customer_id": 3, "lines": rows}, "sites": [], "dc_sections": []},
+    )
+    monkeypatch.setattr(actions, "_open_case_id", lambda *_a, **_k: None)
+    monkeypatch.setattr(actions, "_srp_for_line", lambda *_a, **_k: 10.0)
+    calls = []
+    monkeypatch.setattr(
+        actions,
+        "create_case_from_promo_draft",
+        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 13, "case_code": "CPOR-13", "href": "/x"},
+    )
+    out = auto_propose_from_intelligence(
+        SimpleNamespace(),
+        tenant_id="tenant-a",
+        actor="planner",
+        customer_id=3,
+        period_label="2026Q4",
+        **_writers(),
+    )
+    assert len(calls[0]["lines"]) == 201
+    assert out["truncated"] is False
+    listed = list_aged_stock(SimpleNamespace(), tenant_id="tenant-a", customer_id=3)
+    assert len(listed["lines"]) == 200
+    assert listed["truncated"] is True
+
+
+def test_display_list_is_truncated_when_another_customer_remains(monkeypatch):
+    import app.services.store_dc.stock_actions as actions
+    from app.services.store_dc.stock_actions import list_aged_stock
+
+    def view(_session, _tenant, cid):
+        lines = [
+            {"product_id": i, "suggestions": ["promote"], "stock_on_hand": 1, "site_label": None}
+            for i in range(200)
+        ]
+        return {"account": {"site_label": None, "customer_id": cid, "lines": lines}, "sites": [], "dc_sections": []}
+
+    monkeypatch.setattr(actions, "build_customer_view", view)
+
+    class Session:
+        def scalars(self, *_a, **_k):
+            return SimpleNamespace(all=lambda: [3, 4])
+
+    listed = list_aged_stock(Session(), tenant_id="tenant-a")
+    assert len(listed["lines"]) == 200
+    assert listed["truncated"] is True
+
+
+def test_suggestion_rows_read_stores_and_need_from_distributor():
+    from app.services.store_dc.stock_actions import _suggestion_rows
+
+    view = {
+        "account": None,
+        "sites": [
+            {
+                "site_label": "North",
+                "customer_id": 3,
+                "lines": [{"product_id": 9, "suggestions": ["promote"], "stock_on_hand": 5}],
+            }
+        ],
+        "dc_sections": [
+            {
+                "site_label": "Hub",
+                "customer_id": 3,
+                "stores": [
+                    {
+                        "site_label": "North",
+                        "customer_id": 3,
+                        "lines": [{"product_id": 9, "suggestions": ["promote"], "stock_on_hand": 5}],
+                    },
+                    {
+                        "site_label": "Other",
+                        "customer_id": 8,
+                        "lines": [{"product_id": 7, "suggestions": ["promote"], "stock_on_hand": 9}],
+                    },
+                ],
+                "need_from_distributor": [
+                    {"product_id": 8, "suggestions": ["move"], "stock_on_hand": 3, "sku": "SKU-8"},
+                ],
+            },
+            {
+                "site_label": "Foreign",
+                "customer_id": 8,
+                "need_from_distributor": [
+                    {"product_id": 4, "suggestions": ["promote"], "stock_on_hand": 2},
+                ],
+            },
+            {
+                "site_label": "Wrong",
+                "sites": [
+                    {
+                        "site_label": "Ghost",
+                        "lines": [{"product_id": 1, "suggestions": ["promote"], "stock_on_hand": 1}],
+                    }
+                ],
+                "lines": [{"product_id": 2, "suggestions": ["return"], "stock_on_hand": 1}],
+            },
+        ],
+    }
+    rows = _suggestion_rows(view, customer_id=3)
+    assert {(row["product_id"], row["site_label"]) for row in rows} == {(9, "North"), (8, "Hub")}
+
+
+def test_explicit_line_keeps_promotion_evidence_when_the_draft_omits_it(monkeypatch):
+    import app.services.cpor.promo_plan_builder as mod
+    from app.models.cpor import CporCaseLine
+    from app.services.cpor.promo_plan_builder import create_case_from_promo_draft
+
+    added: list[object] = []
+    draft_calls: list[dict] = []
+    loaded: list[dict] = []
+
+    def build(*_a, **kwargs):
+        draft_calls.append(kwargs)
+        return {
+            "budget_check": {
+                "create_blocked": False,
+                "over_budget_warn": False,
+                "tracks": {"money": {"status": "ok"}},
+            },
+            "product_set_source": "customer_history",
+            "lines": [],
+        }
+
+    def load(_session, **kwargs):
+        loaded.append(kwargs)
+        return {
+            "observed_cover": {"flag": "high_cover", "weeks": 40, "writes_target_cover": False},
+            "read_failed": False,
+        }
+
+    monkeypatch.setattr(mod, "build_promo_plan_draft", build)
+    monkeypatch.setattr(mod, "load_promotion_line_evidence", load)
+    monkeypatch.setattr(mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (6.0, "tenant_default"))
+    monkeypatch.setattr(
+        mod,
+        "suggest_intake_weighted_mac",
+        lambda *_a, **_k: SimpleNamespace(cost_basis=10.0, cost_source="intake_weighted", evidence={}, flags=[]),
+    )
+
+    class Session:
+        def get(self, model, key):
+            name = getattr(model, "__name__", "")
+            if name == "DimCustomer":
+                return SimpleNamespace(id=int(key), tenant_id="tenant-a")
+            if name == "DimProduct":
+                return SimpleNamespace(id=int(key), sku="SKU-9", name="Name")
+            return None
+
+        def execute(self, *_a, **_k):
+            return _Result(scalar=0, rows=[])
+
+        def add(self, obj):
+            added.append(obj)
+
+        def flush(self):
+            nxt = 1
+            for obj in added:
+                if getattr(obj, "id", None) is None:
+                    obj.id = nxt
+                    nxt += 1
+
+        def commit(self):
+            return None
+
+        def refresh(self, obj):
+            return obj
+
+    writers = dict(
+        generate_case_code=lambda _session: "CPOR-EVID",
+        record_event=lambda *_a, **_k: None,
+        recompute_case_line=lambda *_a, **_k: {"flags": []},
+        resolve_default_margin=lambda *_a, **_k: (0.12, "customer_default"),
+        suggest_cost_basis=lambda *_a, **_k: None,
+    )
+    create_case_from_promo_draft(
+        Session(),
+        customer_id=3,
+        promotion_type="Stock PP (In-Direct)",
+        tenant_id="tenant-a",
+        period_label="2026Q4",
+        actor="planner",
+        lines=[{"product_id": 9, "srp": 100, "estimate_qty": 12, "pod_quarter": "2026Q4", "site_labels": ["South"]}],
+        stock_action="promote",
+        **writers,
+    )
+    assert draft_calls[0]["line_specs"] is None
+    assert loaded[0]["product_id"] == 9
+    assert loaded[0]["target_weeks"] == 6.0
+    line = next(obj for obj in added if isinstance(obj, CporCaseLine))
+    assert line.cost_evidence_json["promotion_evidence"]["observed_cover"]["flag"] == "high_cover"
+    assert "observed_cover_high" in line.cost_evidence_json["flags"]
+    assert line.cost_evidence_json["site_labels"] == ["South"]
+
+    loaded.clear()
+    supplied = {"observed_cover": {"flag": "observed_cover", "weeks": 8, "writes_target_cover": False}}
+    create_case_from_promo_draft(
+        Session(),
+        customer_id=3,
+        promotion_type="Stock PP (In-Direct)",
+        tenant_id="tenant-a",
+        period_label="2026Q4",
+        actor="planner",
+        lines=[{"product_id": 9, "srp": 100, "estimate_qty": 12, "promotion_evidence": supplied}],
+        stock_action="promote",
+        **writers,
+    )
+    assert loaded == []
+    explicit = [obj for obj in added if isinstance(obj, CporCaseLine)][-1]
+    assert explicit.cost_evidence_json["promotion_evidence"] == supplied

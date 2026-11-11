@@ -7,7 +7,7 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { AgedStockPanel } from './AgedStockPanel';
 
-const apiGet = vi.fn(async () => ({
+const apiGet = vi.fn(async (_url: string, _init?: unknown) => ({
   lines: [
     {
       customer_id: 3,
@@ -23,14 +23,14 @@ const apiGet = vi.fn(async () => ({
   truncated: false,
 }));
 
-const apiPost = vi.fn(async (url: string) => {
+const apiPost = vi.fn(async (url: string, _body?: unknown) => {
   if (url.endsWith('/auto-propose')) return { created: [{ case_id: 11 }], skipped: [{ product_id: 10 }] };
   return { created: true, case_id: 5 };
 });
 
 vi.mock('@/lib/api', () => ({
-  apiGet: (url: string) => apiGet(url),
-  apiPost: (url: string, body: unknown) => apiPost(url, body),
+  apiGet: (url: string, init?: unknown) => apiGet(url, init),
+  apiPost: (url: string, body?: unknown) => apiPost(url, body),
 }));
 
 describe('AgedStockPanel', () => {
