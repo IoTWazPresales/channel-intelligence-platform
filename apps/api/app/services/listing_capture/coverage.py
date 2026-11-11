@@ -10,6 +10,11 @@ One product sits in one bucket:
 
 ``reported`` is the sum of those buckets. A sell-through read that fails is reported as
 ``data_unavailable`` and the other sources are still counted.
+
+A steward's not-on-site decision for a product on a site outranks any listing of that product
+on that site (the listing stays active; it neither watches nor fails the product there).
+A feed row with no product is its own coverage row, keyed by the feed row: once confirmed it
+takes the state of the listing made from it, until that listing is given a product.
 """
 
 from __future__ import annotations
@@ -50,11 +55,14 @@ def customer_coverage(session: Session, tenant_id: str) -> dict[str, Any]:
 def _coverage(session: Session, tenant_id: str) -> dict[str, Any]:
     names = _customers(session, tenant_id)
     reported_products, sellthrough_down = _reported_products(session, tenant_id, names)
-    states = _states(session, tenant_id, names, reported_products)
+    listings = _listings(session, tenant_id)
+    latest = _latest_parse(session, [int(row[0]) for row in listings if row[0] is not None])
+    readable = _readable_site_keys(session, tenant_id)
+    states = _states(session, tenant_id, names, reported_products, listings, latest, readable)
     counts: dict[int, dict[str, int]] = defaultdict(lambda: {key: 0 for key in _BUCKETS})
     for (customer_id, _product_id), state in states.items():
         counts[customer_id][_bucket(state)] += 1
-    _count_unlinked_seeds(session, tenant_id, names, counts)
+    _count_unlinked_seeds(session, tenant_id, names, counts, listings, latest, readable)
     rows = []
     seen = set(counts) | {cid for cid, (_code, _name, reporting) in names.items() if reporting}
     for customer_id in seen:
@@ -155,15 +163,9 @@ class _State:
         self.proposed = False
 
 
-def _states(
-    session: Session,
-    tenant_id: str,
-    names: dict[int, tuple[str, str, bool]],
-    products: set[tuple[int, int]],
-) -> dict[tuple[int, int], _State]:
-    states = {key: _State() for key in products}
-    readable = _readable_site_keys(session, tenant_id)
-    listings = list(
+def _listings(session: Session, tenant_id: str) -> list[Any]:
+    """(id, customer_id, product_id, status, marketplace, external_id) for the tenant's listings."""
+    return list(
         session.execute(
             select(
                 CustomerListing.id,
@@ -171,25 +173,76 @@ def _states(
                 CustomerListing.product_id,
                 CustomerListing.status,
                 CustomerListing.marketplace,
+                CustomerListing.external_id,
             )
             .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
             .where(DimCustomer.tenant_id == tenant_id)
         ).all()
     )
-    latest = _latest_parse(session, [int(row[0]) for row in listings if row[0] is not None])
-    for listing_id, customer_id, product_id, status, marketplace in listings:
+
+
+def _market(marketplace: Any) -> str:
+    return str(marketplace or "").strip().casefold()
+
+
+def _listing_signal(
+    status: Any,
+    parse_status: str | None,
+    market: str,
+    readable: set[str],
+) -> str | None:
+    """``watched``, ``failing`` or None for one listing."""
+    listing_status = str(status or "")
+    if listing_status in _WATCHED and parse_status != "parse_failed" and market in readable:
+        return "watched"
+    if listing_status == "dead_link" or parse_status == "parse_failed":
+        return "failing"
+    return None
+
+
+def _not_on_site_keys(session: Session, tenant_id: str) -> set[tuple[str, int]]:
+    """(site key, product) pairs a steward decided are not on that site.
+
+    Same scope as ``links._not_on_site``: per site and product, whichever customer queued it.
+    """
+    rows = session.execute(
+        select(ListingSite.site_key, ListingLinkQueue.product_id)
+        .join(ListingSite, ListingSite.id == ListingLinkQueue.site_id)
+        .where(ListingSite.tenant_id == tenant_id, ListingLinkQueue.status == QUEUE_NOT_ON_SITE)
+    ).all()
+    return {
+        (_market(site_key), int(product_id))
+        for site_key, product_id in rows
+        if product_id is not None
+    }
+
+
+def _states(
+    session: Session,
+    tenant_id: str,
+    names: dict[int, tuple[str, str, bool]],
+    products: set[tuple[int, int]],
+    listings: list[Any],
+    latest: dict[int, str],
+    readable: set[str],
+) -> dict[tuple[int, int], _State]:
+    states = {key: _State() for key in products}
+    not_on_site = _not_on_site_keys(session, tenant_id)
+    for listing_id, customer_id, product_id, status, marketplace, _external_id in listings:
         if customer_id is None or int(customer_id) not in names:
             continue
         key = (int(customer_id), int(product_id)) if product_id is not None else None
         if key is None or key not in states:
             continue
         state = states[key]
-        parse_status = latest.get(int(listing_id))
-        listing_status = str(status or "")
-        market = str(marketplace or "").strip().casefold()
-        if listing_status in _WATCHED and parse_status != "parse_failed" and market in readable:
+        market = _market(marketplace)
+        if (market, key[1]) in not_on_site:
+            state.not_on_site = True
+            continue
+        signal = _listing_signal(status, latest.get(int(listing_id)), market, readable)
+        if signal == "watched":
             state.watched = True
-        elif listing_status == "dead_link" or parse_status == "parse_failed":
+        elif signal == "failing":
             state.failing = True
     for customer_id, product_id, status in session.execute(
         select(ListingLinkQueue.customer_id, ListingLinkQueue.product_id, ListingLinkQueue.status).where(
@@ -230,10 +283,31 @@ def _count_unlinked_seeds(
     tenant_id: str,
     names: dict[int, tuple[str, str, bool]],
     counts: dict[int, dict[str, int]],
+    listings: list[Any],
+    latest: dict[int, str],
+    readable: set[str],
 ) -> None:
-    """A feed row with no product is still a coverage row. Proposed awaits a steward; rejected is not found."""
-    for customer_id, status in session.execute(
-        select(CstListingSeed.customer_id, CstListingSeed.status)
+    """A feed row with no product is still a coverage row.
+
+    Proposed awaits a steward; rejected is not found. Confirmed follows the listing
+    ``confirm_proposal`` made from it (same customer, site and external id): watched or failing
+    by that listing, otherwise not searched. Once that listing has a product the row is counted
+    under the product instead, so it is skipped here.
+    """
+    made: dict[tuple[int, str, str], list[Any]] = defaultdict(list)
+    for row in listings:
+        _listing_id, customer_id, _product_id, _status, marketplace, external_id = row
+        ext = str(external_id or "").strip()
+        if customer_id is None or not ext:
+            continue
+        made[(int(customer_id), _market(marketplace), ext)].append(row)
+    for customer_id, marketplace, external_id, status in session.execute(
+        select(
+            CstListingSeed.customer_id,
+            CstListingSeed.marketplace,
+            CstListingSeed.external_id,
+            CstListingSeed.status,
+        )
         .join(DimCustomer, DimCustomer.id == CstListingSeed.customer_id)
         .where(DimCustomer.tenant_id == tenant_id, CstListingSeed.product_id.is_(None))
     ).all():
@@ -245,6 +319,20 @@ def _count_unlinked_seeds(
             counts[cid]["awaiting_steward"] += 1
         elif feed_status == "rejected":
             counts[cid]["not_found"] += 1
+        elif feed_status == "confirmed":
+            matches = made.get((cid, _market(marketplace), str(external_id or "").strip()), [])
+            if any(match[2] is not None for match in matches):
+                continue
+            state = _State()
+            for listing_id, _cid, _pid, listing_status, listing_market, _ext in matches:
+                parse_status = latest.get(int(listing_id))
+                market = _market(listing_market)
+                signal = _listing_signal(listing_status, parse_status, market, readable)
+                if signal == "watched":
+                    state.watched = True
+                elif signal == "failing":
+                    state.failing = True
+            counts[cid][_bucket(state)] += 1
 
 
 def _readable_site_keys(session: Session, tenant_id: str) -> set[str]:

@@ -371,3 +371,103 @@ def test_a_rejected_feed_proposal_counts_as_not_found(db_session: Session) -> No
     assert row["not_searched"] == 0
     assert row["watched"] == 0
     assert row["reported"] == 3
+
+
+def _seed(session: Session, customer: DimCustomer, external_id: str) -> CstListingSeed:
+    row = CstListingSeed(
+        customer_id=int(customer.id),
+        marketplace="shop-a",
+        external_id=external_id,
+        product_id=None,
+        status="proposed",
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def _reader_site(tenant: str, key: str) -> ListingSite:
+    return ListingSite(tenant_id=tenant, site_key=key, display_name=key, adapter_key="html_page")
+
+
+def test_a_confirmed_proposal_with_no_product_stays_in_coverage(db_session: Session) -> None:
+    """A1: a confirmed product-less proposal keeps its row until a product is resolved."""
+    from app.services.listing_capture.registry import confirm_proposal
+
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "counter")
+    db_session.add(CustomerReportConfig(customer_id=int(customer.id), reports_expected=True))
+    db_session.add(_reader_site(tenant, "shop-a"))
+    db_session.flush()
+    live_seed = _seed(db_session, customer, f"open-live-{uuid.uuid4().hex[:6]}")
+    dead_seed = _seed(db_session, customer, f"open-dead-{uuid.uuid4().hex[:6]}")
+
+    before = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert before["awaiting_steward"] == 2
+    assert before["reported"] == 2
+
+    live = confirm_proposal(db_session, seed_id=int(live_seed.id), url=f"https://shop-a.example.test/p/{live_seed.id}")
+    dead = confirm_proposal(db_session, seed_id=int(dead_seed.id), url=f"https://shop-a.example.test/p/{dead_seed.id}")
+    assert live.product_id is None
+    dead.status = "dead_link"
+    db_session.add(dead)
+    db_session.flush()
+
+    after = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert after["reported"] == 2
+    assert after["watched"] == 1
+    assert after["failing"] == 1
+    assert after["awaiting_steward"] == 0
+
+    product = _product(db_session, tenant)
+    live.product_id = int(product.id)
+    db_session.add(live)
+    db_session.flush()
+    resolved = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert resolved["reported"] == 2
+    assert resolved["watched"] == 1
+    assert resolved["failing"] == 1
+
+
+def test_a_not_on_site_decision_wins_over_a_listing_on_that_site(db_session: Session) -> None:
+    """A2: not_on_site leaves the listing active; coverage still says not found for that site."""
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "counter")
+    db_session.add(CustomerReportConfig(customer_id=int(customer.id), reports_expected=True))
+    shop_a = _reader_site(tenant, "shop-a")
+    shop_b = _reader_site(tenant, "shop-b")
+    db_session.add_all([shop_a, shop_b])
+    db_session.flush()
+    only_here = _product(db_session, tenant)
+    unattributed = _product(db_session, tenant)
+    elsewhere = _product(db_session, tenant)
+    for product in (only_here, unattributed, elsewhere):
+        _sell(db_session, tenant, customer, product)
+        _listing(db_session, customer, product, status="active", url=f"https://shop-a.example.test/a/{product.id}")
+    other = _listing(
+        db_session,
+        customer,
+        elsewhere,
+        status="active",
+        url=f"https://shop-b.example.test/b/{elsewhere.id}",
+        marketplace="shop-b",
+    )
+    _obs(db_session, other, "ok", when=datetime.now(timezone.utc))  # noqa: UP017
+    _queue(db_session, tenant, shop_a, customer, only_here, QUEUE_NOT_ON_SITE)
+    _queue(db_session, tenant, shop_a, customer, elsewhere, QUEUE_NOT_ON_SITE)
+    db_session.add(
+        ListingLinkQueue(
+            tenant_id=tenant,
+            site_id=int(shop_a.id),
+            product_id=int(unattributed.id),
+            customer_id=None,
+            reason="no_match",
+            status=QUEUE_NOT_ON_SITE,
+        )
+    )
+    db_session.flush()
+
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["not_found"] == 2
+    assert row["watched"] == 1
+    assert row["reported"] == 3
