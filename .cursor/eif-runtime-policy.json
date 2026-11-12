@@ -66,6 +66,18 @@
     "CLAUDE.md"
   ],
   "derived": true,
+  "enforcement": {
+    "profile": "lean",
+    "protected_branches": [
+      "main"
+    ],
+    "protected_database_flags": [
+      "ALLOW_TESTS_ON_DEV_DB"
+    ],
+    "protected_databases": [
+      "cip"
+    ]
+  },
   "framework_version": "0.4.0-draft",
   "identity": {
     "expected_remotes": [
@@ -188,7 +200,7 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "b86a03183836be0364ebf4ab206d968b485360be8c24b427e83cd62408185a93"
+      "sha256": "7aafb52f2f19be535b585f2de958bff9ad50f33bf7a3303fb11f0453a1b4b8c9"
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",

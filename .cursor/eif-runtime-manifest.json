@@ -2,15 +2,15 @@
   "eif": "hook-runtime-manifest",
   "files": {
     ".cursor/hooks.json": "d7d7c183e44342e4674a83e969a1d79400b3af2763fa1a352239afc2f7a58167",
-    ".cursor/hooks/eif_guard.cmd": "dfaf88cc3806779de72641b1808161f5b1195e16f91c6151ad3b4c65b5dbc4aa",
-    ".cursor/hooks/eif_guard.py": "a33abad3a12c4b67263a0f3c93d3c453b4dc2cdd9126ae71b0ec6d21dc038639",
+    ".cursor/hooks/eif_guard.cmd": "4fb354978ff1459d309fe9f4768336adfac7271dbb74e4a544b483320b469556",
+    ".cursor/hooks/eif_guard.py": "8afdca2ffe6eda5ef8a4e277b5bfbeb9d0d5a8a559b3cf9c1758ce64f57ba4b1",
     ".cursor/hooks/eif_guard.sh": "228ed8d88af7362332b562f5a7f1c96d851d545b8ffc69195d83d99799f5df60",
     ".cursor/hooks/eif_guard_crash.json": "00d7f2cdaee97215a9d7a6ccd3a12cf352cc34bd7418be4f2a1410e6e1099a4f",
     ".cursor/hooks/eif_guard_failclosed.json": "b8a84d7b95a7da709f8f26449c96ef636d7796ff82bc7416af70d9b8bfe522f4",
     ".cursor/hooks/eif_integrity.py": "1ba6629252eeef5df5d5fb89ab94fd588bed29a1f0e5ece0413bdb4b1ec9d877",
-    ".cursor/hooks/eif_reason_codes.py": "3917f0021a3b04b18729d3123bd30f160ee85857e795cf0e11cb50ba7b3607cb",
-    ".cursor/hooks/eif_session.py": "3d5d405b4ec91cd71515f6c3e3ba3d30ef110ab65312fde888ca6e5eb32757e8",
-    ".cursor/hooks/eif_state.py": "4b164c8107196571002341ebe56b0c81839c773427103bcda6b70c5c8bfa4b6a"
+    ".cursor/hooks/eif_reason_codes.py": "7234f1ce535733a6d2cb568ddc2eb915df7cdeb9ceda7f14f33e3243f014d47b",
+    ".cursor/hooks/eif_session.py": "a0eddb31bbaeb65dcb8f121c9310926a26ea424b93389dfacaf98ececfb7bc34",
+    ".cursor/hooks/eif_state.py": "cbfd6695ffb776d891b60a3e9604017313026e40a94264e0451dea45cc9fad18"
   },
   "product_version": "0.7.0-draft"
 }

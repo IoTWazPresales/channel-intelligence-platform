@@ -61,19 +61,20 @@ goto :python_failed
 :validate_response
 REM Exact marker proves validation ran; an empty/malformed shim cannot validate
 REM itself merely by returning exit zero. Input pipe is never read twice.
-REM Validation only reads the captured response, so it may repeat. Each attempt
-REM writes a fresh marker: a scanner can briefly hold a just-written file.
+REM Validation only reads the captured response, so it may repeat. A scanner
+REM can briefly hold a just-written file (sharing violation, size still 0).
+REM Retries back off. A marker without a newline made set /p drop the line.
+REM A response that stays invalid still fails closed; validator stderr is kept.
 set "EIF_VTRIES=0"
 :validate_attempt
 set /a EIF_VTRIES+=1 >nul
-if %EIF_VTRIES% GTR 3 goto :python_failed
+if %EIF_VTRIES% GTR 8 goto :python_failed
+if %EIF_VTRIES% GTR 1 call %EIF_PYTHON% %EIF_PYTHON_ARGS% -c "import time; time.sleep(0.05)" <nul >nul 2>&1
 set "EIF_VALIDATION=%EIF_CAPTURE_DIR%\validated-%EIF_VTRIES%"
-call %EIF_PYTHON% %EIF_PYTHON_ARGS% -u -X utf8 -I -B -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); valid=isinstance(d,dict) and d.get('permission') in ('allow','deny') and d.get('decision_kind') in ('policy','harness_fault') and isinstance(d.get('reason_code'),str) and bool(d['reason_code']) and ((int(sys.argv[2])==2)==(d['permission']=='deny' and d['decision_kind']=='policy')); json.dumps(d,allow_nan=False); print('EIF_VALID' if valid else 'INVALID',end='')" "%EIF_CAPTURE%" "%EIF_RC%" <nul >"%EIF_VALIDATION%" 2>nul
+call %EIF_PYTHON% %EIF_PYTHON_ARGS% -u -X utf8 -I -B -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); valid=isinstance(d,dict) and d.get('permission') in ('allow','deny') and d.get('decision_kind') in ('policy','harness_fault') and isinstance(d.get('reason_code'),str) and bool(d['reason_code']) and ((int(sys.argv[2])==2)==(d['permission']=='deny' and d['decision_kind']=='policy')); json.dumps(d,allow_nan=False); sys.stdout.write('EIF_VALID\n' if valid else 'INVALID\n')" "%EIF_CAPTURE%" "%EIF_RC%" <nul >"%EIF_VALIDATION%" 2>"%EIF_CAPTURE_DIR%\validate.err"
 if errorlevel 1 goto :validate_attempt
-for %%I in ("%EIF_VALIDATION%") do if not "%%~zI"=="9" goto :validate_attempt
-set "EIF_VALIDATED="
-set /p "EIF_VALIDATED=" <"%EIF_VALIDATION%"
-if not "%EIF_VALIDATED%"=="EIF_VALID" goto :validate_attempt
+findstr /x /c:"EIF_VALID" "%EIF_VALIDATION%" >nul
+if errorlevel 1 goto :validate_attempt
 type "%EIF_CAPTURE%"
 if errorlevel 1 goto :delivery_failed
 call :cleanup
@@ -84,6 +85,7 @@ set "EIF_CAPTURE_DIR="
 call :emit_static HOOK_LAUNCHER_ERROR
 exit /b 0
 :python_failed
+if defined EIF_CAPTURE_DIR if exist "%EIF_CAPTURE_DIR%\validate.err" type "%EIF_CAPTURE_DIR%\validate.err" >>"%EIF_ROOT%\.eif\hook-guard.log"
 call :cleanup
 call :emit_static HOOK_INTERNAL_ERROR
 exit /b 0
@@ -95,7 +97,7 @@ exit /b 1
 
 :cleanup
 if not defined EIF_CAPTURE_DIR goto :eof
-del /q "%EIF_CAPTURE_DIR%\response.json" "%EIF_CAPTURE_DIR%\validated-*" >nul 2>&1
+del /q "%EIF_CAPTURE_DIR%\response.json" "%EIF_CAPTURE_DIR%\validated-*" "%EIF_CAPTURE_DIR%\validate.err" >nul 2>&1
 rd "%EIF_CAPTURE_DIR%" >nul 2>&1
 goto :eof
 

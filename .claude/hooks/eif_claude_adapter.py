@@ -46,7 +46,7 @@ MAX_HOOK_INPUT_BYTES = 10 * 1024 * 1024
 # interpreter hangs before the guard's watchdog thread even starts.
 SHIM_TIMEOUT_SEC = 9.5
 
-ADAPTER_VERSION = 'eif-claude-adapter/3'
+ADAPTER_VERSION = 'eif-claude-adapter/5'
 
 
 def shim_timeout_sec() -> float:
@@ -103,6 +103,16 @@ NOTEBOOK_PATH_KEYS = ('notebook_path',)
 # Keep this list narrow and add to it only after the same review this file's
 # header documents for every other entry.
 NO_SIDE_EFFECT_TOOLS = frozenset({'Task', 'Agent', 'ToolSearch', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode'})
+
+# Reviewed tools that this adapter still does not map to a guard tool class,
+# but whose input carries no file path and no command: SendMessage delivers
+# text to another agent session; TaskOutput / BashOutput read the output of a
+# background task this session started. They reach the guard as
+# `Unmapped:<name>` so the PROJECT's verified policy decides: the strict
+# profile denies them (SHIM_TOOL_UNMAPPED, as before), the lean profile allows
+# and flags them. Every other unmapped tool is still denied here, before the
+# guard, whatever the profile. Tools that stop or kill processes are not here.
+REVIEWED_UNMAPPED_TOOLS = frozenset({'SendMessage', 'TaskOutput', 'BashOutput'})
 
 EVENT_MAP = {
     'PreToolUse': 'preToolUse',
@@ -226,6 +236,77 @@ def mcp_tool_split(tool_name: str):
 # presence can only withhold success, never grant it.
 EXIT_CODE_LINE = re.compile(r'Exit code (-?\d+)')
 
+# --- failure execution evidence ---------------------------------------------
+#
+# PostToolUseFailure says a tool call failed, not that it ran. The guard turns
+# only an EXECUTED mutating failure into closure debt, so the shim states the
+# evidence explicitly as `eif_execution_evidence`:
+#   executed  - the text itself shows the action ran:
+#               Shell: a first line `Exit code N` (N != 0; documented above), a
+#               first line reporting a timeout, or is_interrupt with error text
+#               (the user stopped a running command);
+#               Write family: an OS/Node filesystem errno (EACCES: ..., EPERM:
+#               ..., ENOSPC: ...) from the write itself, or an interrupt.
+#   none      - no error text, Claude Code input validation
+#               (<tool_use_error>...</tool_use_error>, rejected before running),
+#               a permission or hook denial, or any other text that does not
+#               show execution. Never debt: a denial is not a failure.
+#   untracked - tools other than Shell, Write and MCP: EIF has no execution
+#               signal for them, so their failures are not debt.
+# The guard never infers execution from missing output and never relabels a
+# failure as permission_denied. For an executed Shell failure the exit code and
+# remaining text go to tool_output (stdout empty, text as stderr), so the guard's
+# Windows PowerShell 5 parser-rejection exemption sees what PowerShell printed.
+# A dispatched MCP failure includes the same error text: the host cannot say
+# whether the server changed, and the guard records closure debt only when the
+# tool may mutate.
+EXIT_CODE_FIRST_LINE = re.compile(r'Exit code (-?\d+)[ \t]*(?:\r?\n|\Z)')
+TIMEOUT_FIRST_LINE = re.compile(r'[^\r\n]*\btimed out\b', re.IGNORECASE)
+WRITE_ERRNO = re.compile(
+    r'(?m)^[ \t]*(?:Error:[ \t]*)?(?:EACCES|EPERM|EBUSY|ENOSPC|EROFS|EIO|EISDIR|ENOTDIR|EMFILE|ENFILE'
+    r'|EAGAIN|EDQUOT|EFBIG|ENAMETOOLONG|EEXIST|ENOTEMPTY|EXDEV|ETXTBSY|ELOOP|ENOENT):[ \t]')
+
+
+def _pre_dispatch_failure(text: str) -> bool:
+    """Input validation, a permission denial, or a hook error before dispatch."""
+    return ('<tool_use_error>' in text or re.search(r'has been denied', text, re.I) is not None
+            or re.search(r'\bhook error:', text, re.I) is not None)
+
+
+def failure_evidence(payload: dict, cursor_tool: str):
+    """(evidence, tool_output) for a Claude Code PostToolUseFailure; see above."""
+    if cursor_tool not in ('Shell', 'Write') and not str(cursor_tool).startswith('MCP:'):
+        return 'untracked', None
+    error = payload.get('error')
+    if not isinstance(error, str) or not error.strip():
+        return 'none', None
+    text = error.strip()
+    if _pre_dispatch_failure(text):
+        return 'none', None
+    interrupted = payload.get('is_interrupt') is True
+    if str(cursor_tool).startswith('MCP:'):
+        # Dispatched. Include the host's error text; the guard decides whether
+        # the tool may have mutated. Exit code 0 is a success, not debt.
+        if EXIT_CODE_FIRST_LINE.match(text) and int(EXIT_CODE_FIRST_LINE.match(text).group(1)) == 0:
+            return 'none', None
+        output = {'error': text}
+        if interrupted:
+            output['interrupted'] = True
+        return 'executed', output
+    if cursor_tool == 'Shell':
+        match = EXIT_CODE_FIRST_LINE.match(text)
+        if match:
+            code = int(match.group(1))
+            if code == 0:
+                return 'none', None  # the command ran and succeeded; not a failure
+            return 'executed', {'exitCode': code, 'stdout': '', 'stderr': text[match.end():].strip('\r\n')}
+        if interrupted or TIMEOUT_FIRST_LINE.match(text):
+            return 'executed', {'exitCode': -1, 'stdout': '', 'stderr': text, 'interrupted': interrupted}
+        return 'none', None
+    if WRITE_ERRNO.search(text) or interrupted:
+        return 'executed', {'error': text}
+    return 'none', None
+
 
 def shell_success_output(payload: dict):
     response = payload.get('tool_response')
@@ -261,6 +342,9 @@ def translate_pretooluse(payload: dict) -> dict:
 
     if tool_name in DIRECT_TOOL_MAP:
         return {'tool_name': DIRECT_TOOL_MAP[tool_name], 'tool_input': dict(tool_input)}
+
+    if tool_name in REVIEWED_UNMAPPED_TOOLS:
+        return {'tool_name': f'Unmapped:{tool_name}', 'tool_input': dict(tool_input)}
 
     if tool_name == 'NotebookEdit':
         translated_input = dict(tool_input)
@@ -326,7 +410,12 @@ def translate_request(payload: dict) -> dict:
             if output is not None:
                 base['tool_output'] = output
         if event == 'PostToolUseFailure':
+            # failure_type is an audit label only; it is never 'permission_denied'.
             base['failure_type'] = failure_summary(payload)
+            evidence, output = failure_evidence(payload, base['tool_name'])
+            base['eif_execution_evidence'] = evidence
+            if output is not None:
+                base['tool_output'] = output
     # Stop / SessionStart / SessionEnd / SubagentStart need no extra fields:
     # eif_guard.py's handlers for these read only hook_event_name/cwd/conversation_id
     # and (for subagentStart) agent_id/agent_type, already copied above.
@@ -346,7 +435,18 @@ def invoke_guard(root: Path, guard_path: Path, translated: dict):
     # so a shell sitting in another project with its own policy would otherwise
     # have that project's policy decide a call this project's guard was chosen for.
     request = {k: v for k, v in translated.items() if k != 'cc_event'}
+    session_cwd = request.get('cwd')
     request['cwd'] = str(root)
+    # select_root trusts payload cwd. Keep that as the project whose guard was
+    # chosen, and pass the session folder separately so a relative tool path
+    # resolves there instead of against this hook process.
+    if isinstance(session_cwd, str) and session_cwd.strip():
+        try:
+            resolved_cwd = Path(session_cwd).resolve()
+        except OSError:
+            resolved_cwd = None
+        if resolved_cwd is not None and os.path.normcase(str(resolved_cwd)) != os.path.normcase(str(root)):
+            request['eif_tool_cwd'] = str(resolved_cwd)
     payload_bytes = json.dumps(request).encode('utf-8')
     env = dict(os.environ)
     env['CLAUDE_PROJECT_DIR'] = str(root)
