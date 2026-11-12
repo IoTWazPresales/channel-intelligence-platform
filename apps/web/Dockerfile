@@ -27,4 +27,6 @@ RUN pnpm --filter @cip/web build
 EXPOSE 3000
 
 WORKDIR /repo
-CMD ["pnpm", "--filter", "@cip/web", "start"]
+# Bind every interface. Do not call the package.json start script: that script
+# binds 127.0.0.1 for the Windows supervisor.
+CMD ["pnpm", "--filter", "@cip/web", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
