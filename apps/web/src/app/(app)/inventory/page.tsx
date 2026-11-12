@@ -148,16 +148,17 @@ export default function InventoryPage() {
       <PageHeader {...navPageChrome('/stock', { search: '?lens=cover' })} />
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
-          intro="Customer stock reported by retailers. Unknown SKUs and customer codes stay as provisional records until they are matched."
+          intro="Hand-entered customer stock only. Retailer stock files land on Sell-through, not here."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}
           onRetry={() => void refetch()}
           isEmpty={rows.length === 0}
           empty={{
-            title: 'No customer inventory rows',
-            description: 'Use Add row or Paste upload, or use Import Center for file-based loads.',
-            primary: { label: 'Import Center', href: '/admin/imports' },
+            title: 'No hand-entered customer stock',
+            description:
+              'Retailer stock files land on Sell-through, not here. Add or paste a row only when the figure was typed by hand.',
+            primary: { label: 'Sell-through', href: '/channel-intelligence' },
             secondary: { label: 'Attention', href: '/brief' },
           }}
           toolbar={
@@ -187,7 +188,6 @@ export default function InventoryPage() {
               }}
               onAdd={() => setAddOpen(true)}
               onUpload={() => setPasteOpen(true)}
-              importsHref="/admin/imports"
               busy={busy}
             />
             </>
