@@ -1,5 +1,35 @@
 # CURRENT state
 
+**Last updated:** 2026-11-12 (integration close-off: #88, #85, #86, #87 and #84 merged into `feat/integrate-20261103`).
+
+**Branch:** `feat/integrate-20261103` @ `4fce3b40` (Merge #84) plus this docs commit. Nothing was pushed to `main`.
+
+**Merged 2026-11-12 (each at its Codex-reviewed head, one at a time, post-merge checks green):**
+- #88 Lane A listings (`000e1e1d`, merge `01b08292`): own-seller discovery, Market Coverage tab, per-customer page-seller rule on shared sites. Follow-ups: BACKLOG-226.
+- #85 Lane D dashboards (`cc96e3ed`, merge `3a326828`): weeks of cover ends on the customer's last reported day and drops customers with no filtered stock row (matches the sell-through overview); My accounts starter. Follow-up: BACKLOG-229.
+- #86 Lane B CPOR (`7c07e226`, merge `2d8d5796`): aged-stock drafts and stock actions; stock actions can never become support claims (server-side); site-grain observed cover; role matrix for the new routes; bounded aged-stock scan. Follow-ups: BACKLOG-227.
+- #87 Lane F (`b1c665b6`, merge `603fd2dc`): the customer SOH check compares ex-VAT, including stored CST and CST-fallback case-line costs; unknown provenance withholds the gap. Follow-up: BACKLOG-228.
+- #84 serial queue (`604b6c2b`, merge `4fce3b40`): queue docs plus the `--expect-db` guard in `apps/api/scripts/ops/split_compuspeed_syntech_identity.py`. Follow-up: BACKLOG-230. Note: GitHub's `refs/pull/84/head` pointed at `docs/queue-step5-backlog214` (`24c7bcaf`), which is an ancestor of the merged head.
+- Docs-only conflicts (CONTEXT.md, this file) were resolved by keeping every lane's lines. No product file conflicted; `cpor_cases.py` (B and F) auto-merged.
+
+**`cip`:** unchanged by this work. Alembic on `cip` is `20261110_0061` (read-only check 2026-11-12). No migration in these PRs.
+
+**Deploy:** the API and the worker must be restarted on this code (both import the changed CPOR, listing-capture and query-model modules).
+
+**Checks:** baseline on `a3d0a9cd` before the merges: API 3,809 passed / 0 failed on `cip_test`; web tsc 0 errors; vitest 1,272 passed / 1 failed (a 16.8 s timeout in `DashboardWorkspace.integration.test.tsx` under CPU load). Each merge ran its area on `cip_test` plus tsc and the area's vitest (all green). Final tip: #84 guard test 3 passed, app import OK, tsc 0 errors. Web `eslint .` cannot run on this branch family (BACKLOG-231).
+
+**Review policy (Warren, 2026-11-12):** Codex (`codex exec -s read-only ... review --base origin/feat/integrate-20261103`) is the only independent reviewer. There is no second review, and no VERIFY debt is recorded for skipping one. Allow two fix-and-review rounds per PR; Warren may grant a narrowed third.
+
+**NEXT, before anything else: repair the EIF guard (Warren).** Observed in the 2026-11-11/12 run:
+- `HOOK_TIMEOUT` (harness fault): the guard's session phase takes 6.1 to 7.6 s of the 8 s watchdog, so calls fail at random even on an idle machine. Lanes ran under a temporary rule: retry the byte-identical call once, at most 5 retries per run.
+- False `FOREIGN_PATH`: any `<rev>:<path>` text (`git show HEAD:apps/...`, `git push origin HEAD:<branch>`) is read as a drive path. Use `git push origin <local-branch>` instead.
+- `PROGRAMME_GIT_STAGE` denied `git add -- CONTEXT.md docs/memory/CURRENT.md` when the same command also held `.` / `:(exclude)` pathspecs, but allowed the same shape three times before.
+- `IDENTITY_MISMATCH` for any Claude session started inside `.worktrees\*`: lanes must start at the main checkout root and edit their worktree by absolute path.
+- The Claude Code adapter has no mapping for `SendMessage` or the subagent hand-back (`SHIM_TOOL_UNMAPPED`), so subagents cannot return results.
+- Open retry obligation from the retired Cursor Lane F chat: `SESSION_RETRY_REQUIRED` fingerprint `e6b12823…` (original `BUDGET_EXHAUSTED`); retire it with `tools/session_retry.py` from the EIF checkout.
+
+**Notes below predate the 2026-11-12 merges. Each lane block is kept as written; "Not merged" in them is now out of date.**
+
 **Last updated:** 2026-11-10 16:43 SAST (serial DB queue step 8: Compuspeed and Syntech customer identity split on `cip`; distributors were already separate; alembic stays `20261110_0061`; no programme ledger edit)
 
 **Branch:** `feat/integrate-20261103` @ `a3d0a9cd` (Merge #82).

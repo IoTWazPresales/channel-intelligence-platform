@@ -3520,3 +3520,86 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Out of scope** | Identity anchors, allowed roots, `.gitattributes` / `.git/info/attributes`, policy recompile, programme ledger, budgets, the EIF framework repo. |
 | **Upstream note** | An EIF `install_project.py upgrade` rewrites `eif_guard.cmd` and the manifest. The dispatch line should be upstreamed into EIF `runtime/cursor/.cursor/hooks/eif_guard.cmd`, or it has to be re-applied after an upgrade. |
 | **TRIGGER** | Close when a Cursor cloud agent on this repo gets a guard `allow` for a normal read and a policy `deny` for a forbidden action. |
+
+---
+
+## BACKLOG-226 — Listing coverage edge cases
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #88 merged at `000e1e1d`. One fix lane, not several. |
+| **Source** | Codex reviews of PR #88 at `9ba66022` and `000e1e1d`, and the lane A reports (2026-11-11/12). Line numbers are at `000e1e1d`. |
+| **Idea** | Make the Market Coverage counts and the Own/Competition label hold in the edge cases below. |
+| **Why it matters** | Coverage counts and Own/Competition labels are what account managers will read. Each item gives a wrong count or label in a narrow case. |
+| **Sub-items** | **(1) HTTP failure counted as Watched:** `apps/api/app/services/listing_capture/coverage.py:196-199`. A 500/503 response whose body parses to a price is recorded `parse_status='ok'` (snapshot `fetch_failed`); `_latest_parse()` keeps only the parse status, so the listing counts as watched. Use the latest observation's HTTP status and fetch-failure flag. **(2) Seller-only change is not a new snapshot:** `adapters/html_page.py:98-102` with `registry.extraction_unchanged()`. A page that changes only its seller (same price) is dropped as unchanged, so an Own-to-Competition change loses its evidence. Include the extracted seller in change detection. **(3) Confirmed product-less proposal later resolved:** `coverage.py:311-312`. When a product-less proposal is confirmed and a later CST import fills the seed's `product_id` but not the listing's, the monitored listing moves from Watched to Not searched. Follow the confirmed seed's listing by customer, marketplace and external id. **(4) Regex seller parser:** `adapters/html_page.py:25-27` and `seller_from_page` (~`:48`). The first `"seller"` key anywhere in the body wins, and an object with a nested property before `name` is missed; read the seller from the offer that supplied the price (JSON-LD / embedded JSON parsed as objects). **(5)** `coverage._latest_parse` (~`:369`) binds every listing id in one `IN (...)`; past 65,535 ids the tab returns `data_unavailable`. **(6)** A `delisted` listing gives no signal (`coverage.py` ~`:196`), so a found and linked product counts as Not searched. **(7)** `apps/web/src/features/market-listings/ListingCoverageLens.tsx:46` shows "No reported products yet." while loading or after an error. **(8)** A product-less listing registered by hand or CSV (not from a feed seed) is left out of coverage (lane A, from code reading). |
+| **Resume-context** | Code: `apps/api/app/services/listing_capture/{coverage.py,registry.py,adapters/html_page.py,adapters/__init__.py}`; tests `apps/api/tests/test_listing_coverage.py`, `test_listing_site_autoconfig.py`, `test_listing_general_reader_sites.py`. The per-customer seller rule (`SiteConfig.for_customer`, inferred vs configured identity via `INFERRED_SELLER_ACTOR`) is the shipped behaviour; keep it. |
+| **Regression traps** | (1) A 200 page with a price must still count as watched. (2) An unchanged page must still skip its snapshot. (3) Never count a seed and its listing twice once the product is known. (4) An inferred seller identity must keep the pre-#88 `first_party_seller` result; no fuzzy or legal-suffix name matching (domain call). (5) Results must be identical for small tenants. (6)/(8) Do not move products out of Not found / Reported. Tests on `cip_test` only. |
+| **TRIGGER** | Before listing coverage goes to account managers. |
+
+---
+
+## BACKLOG-227 — Aged-stock drafts and stock actions: follow-ups
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #86 merged at `4f1e755b`. One fix lane. |
+| **Source** | Codex reviews of PR #86 at `d0bf7833`, `04099ac2` and `4f1e755b`; the 2026-11-12 second review of `04099ac2`; lane B reports. Line numbers are at `4f1e755b`. |
+| **Idea** | Make aged-stock drafts and Move/Return/Promote stock actions safe to raise on live cases. |
+| **Why it matters** | A draft can carry a retired price, and an action can be duplicated, blocked or wrongly suppressed. |
+| **Sub-items** | **(1) SRP from a superseded lineup (headline):** `apps/api/app/services/store_dc/stock_actions.py:254-258`. With no listing price, the fallback can pick a lineup line with `row_status='superseded'` (the duplicate-partition repair retires lines without retiring cases), so a retired row can set the promotion price or allow creation. Apply `active_lineup_line_filters()` before choosing the latest row. **(2)** Superseded cases and voided lines still count as open actions (`stock_actions.py:286-291` and `_open_stock_actions`), so `already_open` blocks a retired action. **(3)** Action identity is read from the editable notes marker (`stock_actions.py:294-297`, `read_model.py:124-127`); read `cost_evidence_json.stock_action` first. **(4)** `rules.stock_action_covers_site` (`rules.py:49-52`) compares stripped labels exactly, while the read model groups with `norm_label`; "North" vs "north" reopens the action. **(5)** Concurrent requests can both create a draft for the same customer/product/site/action (`stock_actions.py:302-310`); no lock or uniqueness. **(6)** Move/Return fail with `no_positive_srp` when no shopper price exists (`stock_actions.py:320-324`); the price rule belongs to Promote. **(7)** Move/Return go through the support-budget create gate (`promo_plan_builder.py:1271`); an over-budget customer cannot record a logistics action. **(8)** The planner's `high_cover` uses a fixed 2.0 multiple and the planner target (`promo_plan_builder.py:858`), not the customer's `slow_cover_multiple` and replen target the board uses. **(9)** A confirmed DC's rows count as an ordinary site in `customer_sku_cover_from_rows` (`promo_plan_builder.py:572`); depends on what DC `units_sold` means. **(10)** The intelligence-exclude toggle (`cpor_cases.py:969`) can put a stock-action case back into support comparisons. **(11)** `_with_stock_evidence`'s DC-owner clause has no test with an owner that reports no stock of its own; the `truncated` flag is now true only when a candidate remains. |
+| **Resume-context** | Code: `apps/api/app/services/store_dc/{stock_actions.py,read_model.py,rules.py}`, `apps/api/app/services/cpor/{promo_plan_builder.py,lifecycle.py}`, `apps/api/app/services/budget_ledger.py`, `apps/api/app/api/v1/endpoints/cpor_cases.py`; tests `test_cpor_aged_stock_propose.py`, `test_cpor_aged_stock_scan.py`, `test_cpor_stock_action_lifecycle.py`, `test_store_dc_*`, `test_rbac_n0038_cpor_roles.py`. |
+| **Regression traps** | A stock action (`origin='stock_action'`) must never reach a support-budget write (`assert_support_step_allowed`). Observed cover must stay single-grain (no chain + site double count). Reads stay authentication-only; writes stay planner-gated in the N-0038 matrix. The aged-stock scan must stay bounded (one lead index, no view for customers without stock evidence). Never invent a price. Tests on `cip_test` only. |
+| **TRIGGER** | Before aged-stock drafts are raised on live cases. |
+
+---
+
+## BACKLOG-228 — Record vat_basis in the CST cost evidence at write time (`_tier1_cst`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #87 merged at `0c056eca`. |
+| **Source** | Codex review of PR #87 at `0c056eca`: `apps/api/app/services/cpor/customer_soh_check.py:176-180`. |
+| **Idea** | Snapshot the VAT basis with the selected cost when the case-line cost is written, and use that snapshot in the SOH gap. |
+| **Why it matters** | `customer_sell_through_apply._CONFLICT_SET` replaces `vat_basis` on a same-key reload even when the cost does not change (e.g. a stock-only import), and `_tier1_cst` does not record VAT in its evidence. A stored 100 ex-VAT cost whose fact is reloaded as incl-VAT with the same amount is then compared as 100 / 1.15 = 86.96 against an SOH cost of 100 ex-VAT, a false 15% `soh_tolerance` flag. |
+| **Resume-context** | `apps/api/app/services/cpor/cost_suggestion.py` (`_tier1_cst` returns a 4-tuple that other tests mock), `customer_soh_check.resolve_stored_mac_vat` (already prefers an evidence `vat_basis` when its recorded amount equals the stored cost), `apps/api/tests/test_cpor_customer_soh_check.py`, `test_cpor_cost_suggestion.py`. |
+| **Regression traps** | Incl-VAT divided by 1.15 once, never twice. Manual costs stay compared as entered. Unknown provenance withholds the gap (`vat_basis_unknown`), never guesses. Existing callers that omit `derived_mac_vat` keep the old behaviour. True intake blends stay `vat_basis_unknown`. |
+| **TRIGGER** | Next change to `cost_suggestion` or `customer_soh_check`, or the first stock-only CST import for a customer whose VAT basis changes. |
+
+---
+
+## BACKLOG-229 — My accounts starter: weekly trend refused for monthly accounts
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-12. Non-blocking at the #85 merge. |
+| **Source** | Codex reviews of PR #85 at `af7af2ab` and `c05dd5a9`: `apps/api/app/services/dashboard_templates.py:215`. |
+| **Idea** | Give the `my_accounts` starter's trend a grain that works for monthly and mixed weekly/monthly books (monthly, as the `sellthrough_stock` starter does, or the coarsest stored grain). |
+| **Why it matters** | A new My accounts dashboard has a trend that `run_v2` refuses with `W-ONE-STORED-PERIOD` when any assigned account reports monthly. |
+| **Regression traps** | Weeks of cover must keep matching the sell-through overview (`test_weeks_of_cover_matches_overview_last_reported_day`). Add an execution test with mixed weekly and monthly reports. |
+| **TRIGGER** | Before the My accounts starter is offered to account managers, or the first complaint about a blank trend. |
+
+---
+
+## BACKLOG-230 — Identity split script fails in the API Docker image
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-12. Non-blocking at the #84 merge (Warren). |
+| **Source** | Codex reviews of PR #84 at `24c7bcaf` and `c7b50497`: `apps/api/scripts/ops/split_compuspeed_syntech_identity.py:20-23`. |
+| **Idea** | Replace the fixed-depth `Path(__file__).resolve().parents[6]` main-checkout lookup with the already-derived API directory. |
+| **Why it matters** | In the API image the script sits at `/app/scripts/ops/...` with only four parents, so it raises `IndexError` before argument parsing, even for `--help`, and its guard tests cannot run there. |
+| **Regression traps** | Keep the `--expect-db` check before `run()` (mismatch prints STOP, rolls back, exits 2). Never run the script against a database to test this; the guard tests fake the engine. |
+| **TRIGGER** | Before the script is run from the API container, or the next change to it. |
+
+---
+
+## BACKLOG-231 — Web lint cannot run (ESLint 9 has no flat config)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-12. Found while recording the merge baseline on `a3d0a9cd`. |
+| **Source** | `pnpm --dir apps/web lint` (`eslint .`) with ESLint 9.39.4: "ESLint couldn't find an eslint.config.(js\|mjs\|cjs) file". `apps/web/package.json` still carries a legacy `eslintConfig` block. |
+| **Idea** | Add an `eslint.config.mjs` flat config equivalent to the current rules (`eslint-config-next`), so `pnpm lint` runs again. Small related item: ruff I001 (import block) at `apps/api/app/query/model/compiler.py:21` exists on the trunk. |
+| **Why it matters** | No lane or merge can run web lint today; only tsc and vitest gate web changes. |
+| **Regression traps** | Do not turn on new rules in the same change; first restore the old rule set, then record the count of existing warnings as the baseline. |
+| **TRIGGER** | Next web change that needs a lint gate, or CI work. |
