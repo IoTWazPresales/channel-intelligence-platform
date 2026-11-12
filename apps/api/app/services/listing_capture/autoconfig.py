@@ -1,5 +1,13 @@
 """Fill empty listing-site configuration from each reporting customer's own data.
 
+On the customer's own site (the general HTML reader), discovery writes that customer's
+name as the first-party seller when the site does not already name one. An existing
+first-party name is kept and becomes the seller identity, so own stock stays Own.
+It is not typed on Sites & sellers. A buy-box site keeps whatever seller names the seed already has.
+A customer's stored seller identity is never re-derived. Each customer's identity comes from
+that customer only: on a site where another customer already has one, the site-wide
+first-party name is neither reused nor filled.
+
 A reporting customer is ``customer_report_config.reports_expected``. The site key is
 ``feed_profile_json.listing_seed.marketplace`` when that seed names one, otherwise each
 distinct ``customer_listing.marketplace`` for that customer. Nothing here names a site.
@@ -47,6 +55,7 @@ from app.services.listing_capture.adapters.html_page import ADAPTER_KEY as HTML_
 from app.services.listing_capture.identity import corroboration, page_facts_from_html
 from app.services.listing_capture.registry import POLLED_LISTING_STATUSES
 from app.services.listing_capture.sites import (
+    INFERRED_SELLER_ACTOR,
     SITE_KEY_RE,
     create_site,
     set_site_seller,
@@ -108,6 +117,9 @@ def capture_health(session: Session, *, tenant_id: str) -> dict[str, Any]:
     tid = str(tenant_id)
     entries = _configure_tenant(session, tid, http_get=None, apply=False)
     sites = _site_health(session, tid)
+    from app.services.listing_capture.coverage import customer_coverage
+
+    coverage = customer_coverage(session, tid)
     skipped = {
         row["site_key"]: row["skipped_not_configured"]
         for row in sites
@@ -121,6 +133,7 @@ def capture_health(session: Session, *, tenant_id: str) -> dict[str, Any]:
         "skipped_not_configured": skipped,
         "exclusions": [entry for entry in entries if entry["outcome"] != OUTCOME_CONFIGURED],
         "configured": [entry for entry in entries if entry["outcome"] == OUTCOME_CONFIGURED],
+        "coverage": coverage,
     }
 
 
@@ -290,10 +303,10 @@ def _configure_site(
             )
             fill = _fill_fields(row, seed=seed, derived=derived, probe_ok=probe_ok)
             _apply_fill(session, row, fill)
-            _ensure_seller(session, row, customer_id=int(customer.id), seed=seed)
+            _ensure_seller(session, row, customer=customer, seed=seed)
             session.refresh(row)
 
-    seller_known = _seller_known(row, int(customer.id), seed)
+    seller_known = _seller_known(row, customer, seed)
     configured = bool(row is not None and row.is_active and configured_adapter(site_config_from_row(row)) is not None)
     reasons: list[str] = []
     if not configured:
@@ -486,27 +499,70 @@ def _apply_fill(session: Session, row: ListingSite, fill: dict[str, Any]) -> Non
             return
 
 
-def _ensure_seller(session: Session, row: ListingSite, *, customer_id: int, seed: dict[str, Any]) -> None:
-    if _seller_present(row, customer_id):
-        return
+def _site_adapter(row: ListingSite | None, seed: dict[str, Any]) -> str:
+    if row is not None and not _is_blank(row.adapter_key):
+        return str(row.adapter_key).strip()
+    site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
+    raw = site.get("adapter_key")
+    return str(raw).strip() if isinstance(raw, str) else ""
+
+
+def _is_customer_own_site(row: ListingSite | None, seed: dict[str, Any]) -> bool:
+    """The general HTML reader is the customer's own site. A buy-box site is not."""
+    return _site_adapter(row, seed) == HTML_PAGE_ADAPTER
+
+
+def _seller_names_for_customer(
+    customer: DimCustomer,
+    row: ListingSite | None,
+    seed: dict[str, Any],
+) -> tuple[list[str], list[str], bool]:
+    """Seed names win. An existing first-party name wins over the inferred customer name,
+    unless another customer already has a seller identity on the site (the first-party name
+    is site-wide and may be that customer's)."""
     names, ids = _seed_seller(seed)
+    if names or ids:
+        return names, ids, False
+    if _is_customer_own_site(row, seed):
+        existing = str(getattr(row, "first_party_seller", "") or "").strip() if row is not None else ""
+        if existing and not _other_seller_present(row, int(customer.id)):
+            return [existing], [], False
+        name = str(getattr(customer, "name", "") or "").strip()
+        if name:
+            return [name], [], True
+    return [], [], False
+
+
+def _ensure_seller(session: Session, row: ListingSite, *, customer: DimCustomer, seed: dict[str, Any]) -> None:
+    """A stored seller identity for this customer is kept: the seed is not read and nothing
+    is inferred or written. The customer name fills a blank first-party name only when no
+    other customer has a seller identity on the site."""
+    if _seller_present(row, int(customer.id)):
+        return
+    names, ids, from_customer = _seller_names_for_customer(customer, row, seed)
     if not names and not ids:
         return
     set_site_seller(
         session,
         row,
-        customer_id=customer_id,
+        customer_id=int(customer.id),
         seller_names=names,
         seller_ids=ids,
-        actor=AUTOCONFIG_ACTOR,
+        actor=INFERRED_SELLER_ACTOR if from_customer else AUTOCONFIG_ACTOR,
     )
+    shared = _other_seller_present(row, int(customer.id))
+    if from_customer and _is_blank(row.first_party_seller) and not shared:
+        try:
+            update_site(session, row, fields={"first_party_seller": names[0]}, actor=AUTOCONFIG_ACTOR)
+        except ValueError:
+            logger.info("listing autoconfigure: site %s rejected the discovered seller", row.site_key)
 
 
-def _seller_known(row: ListingSite | None, customer_id: int, seed: dict[str, Any]) -> bool:
-    """Stored seller row or seed names/ids. Seed data counts before the row is written."""
-    if _seller_present(row, customer_id):
+def _seller_known(row: ListingSite | None, customer: DimCustomer, seed: dict[str, Any]) -> bool:
+    """Stored seller row, seed names, or the customer's own name on their site."""
+    if _seller_present(row, int(customer.id)):
         return True
-    names, ids = _seed_seller(seed)
+    names, ids, _from_customer = _seller_names_for_customer(customer, row, seed)
     return any(str(value or "").strip() for value in names) or any(str(value or "").strip() for value in ids)
 
 
@@ -521,6 +577,14 @@ def _seller_present(row: ListingSite | None, customer_id: int) -> bool:
         if names or ids:
             return True
     return False
+
+
+def _other_seller_present(row: ListingSite | None, customer_id: int) -> bool:
+    """Another customer has a seller name or id on this site."""
+    if row is None:
+        return False
+    others = {int(s.customer_id) for s in (row.sellers or [])} - {int(customer_id)}
+    return any(_seller_present(row, other) for other in others)
 
 
 def _seed(config: CustomerReportConfig) -> dict[str, Any]:

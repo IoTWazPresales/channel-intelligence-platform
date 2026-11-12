@@ -11,8 +11,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
 type Seller = {
@@ -41,7 +40,6 @@ type SiteRow = {
 };
 
 type SiteResponse = { items: SiteRow[]; adapter_keys: string[]; data_unavailable?: boolean };
-type CustomerPick = { id: number; customer_code: string; customer_name: string };
 
 const EMPTY = {
   display_name: '',
@@ -50,7 +48,6 @@ const EMPTY = {
   page_id_pattern: '',
   search_url_pattern: '',
   details_url_pattern: '',
-  first_party_seller: '',
   rate_limit_seconds: '',
 };
 
@@ -65,9 +62,6 @@ export function ListingSitesLens() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState(EMPTY);
   const [newKey, setNewKey] = useState('');
-  const [customer, setCustomer] = useState<CustomerPick | null>(null);
-  const [names, setNames] = useState('');
-  const [ids, setIds] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const rows = sites.data?.items ?? [];
@@ -82,7 +76,6 @@ export function ListingSitesLens() {
       page_id_pattern: row.page_id_pattern ?? '',
       search_url_pattern: row.search_url_pattern ?? '',
       details_url_pattern: row.details_url_pattern ?? '',
-      first_party_seller: row.first_party_seller ?? '',
       rate_limit_seconds: row.rate_limit_seconds == null ? '' : String(row.rate_limit_seconds),
     });
     setError(null);
@@ -110,26 +103,12 @@ export function ListingSitesLens() {
     },
     onError: (e: Error) => setError(e.message),
   });
-  const saveSeller = useMutation({
-    mutationFn: () =>
-      apiPut<SiteRow>(`/api/v1/listing-capture/sites/${selectedId}/sellers/${customer?.id}`, {
-        seller_names: names.split(',').map((s) => s.trim()).filter(Boolean),
-        seller_ids: ids.split(',').map((s) => s.trim()).filter(Boolean),
-      }),
-    onSuccess: async () => {
-      setNames('');
-      setIds('');
-      setCustomer(null);
-      await qc.invalidateQueries({ queryKey: ['listing-capture', 'sites'] });
-    },
-    onError: (e: Error) => setError(e.message),
-  });
 
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="listing-sites-lens">
       <Typography variant="body2" color="text.secondary">
-        Sites, link patterns and each customer&apos;s own seller name on a site are saved here. A site with no page
-        reader is not fetched. Nothing on this page is a fixed list in the code.
+        Sites and link patterns are saved here. Discovery fills the own seller for a reporting customer.
+        It is not typed on this page. A site with no page reader is not fetched.
       </Typography>
       {sites.data?.data_unavailable ? <Alert severity="warning">Sites could not be loaded.</Alert> : null}
       {error ? <Alert severity="error">{error}</Alert> : null}
@@ -162,7 +141,7 @@ export function ListingSitesLens() {
         </Stack>
       ) : (
         <Typography variant="caption" color="text.secondary">
-          A steward edits sites and sellers.
+          A steward edits sites. Discovery fills the own seller.
         </Typography>
       )}
       {selected && canEdit ? (
@@ -175,7 +154,6 @@ export function ListingSitesLens() {
               ['page_id_pattern', 'Page id pattern (one capture group)'],
               ['search_url_pattern', 'Search pattern ({query})'],
               ['details_url_pattern', 'Details pattern ({page_id})'],
-              ['first_party_seller', 'Seller name for the site’s own stock'],
               ['rate_limit_seconds', 'Seconds between requests'],
             ] as const
           ).map(([key, label]) => (
@@ -205,47 +183,21 @@ export function ListingSitesLens() {
           <Button variant="contained" disabled={save.isPending} onClick={() => save.mutate()} data-testid="listing-site-save">
             Save site
           </Button>
-          <Typography variant="subtitle2">Own sellers</Typography>
+        </Stack>
+      ) : null}
+      {selected ? (
+        <Stack spacing={0.5} data-testid="listing-site-own-seller">
+          <Typography variant="subtitle2">Own seller</Typography>
+          <Typography variant="body2">
+            {selected.first_party_seller
+              ? `Own seller: ${selected.first_party_seller}. Discovery fills this for a reporting customer. It is not typed here.`
+              : 'Own seller is not filled yet. Discovery fills this for a reporting customer. It is not typed here.'}
+          </Typography>
           {selected.sellers.map((s) => (
-            <Stack key={s.customer_id} direction="row" spacing={1} alignItems="center">
-              <Typography variant="body2" sx={{ flex: 1 }}>
-                {s.customer_name || s.customer_code || s.customer_id}: {s.seller_names.join(', ') || s.seller_ids.join(', ')}
-              </Typography>
-              <Button
-                size="small"
-                onClick={() =>
-                  apiDelete(`/api/v1/listing-capture/sites/${selected.id}/sellers/${s.customer_id}`).then(() =>
-                    qc.invalidateQueries({ queryKey: ['listing-capture', 'sites'] }),
-                  )
-                }
-              >
-                Remove
-              </Button>
-            </Stack>
+            <Typography key={s.customer_id} variant="body2" data-testid={`listing-site-seller-${s.customer_id}`}>
+              {s.customer_name || s.customer_code || s.customer_id}: {s.seller_names.join(', ') || s.seller_ids.join(', ')}
+            </Typography>
           ))}
-          <EntitySearchAutocomplete<CustomerPick>
-            label="Customer"
-            value={customer}
-            onChange={setCustomer}
-            fetchOptions={async (q, signal) => {
-              const page = await apiGet<{ items?: CustomerPick[] }>(
-                `/api/v1/customers?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
-                { signal },
-              );
-              return page.items ?? [];
-            }}
-            getOptionLabel={(o) => o.customer_name || o.customer_code}
-          />
-          <TextField size="small" label="Seller names (comma separated)" value={names} onChange={(e) => setNames(e.target.value)} />
-          <TextField size="small" label="Seller ids (comma separated)" value={ids} onChange={(e) => setIds(e.target.value)} />
-          <Button
-            variant="outlined"
-            disabled={!customer || saveSeller.isPending}
-            onClick={() => saveSeller.mutate()}
-            data-testid="listing-site-save-seller"
-          >
-            Save seller
-          </Button>
         </Stack>
       ) : null}
       {!sites.isLoading && rows.length === 0 ? (
