@@ -4,6 +4,9 @@ On the customer's own site (the general HTML reader), discovery writes that cust
 name as the first-party seller when the site does not already name one. An existing
 first-party name is kept and becomes the seller identity, so own stock stays Own.
 It is not typed on Sites & sellers. A buy-box site keeps whatever seller names the seed already has.
+A customer's stored seller identity is never re-derived. Each customer's identity comes from
+that customer only: on a site where another customer already has one, the site-wide
+first-party name is neither reused nor filled.
 
 A reporting customer is ``customer_report_config.reports_expected``. The site key is
 ``feed_profile_json.listing_seed.marketplace`` when that seed names one, otherwise each
@@ -52,6 +55,7 @@ from app.services.listing_capture.adapters.html_page import ADAPTER_KEY as HTML_
 from app.services.listing_capture.identity import corroboration, page_facts_from_html
 from app.services.listing_capture.registry import POLLED_LISTING_STATUSES
 from app.services.listing_capture.sites import (
+    INFERRED_SELLER_ACTOR,
     SITE_KEY_RE,
     create_site,
     set_site_seller,
@@ -513,13 +517,15 @@ def _seller_names_for_customer(
     row: ListingSite | None,
     seed: dict[str, Any],
 ) -> tuple[list[str], list[str], bool]:
-    """Seed names win. An existing first-party name wins over the inferred customer name."""
+    """Seed names win. An existing first-party name wins over the inferred customer name,
+    unless another customer already has a seller identity on the site (the first-party name
+    is site-wide and may be that customer's)."""
     names, ids = _seed_seller(seed)
     if names or ids:
         return names, ids, False
     if _is_customer_own_site(row, seed):
         existing = str(getattr(row, "first_party_seller", "") or "").strip() if row is not None else ""
-        if existing:
+        if existing and not _other_seller_present(row, int(customer.id)):
             return [existing], [], False
         name = str(getattr(customer, "name", "") or "").strip()
         if name:
@@ -528,17 +534,24 @@ def _seller_names_for_customer(
 
 
 def _ensure_seller(session: Session, row: ListingSite, *, customer: DimCustomer, seed: dict[str, Any]) -> None:
+    """A stored seller identity for this customer is kept: the seed is not read and nothing
+    is inferred or written. The customer name fills a blank first-party name only when no
+    other customer has a seller identity on the site."""
+    if _seller_present(row, int(customer.id)):
+        return
     names, ids, from_customer = _seller_names_for_customer(customer, row, seed)
-    if not _seller_present(row, int(customer.id)) and (names or ids):
-        set_site_seller(
-            session,
-            row,
-            customer_id=int(customer.id),
-            seller_names=names,
-            seller_ids=ids,
-            actor=AUTOCONFIG_ACTOR,
-        )
-    if from_customer and names and _is_blank(row.first_party_seller):
+    if not names and not ids:
+        return
+    set_site_seller(
+        session,
+        row,
+        customer_id=int(customer.id),
+        seller_names=names,
+        seller_ids=ids,
+        actor=INFERRED_SELLER_ACTOR if from_customer else AUTOCONFIG_ACTOR,
+    )
+    shared = _other_seller_present(row, int(customer.id))
+    if from_customer and _is_blank(row.first_party_seller) and not shared:
         try:
             update_site(session, row, fields={"first_party_seller": names[0]}, actor=AUTOCONFIG_ACTOR)
         except ValueError:
@@ -564,6 +577,14 @@ def _seller_present(row: ListingSite | None, customer_id: int) -> bool:
         if names or ids:
             return True
     return False
+
+
+def _other_seller_present(row: ListingSite | None, customer_id: int) -> bool:
+    """Another customer has a seller name or id on this site."""
+    if row is None:
+        return False
+    others = {int(s.customer_id) for s in (row.sellers or [])} - {int(customer_id)}
+    return any(_seller_present(row, other) for other in others)
 
 
 def _seed(config: CustomerReportConfig) -> dict[str, Any]:

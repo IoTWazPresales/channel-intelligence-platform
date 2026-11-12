@@ -42,6 +42,8 @@ class SiteSeller:
     customer_id: int
     names: tuple[str, ...] = ()
     ids: tuple[str, ...] = ()
+    # True when discovery took the identity from the customer's name (not a seed or a steward).
+    inferred: bool = False
 
 
 @dataclass(frozen=True)

@@ -1,9 +1,10 @@
 """Page reader for sites whose product page is ordinary HTML (JSON-LD offer or a shown price).
 
-Fetches the stored listing URL itself. When the page names a seller, that name is the buy-box
-seller. Otherwise the seller is the site's ``first_party_seller`` (the store's own stock).
-A different seller on the customer's own site is competition. A page that lists several priced
-offers still needs a reader that keeps each offer.
+Fetches the stored listing URL itself. When the page names a seller and the site's seller
+identities were configured (seed or steward, not inferred from a customer name), that name is
+the buy-box seller. Otherwise the seller is the site's ``first_party_seller`` (the store's own
+stock). A different seller on the customer's own site is competition. A page that lists
+several priced offers still needs a reader that keeps each offer.
 """
 
 from __future__ import annotations
@@ -51,6 +52,19 @@ def seller_from_page(text: str) -> str | None:
     return _decode_json_string(match.group(1))
 
 
+def buy_box_seller(text: str, site: SiteConfig) -> str | None:
+    """The page-named seller when every seller identity on the site was configured (seed or
+    steward); otherwise, as before, the site's ``first_party_seller``.
+
+    An identity discovery inferred from a customer name is not compared with a page-named
+    seller: a differently written own name would read as Competition.
+    """
+    sellers = tuple(site.sellers or ())
+    configured = bool(sellers) and not any(getattr(s, "inferred", False) for s in sellers)
+    named = seller_from_page(text) if configured else None
+    return named or (site.first_party_seller or "").strip() or None
+
+
 def request_headers(site: "SiteConfig") -> dict[str, str]:
     return {}
 
@@ -81,8 +95,7 @@ def parse(
 
     parsed = parse_snapshot_text(body, marketplace=site.site_key, parser_version=parser_version)
     if parsed.parse_status == "ok":
-        named = seller_from_page(body)
-        seller_name = named if named else (site.first_party_seller or None)
+        seller_name = buy_box_seller(body, site)
         parsed.offers = [
             {
                 "seller_name": seller_name,
@@ -119,7 +132,7 @@ def quality_fields(text: str, *, site: "SiteConfig") -> dict[str, Any]:
         title = unescape(og.group(1))
     image_urls = set(re.findall(r"https?:\\?/\\?/[^\"'\s>]+\.(?:jpg|jpeg|png|webp)", text, flags=re.I))
     review_raw = _embedded_field(text, "reviewCount") or _embedded_field(text, "ratingCount")
-    seller = seller_from_page(text) or (site.first_party_seller or "").strip()
+    seller = buy_box_seller(text, site) or ""
     return {
         "title": title,
         "brand": _embedded_field(text, "brand") or "",
