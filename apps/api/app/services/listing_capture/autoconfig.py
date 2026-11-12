@@ -10,6 +10,16 @@ The listing-capture poll runs every 30 minutes.
 A customer whose adapter is still unconfigured and who also has no seller names or ids is
 reported with both ``needs_details_pattern`` and ``no_seller_data`` (in both buckets).
 
+Own seller: a reporting customer's own site is the site its seed names (``marketplace``), or
+the one site key that no other reporting customer in the tenant lists on or names. On its own
+site the customer's seller is the site's ``first_party_seller``. When the seed gives no seller
+names or ids, that first-party seller is written as the customer's seller (actor
+``listing-autoconfigure``), so a steward never types it. A buy-box held by any other seller on
+that site then reads as competition. A site several reporting customers share is not filled.
+When the HTML probe corroborates a page and the site's ``first_party_seller`` is blank, the one
+seller the page's offer names (``"seller": {"name": ...}``) becomes the first-party seller. A
+page that names two or more sellers sets nothing.
+
 Seed shape (all optional, all data)::
 
     feed_profile_json.listing_seed = {
@@ -33,6 +43,8 @@ Seed shape (all optional, all data)::
 from __future__ import annotations
 
 import logging
+import re
+from html import unescape
 from typing import Any, Callable
 
 from sqlalchemy import func, select, text
@@ -264,6 +276,7 @@ def _configure_site(
     else:
         pattern_status = "none"
     row = _load_site(session, tenant_id, site_key)
+    own_site = _is_own_site(session, tenant_id=tenant_id, customer_id=int(customer.id), site_key=site_key, seed=seed)
 
     if apply:
         if row is None:
@@ -281,19 +294,20 @@ def _configure_site(
                     raise
                 row = _load_site(session, tenant_id, site_key)
         if row is not None:
-            probe_ok = _html_probe(
+            probe_ok, probe_body = _html_probe(
                 session,
                 tenant_id=tenant_id,
                 listings=listings,
                 http_get=http_get,
                 adapter_blank=_is_blank(row.adapter_key),
             )
-            fill = _fill_fields(row, seed=seed, derived=derived, probe_ok=probe_ok)
+            page_seller = page_first_party_seller(probe_body) if probe_ok else None
+            fill = _fill_fields(row, seed=seed, derived=derived, probe_ok=probe_ok, page_seller=page_seller)
             _apply_fill(session, row, fill)
-            _ensure_seller(session, row, customer_id=int(customer.id), seed=seed)
+            _ensure_seller(session, row, customer_id=int(customer.id), seed=seed, own_site=own_site)
             session.refresh(row)
 
-    seller_known = _seller_known(row, int(customer.id), seed)
+    seller_known = _seller_known(row, int(customer.id), seed, own_site=own_site)
     configured = bool(row is not None and row.is_active and configured_adapter(site_config_from_row(row)) is not None)
     reasons: list[str] = []
     if not configured:
@@ -369,18 +383,19 @@ def _html_probe(
     listings: list[CustomerListing],
     http_get: _HttpGet | None,
     adapter_blank: bool,
-) -> bool:
+) -> tuple[bool, str | None]:
     """One stored-URL read plus the same identity corroboration the link learner uses.
 
     A page corroborates when its gtin/mpn/model equals the product. A stock code does not.
+    Returns ``(corroborated, page body)``; the body is only returned when it corroborates.
     """
     from app.services.listing_capture.observation import listing_live_fetch_enabled
 
     if not adapter_blank or http_get is None or not listing_live_fetch_enabled():
-        return False
+        return False, None
     listing = next((row for row in listings if row.product_id and str(row.url or "").strip()), None)
     if listing is None:
-        return False
+        return False, None
     product = session.scalar(
         select(DimProduct).where(
             DimProduct.id == int(listing.product_id),
@@ -388,14 +403,68 @@ def _html_probe(
         )
     )
     if not isinstance(product, DimProduct):
-        return False
+        return False, None
     try:
         status, body = http_get(str(listing.url))
     except (OSError, ValueError, RuntimeError):
-        return False
+        return False, None
     if int(status or 0) != 200 or not body:
-        return False
-    return corroboration(page_facts_from_html(body), product) in {"barcode", "model"}
+        return False, None
+    if corroboration(page_facts_from_html(body), product) in {"barcode", "model"}:
+        return True, body
+    return False, None
+
+
+_OFFER_SELLER_RE = re.compile(r'"seller"\s*:\s*\{[^{}]*?"name"\s*:\s*"([^"\\]{1,256})"', re.IGNORECASE)
+
+
+def page_first_party_seller(body: str | None) -> str | None:
+    """The one seller a product page's offers name, or None when none or several are named."""
+    if not body:
+        return None
+    names: dict[str, str] = {}
+    for raw in _OFFER_SELLER_RE.findall(body):
+        name = re.sub(r"\s+", " ", unescape(raw)).strip()
+        if name:
+            names.setdefault(name.casefold(), name)
+    if len(names) != 1:
+        return None
+    return next(iter(names.values()))[:256]
+
+
+def _is_own_site(
+    session: Session,
+    *,
+    tenant_id: str,
+    customer_id: int,
+    site_key: str,
+    seed: dict[str, Any],
+) -> bool:
+    """The seed names this site, or no other reporting customer in the tenant lists on or names it."""
+    named = seed.get("marketplace")
+    if isinstance(named, str) and named.strip():
+        return named.strip().lower() == site_key
+    others = session.execute(
+        text(
+            """
+            SELECT count(DISTINCT c.id)
+            FROM dim_customer c
+            JOIN customer_report_config r ON r.customer_id = c.id
+            WHERE r.reports_expected IS TRUE
+              AND c.tenant_id = :tenant_id
+              AND c.id <> :customer_id
+              AND (
+                    lower(trim(r.feed_profile_json -> 'listing_seed' ->> 'marketplace')) = :site_key
+                 OR EXISTS (
+                        SELECT 1 FROM customer_listing l
+                        WHERE l.customer_id = c.id AND lower(trim(l.marketplace)) = :site_key
+                    )
+              )
+            """
+        ),
+        {"tenant_id": tenant_id, "customer_id": int(customer_id), "site_key": site_key},
+    ).scalar()
+    return int(others or 0) == 0
 
 
 def _fill_fields(
@@ -404,6 +473,7 @@ def _fill_fields(
     seed: dict[str, Any],
     derived: Any,
     probe_ok: bool,
+    page_seller: str | None = None,
 ) -> dict[str, Any]:
     curated = seed.get("site") if isinstance(seed.get("site"), dict) else {}
     fill: dict[str, Any] = {}
@@ -423,6 +493,8 @@ def _fill_fields(
     if derived is not None:
         take("product_url_pattern", derived.product_url_pattern)
         take("page_id_pattern", derived.page_id_pattern)
+    if probe_ok and page_seller:
+        take("first_party_seller", page_seller)
     if _is_blank(row.adapter_key):
         if probe_ok:
             take("adapter_key", HTML_PAGE_ADAPTER)
@@ -486,12 +558,22 @@ def _apply_fill(session: Session, row: ListingSite, fill: dict[str, Any]) -> Non
             return
 
 
-def _ensure_seller(session: Session, row: ListingSite, *, customer_id: int, seed: dict[str, Any]) -> None:
+def _ensure_seller(
+    session: Session,
+    row: ListingSite,
+    *,
+    customer_id: int,
+    seed: dict[str, Any],
+    own_site: bool = False,
+) -> None:
     if _seller_present(row, customer_id):
         return
     names, ids = _seed_seller(seed)
     if not names and not ids:
-        return
+        first_party = _text_or_none(row.first_party_seller)
+        if not own_site or first_party is None:
+            return
+        names = [first_party]
     set_site_seller(
         session,
         row,
@@ -502,12 +584,29 @@ def _ensure_seller(session: Session, row: ListingSite, *, customer_id: int, seed
     )
 
 
-def _seller_known(row: ListingSite | None, customer_id: int, seed: dict[str, Any]) -> bool:
-    """Stored seller row or seed names/ids. Seed data counts before the row is written."""
+def _seller_known(
+    row: ListingSite | None,
+    customer_id: int,
+    seed: dict[str, Any],
+    *,
+    own_site: bool = False,
+) -> bool:
+    """Stored seller row, seed names/ids, or (own site) the first-party seller.
+
+    Seed data and the first-party seller count before the row is written.
+    """
     if _seller_present(row, customer_id):
         return True
     names, ids = _seed_seller(seed)
-    return any(str(value or "").strip() for value in names) or any(str(value or "").strip() for value in ids)
+    if any(str(value or "").strip() for value in names) or any(str(value or "").strip() for value in ids):
+        return True
+    if not own_site:
+        return False
+    curated = seed.get("site") if isinstance(seed.get("site"), dict) else {}
+    first_party = _text_or_none(row.first_party_seller) if row is not None else None
+    if first_party is None:
+        first_party = _text_or_none(curated.get("first_party_seller"))
+    return first_party is not None
 
 
 def _seller_present(row: ListingSite | None, customer_id: int) -> bool:
