@@ -1,0 +1,6 @@
+{"ts":1793928917,"event":"preToolUse","tool":"Shell","decision":"deny","code":"SESSION_CLOSURE_REQUIRED","path":null,"cursor_version":"1.0.0","conversation_id":"","sandbox":null}
+{"ts":1793928919,"event":"postToolUseFailure","tool":"Shell","decision":"allow","code":"POST_TOOL_FAILURE","path":null,"cursor_version":"1.0.0","conversation_id":"","sandbox":null,"failure_type":"permission_denied","retry_admission":"none; callback is audit-only"}
+{"ts":1793928953,"event":"preToolUse","tool":"Shell","decision":"deny","code":"SESSION_CLOSURE_REQUIRED","path":null,"cursor_version":"1.0.0","conversation_id":"","sandbox":null}
+{"ts":1793928954,"event":"postToolUseFailure","tool":"Shell","decision":"allow","code":"POST_TOOL_FAILURE","path":null,"cursor_version":"1.0.0","conversation_id":"","sandbox":null,"failure_type":"permission_denied","retry_admission":"none; callback is audit-only"}
+{"ts":1793928966,"event":"preToolUse","tool":"Shell","decision":"deny","code":"IDENTITY_TOOL","path":null,"cursor_version":"1.0.0","conversation_id":"","sandbox":null}
+{"ts":1793928968,"event":"postToolUseFailure","tool":"Shell","decision":"allow","code":"POST_TOOL_FAILURE","path":null,"cursor_version":"1.0.0","conversation_id":"","sandbox":null,"failure_type":"permission_denied","retry_admission":"none; callback is audit-only"}
