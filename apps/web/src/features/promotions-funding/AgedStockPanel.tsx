@@ -86,7 +86,7 @@ export function AgedStockPanel({ onOpen }: { onOpen?: (caseId: number) => void }
       {propose.data ? (
         <Alert severity="info" data-testid="aged-stock-raise-result">
           {propose.data.created?.length ?? 0} draft{(propose.data.created?.length ?? 0) === 1 ? '' : 's'} opened
-          {(propose.data.skipped?.length ?? 0) ? ` · ${propose.data.skipped.length} skipped` : ''}
+          {(propose.data.skipped?.length ?? 0) ? ` · ${propose.data.skipped?.length} skipped` : ''}
         </Alert>
       ) : null}
       {!list.isLoading && lines.length === 0 ? (

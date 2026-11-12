@@ -801,6 +801,7 @@ def test_auto_propose_is_not_capped_at_the_display_list(monkeypatch):
         {"product_id": i, "stock_on_hand": 1, "suggestions": ["promote"], "site_label": None}
         for i in range(1, 202)
     ]
+    monkeypatch.setattr(actions, "build_lead_index", lambda *_a, **_k: {})
     monkeypatch.setattr(
         actions,
         "build_customer_view",
@@ -833,7 +834,7 @@ def test_display_list_is_truncated_when_another_customer_remains(monkeypatch):
     import app.services.store_dc.stock_actions as actions
     from app.services.store_dc.stock_actions import list_aged_stock
 
-    def view(_session, _tenant, cid):
+    def view(_session, _tenant, cid, **_kwargs):
         lines = [
             {"product_id": i, "suggestions": ["promote"], "stock_on_hand": 1, "site_label": None}
             for i in range(200)
@@ -841,6 +842,10 @@ def test_display_list_is_truncated_when_another_customer_remains(monkeypatch):
         return {"account": {"site_label": None, "customer_id": cid, "lines": lines}, "sites": [], "dc_sections": []}
 
     monkeypatch.setattr(actions, "build_customer_view", view)
+    monkeypatch.setattr(actions, "build_lead_index", lambda *_a, **_k: {})
+    monkeypatch.setattr(
+        actions, "_with_stock_evidence", lambda _s, *, tenant_id, customer_ids: customer_ids
+    )
 
     class Session:
         def scalars(self, *_a, **_k):

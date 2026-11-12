@@ -15,13 +15,15 @@ from sqlalchemy.orm import Session
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer
+from app.models.fact_customer_sellthrough import FactCustomerSellthrough
+from app.models.store_dc import SiteCandidate
 from app.services.cpor.promo_plan_builder import (
     _positive_srp,
     create_case_from_promo_draft,
     load_promotion_line_evidence,
 )
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
-from app.services.store_dc.read_model import build_customer_view
+from app.services.store_dc.read_model import build_customer_view, build_lead_index
 from app.services.store_dc.rules import SUGGESTIONS, stock_action_covers_site, stock_action_in_notes
 
 OPEN_CASE_STATUSES = ("draft", "proposed", "approved", "active")
@@ -145,6 +147,41 @@ def _customer_ids(session: Session, *, tenant_id: str, customer_id: int | None) 
     ]
 
 
+def _with_stock_evidence(session: Session, *, tenant_id: str, customer_ids: list[int]) -> list[int]:
+    """Keep customers that can have a slow or unsold line, in the same order.
+
+    A customer view lists a line only from stock that customer reported itself,
+    or from a confirmed distribution centre it owns. A customer with neither
+    has no suggestion, so it needs no view.
+    """
+    if not customer_ids:
+        return []
+    reporting = set(
+        session.scalars(
+            select(FactCustomerSellthrough.customer_id)
+            .where(
+                FactCustomerSellthrough.tenant_id == tenant_id,
+                FactCustomerSellthrough.customer_id.in_(customer_ids),
+                FactCustomerSellthrough.reported_soh.is_not(None),
+            )
+            .distinct()
+        ).all()
+    )
+    owners = set(
+        session.scalars(
+            select(SiteCandidate.customer_id)
+            .where(
+                SiteCandidate.tenant_id == tenant_id,
+                SiteCandidate.status == "confirmed",
+                SiteCandidate.customer_id.is_not(None),
+            )
+            .distinct()
+        ).all()
+    )
+    keep = {int(c) for c in reporting} | {int(c) for c in owners}
+    return [cid for cid in customer_ids if cid in keep]
+
+
 def _collect_aged_stock(
     session: Session,
     *,
@@ -152,13 +189,20 @@ def _collect_aged_stock(
     customer_id: int | None = None,
     limit: int | None = MAX_LISTED_LINES,
 ) -> tuple[list[dict[str, Any]], bool]:
-    """Slow and unsold lines. ``limit`` None reads every customer; the display uses the cap."""
+    """Slow and unsold lines. ``limit`` None reads every customer; the display uses the cap.
+
+    A scan of every customer reads only those with stock evidence, and builds the
+    tenant-wide lead index once for all of them. A named customer is always viewed.
+    """
     customer_ids = _customer_ids(session, tenant_id=tenant_id, customer_id=customer_id)
+    if customer_id is None:
+        customer_ids = _with_stock_evidence(session, tenant_id=tenant_id, customer_ids=customer_ids)
+    lead_index = build_lead_index(session, tenant_id) if customer_ids else None
     lines: list[dict[str, Any]] = []
     truncated = False
     for index, cid in enumerate(customer_ids):
         try:
-            view = build_customer_view(session, tenant_id, cid)
+            view = build_customer_view(session, tenant_id, cid, lead_index=lead_index)
         except LookupError:
             continue
         rows = _suggestion_rows(view, customer_id=cid)

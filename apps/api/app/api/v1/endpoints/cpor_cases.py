@@ -1886,7 +1886,7 @@ def _draft_case_writers(user: dict):
 @router.get("/intelligence/promo-plan-draft/aged-stock")
 def cpor_aged_stock(
     customer_id: int | None = Query(default=None, ge=1),
-    user: dict = Depends(_require_cpor_planner),
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Slow and unsold lines. Reading this does not create a case."""
     with SessionLocal() as session:

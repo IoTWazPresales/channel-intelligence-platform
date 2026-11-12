@@ -45,6 +45,8 @@ _CPOR_WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     ("POST", f"{_P}/cases/{{case_id}}/transition"): _PLANNER,
     ("POST", f"{_P}/intelligence/promo-plan-draft/recompute"): _PLANNER,
     ("POST", f"{_P}/intelligence/promo-plan-draft/create-case"): _PLANNER,
+    ("POST", f"{_P}/intelligence/promo-plan-draft/auto-propose"): _PLANNER,
+    ("POST", f"{_P}/intelligence/promo-plan-draft/aged-stock-action"): _PLANNER,
     ("POST", f"{_P}/cases/{{case_id}}/claim-evidence/import"): _PLANNER,
     ("POST", f"{_P}/cases/{{case_id}}/settlement/rollup"): _PLANNER,
     # case_approval.py (N-0082) — the planner sends and revokes the customer's case link

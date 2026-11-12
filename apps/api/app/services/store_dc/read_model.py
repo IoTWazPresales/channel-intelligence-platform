@@ -506,7 +506,19 @@ def _dc_section(
     }
 
 
-def build_customer_view(db: Session, tenant_id: str, customer_id: int) -> dict[str, Any]:
+def build_lead_index(db: Session, tenant_id: str) -> dict[tuple[int, str], dict[str, Any]]:
+    """Tenant-wide inbound lead legs. A caller that builds many views builds this once."""
+    cfg_row = tenant_config(db, tenant_id)
+    return _lead_index(db, tenant_id, int(cfg_row["lead_time_min_deliveries"]))
+
+
+def build_customer_view(
+    db: Session,
+    tenant_id: str,
+    customer_id: int,
+    *,
+    lead_index: dict[tuple[int, str], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     customer = db.get(DimCustomer, customer_id)
     if customer is None or customer.tenant_id != tenant_id:
         raise LookupError(str(customer_id))
@@ -527,7 +539,8 @@ def build_customer_view(db: Session, tenant_id: str, customer_id: int) -> dict[s
     labeled = [r for r in own if r.site]
     blank = [r for r in own if not r.site]
     distributors = _distributors_for(db, tenant_id, [customer_id])
-    lead_index = _lead_index(db, tenant_id, min_deliveries)
+    if lead_index is None:
+        lead_index = _lead_index(db, tenant_id, min_deliveries)
     # Rebuild index legs with this tenant floor. _lead_index already used min_deliveries.
     distributor_id = _primary_distributor(distributors)
     own_cover = cover_weeks(configs.get(customer_id))
