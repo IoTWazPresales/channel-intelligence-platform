@@ -11,6 +11,7 @@ from app.services.cpor.customer_soh_check import (
     FLAG_SOH_TOLERANCE,
     SOURCE_TABLE,
     customer_soh_check,
+    resolve_stored_mac_vat,
     summarise_soh_rows,
 )
 
@@ -229,6 +230,136 @@ def test_units_without_a_cost_do_not_raise_an_unknown_vat_flag():
     out = summarise_soh_rows([_row(1, Decimal("7"), vat=None)], as_of=AS_OF, derived_mac=Decimal("50"))
     assert out["flags"] == ["no_soh_cost"]
     assert out["soh_unit_cost"] is None
+
+
+def test_stored_incl_vat_mac_is_divided_before_the_gap():
+    # Review case: stored CST cost 115 incl-VAT against an ex-VAT SOH cost of 100.
+    # 115 / 1.15 = 100, so the gap is zero and soh_tolerance must not fire.
+    out = summarise_soh_rows(
+        [_row(1, Decimal("10"), unit_cost=Decimal("100"), vat="ex_vat")],
+        as_of=AS_OF,
+        derived_mac=Decimal("115"),
+        derived_mac_vat="inc_vat",
+        tolerance_pct=Decimal("0.10"),
+    )
+    assert out["soh_unit_cost"] == 100.0
+    assert out["derived_mac"] == 100.0
+    assert out["derived_mac_input"] == 115.0
+    assert out["derived_mac_input_vat"] == "inc_vat"
+    assert out["delta"] == 0.0
+    assert FLAG_SOH_TOLERANCE not in out["flags"]
+    assert "vat_basis_unknown" not in out["flags"]
+
+
+def test_unknown_stored_mac_basis_withholds_the_comparison():
+    out = summarise_soh_rows(
+        [_row(1, Decimal("10"), unit_cost=Decimal("100"))],
+        as_of=AS_OF,
+        derived_mac=Decimal("115"),
+        derived_mac_vat=None,
+        tolerance_pct=Decimal("0.10"),
+    )
+    assert out["derived_mac"] == 115.0
+    assert "derived_mac_input" not in out
+    assert "delta" not in out
+    assert "gap_pct" not in out
+    assert "vat_basis_unknown" in out["flags"]
+    assert FLAG_SOH_TOLERANCE not in out["flags"]
+
+
+def test_explicit_ex_vat_mac_is_not_divided():
+    out = summarise_soh_rows(
+        [_row(1, Decimal("10"), unit_cost=Decimal("100"))],
+        as_of=AS_OF,
+        derived_mac=Decimal("115"),
+        derived_mac_vat="ex_vat",
+        tolerance_pct=Decimal("0.10"),
+    )
+    assert out["derived_mac"] == 115.0
+    assert "derived_mac_input" not in out
+    assert FLAG_SOH_TOLERANCE in out["flags"]
+
+
+def test_manual_cost_is_compared_as_given():
+    apply, basis = resolve_stored_mac_vat(
+        MagicMock(),
+        cost_source="manual",
+        cost_evidence={},
+        cost_basis=Decimal("115"),
+        customer_id=1,
+        product_id=2,
+        as_of=AS_OF,
+    )
+    assert apply is False and basis is None
+
+
+def test_sellout_cost_is_already_ex_vat():
+    session = MagicMock()
+    apply, basis = resolve_stored_mac_vat(
+        session,
+        cost_source="sellout_evidence",
+        cost_evidence={},
+        cost_basis=Decimal("100"),
+        customer_id=1,
+        product_id=2,
+        as_of=AS_OF,
+    )
+    assert apply is True and basis == "ex_vat"
+    session.get.assert_not_called()
+    session.execute.assert_not_called()
+
+
+def test_cst_reported_line_uses_the_source_row_vat_basis():
+    row = MagicMock()
+    row.vat_basis = "inc_vat"
+    session = MagicMock()
+    session.get = MagicMock(return_value=row)
+    apply, basis = resolve_stored_mac_vat(
+        session,
+        cost_source="cst_reported",
+        cost_evidence={"fact_id": 9, "field_used": "unit_cost"},
+        cost_basis=Decimal("115"),
+        customer_id=1,
+        product_id=2,
+        as_of=AS_OF,
+    )
+    assert apply is True and basis == "inc_vat"
+    session.get.assert_called_once()
+    session.execute.assert_not_called()
+
+
+def test_cst_line_without_a_matching_current_cost_withholds():
+    session = MagicMock()
+    res = MagicMock()
+    res.first = MagicMock(return_value=(Decimal("80"), None, "inc_vat"))
+    session.execute = MagicMock(return_value=res)
+    apply, basis = resolve_stored_mac_vat(
+        session,
+        cost_source="cst_reported",
+        cost_evidence={},
+        cost_basis=Decimal("115"),
+        customer_id=1,
+        product_id=2,
+        as_of=AS_OF,
+    )
+    assert apply is True and basis is None
+
+
+def test_cst_line_matches_the_current_incl_vat_cost():
+    session = MagicMock()
+    res = MagicMock()
+    res.first = MagicMock(return_value=(None, Decimal("115"), "inc_vat"))
+    session.execute = MagicMock(return_value=res)
+    apply, basis = resolve_stored_mac_vat(
+        session,
+        cost_source="cst_reported",
+        cost_evidence={},
+        cost_basis=Decimal("115"),
+        customer_id=1,
+        product_id=2,
+        as_of=AS_OF,
+    )
+    assert apply is True and basis == "inc_vat"
 
 
 def test_tolerance_uses_tenant_default_when_pct_omitted(monkeypatch):

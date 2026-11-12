@@ -12,10 +12,13 @@ Rule (customer x product, as of date D):
 - ``soh_unit_cost`` = ex-VAT ``reported_soh``-weighted average of ``unit_mac`` else
   ``unit_cost`` (same preference as CPOR tier-1 cost). Incl-VAT costs are divided
   by 1.15 first. A cost with an unknown VAT basis is left out;
-- ``delta`` = derived MAC - ``soh_unit_cost``. When both sides exist, flag
+- ``delta`` = ex-VAT derived MAC - ``soh_unit_cost``. When both sides exist, flag
   ``soh_tolerance`` if abs(delta) / abs(derived MAC) exceeds the tenant
-  tolerance (default 10%; D-0038). Accounts with SOH units but no cost stay
-  units-only: no invented cost, no cost-tolerance flag.
+  tolerance (default 10%; D-0038). A stored MAC passed with ``derived_mac_vat``
+  uses the same rule: incl-VAT is divided by 1.15, and an unknown basis
+  withholds the gap. Omitting ``derived_mac_vat`` compares the passed number,
+  which is already the ex-VAT operand (a manual cost). Accounts with SOH units
+  but no cost stay units-only: no invented cost, no cost-tolerance flag.
 Flags: ``zero_soh`` (reported 0 on hand: no cost to check), ``no_soh_cost`` (SOH
 units without any cost field), ``soh_tolerance`` (cost gap beyond tolerance),
 ``vat_basis_unknown`` (a cost whose basis is missing or neither ex-VAT nor incl-VAT).
@@ -29,7 +32,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Iterable
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
@@ -43,6 +46,8 @@ VAT_INCL_DIVISOR = Decimal("1.15")
 COMPARED_VAT = "ex_vat"
 FLAG_SOH_TOLERANCE = "soh_tolerance"
 FLAG_VAT_BASIS_UNKNOWN = "vat_basis_unknown"
+# Omitting derived_mac_vat means the caller already passed an ex-VAT operand.
+_MAC_VAT_OMITTED = object()
 
 
 def _vat_kind(basis: str | None) -> str:
@@ -53,6 +58,107 @@ def _vat_kind(basis: str | None) -> str:
     if raw.startswith("inc"):
         return "inc"
     return "unknown"
+
+
+def _compared_mac(raw: Decimal, vat: Any, flags: list[str]) -> Decimal | None:
+    """Ex-VAT operand, or None when a supplied basis is unknown and the gap must be withheld."""
+    if vat is _MAC_VAT_OMITTED:
+        return raw
+    kind = _vat_kind(None if vat is None else str(vat))
+    if kind == "unknown":
+        if FLAG_VAT_BASIS_UNKNOWN not in flags:
+            flags.append(FLAG_VAT_BASIS_UNKNOWN)
+        return None
+    if kind == "inc":
+        return raw / VAT_INCL_DIVISOR
+    return raw
+
+
+def _cst_vat_basis_for_amount(
+    session: Session,
+    *,
+    customer_id: int,
+    product_id: int,
+    as_of: date,
+    cost_basis: Decimal | float | int | str | None,
+) -> str | None:
+    """VAT basis of the latest CST cost row when its chosen amount is still the stored cost.
+
+    A different amount means this row is not the stored figure, so the basis stays unknown.
+    """
+    if cost_basis is None:
+        return None
+    row = session.execute(
+        select(
+            FactCustomerSellthrough.unit_mac,
+            FactCustomerSellthrough.unit_cost,
+            FactCustomerSellthrough.vat_basis,
+        )
+        .where(
+            FactCustomerSellthrough.customer_id == int(customer_id),
+            FactCustomerSellthrough.product_id == int(product_id),
+            or_(
+                FactCustomerSellthrough.unit_mac.is_not(None),
+                FactCustomerSellthrough.unit_cost.is_not(None),
+            ),
+            FactCustomerSellthrough.period_start_date <= as_of,
+        )
+        .order_by(
+            FactCustomerSellthrough.period_start_date.desc(),
+            FactCustomerSellthrough.id.desc(),
+        )
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    unit_mac, unit_cost, vat_basis = row
+    chosen = unit_mac if unit_mac is not None else unit_cost
+    if chosen is None or _as_decimal(chosen) != _as_decimal(cost_basis):
+        return None
+    return None if vat_basis is None else str(vat_basis)
+
+
+def resolve_stored_mac_vat(
+    session: Session,
+    *,
+    cost_source: str | None,
+    cost_evidence: dict | None,
+    cost_basis: Decimal | float | int | str | None,
+    customer_id: int,
+    product_id: int,
+    as_of: date,
+) -> tuple[bool, str | None]:
+    """``(apply, basis)`` for a stored case-line cost.
+
+    ``(False, None)`` compares the stored number as given (manual, or no source).
+    ``(True, basis)`` runs the ex-VAT rule. Sell-out evidence is already ex-tax.
+    A CST-sourced cost uses the source row's ``vat_basis``. A missing basis, or a
+    current CST row whose amount is no longer the stored cost, withholds the gap.
+    """
+    source = str(cost_source or "").strip()
+    if source == "sellout_evidence":
+        return True, "ex_vat"
+    if source != "cst_reported":
+        return False, None
+    evidence = cost_evidence if isinstance(cost_evidence, dict) else {}
+    fact_id = evidence.get("fact_id")
+    if fact_id is not None:
+        try:
+            fact_key = int(fact_id)
+        except (TypeError, ValueError):
+            fact_key = None
+        if fact_key is not None:
+            row = session.get(FactCustomerSellthrough, fact_key)
+            if row is not None:
+                basis = getattr(row, "vat_basis", None)
+                return True, None if basis is None else str(basis)
+    return True, _cst_vat_basis_for_amount(
+        session,
+        customer_id=customer_id,
+        product_id=product_id,
+        as_of=as_of,
+        cost_basis=cost_basis,
+    )
 
 
 def _resolve_tolerance_pct(
@@ -72,6 +178,7 @@ def summarise_soh_rows(
     *,
     as_of: date,
     derived_mac: Decimal | float | int | str | None = None,
+    derived_mac_vat: Any = _MAC_VAT_OMITTED,
     tolerance_pct: Decimal | float | int | str | None = None,
     tenant_id: str = "default",
 ) -> dict[str, Any]:
@@ -133,8 +240,19 @@ def summarise_soh_rows(
         flags=flags,
     )
     if derived_mac is not None:
-        mac = _as_decimal(derived_mac)
+        raw_mac = _as_decimal(derived_mac)
+        mac = _compared_mac(raw_mac, derived_mac_vat, flags)
+        if mac is None:
+            # Supplied basis is unknown: keep the stored number and do not invent a gap.
+            out["derived_mac"] = float(raw_mac)
+            return out
         out["derived_mac"] = float(mac)
+        if (
+            derived_mac_vat is not _MAC_VAT_OMITTED
+            and _vat_kind(None if derived_mac_vat is None else str(derived_mac_vat)) == "inc"
+        ):
+            out["derived_mac_input"] = float(raw_mac)
+            out["derived_mac_input_vat"] = str(derived_mac_vat)
         if soh_cost is not None:
             delta = mac - soh_cost
             out["delta"] = float(delta)
@@ -163,6 +281,7 @@ def customer_soh_check(
     product_id: int,
     as_of: date,
     derived_mac: Decimal | float | int | str | None = None,
+    derived_mac_vat: Any = _MAC_VAT_OMITTED,
     tolerance_pct: Decimal | float | int | str | None = None,
     tenant_id: str = "default",
 ) -> dict[str, Any]:
@@ -194,6 +313,7 @@ def customer_soh_check(
         rows,
         as_of=as_of,
         derived_mac=derived_mac,
+        derived_mac_vat=derived_mac_vat,
         tolerance_pct=tolerance_pct,
         tenant_id=tenant_id,
     )

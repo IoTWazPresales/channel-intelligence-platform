@@ -29,7 +29,7 @@ from app.services.cpor.cost_suggestion import (
     resolve_default_margin,
     suggest_cost_basis,
 )
-from app.services.cpor.customer_soh_check import customer_soh_check
+from app.services.cpor.customer_soh_check import customer_soh_check, resolve_stored_mac_vat
 from app.services.cpor.intake_weighted_mac import suggest_intake_weighted_mac
 from app.services.cpor.lifecycle import (
     EDITABLE_STATUSES,
@@ -1353,6 +1353,17 @@ def cost_suggest(case_id: int, line_id: int):
             as_of=as_of,
             exclude_case_id=case.id,
         )
+        apply_mac_vat, mac_vat = resolve_stored_mac_vat(
+            session,
+            cost_source=line.cost_source,
+            cost_evidence=line.cost_evidence_json,
+            cost_basis=line.cost_basis,
+            customer_id=case.customer_id,
+            product_id=line.product_id,
+            as_of=as_of,
+        )
+        # A CST-sourced cost is still the raw file amount. A manual cost stays as entered.
+        mac_vat_arg = {"derived_mac_vat": mac_vat} if apply_mac_vat else {}
         return {
             "line_id": line.id,
             "cost_basis": float(sug.cost_basis) if sug.cost_basis is not None else None,
@@ -1371,6 +1382,7 @@ def cost_suggest(case_id: int, line_id: int):
                 as_of=as_of,
                 derived_mac=line.cost_basis,
                 tenant_id=case.tenant_id or "default",
+                **mac_vat_arg,
             ),
         }
 
