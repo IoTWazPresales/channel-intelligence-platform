@@ -703,6 +703,52 @@ def test_r2_4_inferred_seller_keeps_first_party_offers_own(db_session: Session) 
     assert label() == "Competition"
 
 
+def test_r3_shared_site_reads_the_page_seller_per_customer(db_session: Session) -> None:
+    """Shared site, one configured and one inferred seller: each listing follows its customer."""
+    from app.services.listing_capture.registry import record_observation
+    from app.services.listing_capture.sites import INFERRED_SELLER_ACTOR, set_site_seller
+
+    tenant = f"t-r3-{uuid.uuid4().hex[:6]}"
+    configured = _customer(db_session, tenant, "north")
+    inferred = _customer(db_session, tenant, "harbour")
+    row = _own_site(db_session, tenant, first_party="North Counter")
+    set_site_seller(
+        db_session,
+        row,
+        customer_id=int(configured.id),
+        seller_names=["North Counter"],
+        seller_ids=[],
+        actor="steward@x",
+    )
+    set_site_seller(
+        db_session,
+        row,
+        customer_id=int(inferred.id),
+        seller_names=[inferred.name],
+        seller_ids=[],
+        actor=INFERRED_SELLER_ACTOR,
+    )
+
+    def read(customer: DimCustomer, seller: str):
+        page = (
+            '{"@type":"Offer","priceCurrency":"ZAR","price":1299.00,'
+            f'"seller":{{"name":"{seller}"}}}}'
+        )
+        url = f"https://shop-a.example.test/p/{uuid.uuid4().hex[:8]}"
+        listing = _listing(db_session, customer, site_key="shop-a", url=url)
+        return record_observation(db_session, listing, http_get=lambda _u: (200, page))
+
+    competitor = read(configured, "Harbour Stall")
+    assert competitor.buy_box_seller == "Harbour Stall"
+    assert competitor.buy_box_own is False
+    own = read(configured, "North Counter")
+    assert own.buy_box_seller == "North Counter"
+    assert own.buy_box_own is True
+    fallback = read(inferred, "Harbour Stall")
+    assert fallback.buy_box_seller == "North Counter"
+    assert fallback.buy_box_own is False
+
+
 def test_absent_compact_flag_follows_stored_external_ids(db_session: Session) -> None:
     tenant = f"t-compact-{uuid.uuid4().hex[:6]}"
     compacted = _customer(db_session, tenant, "compacted")

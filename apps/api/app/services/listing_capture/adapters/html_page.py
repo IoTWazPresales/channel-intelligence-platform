@@ -57,7 +57,8 @@ def buy_box_seller(text: str, site: SiteConfig) -> str | None:
     steward); otherwise, as before, the site's ``first_party_seller``.
 
     An identity discovery inferred from a customer name is not compared with a page-named
-    seller: a differently written own name would read as Competition.
+    seller: a differently written own name would read as Competition. Callers pass
+    ``site.for_customer(customer_id)``, so the rule applies to the reading customer only.
     """
     sellers = tuple(site.sellers or ())
     configured = bool(sellers) and not any(getattr(s, "inferred", False) for s in sellers)

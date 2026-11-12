@@ -18,7 +18,7 @@ code and name no site. Each reader module exposes:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import ModuleType
 from typing import Any
 
@@ -61,6 +61,17 @@ class SiteConfig:
     id: int | None = None
     tenant_id: str = "default"
     sellers: tuple[SiteSeller, ...] = field(default_factory=tuple)
+
+    def for_customer(self, customer_id: int | None) -> SiteConfig:
+        """This site as the given customer's reader sees it: only that customer's seller identity.
+
+        A reader then decides from the identity of the customer whose listing it reads, not
+        from other customers on a shared site. ``None`` keeps every seller.
+        """
+        if customer_id is None:
+            return self
+        own = tuple(s for s in self.sellers if int(s.customer_id) == int(customer_id))
+        return replace(self, sellers=own)
 
     def own_seller(self, customer_id: int | None) -> SiteSeller | None:
         if customer_id is None:

@@ -613,7 +613,11 @@ def record_observation(
         listing.meta_json = {**meta, "page_id": resolved}
         session.add(listing)
     blob = compress_snapshot(body)
-    parsed = adapter.parse(body, site=site, preferred_sku=preferred_sku, parser_version=PARSER_VERSION)
+    # The reader sees only this listing's customer's seller identity (shared sites).
+    reader_site = site.for_customer(getattr(listing, "customer_id", None))
+    parsed = adapter.parse(
+        body, site=reader_site, preferred_sku=preferred_sku, parser_version=PARSER_VERSION
+    )
     flags = {**fetch_flags, **dict(parsed.flags or {})}
     if fetch_flags.get("reason"):
         # Parser flags overwrite ``reason``; keep the fetch-side reason for diagnosis.
@@ -755,7 +759,10 @@ def reparse_observation(
     module = adapter_module(site.adapter_key) if site is not None else None
     preferred_sku = getattr(listing, "external_id", None)
     if module is not None:
-        parsed = module.parse(text, site=site, preferred_sku=preferred_sku, parser_version=PARSER_VERSION)
+        reader_site = site.for_customer(getattr(listing, "customer_id", None))
+        parsed = module.parse(
+            text, site=reader_site, preferred_sku=preferred_sku, parser_version=PARSER_VERSION
+        )
     else:
         parsed = parse_snapshot_text(text, marketplace=(getattr(listing, "marketplace", None) or ""))
     flags = {**(parsed.flags or {}), "reparsed": True}
