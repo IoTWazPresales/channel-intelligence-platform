@@ -96,4 +96,7 @@ def total_for(
         if vals[0] is None or weeks is None or weeks == 0:
             return None
         return vals[0] / weeks
+    if kind == "stock_cover":
+        # The compiler stores the finished ratio (customers with no 4-week sales left out).
+        return _dec(base_totals.get(measure.id))
     return None

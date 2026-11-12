@@ -36,6 +36,7 @@ import { ListingCaptureHealth } from '@/features/market-listings/ListingCaptureH
 import { ListingLinksLens } from '@/features/market-listings/ListingLinksLens';
 import { ListingOffersSupply } from '@/features/market-listings/ListingOffersSupply';
 import { ListingQualityLens } from '@/features/market-listings/ListingQualityLens';
+import { ListingCoverageLens } from '@/features/market-listings/ListingCoverageLens';
 import { ListingSitesLens } from '@/features/market-listings/ListingSitesLens';
 import { SubstrateOrPlanned } from '@/features/market-listings/SubstrateOrPlanned';
 import { fmtMoney } from '@/features/promotions-funding/format';
@@ -1599,6 +1600,7 @@ export function MarketSurface() {
         {lens === 'quality' ? <ListingQualityLens /> : null}
         {lens === 'sites' ? <ListingSitesLens /> : null}
         {lens === 'links' ? <ListingLinksLens /> : null}
+        {lens === 'coverage' ? <ListingCoverageLens /> : null}
       </MarketChrome>
 
       <EntityContextPanel

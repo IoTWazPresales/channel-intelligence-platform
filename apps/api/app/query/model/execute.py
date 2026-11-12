@@ -193,6 +193,8 @@ async def run_v2(
 
     rows = await _rows_from(db, plan, compiled, result)
     base_totals: dict[str, Decimal | None] = {mid: trow[lab] for mid, lab in compiled.total_labels.items()}
+    if compiled.stock_cover_total is not None and compiled.stock_cover_id:
+        base_totals[compiled.stock_cover_id] = (await db.execute(compiled.stock_cover_total)).scalar_one()
     vmin = as_date(trow.get("vintage_min")) if "vintage_min" in trow else None
     vmax = as_date(trow.get("vintage_max")) if "vintage_max" in trow else None
     weeks = compiled.weeks_in_window or window_weeks(

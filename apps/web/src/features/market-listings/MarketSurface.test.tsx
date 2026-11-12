@@ -1,10 +1,11 @@
 import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
+import { marketLensFromLocation } from './MarketChrome';
 import { ListingUrl, listingUrlState, MarketSurface } from './MarketSurface';
 
 const nav = vi.hoisted(() => ({
@@ -45,6 +46,22 @@ vi.mock('@/lib/api', () => ({
         sites: [],
         configured: [],
         exclusions: [],
+        coverage: {
+          data_unavailable: false,
+          customers: [
+            {
+              customer_id: 4,
+              customer_code: 'c4',
+              customer_name: 'Counter Four',
+              reported: 6,
+              watched: 1,
+              awaiting_steward: 2,
+              failing: 1,
+              not_found: 1,
+              not_searched: 1,
+            },
+          ],
+        },
       };
     }
     if (url.includes('/customers')) return { items: [] };
@@ -95,6 +112,28 @@ describe('MarketSurface', () => {
     );
     await waitFor(() => expect(screen.getByTestId('market-surface')).toBeInTheDocument());
     expect(screen.queryByTestId('listing-capture-health')).toBeNull();
+  });
+
+  it('opens the coverage tab with reported, watched, awaiting steward, failing, not found and not searched', async () => {
+    nav.search = 'tab=coverage';
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    const row = await screen.findByTestId('listing-coverage-row-4');
+    expect(screen.getByTestId('listing-coverage-lens')).toBeInTheDocument();
+    expect(within(row).getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
+      'Counter Four',
+      '6',
+      '1',
+      '2',
+      '1',
+      '1',
+      '1',
+    ]);
+    expect(marketLensFromLocation('/listing-capture', new URLSearchParams('tab=coverage'))).toBe('coverage');
   });
 });
 

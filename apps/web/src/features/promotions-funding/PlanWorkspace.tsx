@@ -323,6 +323,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
     if (action === 'resend') return data.status === 'rejected';
     // Settle only on the desk: it owns the FX readiness gate and the SettlementConfirmDialog.
     if (action === 'settle') return false;
+    if (action === 'propose' && data.origin === 'stock_action') return false;
     return (data.allowed_next ?? []).includes(ACTION_TARGET[action]);
   });
   const canSettleOnDesk = (data.allowed_next ?? []).includes('settled');

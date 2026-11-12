@@ -42,7 +42,7 @@ export function StarterGallery({
       <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }} component="h2">
         {heading}
       </Typography>
-      <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' } }}>
+      <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(auto-fit, minmax(240px, 1fr))' } }}>
         {templates.map((t) => (
           <Card variant="outlined" key={t.key} data-testid={`starter-${t.key}`} sx={{ display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ flex: 1 }}>

@@ -646,7 +646,7 @@ export function PlanVsExecutedView() {
                 <HeadlineFigure
                   compact
                   testId="pve-over-plan-intake"
-                  label="Deal-stock landing"
+                  label="Over-plan intake"
                   value={fmtUnits(sc.over_plan_intake_units ?? sc.deal_stock_units)}
                   unit="units"
                   caption={`${fmtValue(sc.value.over_plan_intake_value_plan ?? sc.value.deal_stock_value_plan)} plan${fxNote}`}
@@ -688,7 +688,7 @@ export function PlanVsExecutedView() {
                     Planned versus in-plan shipped is that same pair. Total shipped adds units on linked purchase orders that were not on the plan. Pipeline is inbound on plan lines that have not landed. Cold lines have no inbound movement.
                   </Typography>
                   <Typography variant="body2" sx={{ mt: 1 }}>
-                    Short exposure is planned quantity still not shipped. Deal-stock landing is the extra shipped above the plan on lines that were on the plan. It is the same over-plan intake already on this page, not a separate proof-of-delivery landing. Unplanned intake is shipped on linked purchase orders with no plan line.
+                    Short exposure is planned quantity still not shipped. Over-plan intake is the extra shipped above the plan on lines that were on the plan. It is not a proof-of-delivery landing. Unplanned intake is shipped on linked purchase orders with no plan line.
                   </Typography>
                   <Typography variant="body2" sx={{ mt: 1 }}>
                     Ship-quarter slip is the average of ship quarter minus plan quarter on plan lines that have shipped. The date is the ship confirmation, or the scheduled ship date when confirmation is missing. Proof of delivery is not used. Volume bias is the average of shipped-against-plan minus planned, divided by planned, by product line. It is shown after 6 closed quarters and may change a buy plan after 8. A late shipment scores in the quarter it ships and does not fill the plan quarter.
