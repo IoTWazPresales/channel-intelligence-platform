@@ -184,6 +184,10 @@ def measure_breakdowns(dm: DataModel, m: Measure | Calculated) -> list[str]:
     # Stock is never summed over time, and an open-order figure has no ship date: neither offers period.
     if not period_grains_for(dm, m):
         allowed = [b for b in allowed if b != "period"]
+    # Cover is a customer snapshot. A store split would use one stock date for every store.
+    if isinstance(m, Calculated) and m.kind == "stock_cover":
+        local = set(dm.models[m.model].local)
+        allowed = [b for b in allowed if b not in local]
     return allowed
 
 
@@ -509,6 +513,30 @@ def plan_request(dm: DataModel, req: V2Request, *, v1_catalog: Any) -> Plan:
                 Refusal(measure=m.id, reason=wall.reason if wall else "Stock is never summed across dates.", wall="W-SNAPSHOT-NOT-SUMMED")
             )
             continue
+        if isinstance(m, Calculated) and m.kind == "stock_cover":
+            if period_in:
+                wall = dm.wall("W-SNAPSHOT-NOT-SUMMED")
+                plan.refusals.append(
+                    Refusal(
+                        measure=m.id,
+                        reason=wall.reason if wall else "Stock is never summed across dates.",
+                        wall="W-SNAPSHOT-NOT-SUMMED",
+                    )
+                )
+                continue
+            local = [b for b in breakdowns if b in model.local]
+            if local:
+                plan.refusals.append(
+                    Refusal(
+                        measure=m.id,
+                        reason=(
+                            "Weeks of cover is each customer's reported stock divided by that "
+                            "customer's sell-through in the 4 weeks ending on its last reported day. "
+                            f"It is not split by {', '.join(local)}."
+                        ),
+                    )
+                )
+                continue
         if needs_period_breakdown(dm, m) and not period_in:
             plan.refusals.append(Refusal(measure=m.id, reason=f"{m.label} needs period as a breakdown."))
             continue

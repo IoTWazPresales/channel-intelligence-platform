@@ -35,14 +35,25 @@ _KEPT_PRODUCT = "https://shop-a.example.test/kept/{page_id}"
 _KEPT_PAGE_ID = r"^https://shop-a\.example\.test/kept/([^/]+)$"
 
 
-@pytest.fixture()
-def db_session():
+def _sync_url() -> str:
+    """Point the sync URL at cip_test when settings still name cip. Never print the URL."""
+    from sqlalchemy.engine import make_url
+
     from app.core.config import get_settings
 
     get_settings.cache_clear()
     url = get_settings().database_url_sync
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    parsed = make_url(url)
+    if (parsed.database or "").casefold() == "cip":
+        parsed = parsed.set(database="cip_test")
+    return parsed.render_as_string(hide_password=False)
+
+
+@pytest.fixture()
+def db_session():
+    url = _sync_url()
     eng = create_engine(url)
     try:
         conn = eng.connect()
@@ -396,16 +407,21 @@ def test_excluded_customers_keep_their_reason(db_session: Session) -> None:
     report = autoconfigure_sites(db_session, tenant_id=tenant, http_get=lambda url, headers=None: (_ for _ in ()).throw(AssertionError(url)))
     reasons = {row["customer_id"]: row["reason"] for row in report["excluded"]}
     assert reasons[no_key.id] == "no_site_key"
-    assert reasons[no_seller.id] == "no_seller_data"
+    assert no_seller.id not in reasons
+    assert no_seller.id in {row["customer_id"] for row in report["configured"]}
     buckets = [value for value in report.values() if isinstance(value, list)]
     assert silent.id not in {row["customer_id"] for bucket in buckets for row in bucket}
     seller_site = _site(db_session, tenant, "shop-a")
+    db_session.refresh(seller_site)
     assert seller_site.adapter_key == "html_page"
-    assert seller_site.sellers == []
+    assert seller_site.first_party_seller == no_seller.name
+    assert seller_site.sellers[0].seller_names == [no_seller.name]
+    assert seller_site.sellers[0].seller_ids == []
     health = capture_health(db_session, tenant_id=tenant)
     health_reasons = {(row["customer_id"], row["reason"]) for row in health["exclusions"]}
     assert (no_key.id, "no_site_key") in health_reasons
-    assert (no_seller.id, "no_seller_data") in health_reasons
+    assert all(row["customer_id"] != no_seller.id for row in health["exclusions"])
+    assert isinstance(health["coverage"], dict)
 
 
 def test_missing_adapter_and_seller_reports_both_reasons(db_session: Session) -> None:
@@ -486,14 +502,251 @@ def test_bad_seller_seed_shapes_leave_the_other_customers_configured(db_session:
     report = autoconfigure_sites(db_session, tenant_id=tenant)
     reasons = {row["customer_id"]: row["reason"] for row in report["excluded"]}
     assert reasons[broken.id] == "seller_seed_invalid"
-    assert reasons[blank.id] == "no_seller_data"
-    assert reasons[blanks.id] == "no_seller_data"
-    assert {row["customer_id"] for row in report["configured"]} >= {named.id, good.id}
+    assert blank.id not in reasons
+    assert blanks.id not in reasons
+    assert {row["customer_id"] for row in report["configured"]} >= {named.id, good.id, blank.id, blanks.id}
     assert _site(db_session, tenant, "shop-c").sellers[0].seller_names == ["Counter"]
     assert _site(db_session, tenant, "shop-c").sellers[0].seller_ids == ["sid-9"]
     assert _site(db_session, tenant, "shop-w").sellers[0].seller_names == ["Good Seller"]
-    assert _site(db_session, tenant, "shop-a").sellers == []
+    shop_a = _site(db_session, tenant, "shop-a")
+    db_session.refresh(shop_a)
+    assert shop_a.first_party_seller == blank.name
+    assert shop_a.sellers[0].seller_names == [blank.name]
+    shop_b = _site(db_session, tenant, "shop-b")
+    db_session.refresh(shop_b)
+    assert shop_b.first_party_seller == blanks.name
+    assert shop_b.sellers[0].seller_names == [blanks.name]
     assert db_session.scalar(text("select id from listing_site where tenant_id = :t and site_key = 'shop-z'"), {"t": tenant}) is None
+
+
+def test_buy_box_site_does_not_take_the_customer_name(db_session: Session) -> None:
+    """A marketplace reader keeps an empty seller. Discovery must not stamp the customer name."""
+    tenant = f"t-bb-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "box")
+    _report(
+        db_session,
+        customer,
+        {
+            "marketplace": "market-b",
+            "site": {
+                "adapter_key": "rest_buybox_json",
+                "product_url_pattern": "https://market-b.example.test/x/ID{page_id}",
+                "page_id_pattern": r"ID(\d{5,12})",
+                "details_url_pattern": "https://api.market-b.example.test/rest/details/ID{page_id}?platform=desktop",
+            },
+        },
+    )
+    report = autoconfigure_sites(db_session, tenant_id=tenant)
+    reasons = {row["customer_id"]: row["reason"] for row in report["excluded"]}
+    assert reasons[customer.id] == "no_seller_data"
+    assert all(row["customer_id"] != customer.id for row in report["configured"])
+    site = _site(db_session, tenant, "market-b")
+    db_session.refresh(site)
+    assert site.adapter_key == "rest_buybox_json"
+    assert not (site.first_party_seller or "").strip()
+    assert site.sellers == []
+    assert customer.name not in (site.first_party_seller or "")
+
+
+def test_existing_first_party_seller_is_kept_when_discovery_infers_the_customer(db_session: Session) -> None:
+    """An existing first-party name stays the seller identity. The customer name must not relabel it."""
+    from app.services.listing_capture.adapters import seller_role_label
+    from app.services.listing_capture.sites import create_site, site_config_from_row
+
+    tenant = f"t-keep-fp-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "keepown")
+    row = create_site(
+        db_session,
+        tenant_id=tenant,
+        site_key="shop-a",
+        fields={
+            "display_name": "Kept",
+            "adapter_key": "html_page",
+            "first_party_seller": "Kept Counter",
+        },
+        actor="steward@x",
+    )
+    _report(db_session, customer, {"marketplace": "shop-a", "site": {"adapter_key": "html_page"}})
+    report = autoconfigure_sites(db_session, tenant_id=tenant)
+    assert [item["customer_id"] for item in report["configured"]] == [customer.id]
+    db_session.refresh(row)
+    assert row.first_party_seller == "Kept Counter"
+    assert [seller.seller_names for seller in row.sellers] == [["Kept Counter"]]
+    assert customer.name not in row.sellers[0].seller_names
+    config = site_config_from_row(row)
+    assert seller_role_label(config.is_own_seller(int(customer.id), name="Kept Counter")) == "Own"
+    assert seller_role_label(config.is_own_seller(int(customer.id), name=customer.name)) == "Competition"
+
+
+_OWN_SITE_SEED = {"marketplace": "shop-a", "site": {"adapter_key": "html_page"}}
+
+
+def _own_site(session: Session, tenant: str, *, first_party: str | None = None) -> ListingSite:
+    from app.services.listing_capture.sites import create_site
+
+    fields = {"display_name": "Own", "adapter_key": "html_page"}
+    if first_party:
+        fields["first_party_seller"] = first_party
+    return create_site(
+        session, tenant_id=tenant, site_key="shop-a", fields=fields, actor="steward@x"
+    )
+
+
+def _names_by_customer(row: ListingSite) -> dict[int, list[str]]:
+    return {int(seller.customer_id): list(seller.seller_names) for seller in row.sellers}
+
+
+def test_r2_1_stored_seller_skips_an_invalid_seed_seller(db_session: Session) -> None:
+    """A stored seller identity is kept; a bad seed seller field must not roll the site back."""
+    from app.services.listing_capture.sites import set_site_seller
+
+    tenant = f"t-r21-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "stored")
+    row = _own_site(db_session, tenant)
+    set_site_seller(
+        db_session,
+        row,
+        customer_id=int(customer.id),
+        seller_names=["North Counter"],
+        seller_ids=[],
+        actor="steward@x",
+    )
+    _report(db_session, customer, {**_OWN_SITE_SEED, "seller_names": 17})
+    report = autoconfigure_sites(db_session, tenant_id=tenant)
+    reasons = {item["customer_id"]: item["reason"] for item in report["excluded"]}
+    assert customer.id not in reasons
+    assert [item["customer_id"] for item in report["configured"]] == [customer.id]
+    db_session.refresh(row)
+    assert _names_by_customer(row) == {int(customer.id): ["North Counter"]}
+
+
+def test_r2_2_each_customer_keeps_its_own_seller_on_a_shared_site(db_session: Session) -> None:
+    """A first-party name filled from one customer never becomes another customer's seller."""
+    tenant = f"t-r22-{uuid.uuid4().hex[:6]}"
+    first = _customer(db_session, tenant, "north")
+    second = _customer(db_session, tenant, "harbour")
+    _report(db_session, first, dict(_OWN_SITE_SEED))
+    _report(db_session, second, dict(_OWN_SITE_SEED))
+    autoconfigure_sites(db_session, tenant_id=tenant)
+    row = _site(db_session, tenant, "shop-a")
+    db_session.refresh(row)
+    assert _names_by_customer(row) == {
+        int(first.id): [first.name],
+        int(second.id): [second.name],
+    }
+    assert row.first_party_seller == first.name
+
+
+def test_r2_3_stored_seller_blocks_the_inferred_first_party_fill(db_session: Session) -> None:
+    """A steward-saved seller: discovery must not write the customer name as first party."""
+    from app.services.listing_capture.sites import set_site_seller
+
+    tenant = f"t-r23-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant, "online")
+    row = _own_site(db_session, tenant)
+    set_site_seller(
+        db_session,
+        row,
+        customer_id=int(customer.id),
+        seller_names=["North Counter Online"],
+        seller_ids=[],
+        actor="steward@x",
+    )
+    _report(db_session, customer, dict(_OWN_SITE_SEED))
+    autoconfigure_sites(db_session, tenant_id=tenant)
+    db_session.refresh(row)
+    assert not (row.first_party_seller or "").strip()
+    assert _names_by_customer(row) == {int(customer.id): ["North Counter Online"]}
+
+
+def test_r2_4_inferred_seller_keeps_first_party_offers_own(db_session: Session) -> None:
+    """A seller inferred from the customer name does not let a page-named seller decide."""
+    from app.services.listing_capture.adapters import seller_role_label
+    from app.services.listing_capture.adapters.html_page import parse
+    from app.services.listing_capture.sites import set_site_seller, site_config_from_row
+
+    tenant = f"t-r24-{uuid.uuid4().hex[:6]}"
+    customer = DimCustomer(
+        code=f"nc-{uuid.uuid4().hex[:8]}",
+        name=f"North Counter (Pty) Ltd {uuid.uuid4().hex[:4]}",
+        customer_status="active",
+        is_key_account=False,
+        tenant_id=tenant,
+    )
+    db_session.add(customer)
+    db_session.flush()
+    _report(db_session, customer, dict(_OWN_SITE_SEED))
+    autoconfigure_sites(db_session, tenant_id=tenant)
+    row = _site(db_session, tenant, "shop-a")
+    db_session.refresh(row)
+    assert row.first_party_seller == customer.name
+    page = (
+        '{"@type":"Offer","priceCurrency":"ZAR","price":1299.00,'
+        '"seller":{"name":"North Counter"}}'
+    )
+
+    def label() -> str | None:
+        config = site_config_from_row(row)
+        offer = parse(page, site=config, parser_version="test").offers[0]
+        return seller_role_label(config.is_own_seller(int(customer.id), name=offer["seller_name"]))
+
+    assert label() == "Own"
+    set_site_seller(
+        db_session,
+        row,
+        customer_id=int(customer.id),
+        seller_names=[customer.name],
+        seller_ids=[],
+        actor="steward@x",
+    )
+    db_session.refresh(row)
+    assert label() == "Competition"
+
+
+def test_r3_shared_site_reads_the_page_seller_per_customer(db_session: Session) -> None:
+    """Shared site, one configured and one inferred seller: each listing follows its customer."""
+    from app.services.listing_capture.registry import record_observation
+    from app.services.listing_capture.sites import INFERRED_SELLER_ACTOR, set_site_seller
+
+    tenant = f"t-r3-{uuid.uuid4().hex[:6]}"
+    configured = _customer(db_session, tenant, "north")
+    inferred = _customer(db_session, tenant, "harbour")
+    row = _own_site(db_session, tenant, first_party="North Counter")
+    set_site_seller(
+        db_session,
+        row,
+        customer_id=int(configured.id),
+        seller_names=["North Counter"],
+        seller_ids=[],
+        actor="steward@x",
+    )
+    set_site_seller(
+        db_session,
+        row,
+        customer_id=int(inferred.id),
+        seller_names=[inferred.name],
+        seller_ids=[],
+        actor=INFERRED_SELLER_ACTOR,
+    )
+
+    def read(customer: DimCustomer, seller: str):
+        page = (
+            '{"@type":"Offer","priceCurrency":"ZAR","price":1299.00,'
+            f'"seller":{{"name":"{seller}"}}}}'
+        )
+        url = f"https://shop-a.example.test/p/{uuid.uuid4().hex[:8]}"
+        listing = _listing(db_session, customer, site_key="shop-a", url=url)
+        return record_observation(db_session, listing, http_get=lambda _u: (200, page))
+
+    competitor = read(configured, "Harbour Stall")
+    assert competitor.buy_box_seller == "Harbour Stall"
+    assert competitor.buy_box_own is False
+    own = read(configured, "North Counter")
+    assert own.buy_box_seller == "North Counter"
+    assert own.buy_box_own is True
+    fallback = read(inferred, "Harbour Stall")
+    assert fallback.buy_box_seller == "North Counter"
+    assert fallback.buy_box_own is False
 
 
 def test_absent_compact_flag_follows_stored_external_ids(db_session: Session) -> None:
