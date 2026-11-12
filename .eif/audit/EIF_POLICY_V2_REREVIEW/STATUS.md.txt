@@ -1,0 +1,13 @@
+﻿# EIF policy v2 status — NOT READY TO INSTALL
+
+Only files under cip-run-logs\eif-policy-v2 were changed for implementation; staged .py.txt reference copies were placed in .eif/audit/EIF_POLICY_V2_REREVIEW for Claude. Installed hooks, runtime manifest and runtime policy were not changed. No compiler run or activation occurred.
+
+Latest isolated suite: test_policy_review.py with six behavioral cases; five mutation events intentionally deduplicate to four unresolved unique actions (same npm command+fingerprint twice).
+
+Artifacts: per-file *.diff, source/ proposed files, staged/ installed-layout copy, test_policy.py, test_policy_review.py, test-results-review.txt, originals in baseline/, claude-v2-review.txt (boundary-blocked attempt), claude-v2-review-actual.txt (second review).
+
+Search for source/compiler: inspected C:\Users\warren_eliason\.eif (runtime/hook-launcher and hook log only), source\repos (empty), C:\Users\warren_eliason\channel-intelligence-platform\.eif recursively (no separate EIF source), .cursor\eif-runtime-manifest.json (hash-only, v0.7.0-draft, no generator), agent-bridge (EIF backups, fix bundles, CIP snapshots; no compiler under searched names/content), home directories up to depth 4 with EIF names, and searched install/compiler/manifest/session_retry references. No authoritative upstream checkout or generator located. Must not regenerate manifest manually without review.
+
+Claude initial review: B1-B9 addressed in proposed staging: conservative executed-command read-only allowlist, Shell timeouts record possible mutation failure, live-only retry with retry_history, unresolved verify_request refusal, pending legacy compatibility, registered reason codes, protected+locked metadata review log, CLAUDE doc update. Compiler route remains missing. S1-S10 feedback incorporated in part; MCP failure tracking deferred explicitly, operator authentication limits explicitly documented, stop follow-up retained. No independent final approval yet.
+
+Important: do not treat per-file diffs or staging as approval. Final independent review must verify actual compiled/staged code, no accidental unrelated edits, all old retry-site compatibility and compiler/documentation consistency. No installation authorized or attempted by this task.

@@ -1,0 +1,21 @@
+﻿python : ....F.
+At C:\Users\warren_eliason\AppData\Local\Temp\ps-script-97aec343-0bd1-44ee-b009-f3e890e272c4.ps1:555 char:185
++ ... n","=6`n") | Set-Content -Encoding utf8 $p; python -B $p 2>&1 | Out-F ...
++                                                 ~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (....F.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+======================================================================
+FAIL: test_mutations_and_timeouts_are_never_hidden (__main__.PolicyTests.test_mutations_and_timeouts_are_never_hidden)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\cip-run-logs\eif-policy-v2\test_policy_review.py", line 21, in 
+test_mutations_and_timeouts_are_never_hidden
+    self.assertEqual(len(s.unresolved(self.root,event('x'))),5)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 4 != 5
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.788s
+
+FAILED (failures=1)
