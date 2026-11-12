@@ -105,6 +105,8 @@ def _blocks(view: dict[str, Any], *, customer_id: int) -> list[dict[str, Any]]:
 def _suggestion_rows(view: dict[str, Any], *, customer_id: int) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     seen: set[tuple[int, str | None]] = set()
+    # Every row belongs to the viewed customer (_blocks drops other owners). Name only: no code.
+    customer_name = view.get("customer_name")
     for block in _blocks(view, customer_id=customer_id):
         site = _blank_site(block.get("site_label"))
         for line in block.get("lines") or []:
@@ -117,7 +119,14 @@ def _suggestion_rows(view: dict[str, Any], *, customer_id: int) -> list[dict[str
             if key in seen:
                 continue
             seen.add(key)
-            rows.append({**line, "site_label": site, "customer_id": int(customer_id)})
+            rows.append(
+                {
+                    **line,
+                    "site_label": site,
+                    "customer_id": int(customer_id),
+                    "customer_name": customer_name,
+                }
+            )
     return rows
 
 

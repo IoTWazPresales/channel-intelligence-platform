@@ -22,7 +22,14 @@ from app.models.dimensions import DimCompetitorBrand, DimCompetitorProduct, DimC
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.facts import FactCompetitorMapping, FactCompetitorPrice
 from app.models.listing_capture import CustomerListing, ListingObservation
-from app.services.store_dc.rules import DEFAULT_SLOW_COVER_MULTIPLE, is_slow, is_weekly, weekly_rate, weeks_of_cover
+from app.services.store_dc.rules import (
+    DEFAULT_SLOW_COVER_MULTIPLE,
+    is_slow,
+    is_weekly,
+    norm_label,
+    weekly_rate,
+    weeks_of_cover,
+)
 from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.lineup import FactLineupPlanItem
 from app.services import commercial_tenant_profile as tenant_profile
@@ -552,12 +559,22 @@ def customer_sku_cover_from_rows(
     target_weeks: float | None,
     multiple: float = DEFAULT_SLOW_COVER_MULTIPLE,
 ) -> dict[str, Any]:
-    """Customer × product cover from reported sell-through. Not stored, and not a target."""
+    """Customer × product cover from reported sell-through. Not stored, and not a target.
+
+    Grain follows the store/DC read model: when any row names a site, rows with
+    no site label are the collapsed chain grain and are left out of both stock
+    and sales, so a chain report is never added on top of the sites it covers.
+    With no site rows, the chain rows are the account grain and are used.
+    Sites group by ``norm_label``; each site's latest stock report counts once.
+    """
     weekly: dict[Any, float] = {}
     latest_soh: dict[str, tuple[Any, float]] = {}
+    has_sites = any(norm_label(row[5]) for row in rows)
     for row in rows:
         period, grain, kind, units, soh, site = row[0], row[1], row[2], row[3], row[4], row[5]
-        site_key = (site or "").strip()
+        site_key = norm_label(site)
+        if has_sites and not site_key:
+            continue
         if soh is not None:
             previous = latest_soh.get(site_key)
             if previous is None or period >= previous[0]:

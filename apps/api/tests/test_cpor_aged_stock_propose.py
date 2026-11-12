@@ -71,6 +71,89 @@ def test_customer_sku_cover_sums_sites_and_ignores_a_zero_rate():
     assert unsold["flag"] is None
 
 
+def test_an_older_chain_report_is_not_added_to_site_stock():
+    # Chain-level (blank site) report on 5 Oct: 100 on hand, 10 sold.
+    # Site reports on 26 Oct: North 40 on hand + 4 sold, South 60 on hand + 6 sold.
+    # Sites exist, so the blank row is the collapsed grain (as in the store/DC read model):
+    #   stock = 40 + 60 = 100 (not 100 + 40 + 60 = 200)
+    #   rate  = (4 + 6) / 1 week = 10 (not (10 + 10) / 2 = 10 with a chain week mixed in)
+    #   cover = 100 / 10 = 10 weeks < 2 x 6 = 12, so observed_cover
+    #   (the old sum, 200 / 10 = 20 weeks, raised a false high_cover)
+    rows = [
+        (date(2026, 10, 5), "week", "weekly", 10, 100, None),
+        (date(2026, 10, 26), "week", "weekly", 4, 40, "North"),
+        (date(2026, 10, 26), "week", "weekly", 6, 60, "South"),
+    ]
+    cover = customer_sku_cover_from_rows(rows, target_weeks=6, multiple=2)
+    assert cover["soh_units"] == 100
+    assert cover["weekly_rate"] == 10
+    assert cover["weeks"] == 10
+    assert cover["flag"] == "observed_cover"
+
+
+def test_a_same_week_chain_row_is_not_double_counted():
+    # Same week, chain total 100 on hand / 10 sold beside the two sites that make it up.
+    #   stock = 40 + 60 = 100 (not 200); rate = 4 + 6 = 10 (not 20); cover = 100 / 10 = 10
+    rows = [
+        (date(2026, 10, 26), "week", "weekly", 10, 100, ""),
+        (date(2026, 10, 26), "week", "weekly", 4, 40, "North"),
+        (date(2026, 10, 26), "week", "weekly", 6, 60, "South"),
+    ]
+    cover = customer_sku_cover_from_rows(rows, target_weeks=6, multiple=2)
+    assert cover["soh_units"] == 100
+    assert cover["weekly_rate"] == 10
+    assert cover["weeks"] == 10
+
+
+def test_site_labels_group_as_the_read_model_groups_them():
+    # "North" and " north " are one site (norm_label). Latest report wins: 40, not 50 + 40 = 90.
+    #   rate = (2 + 2) / 2 weeks = 2; cover = 40 / 2 = 20
+    rows = [
+        (date(2026, 10, 19), "week", "weekly", 2, 50, "North"),
+        (date(2026, 10, 26), "week", "weekly", 2, 40, " north "),
+    ]
+    cover = customer_sku_cover_from_rows(rows, target_weeks=6, multiple=2)
+    assert cover["soh_units"] == 40
+    assert cover["weekly_rate"] == 2
+    assert cover["weeks"] == 20
+
+
+def test_account_grain_rows_count_when_no_site_reports():
+    # Only chain-level rows: latest 100 on hand (26 Oct), rate (5 + 5) / 2 = 5, cover 100 / 5 = 20
+    rows = [
+        (date(2026, 10, 19), "week", "weekly", 5, 120, None),
+        (date(2026, 10, 26), "week", "weekly", 5, 100, None),
+    ]
+    cover = customer_sku_cover_from_rows(rows, target_weeks=6, multiple=2)
+    assert cover["soh_units"] == 100
+    assert cover["weekly_rate"] == 5
+    assert cover["weeks"] == 20
+    assert cover["flag"] == "high_cover"
+
+
+def test_aged_stock_rows_name_their_customer():
+    from app.services.store_dc.stock_actions import _suggestion_rows
+
+    view = {
+        "customer_id": 3,
+        "customer_name": "Northwind Stores",
+        "customer_code": "C-003",
+        "account": None,
+        "sites": [
+            {
+                "site_label": "North",
+                "customer_id": 3,
+                "lines": [{"product_id": 9, "suggestions": ["promote"], "stock_on_hand": 5}],
+            }
+        ],
+        "dc_sections": [],
+    }
+    rows = _suggestion_rows(view, customer_id=3)
+    assert rows[0]["customer_id"] == 3
+    assert rows[0]["customer_name"] == "Northwind Stores"
+    assert "customer_code" not in rows[0]
+
+
 class _Result:
     def __init__(self, *, scalar=None, rows=None):
         self._scalar = scalar

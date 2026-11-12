@@ -7,6 +7,8 @@ import { apiGet, apiPost } from '@/lib/api';
 
 type AgedLine = {
   customer_id: number;
+  /** Name only; codes never go in the customer column. */
+  customer_name?: string | null;
   product_id: number;
   sku?: string | null;
   product_name?: string | null;
@@ -106,6 +108,13 @@ export function AgedStockPanel({ onOpen }: { onOpen?: (caseId: number) => void }
             useFlexGap
             data-testid={`aged-stock-line-${line.product_id}`}
           >
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 600, minWidth: 140 }}
+              data-testid={`aged-stock-customer-${key}`}
+            >
+              {line.customer_name ?? ''}
+            </Typography>
             <Typography variant="body2" sx={{ flex: 1, minWidth: 160 }}>
               {name}
               {line.site_label ? ` · ${line.site_label}` : ''}

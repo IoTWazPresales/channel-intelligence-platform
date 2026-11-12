@@ -54,6 +54,23 @@ def stock_action_covers_site(evidence: dict | None, site_label: str | None) -> b
     return False
 
 
+STOCK_ACTION_EVIDENCE_KEYS = ("stock_action", "site_labels")
+
+
+def keep_stock_action_evidence(previous: dict | None, replacement: dict) -> dict:
+    """Carry a line's action and site list across a cost-evidence rewrite.
+
+    A missing site list means "covers every site", so dropping it on a cost edit
+    would let one site's action suppress every other site.
+    """
+    kept = dict(replacement)
+    if isinstance(previous, dict):
+        for key in STOCK_ACTION_EVIDENCE_KEYS:
+            if key in previous:
+                kept[key] = previous[key]
+    return kept
+
+
 DEFAULT_LEAD_TIME_MIN_DELIVERIES = 5
 DEFAULT_SLOW_COVER_MULTIPLE = 2.0
 DEFAULT_STOCK_BEHAVIOUR_MIN_SOH = 1.0

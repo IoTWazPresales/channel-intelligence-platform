@@ -1194,7 +1194,11 @@ def patch_line(
                 exclude_case_id=case.id,
                 manual_cost=data["cost_basis"],
             )
-            line.cost_evidence_json = {**sug.evidence, "flags": sug.flags}
+            from app.services.store_dc.rules import keep_stock_action_evidence
+
+            line.cost_evidence_json = keep_stock_action_evidence(
+                line.cost_evidence_json, {**sug.evidence, "flags": sug.flags}
+            )
         for k, v in data.items():
             if k == "cost_source" and "cost_basis" in data:
                 continue
@@ -1437,6 +1441,24 @@ def transition_case(
                     "action": action,
                     "allowed_next": allowed_next(case.status),
                     "allowed_actions": [a for a, t in LIFECYCLE_ACTIONS.items() if can_transition(case.status, a)],
+                },
+            )
+        from app.services.cpor.lifecycle import STOCK_ACTION_ALLOWED_ACTIONS, support_step_refused
+
+        if support_step_refused(getattr(case, "origin", None), action):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "not_a_support_claim",
+                    "message": (
+                        "A move or return is a stock action, not a support claim. "
+                        "It can only be cancelled."
+                    ),
+                    "current": case.status,
+                    "action": action,
+                    "allowed_actions": sorted(
+                        a for a in STOCK_ACTION_ALLOWED_ACTIONS if can_transition(case.status, a)
+                    ),
                 },
             )
 

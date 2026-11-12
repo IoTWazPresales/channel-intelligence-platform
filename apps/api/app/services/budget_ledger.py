@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.models.budget_ledger import ENTRY_TYPES, BudgetLedgerEntry
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.cpor.lifecycle import assert_support_step_allowed
 
 
 def balances_from_amounts(rows: list[tuple[str, float]]) -> dict[str, float]:
@@ -582,7 +583,12 @@ def _net_for_line(session: Session, case_line_id: int, entry_types: set[str]) ->
 
 
 def apply_case_transition(session: Session, case: CporCase, action: str, *, actor: str | None) -> int:
-    """Write ledger rows for approve, cancel, and settle. Same session, no commit."""
+    """Write ledger rows for approve, cancel, and settle. Same session, no commit.
+
+    A stock-action case (move or return) is not a support claim: approve and
+    settle are refused here too, so no caller can book support money for it.
+    """
+    assert_support_step_allowed(case, action)
     lines = list(session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == int(case.id))).all())
     written = 0
     for line in lines:
