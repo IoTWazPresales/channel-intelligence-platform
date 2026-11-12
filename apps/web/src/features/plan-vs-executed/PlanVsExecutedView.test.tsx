@@ -95,4 +95,10 @@ describe('PlanVsExecutedView', () => {
     expect(screen.getByText(/62 in-plan · 5 unplanned/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Rank: value/i })).toHaveProperty('disabled', true);
   });
+
+  it('labels the over-plan tile "Over-plan intake", never "Deal-stock landing" (BACKLOG-091)', () => {
+    render(<PlanVsExecutedView />);
+    expect(screen.getByTestId('pve-over-plan-intake')).toHaveTextContent('Over-plan intake');
+    expect(screen.queryByText(/Deal-stock landing/)).toBeNull();
+  });
 });

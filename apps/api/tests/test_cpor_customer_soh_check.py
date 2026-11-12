@@ -166,3 +166,78 @@ def test_tolerance_uses_tenant_default_when_pct_omitted(monkeypatch):
     assert out["tolerance_pct"] == 0.10
     assert FLAG_SOH_TOLERANCE in out["flags"]
 
+
+
+# --- BACKLOG-135 VAT rule (Warren 2026-11-10): compare ex-VAT; incl-VAT costs / 1.15; flag unknown basis.
+
+
+def test_inc_vat_cost_is_divided_by_one_plus_vat_rate_before_compare():
+    # 115 incl-VAT at 15% -> 100 ex-VAT; derived MAC 100 -> no gap.
+    out = summarise_soh_rows(
+        [_row(1, Decimal("10"), unit_cost=Decimal("115"), vat="inc_vat")],
+        as_of=AS_OF,
+        derived_mac=Decimal("100"),
+        tolerance_pct=Decimal("0.10"),
+        vat_rate_pct=Decimal("0.15"),
+    )
+    assert out["soh_unit_cost"] == 100.0
+    assert out["soh_cost_vat_basis"] == "ex_vat"
+    assert out["vat_converted_rows"] == 1
+    assert out["vat_rate_pct"] == 0.15
+    assert out["vat_basis"] == "inc_vat"  # source basis still reported
+    assert out["delta"] == 0.0
+    assert FLAG_SOH_TOLERANCE not in out["flags"]
+    assert "vat_basis_unknown" not in out["flags"]
+
+
+def test_mixed_bases_convert_per_row_before_weighting():
+    rows = [
+        _row(1, Decimal("10"), unit_cost=Decimal("230"), vat="inc_vat"),  # 200 ex
+        _row(2, Decimal("30"), unit_cost=Decimal("100"), vat="ex_vat"),
+    ]
+    out = summarise_soh_rows(rows, as_of=AS_OF, vat_rate_pct=Decimal("0.15"))
+    assert out["soh_unit_cost"] == 125.0  # (10*200 + 30*100) / 40
+    assert out["vat_converted_rows"] == 1
+    assert out["vat_basis"] == ["ex_vat", "inc_vat"]
+    assert out["flags"] == []
+
+
+def test_ex_vat_rows_need_no_rate_and_are_unchanged():
+    out = summarise_soh_rows(
+        [_row(1, Decimal("4"), unit_mac=Decimal("80"), vat="ex_vat")], as_of=AS_OF
+    )
+    assert out["soh_unit_cost"] == 80.0
+    assert out["vat_converted_rows"] == 0
+    assert "vat_rate_pct" not in out
+    assert out["flags"] == []
+
+
+def test_unknown_vat_basis_on_a_costed_row_is_flagged_not_converted():
+    for basis in (None, "", "gross"):
+        out = summarise_soh_rows(
+            [_row(1, Decimal("2"), unit_cost=Decimal("50"), vat=basis)],
+            as_of=AS_OF,
+            vat_rate_pct=Decimal("0.15"),
+        )
+        assert out["soh_unit_cost"] == 50.0, basis
+        assert "vat_basis_unknown" in out["flags"], basis
+        assert out["vat_converted_rows"] == 0
+
+
+def test_unknown_basis_on_units_only_row_is_not_flagged():
+    # No cost figure on the row, so there is no VAT basis to know.
+    out = summarise_soh_rows([_row(1, Decimal("7"), vat=None)], as_of=AS_OF)
+    assert out["flags"] == ["no_soh_cost"]
+
+
+def test_inc_vat_uses_tenant_vat_rate_when_omitted(monkeypatch):
+    from app.services import commercial_tenant_profile as ctp
+
+    monkeypatch.setattr(ctp, "load_tenant_profile_overrides", lambda tenant_id="default": {})
+    out = summarise_soh_rows(
+        [_row(1, Decimal("1"), unit_cost=Decimal("115"), vat="INC_VAT")],
+        as_of=AS_OF,
+        tenant_id="default",
+    )
+    assert out["vat_rate_pct"] == 0.15
+    assert out["soh_unit_cost"] == 100.0
