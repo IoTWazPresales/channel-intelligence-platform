@@ -132,15 +132,38 @@ def resolve_stored_mac_vat(
 
     ``(False, None)`` compares the stored number as given (manual, or no source).
     ``(True, basis)`` runs the ex-VAT rule. Sell-out evidence is already ex-tax.
-    A CST-sourced cost uses the source row's ``vat_basis``. A missing basis, or a
-    current CST row whose amount is no longer the stored cost, withholds the gap.
+    A CST-sourced cost uses the VAT basis recorded in its evidence, else the source
+    fact's ``vat_basis``, but only while the amount that was used still equals the
+    stored cost (a CST reload rewrites a fact in place). Otherwise the gap is withheld.
+    ``intake_weighted`` lines take the provenance of their ``snapshot_fallback``; a real
+    blend includes inbound unit prices of unknown VAT basis, so it withholds the gap.
     """
     source = str(cost_source or "").strip()
+    evidence = cost_evidence if isinstance(cost_evidence, dict) else {}
+    if source == "intake_weighted":
+        fallback = evidence.get("snapshot_fallback")
+        if not isinstance(fallback, dict):
+            return True, None
+        nested = fallback.get("evidence")
+        source = str(fallback.get("cost_source") or "").strip()
+        evidence = nested if isinstance(nested, dict) else {}
+        if source not in {"cst_reported", "sellout_evidence"}:
+            return True, None
     if source == "sellout_evidence":
         return True, "ex_vat"
     if source != "cst_reported":
         return False, None
-    evidence = cost_evidence if isinstance(cost_evidence, dict) else {}
+    field_used = str(evidence.get("field_used") or "").strip()
+    if field_used not in {"unit_mac", "unit_cost"}:
+        field_used = ""
+    stored = None if cost_basis is None else _as_decimal(cost_basis)
+    recorded = evidence.get("vat_basis")
+    if recorded is not None:
+        # Basis recorded with the cost: trust it only while the recorded amount is the stored one.
+        amount = evidence.get(field_used) if field_used else None
+        if amount is not None and stored is not None and _as_decimal(amount) == stored:
+            return True, str(recorded)
+        return True, None
     fact_id = evidence.get("fact_id")
     if fact_id is not None:
         try:
@@ -150,6 +173,9 @@ def resolve_stored_mac_vat(
         if fact_key is not None:
             row = session.get(FactCustomerSellthrough, fact_key)
             if row is not None:
+                current = getattr(row, field_used, None) if field_used else None
+                if current is None or stored is None or _as_decimal(current) != stored:
+                    return True, None
                 basis = getattr(row, "vat_basis", None)
                 return True, None if basis is None else str(basis)
     return True, _cst_vat_basis_for_amount(
