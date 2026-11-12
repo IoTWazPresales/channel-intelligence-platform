@@ -19,6 +19,9 @@ from app.services.listing_capture.adapters import (
 )
 
 SITE_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+# ``listing_site_seller.updated_by`` when discovery took the seller identity from the customer's
+# name. Any later save (steward, seed) replaces it, and the identity is then configured.
+INFERRED_SELLER_ACTOR = "listing-autoconfigure:customer-name"
 MAX_RATE_LIMIT_SECONDS = 3600.0
 EDITABLE_FIELDS: tuple[str, ...] = (
     "display_name",
@@ -50,6 +53,7 @@ def site_config_from_row(row: ListingSite) -> SiteConfig:
             customer_id=int(s.customer_id),
             names=tuple(_clean_list(s.seller_names)),
             ids=tuple(_clean_list(s.seller_ids)),
+            inferred=s.updated_by == INFERRED_SELLER_ACTOR,
         )
         for s in (row.sellers or [])
     )
