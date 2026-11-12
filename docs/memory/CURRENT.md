@@ -4,6 +4,8 @@
 
 **Branch:** `feat/integrate-20261103` @ `4fce3b40` (Merge #84) plus this docs commit. Nothing was pushed to `main`.
 
+**Deployed:** `52cec5d7` at 2026-11-12 18:23 (api, worker+beat, web restarted via the supervisor; api `/health/ready` 200, Celery ping ok, web 3000 up past 2 min; alembic head = `cip` = `20261110_0061`). Web had been down since about 2026-11-05 (`next start` crash-looping, 50 launches) because `apps/web/node_modules` was broken (no `.bin`, no `next/dist/bin/next`); fixed with `pnpm install --frozen-lockfile --force` then a fresh build, BUILD_ID `bI3iphi3dHhUA9AYnbzEz`. Tunnel is held by the network blocking outbound 7844 (N-0107), not by this deploy.
+
 **Merged 2026-11-12 (each at its Codex-reviewed head, one at a time, post-merge checks green):**
 - #88 Lane A listings (`000e1e1d`, merge `01b08292`): own-seller discovery, Market Coverage tab, per-customer page-seller rule on shared sites. Follow-ups: BACKLOG-226.
 - #85 Lane D dashboards (`cc96e3ed`, merge `3a326828`): weeks of cover ends on the customer's last reported day and drops customers with no filtered stock row (matches the sell-through overview); My accounts starter. Follow-up: BACKLOG-229.
