@@ -215,6 +215,15 @@ def main() -> int:
         sync = _rewrite_dbname(sync, args.db)
     engine = create_engine(sqlalchemy_sync_engine_url(sync))
     with Session(engine) as db:
+        actual_db = db.execute(text("SELECT current_database()")).scalar()
+        if actual_db != args.expect_db:
+            print(
+                "STOP database mismatch:",
+                f"--expect-db={args.expect_db!r} but connected to current_database()={actual_db!r}",
+            )
+            db.rollback()
+            engine.dispose()
+            return 2
         code = run(db, apply=args.apply)
         if code != 0:
             db.rollback()
