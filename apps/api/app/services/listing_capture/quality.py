@@ -277,7 +277,7 @@ def evaluate_quality(
     elif parse_status == "parse_failed" or not (snapshot_text or "").strip():
         checks = {key: _no_data("No parsed snapshot") for key in CHECK_KEYS}
     else:
-        fields = module.quality_fields(snapshot_text, site=site)
+        fields = module.quality_fields(snapshot_text, site=site.for_customer(customer_id))
         if fields.get("unreadable"):
             checks = {key: _no_data(str(fields["unreadable"])) for key in CHECK_KEYS}
         else:

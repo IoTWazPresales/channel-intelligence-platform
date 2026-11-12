@@ -219,7 +219,7 @@ def test_every_starter_widget_plans_with_no_refusals() -> None:
     from app.services.dashboard_templates import TEMPLATES, template_list
 
     dm, v1 = default_model(), load_catalog()
-    assert [t.key for t in TEMPLATES] == ["account_overview", "sellthrough_stock", "cpor_cases"]
+    assert [t.key for t in TEMPLATES] == ["account_overview", "sellthrough_stock", "cpor_cases", "my_accounts"]
     assert TEMPLATES[1].title == "Sell-through & stock across customers"
     measure_ids = {m["id"] for m in _cat()["measures"]}
     for t in TEMPLATES:
@@ -238,7 +238,34 @@ def test_every_starter_widget_plans_with_no_refusals() -> None:
     listing = {t["key"]: t for t in template_list()}
     assert listing["account_overview"]["required_filters"] == ["customer"]
     reasons = [lo["reason"] for lo in listing["account_overview"]["left_out"]]
-    assert any(r.startswith("Customer stock cover is not defined for the builder") for r in reasons)
+    assert reasons and not any("stock cover" in r.lower() for r in reasons)
+    assert listing["my_accounts"]["required_filters"] == []
+    assert "My accounts" in listing["my_accounts"]["description"]
+    from app.query.model.graph import V2Request
+
+    refused_period = plan_request(
+        dm,
+        V2Request(
+            measures=["cst_sellthrough.stock_cover"],
+            breakdowns=["period"],
+            period_grain="week",
+            period_from="2026-03-01",
+            period_to="2026-04-30",
+        ),
+        v1_catalog=v1,
+    )
+    assert refused_period.refusals and not refused_period.measures
+    refused_store = plan_request(
+        dm,
+        V2Request(
+            measures=["cst_sellthrough.stock_cover"],
+            breakdowns=["site_label"],
+            period_from="2026-03-01",
+            period_to="2026-04-30",
+        ),
+        v1_catalog=v1,
+    )
+    assert refused_store.refusals and not refused_store.measures
     assert all(lo["reason"] for t in listing.values() for lo in t["left_out"])
     cases = next(t for t in TEMPLATES if t.key == "cpor_cases")
     assert any(w.visual == "table" and "case" in w.breakdowns for w in cases.widgets)

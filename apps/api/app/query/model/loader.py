@@ -33,6 +33,8 @@ CALC_KINDS = frozenset({
     "prior_year",
     "running_total",
     "share_of_total",
+    # Reported stock / that customer's own 4-week sell-through. The first input is semi-additive.
+    "stock_cover",
 })
 # day: the stored date is a real day. stored_period_type: never finer than the coarsest stored period type in scope.
 # period_start: the stored date is the FIRST DAY of a month or quarter (a plan, a sell-in period): day and week are refused.
@@ -501,7 +503,7 @@ def _parse_calculated(raw: dict[str, Any], measures: dict[str, Measure]) -> dict
         kind = str(cb.get("kind") or "")
         _need(kind in CALC_KINDS, f"calculated {cid}: kind {kind!r} unknown")
         inputs = tuple(str(x) for x in (cb.get("inputs") or []))
-        want = 2 if kind in ("ratio", "difference") else 1
+        want = 2 if kind in ("ratio", "difference", "stock_cover") else 1
         _need(len(inputs) == want, f"calculated {cid}: {kind} takes {want} input(s)")
         models: set[str] = set()
         units: list[str] = []
@@ -511,11 +513,21 @@ def _parse_calculated(raw: dict[str, Any], measures: dict[str, Measure]) -> dict
             assert src is not None
             if isinstance(src, Calculated):
                 _need(
-                    src.kind in ("prior_period", "prior_year"),
+                    kind != "stock_cover" and src.kind in ("prior_period", "prior_year"),
                     f"calculated {cid}: a calculated input must be a prior_period or prior_year",
                 )
-            else:
-                _need(src.additivity != "semi_additive", f"calculated {cid}: {i} is semi-additive")
+            elif src.additivity == "semi_additive":
+                _need(
+                    kind == "stock_cover" and i == inputs[0] and isinstance(src, Measure) and src.agg == "latest_sum",
+                    f"calculated {cid}: {i} is semi-additive",
+                )
+            elif kind == "stock_cover" and i == inputs[0]:
+                _need(False, f"calculated {cid}: first input must be a latest_sum stock measure")
+            if kind == "stock_cover" and i == inputs[1]:
+                _need(
+                    isinstance(src, Measure) and src.agg == "sum" and src.additivity == "additive",
+                    f"calculated {cid}: second input must be an additive sum of units",
+                )
             models.add(src.model)
             units.append(src.unit)
         _need(len(models) == 1, f"calculated {cid}: inputs must share one model")

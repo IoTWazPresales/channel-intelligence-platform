@@ -44,6 +44,11 @@ from app.services.cpor.line_window import default_line_window, follow_case_windo
 from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
 from app.services.cpor.promo_plan_builder import build_promo_plan_draft, create_case_from_promo_draft
+from app.services.store_dc.stock_actions import (
+    auto_propose_from_intelligence,
+    execute_aged_stock_action,
+    list_aged_stock,
+)
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 from app.services.cpor.settlement_book_read import build_settlement_book_read_model
 from app.services.cpor.support_bias import build_support_bias
@@ -1189,7 +1194,11 @@ def patch_line(
                 exclude_case_id=case.id,
                 manual_cost=data["cost_basis"],
             )
-            line.cost_evidence_json = {**sug.evidence, "flags": sug.flags}
+            from app.services.store_dc.rules import keep_stock_action_evidence
+
+            line.cost_evidence_json = keep_stock_action_evidence(
+                line.cost_evidence_json, {**sug.evidence, "flags": sug.flags}
+            )
         for k, v in data.items():
             if k == "cost_source" and "cost_basis" in data:
                 continue
@@ -1446,6 +1455,24 @@ def transition_case(
                     "allowed_actions": [a for a, t in LIFECYCLE_ACTIONS.items() if can_transition(case.status, a)],
                 },
             )
+        from app.services.cpor.lifecycle import STOCK_ACTION_ALLOWED_ACTIONS, support_step_refused
+
+        if support_step_refused(getattr(case, "origin", None), action):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "not_a_support_claim",
+                    "message": (
+                        "A move or return is a stock action, not a support claim. "
+                        "It can only be cancelled."
+                    ),
+                    "current": case.status,
+                    "action": action,
+                    "allowed_actions": sorted(
+                        a for a in STOCK_ACTION_ALLOWED_ACTIONS if can_transition(case.status, a)
+                    ),
+                },
+            )
 
         drifts: list[dict] = []
         now = datetime.now(timezone.utc)
@@ -1679,6 +1706,7 @@ def cpor_promo_plan_draft(
     period_label: str | None = Query(default=None),
     horizon_weeks: int = Query(default=13, ge=1, le=52),
     comparable_limit: int = Query(default=10, ge=1, le=50),
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Compose a promo plan: seed case (B4) or customer_id + period_label."""
     with SessionLocal() as session:
@@ -1693,6 +1721,7 @@ def cpor_promo_plan_draft(
                 period_label=period_label,
                 horizon_weeks=horizon_weeks,
                 comparable_limit=comparable_limit,
+                tenant_id=tenant_id_from_user(user),
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1723,7 +1752,7 @@ class PromoPlanRecomputeBody(BaseModel):
 @router.post("/intelligence/promo-plan-draft/recompute")
 def cpor_promo_plan_recompute(
     body: PromoPlanRecomputeBody,
-    _user: dict = Depends(_require_cpor_planner),
+    user: dict = Depends(_require_cpor_planner),
 ) -> dict[str, Any]:
     """Recompute per-line suggestions for the given identities. Dirty merge is client-owned (D-052)."""
     with SessionLocal() as session:
@@ -1739,6 +1768,7 @@ def cpor_promo_plan_recompute(
                 horizon_weeks=body.horizon_weeks,
                 comparable_limit=body.comparable_limit,
                 line_specs=[row.model_dump() for row in body.lines] if body.lines else None,
+                tenant_id=tenant_id_from_user(user),
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1823,6 +1853,102 @@ def cpor_promo_plan_create_case(
             if msg.startswith("seed_case_not_found") or msg.startswith("customer_not_found"):
                 code = 404
             raise HTTPException(status_code=code, detail=msg) from exc
+
+
+class AgedStockActionBody(BaseModel):
+    customer_id: int = Field(ge=1)
+    product_id: int = Field(ge=1)
+    action: str
+    site_label: str | None = None
+    period_label: str | None = None
+
+
+class AgedStockAutoProposeBody(BaseModel):
+    customer_id: int | None = Field(default=None, ge=1)
+    period_label: str | None = None
+
+
+def _draft_case_writers(user: dict):
+    def _record_event_for_user(
+        session,
+        *,
+        case_id: int,
+        event_type: str,
+        actor: str | None,
+        payload: dict | None = None,
+    ) -> None:
+        _record_event(
+            session,
+            case_id=case_id,
+            event_type=event_type,
+            actor=actor,
+            payload=payload,
+            user=user,
+        )
+
+    return {
+        "generate_case_code": _generate_case_code,
+        "record_event": _record_event_for_user,
+        "recompute_case_line": recompute_case_line,
+        "resolve_default_margin": resolve_default_margin,
+        "suggest_cost_basis": suggest_cost_basis,
+    }
+
+
+@router.get("/intelligence/promo-plan-draft/aged-stock")
+def cpor_aged_stock(
+    customer_id: int | None = Query(default=None, ge=1),
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Slow and unsold lines. Reading this does not create a case."""
+    with SessionLocal() as session:
+        return list_aged_stock(
+            session,
+            tenant_id=tenant_id_from_user(user),
+            customer_id=customer_id,
+        )
+
+
+@router.post("/intelligence/promo-plan-draft/auto-propose")
+def cpor_aged_stock_auto_propose(
+    body: AgedStockAutoProposeBody,
+    user: dict = Depends(_require_cpor_planner),
+) -> dict[str, Any]:
+    """One draft promotion per customer from slow or unsold stock."""
+    with SessionLocal() as session:
+        return auto_propose_from_intelligence(
+            session,
+            tenant_id=tenant_id_from_user(user),
+            actor=_actor(user),
+            customer_id=body.customer_id,
+            period_label=body.period_label,
+            **_draft_case_writers(user),
+        )
+
+
+@router.post("/intelligence/promo-plan-draft/aged-stock-action")
+def cpor_aged_stock_action(
+    body: AgedStockActionBody,
+    user: dict = Depends(_require_cpor_planner),
+) -> dict[str, Any]:
+    """Promote, move, or return one slow or unsold line. Move and return are not claims."""
+    with SessionLocal() as session:
+        try:
+            return execute_aged_stock_action(
+                session,
+                tenant_id=tenant_id_from_user(user),
+                customer_id=body.customer_id,
+                product_id=body.product_id,
+                action=body.action,
+                actor=_actor(user),
+                site_label=body.site_label,
+                period_label=body.period_label,
+                **_draft_case_writers(user),
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="customer_not_found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/meta/promotion-types")

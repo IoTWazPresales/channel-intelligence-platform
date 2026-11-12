@@ -4,6 +4,8 @@
 
 **Entry template:** ID + title · status/parked-date · effort · the idea · why it matters (and why deferrable) · what the work is · regression traps / hard constraints · behavior to retain · out-of-scope · **TRIGGER**
 
+**Shipped on `cursor/lane-a-listings-7c39` (not a parked item):** the Market Coverage tab (N-0103), discovery filling a reporting customer's own HTML-site seller from the customer name, the Competition label when another seller holds that site's buy box, and general-HTML-reader tests for the remaining page shapes (N-0104/5/6). No custom reader. N-0102 and N-0076 are not done. BACKLOG-183 stays parked: this does not join listings onto a promotion plan line.
+
 ---
 
 ## VERIFY-debt register (charter v1.3 amendment 7)
@@ -2633,7 +2635,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: `fact_competitor_price` 0 · `customer_listing` 218 · `listing_observation` 168; buildable with honest empties; Stage 7.1) · **Parked** · 2026-09-14 · N-0026 UNCOVERED |
+| **Status / parked** | **Built** on `cursor/lane-b2-cpor-cases-ea30` (2026-11-10). Trigger fired: Warren asked to join Market onto the planner line. Listing and the minimum latest approved competitor price show on the draft line. No rows, or prices with no approved map, stay an honest empty. Not merged. |
 | **Effort** | Medium (join + grain + honesty when empty) |
 | **Source** | D-0008; `.eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md`. Live `cip`: `fact_competitor_price` 0 rows; `customer_listing` 218 rows on 3 customers; `listing_observation` 168. |
 | **Idea** | Show listing activation and competitor-SKU prices on each `cpor_case_line` without inventing facts. Product competition only. |
@@ -2650,7 +2652,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-14 · N-0026 UNCOVERED |
+| **Status / parked** | **Built** on `cursor/lane-b2-cpor-cases-ea30` (2026-11-10). Trigger fired: Warren asked to surface observed cover on propose. Customer×SKU weeks are a flag only (`observed_cover_high` at twice the target). Quantity and `commercial_customer_term` are unchanged. Not merged. |
 | **Effort** | Medium (grain: distributor×product week vs customer-term target) |
 | **Source** | `.eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md`. `weeks_of_cover_observation` 194349 rows; `commercial_customer_term.target_cover_weeks` all null (11 terms). |
 | **Idea** | Use observed cover/SOH as a proposal constraint or flag, distinct from target cover weeks. |
@@ -3387,7 +3389,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / recorded** | **Open, active programme continuation; not an approved permanent deferral** · 2026-10-25 independent review at product HEAD `d069f86c`. |
+| **Status / recorded** | **Open, active programme continuation; not an approved permanent deferral** · 2026-10-25 independent review at product HEAD `d069f86c`. **Lane D 2026-11-10:** weeks of cover is a builder measure (`cst_sellthrough.stock_cover`, sell-through overview rule) and the My accounts starter is the fourth template. Rand sales value and CPOR open/value are proposed only (`docs/proposals/2026-11-10-rand-sales-value-and-cpor-measures.md`); Warren approves them before any implementation. Independent E4/E10 review, concurrency/non-owner proof, restock flags, and the five-model gaps that are not cover stay open. Not accepted. |
 | **Source** | `.eif/audit/PROGRAMME_20261025/VERIFICATION_AND_FRONTIER.md`, original matrices, pure probe scripts/JSON and closeout. D-0131 keeps the original23October scope; D-0116–D-0130 remain proposed. |
 | **Effort** | Bounded E1–E10 units in that report; no single broad rewrite. |
 | **E1 checkpoint (26 October)** | Governed CPOR customer/BU filter/total and cache-refusal corrections tested: final API3,387/22skip, web1,139, separate bounded Astra11, lint/typecheck/isolated build pass. `.eif/audit/EXECUTION_20261025_E1/`. No node acceptance. |

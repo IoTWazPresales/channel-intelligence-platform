@@ -30,6 +30,7 @@ import { PromoPlanBuilderPanel } from '@/app/(app)/promotions/PromoPlanBuilderPa
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { AgedStockPanel } from '@/features/promotions-funding/AgedStockPanel';
 import { CaseScopeFilters } from '@/features/promotions-funding/CaseScopeFilters';
 import {
   caseScopeClearPatch,
@@ -368,6 +369,9 @@ function PlannerList({
           </Stack>
 
           <Stack spacing={2}>
+            <Panel title="Aged and slow stock" subtitle="One draft per customer, or one action on a line" flush>
+              <AgedStockPanel onOpen={onOpen} />
+            </Panel>
             <Panel title="Needs a decision" subtitle="Grouped by condition, then ranked" flush>
               <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
                 {(() => {
