@@ -5,7 +5,7 @@ export const PLANNER_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Propose a plan from history, cover, forecast and MAC',
     state: 'partial',
-    note: 'Build a plan from the customer and period: the lineup first, then that customer’s history. A seed case is optional. Listing, competitor price, and observed cover show on the line and do not set the quantity.',
+    note: 'Build a plan from the customer and period: the lineup first, then that customer’s history. A seed case is optional. Slow or unsold stock can raise a draft promotion, or a move or return that is not a support claim. Listing, competitor price, and observed cover show on the line and do not set the quantity.',
   },
   {
     label: 'Create and edit plans manually (lines, layers, parameters)',
@@ -20,7 +20,7 @@ export const PLANNER_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Evidence behind each line in one view',
     state: 'live',
-    note: 'Each proposed line has an Evidence column: listed or not, competitor price or none, observed cover as a flag. It does not write cover policy. Uplift from claim evidence is not derived.',
+    note: 'Each proposed line has an Evidence column: listed or not, a competitor price when an approved map exists, otherwise none, and observed cover as a flag. High cover does not set the quantity and it does not write cover policy. Uplift from claim evidence is not derived.',
   },
   {
     label: 'Export in the customer’s promotion-plan format',

@@ -23,6 +23,54 @@ EVIDENCE_KINDS = ("pattern", "stock_behaviour", "direct_shipment")
 CANDIDATE_STATUSES = ("open", "confirmed", "rejected")
 SUGGESTIONS = ("promote", "move", "return")
 
+
+def stock_action_in_notes(notes: str | None) -> str | None:
+    """Read a promote, move, or return marker. Anything else is not an action."""
+    if not notes:
+        return None
+    for token in str(notes).replace("\n", ";").split(";"):
+        token = token.strip()
+        if not token.startswith("stock_action="):
+            continue
+        action = token.split("=", 1)[1].strip().split()[0]
+        if action in SUGGESTIONS:
+            return action
+    return None
+
+
+def stock_action_covers_site(evidence: dict | None, site_label: str | None) -> bool:
+    """Whether a recorded action includes this site.
+
+    Lines written before a site was stored cover every site. A recorded list
+    covers only the sites in that list. An empty label is the account grain.
+    """
+    if not isinstance(evidence, dict) or "site_labels" not in evidence:
+        return True
+    wanted = (site_label or "").strip() or None
+    for raw in evidence.get("site_labels") or []:
+        recorded = None if raw is None or str(raw).strip() == "" else str(raw).strip()
+        if recorded == wanted:
+            return True
+    return False
+
+
+STOCK_ACTION_EVIDENCE_KEYS = ("stock_action", "site_labels")
+
+
+def keep_stock_action_evidence(previous: dict | None, replacement: dict) -> dict:
+    """Carry a line's action and site list across a cost-evidence rewrite.
+
+    A missing site list means "covers every site", so dropping it on a cost edit
+    would let one site's action suppress every other site.
+    """
+    kept = dict(replacement)
+    if isinstance(previous, dict):
+        for key in STOCK_ACTION_EVIDENCE_KEYS:
+            if key in previous:
+                kept[key] = previous[key]
+    return kept
+
+
 DEFAULT_LEAD_TIME_MIN_DELIVERIES = 5
 DEFAULT_SLOW_COVER_MULTIPLE = 2.0
 DEFAULT_STOCK_BEHAVIOUR_MIN_SOH = 1.0

@@ -68,5 +68,12 @@ describe('promoPlanDraftMerge', () => {
       },
     ])[0];
     expect(row.evidence_caption).toBe('Listed · Competitor price not on this product · Observed cover 6w (flag only)');
+    expect(
+      evidenceCaption({
+        listing: { listed: true },
+        competitor_price: { data_unavailable: false, row_count: 1, price: 199.5 },
+        observed_cover: { weeks: 40, flag: 'high_cover', writes_target_cover: false },
+      }),
+    ).toBe('Listed · Competitor price 199.5 · Observed cover 40w (high, flag only)');
   });
 });

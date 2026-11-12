@@ -36,14 +36,24 @@ export type PromotionEvidence = {
   observed_cover?: { weeks?: number | null; flag?: string | null; grain?: string; writes_target_cover?: boolean; note?: string; data_unavailable?: boolean };
 };
 
+function competitorCaption(evidence: PromotionEvidence | null | undefined): string {
+  const price = evidence?.competitor_price?.price;
+  if (price != null && Number.isFinite(Number(price))) return `Competitor price ${price}`;
+  const rows = evidence?.competitor_price?.row_count ?? 0;
+  return rows > 0 ? 'Competitor price not on this product' : 'No competitor price';
+}
+
+function coverCaption(evidence: PromotionEvidence | null | undefined): string {
+  const weeks = evidence?.observed_cover?.weeks;
+  if (weeks == null) return 'No observed cover';
+  if (evidence?.observed_cover?.flag === 'high_cover') return `Observed cover ${weeks}w (high, flag only)`;
+  return `Observed cover ${weeks}w (flag only)`;
+}
+
 export function evidenceCaption(evidence: PromotionEvidence | null | undefined): string {
   if (evidence?.read_failed) return 'Evidence unavailable';
   const listed = evidence?.listing?.listed ? 'Listed' : 'Not listed';
-  const rows = evidence?.competitor_price?.row_count ?? 0;
-  const competitor = rows > 0 ? 'Competitor price not on this product' : 'No competitor price';
-  const weeks = evidence?.observed_cover?.weeks;
-  const cover = weeks == null ? 'No observed cover' : `Observed cover ${weeks}w (flag only)`;
-  return `${listed} · ${competitor} · ${cover}`;
+  return `${listed} · ${competitorCaption(evidence)} · ${coverCaption(evidence)}`;
 }
 
 export type SuggestionLine = {

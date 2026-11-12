@@ -16,6 +16,9 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-11 - **Lane B review fixes:** lineup price stays on the target customer; a stock action covers the sites it names; auto-propose is not capped at the 200-row board; confirmed DC stock is read from stores and need_from_distributor; an explicit line keeps promotion evidence. Branch `cursor/lane-b2-cpor-cases-ea30`. Commit `997e16f6`. Not merged.
+
+- 2026-11-10 - **Lane B CPOR cases:** slow or unsold stock can raise a draft promotion, or a move or return that is not a support claim. Customer×SKU observed cover is a flag and does not set quantity or the customer term. Competitor price is the latest approved map or an honest empty. Branch `cursor/lane-b2-cpor-cases-ea30`. Commit `a6c1ced5`.
 - 2026-11-12 - **Lane D:** weeks of cover under a product-side filter now drops a customer whose latest stock report has no filtered stock row (zero counts as a row), from both sides, as the sell-through overview does. Filter product Y with A (stock for X only, sells 8 a week of Y) and B (100 of Y, sells 10 a week) reads 100 / 10 = 10.0 weeks, not 100 / 18 = 5.6, and A shows no figure rather than 0.0. Branch `cursor/lane-d-brief-dashboards-3efe`. No cip write. Not merged.
 
 - 2026-11-11 - **Lane D:** weeks of cover now ends the 4-week sales window on the customer's last reported day (the end of that weekly or monthly report), not the period start. A March row of 30 units and stock of 12 is about 1.77 weeks, not about 49.6. Rand sales value and CPOR open/value stay a proposal. Branch `cursor/lane-d-brief-dashboards-3efe`. No cip write. No main. Not merged.

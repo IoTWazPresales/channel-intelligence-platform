@@ -141,8 +141,16 @@ def test_confirmed_dc_serves_two_accounts_and_stock_is_once(world: World):
     assert section["onward"]["median_days"] is None
     assert section["lead_time"]["median_days"] == 14
     assert section["need_from_distributor"][0]["stock_on_hand"] == 50
+    assert section["customer_id"] == owner.id
+    assert "promote" in section["need_from_distributor"][0]["suggestions"]
+    from app.services.store_dc.stock_actions import _suggestion_rows
+
+    owner_rows = _suggestion_rows(view, customer_id=owner.id)
+    assert [(row["product_id"], row["site_label"]) for row in owner_rows] == [(product.id, hub)]
     other_view = build_customer_view(world.db, world.tenant, other.id)
     assert other_view["dc_sections"][0]["stock_on_hand"] == 50
+    other_rows = _suggestion_rows(other_view, customer_id=other.id)
+    assert all(row["site_label"] != hub for row in other_rows)
 
 
 def test_served_accounts_save_from_owner_context_preserves_extra_served_links(world: World):
@@ -238,7 +246,115 @@ def test_slow_and_unsold_are_labels_only(world: World):
     assert slow["suggestions"] == ["promote", "move", "return"]
     assert unsold["suggestions"] == ["promote", "move", "return"]
     assert slow["suggestion_executed"] is False
+    assert slow["executed_actions"] == []
     assert world.counts()[:2] == before[:2]
+
+
+def test_an_open_stock_action_marks_that_suggestion_executed(world: World):
+    from uuid import uuid4
+
+    from app.models.cpor import CporCase, CporCaseLine
+
+    customer = world.customer("SDC-C")
+    product = world.product("SDC-SLOW")
+    site = world.code("SDC-SITE-A")
+    world.weeks(customer, product, [10, 10, 10, 10], soh=120, site=site)
+    case = CporCase(
+        case_code=f"SDC-{uuid4().hex[:12]}",
+        case_name="Move aged stock",
+        tenant_id=world.tenant,
+        customer_id=customer.id,
+        promotion_type="Stock PP (In-Direct)",
+        window_start=date(2026, 1, 1),
+        window_end=date(2026, 3, 31),
+        status="draft",
+        origin="stock_action",
+        notes="stock_action=move;not_a_support_claim=true",
+        intelligence_exclude=True,
+        currency_code="ZAR",
+        channel="reseller",
+    )
+    world.db.add(case)
+    world.db.flush()
+    world.db.add(
+        CporCaseLine(
+            case_id=case.id,
+            product_id=product.id,
+            srp=100,
+            vat_rate=0.15,
+            dealer_margin_pct=0.12,
+            estimate_qty=120,
+            window_start=case.window_start,
+            window_end=case.window_end,
+        )
+    )
+    world.db.flush()
+    before = world.counts()
+    view = build_customer_view(world.db, world.tenant, customer.id)
+    line = _line(view, site, product.id)
+    assert line["suggestion_executed"] is True
+    assert line["executed_actions"] == ["move"]
+    assert line["suggestions"] == ["promote", "move", "return"]
+    assert world.counts()[:2] == before[:2]
+
+
+def test_an_open_stock_action_at_one_site_does_not_mark_the_other(world: World):
+    from uuid import uuid4
+
+    from app.models.cpor import CporCase, CporCaseLine
+
+    customer = world.customer("SDC-C")
+    product = world.product("SDC-SLOW")
+    north = world.code("SDC-SITE-A")
+    south = world.code("SDC-SITE-B")
+    world.weeks(customer, product, [10, 10, 10, 10], soh=120, site=north)
+    world.weeks(customer, product, [10, 10, 10, 10], soh=120, site=south)
+    case = CporCase(
+        case_code=f"SDC-{uuid4().hex[:12]}",
+        case_name="Aged stock promotion",
+        tenant_id=world.tenant,
+        customer_id=customer.id,
+        promotion_type="Stock PP (In-Direct)",
+        window_start=date(2026, 1, 1),
+        window_end=date(2026, 3, 31),
+        status="draft",
+        origin="proposed_by_cip",
+        notes="stock_action=promote",
+        currency_code="ZAR",
+        channel="reseller",
+    )
+    world.db.add(case)
+    world.db.flush()
+    world.db.add(
+        CporCaseLine(
+            case_id=case.id,
+            product_id=product.id,
+            srp=100,
+            vat_rate=0.15,
+            dealer_margin_pct=0.12,
+            estimate_qty=120,
+            window_start=case.window_start,
+            window_end=case.window_end,
+            cost_evidence_json={"site_labels": [north], "stock_action": "promote"},
+        )
+    )
+    world.db.flush()
+    view = build_customer_view(world.db, world.tenant, customer.id)
+    assert _line(view, north, product.id)["executed_actions"] == ["promote"]
+    assert _line(view, south, product.id)["suggestion_executed"] is False
+    assert _line(view, south, product.id)["executed_actions"] == []
+
+
+def test_approved_competitor_join_executes(world: World):
+    from sqlalchemy import text
+
+    from app.services.cpor.promo_plan_builder import _approved_competitor_prices
+
+    name = world.db.execute(text("select current_database()")).scalar()
+    print("current_database()", name)
+    assert name == "cip_test"
+    prices = _approved_competitor_prices(world.db, -1)
+    assert prices == []
 
 
 def test_customer_can_override_the_suggestion_thresholds(world: World):

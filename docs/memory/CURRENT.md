@@ -1,5 +1,8 @@
 # CURRENT state
 
+**Last updated:** 2026-11-11 (lane B review fixes). Serial DB queue note below is unchanged.
+
+**Lane B CPOR:** branch `cursor/lane-b2-cpor-cases-ea30` off `feat/integrate-20261103`. Leigh can list slow or unsold stock, raise one draft promotion per customer, or record promote, move, or return. Promote is a Stock PP draft (`proposed_by_cip`). Move and return stay drafts with origin `stock_action` and `intelligence_exclude`; they are not support claims. Opening the list does not write. Observed customer×SKU cover is a flag and does not set quantity or the customer term. Competitor price is the minimum of the latest approved maps, or an honest empty. A lineup shelf price is the target customer's active lineup only. One site's open action does not close the action at another site. Auto-propose reads every slow or unsold line; the board still stops at 200. Confirmed-DC stock is read from `stores` and `need_from_distributor`. An explicit case line keeps its promotion evidence when the draft did not discover that product. Focused pytest passed on `cip_test` (`current_database()` = cip_test). Web `tsc --noEmit` passed. Not merged. Do not push main.
 **Last updated:** 2026-11-11 (lane D: weeks of cover anchors on the last reported day; Rand sales value and CPOR open/value stay a proposal)
 
 **Branch:** `cursor/lane-d-brief-dashboards-3efe`
