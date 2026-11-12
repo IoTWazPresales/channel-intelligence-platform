@@ -1,6 +1,6 @@
 # Plan D — Bitemporal shipment evidence (BACKLOG-033 design)
 
-**Status:** D1–D3 **done** on `cip` (2026-07-02). D4–D5 deferred (BACKLOG-057/058). Change-event derivation v1 shipped (phase 4).  
+**Status:** D1–D3 **done** on `cip` (2026-07-02). D4 schema **on `cip`** (`20261103_0056`, read-only check 2026-11-10). D5 deferred (BACKLOG-058-D5). Change-event derivation v1 shipped (phase 4).  
 **Backlog:** BACKLOG-033 **closed** — see BACKLOG-057/058 for legacy column deprecation.  
 **Trigger:** ~~Weekly shipment cadence~~ **fired** — cutover complete.
 
