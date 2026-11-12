@@ -2,7 +2,7 @@
 eif: autonomy-policy
 version: 0.3
 status: accepted
-last_updated: '2026-11-09'
+last_updated: '2026-11-12'
 owner: Warren
 review_after: 30d
 project_id: channel-intelligence-platform
@@ -65,6 +65,14 @@ budgets:
   improvement_items: 0
   wrap_up_ratio: 0.85
   repeat_mutating_limit: 12
+enforcement:
+  profile: lean
+  protected_databases:
+  - cip
+  protected_branches:
+  - main
+  protected_database_flags:
+  - ALLOW_TESTS_ON_DEV_DB
 ---
 
 > **Authoritative policy:** the YAML front matter above is machine-readable and is the only policy input compiled into runtime enforcement. The body is explanatory and must not duplicate competing values.
