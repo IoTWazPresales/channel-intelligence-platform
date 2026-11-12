@@ -1,0 +1,42 @@
+{
+  "database": "cip_n0118_clone",
+  "apply": false,
+  "rows": [
+    {
+      "id": 3,
+      "case_code": "BATCH0-SMOKE-001",
+      "origin": "native",
+      "status": "cancelled",
+      "workflow_status_before": "draft",
+      "workflow_status_after": "cancelled",
+      "updated_at": "2026-07-09 16:44:20.997646+02:00"
+    },
+    {
+      "id": 309,
+      "case_code": "C26761655",
+      "origin": "historical_import",
+      "status": "settled",
+      "workflow_status_before": "ended",
+      "workflow_status_after": "settled",
+      "updated_at": "2026-09-06 12:43:13.879265+02:00"
+    },
+    {
+      "id": 310,
+      "case_code": "C26759823",
+      "origin": "historical_import",
+      "status": "cancelled",
+      "workflow_status_before": "ended",
+      "workflow_status_after": "cancelled",
+      "updated_at": "2026-09-06 12:43:13.879265+02:00"
+    },
+    {
+      "id": 311,
+      "case_code": "C26760971",
+      "origin": "historical_import",
+      "status": "settled",
+      "workflow_status_before": "ended",
+      "workflow_status_after": "settled",
+      "updated_at": "2026-09-08 14:17:34.983863+02:00"
+    }
+  ]
+}
