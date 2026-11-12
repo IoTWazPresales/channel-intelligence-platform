@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """Small shared helpers for EIF tooling."""
 from __future__ import annotations
-import hashlib, re
+import hashlib, os, re, time
 from pathlib import Path
 import yaml
+
+# Windows delete/copy is not atomic against the indexer or antivirus.
+# 2/3: the file or its parent disappeared mid-walk (the skill-copy race).
+# 5/32: access denied / sharing violation while a scanner holds the new file.
+# 145: directory not empty because a child was still being released.
+_TRANSIENT_WINERRORS = frozenset({2, 3, 5, 32, 145})
 
 ANCHOR_RE = re.compile(r'<a\s+id=["\']([^"\']+)["\']\s*></a>', re.I)
 HEADING_RE = re.compile(r'^(#{1,6})\s+(.+?)\s*$', re.M)
@@ -23,6 +29,23 @@ def write_utf8(path, text: str, *, encoding=UTF8, newline=None) -> None:
     kw={'encoding':encoding}
     if newline is not None: kw['newline']=newline
     Path(path).write_text(text, **kw)
+
+def retry_transient_io(action, *, attempts=8):
+    """Run `action`. On Windows, retry a short list of transient IO errors.
+
+    A persistent failure, and every failure on other systems, is raised
+    unchanged. This does not treat a missing source or a bad path as success.
+    """
+    delay = 0.02
+    for attempt in range(attempts):
+        try:
+            return action()
+        except OSError as exc:
+            winerror = getattr(exc, 'winerror', None)
+            if os.name != 'nt' or winerror not in _TRANSIENT_WINERRORS or attempt + 1 == attempts:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 0.25)
 
 def sha256_path(path: Path) -> str:
     h=hashlib.sha256();
