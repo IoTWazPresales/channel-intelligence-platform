@@ -1,5 +1,12 @@
 # CURRENT state
 
+**Last updated:** 2026-11-11 (lane D: weeks of cover anchors on the last reported day; Rand sales value and CPOR open/value stay a proposal)
+
+**Branch:** `cursor/lane-d-brief-dashboards-3efe`
+
+**Lane D (this worktree):** `cst_sellthrough.stock_cover` is weeks of cover by the sell-through overview rule (reported stock divided by that customer's own sell-through per week in the 4 weeks ending on its last reported day — the end of that weekly or monthly report, not the period start — capped by period.to; a customer with no filtered stock row at its latest stock date is left out of both sides; grouped cover is the ratio of those sums). Template `my_accounts` is the fourth starter: no required customer, the existing My accounts filter narrows it while it is on, and Clear shows the wider book for the rest of the sign-in. Proposed definitions, not implemented: `docs/proposals/2026-11-10-rand-sales-value-and-cpor-measures.md`. BACKLOG-217 stays open (independent E4/E10 review, restock flags, sales value, CPOR open/value, concurrency). No write to `cip`. D-0141's filter default is still held. Not merged.
+
+**Integration checkpoint this note used to pin:** `feat/integrate-20261103` @ `c87847e8` (Merge #80). This worktree was cut from the later integrate tip `a3d0a9cd`.
 **Last updated:** 2026-11-11 (lane A review fixes). Not merged.
 
 **Branch:** `cursor/lane-a-listings-7c39`. PR into `feat/integrate-20261103`. Do not merge from this note: a separate verifier runs the full suite, the Claude review, and the merges one at a time. Worktree `.worktrees/lane-a2`. Leave `.worktrees/lane-a` alone.

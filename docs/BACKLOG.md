@@ -3389,7 +3389,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / recorded** | **Open, active programme continuation; not an approved permanent deferral** · 2026-10-25 independent review at product HEAD `d069f86c`. |
+| **Status / recorded** | **Open, active programme continuation; not an approved permanent deferral** · 2026-10-25 independent review at product HEAD `d069f86c`. **Lane D 2026-11-10:** weeks of cover is a builder measure (`cst_sellthrough.stock_cover`, sell-through overview rule) and the My accounts starter is the fourth template. Rand sales value and CPOR open/value are proposed only (`docs/proposals/2026-11-10-rand-sales-value-and-cpor-measures.md`); Warren approves them before any implementation. Independent E4/E10 review, concurrency/non-owner proof, restock flags, and the five-model gaps that are not cover stay open. Not accepted. |
 | **Source** | `.eif/audit/PROGRAMME_20261025/VERIFICATION_AND_FRONTIER.md`, original matrices, pure probe scripts/JSON and closeout. D-0131 keeps the original23October scope; D-0116–D-0130 remain proposed. |
 | **Effort** | Bounded E1–E10 units in that report; no single broad rewrite. |
 | **E1 checkpoint (26 October)** | Governed CPOR customer/BU filter/total and cache-refusal corrections tested: final API3,387/22skip, web1,139, separate bounded Astra11, lint/typecheck/isolated build pass. `.eif/audit/EXECUTION_20261025_E1/`. No node acceptance. |
