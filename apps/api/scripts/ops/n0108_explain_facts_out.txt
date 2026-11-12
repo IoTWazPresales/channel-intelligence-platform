@@ -1,0 +1,148 @@
+current_database=cip
+size dim_product tuples=18177 74 MB
+size fact_inbound_shipment tuples=15818 238 MB
+size fact_sales_sellout tuples=58128 25 MB
+size weeks_of_cover_observation tuples=212212 331 MB
+index fact_inbound_shipment.ix_fact_inbound_shipment_customer_id: CREATE INDEX ix_fact_inbound_shipment_customer_id ON public.fact_inbound_shipment USING btree (customer_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_distributor_id: CREATE INDEX ix_fact_inbound_shipment_distributor_id ON public.fact_inbound_shipment USING btree (distributor_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_import_job_id: CREATE INDEX ix_fact_inbound_shipment_import_job_id ON public.fact_inbound_shipment USING btree (import_job_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_product_id: CREATE INDEX ix_fact_inbound_shipment_product_id ON public.fact_inbound_shipment USING btree (product_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_purchase_order_id: CREATE INDEX ix_fact_inbound_shipment_purchase_order_id ON public.fact_inbound_shipment USING btree (purchase_order_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_resolved_customer_id: CREATE INDEX ix_fact_inbound_shipment_resolved_customer_id ON public.fact_inbound_shipment USING btree (resolved_customer_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_resolved_distributor_id: CREATE INDEX ix_fact_inbound_shipment_resolved_distributor_id ON public.fact_inbound_shipment USING btree (resolved_distributor_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_shipment_evidence_line_id: CREATE INDEX ix_fact_inbound_shipment_shipment_evidence_line_id ON public.fact_inbound_shipment USING btree (shipment_evidence_line_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_source_key: CREATE INDEX ix_fact_inbound_shipment_source_key ON public.fact_inbound_shipment USING btree (source_key)
+index fact_inbound_shipment.ix_fact_inbound_shipment_tenant_id: CREATE INDEX ix_fact_inbound_shipment_tenant_id ON public.fact_inbound_shipment USING btree (tenant_id)
+index fact_inbound_shipment.ix_fact_inbound_shipment_woc_asof: CREATE INDEX ix_fact_inbound_shipment_woc_asof ON public.fact_inbound_shipment USING btree (distributor_id, product_id, pod_date, line_state)
+index fact_inbound_shipment.pk_fact_inbound_shipment: CREATE UNIQUE INDEX pk_fact_inbound_shipment ON public.fact_inbound_shipment USING btree (id)
+index fact_inbound_shipment.uq_fact_inbound_shipment_fact_upsert_key: CREATE UNIQUE INDEX uq_fact_inbound_shipment_fact_upsert_key ON public.fact_inbound_shipment USING btree (tenant_id, fact_upsert_key)
+index fact_sales_sellout.ix_fact_sales_sellout_channel_id: CREATE INDEX ix_fact_sales_sellout_channel_id ON public.fact_sales_sellout USING btree (channel_id)
+index fact_sales_sellout.ix_fact_sales_sellout_customer_id: CREATE INDEX ix_fact_sales_sellout_customer_id ON public.fact_sales_sellout USING btree (customer_id)
+index fact_sales_sellout.ix_fact_sales_sellout_distributor_id: CREATE INDEX ix_fact_sales_sellout_distributor_id ON public.fact_sales_sellout USING btree (distributor_id)
+index fact_sales_sellout.ix_fact_sales_sellout_product_id: CREATE INDEX ix_fact_sales_sellout_product_id ON public.fact_sales_sellout USING btree (product_id)
+index fact_sales_sellout.ix_fact_sales_sellout_source_import_job_id: CREATE INDEX ix_fact_sales_sellout_source_import_job_id ON public.fact_sales_sellout USING btree (source_import_job_id)
+index fact_sales_sellout.ix_fact_sales_sellout_staging_line_id: CREATE INDEX ix_fact_sales_sellout_staging_line_id ON public.fact_sales_sellout USING btree (staging_line_id)
+index fact_sales_sellout.ix_fact_sales_sellout_tenant_id: CREATE INDEX ix_fact_sales_sellout_tenant_id ON public.fact_sales_sellout USING btree (tenant_id)
+index fact_sales_sellout.ix_fact_sales_sellout_woc_asof: CREATE INDEX ix_fact_sales_sellout_woc_asof ON public.fact_sales_sellout USING btree (distributor_id, product_id, transaction_date)
+index fact_sales_sellout.pk_fact_sales_sellout: CREATE UNIQUE INDEX pk_fact_sales_sellout ON public.fact_sales_sellout USING btree (id)
+index fact_sales_sellout.uq_fact_sales_sellout_source_key: CREATE UNIQUE INDEX uq_fact_sales_sellout_source_key ON public.fact_sales_sellout USING btree (source_key)
+=== unset product_lines=None ===
+--- so_max wall=0.183s ---
+execution_ms=103.824 planning_ms=70.439
+  Aggregate actual=103.5ms rows=1.0 loops=1
+  Seq Scan actual=90.0ms rows=58128.0 loops=1
+  Seq Scan actual=0.0ms rows=0 loops=0
+--- in_max wall=0.134s ---
+execution_ms=76.279 planning_ms=50.355
+  Aggregate actual=76.0ms rows=1.0 loops=1
+  Seq Scan actual=71.9ms rows=15818.0 loops=1
+  Seq Scan actual=0.0ms rows=0 loops=0
+  Function Scan actual=0.0ms rows=0 loops=0
+  Seq Scan actual=0.0ms rows=0 loops=0
+--- so_weeks wall=0.019s ---
+execution_ms=7.256 planning_ms=1.356
+  Aggregate actual=7.0ms rows=10.0 loops=1
+  Sort actual=6.7ms rows=710.0 loops=1
+  Bitmap Heap Scan actual=6.2ms rows=710.0 loops=1
+  Bitmap Index Scan actual=3.7ms rows=710.0 loops=1
+  Seq Scan actual=0.0ms rows=0 loops=0
+--- in_weeks wall=0.609s ---
+execution_ms=579.422 planning_ms=18.149
+  Aggregate actual=577.9ms rows=13.0 loops=1
+  Sort actual=577.5ms rows=467.0 loops=1
+  Hash Join actual=576.9ms rows=467.0 loops=1
+  Hash actual=541.2ms rows=0.0 loops=1
+  Subquery Scan actual=541.2ms rows=0.0 loops=1
+  CTE Scan actual=541.2ms rows=0.0 loops=1
+  WindowAgg actual=537.3ms rows=14361.0 loops=1
+  Sort actual=446.1ms rows=14361.0 loops=1
+--- open_pairs wall=0.559s ---
+execution_ms=545.42 planning_ms=4.015
+  Aggregate actual=544.1ms rows=201.0 loops=1
+  Sort actual=543.5ms rows=668.0 loops=1
+  Hash Join actual=542.7ms rows=668.0 loops=1
+  Hash actual=533.8ms rows=0.0 loops=1
+  Subquery Scan actual=533.8ms rows=0.0 loops=1
+  CTE Scan actual=533.8ms rows=0.0 loops=1
+  WindowAgg actual=530.0ms rows=14361.0 loops=1
+  Sort actual=438.0ms rows=14361.0 loops=1
+=== star product_lines='*' ===
+--- so_max wall=0.171s ---
+execution_ms=103.899 planning_ms=58.465
+  Aggregate actual=103.5ms rows=1.0 loops=1
+  Seq Scan actual=91.7ms rows=58128.0 loops=1
+  Seq Scan actual=0.0ms rows=0 loops=0
+--- in_max wall=0.126s ---
+execution_ms=69.659 planning_ms=48.935
+  Aggregate actual=69.4ms rows=1.0 loops=1
+  Seq Scan actual=66.0ms rows=15818.0 loops=1
+  Seq Scan actual=0.0ms rows=0 loops=0
+  Function Scan actual=0.0ms rows=0 loops=0
+  Seq Scan actual=0.0ms rows=0 loops=0
+--- so_weeks wall=0.016s ---
+execution_ms=7.298 planning_ms=1.908
+  Aggregate actual=7.1ms rows=10.0 loops=1
+  Sort actual=6.6ms rows=710.0 loops=1
+  Bitmap Heap Scan actual=6.2ms rows=710.0 loops=1
+  Bitmap Index Scan actual=3.7ms rows=710.0 loops=1
+  Seq Scan actual=0.0ms rows=0 loops=0
+--- in_weeks wall=0.575s ---
+execution_ms=555.135 planning_ms=9.218
+  Aggregate actual=553.7ms rows=13.0 loops=1
+  Sort actual=553.3ms rows=467.0 loops=1
+  Hash Join actual=552.7ms rows=467.0 loops=1
+  Hash actual=502.9ms rows=0.0 loops=1
+  Subquery Scan actual=502.9ms rows=0.0 loops=1
+  CTE Scan actual=502.9ms rows=0.0 loops=1
+  WindowAgg actual=498.8ms rows=14361.0 loops=1
+  Sort actual=401.8ms rows=14361.0 loops=1
+--- open_pairs wall=0.576s ---
+execution_ms=561.889 planning_ms=4.117
+  Aggregate actual=560.3ms rows=201.0 loops=1
+  Sort actual=559.6ms rows=668.0 loops=1
+  Hash Join actual=558.7ms rows=668.0 loops=1
+  Hash actual=547.6ms rows=0.0 loops=1
+  CTE Scan actual=547.6ms rows=0.0 loops=1
+  Subquery Scan actual=547.6ms rows=0.0 loops=1
+  WindowAgg actual=543.5ms rows=14361.0 loops=1
+  Sort actual=449.1ms rows=14361.0 loops=1
+=== one_line product_lines='NB' ===
+--- so_max wall=0.337s ---
+execution_ms=264.562 planning_ms=63.794
+  Aggregate actual=263.8ms rows=1.0 loops=1
+  Seq Scan actual=256.2ms rows=29732.0 loops=1
+  Seq Scan actual=104.3ms rows=6840.0 loops=1
+--- in_max wall=1.449s ---
+execution_ms=1387.35 planning_ms=54.642
+  Aggregate actual=1386.6ms rows=1.0 loops=1
+  Seq Scan actual=1385.0ms rows=8448.0 loops=1
+  Function Scan actual=1239.8ms rows=2.0 loops=1
+  Seq Scan actual=78.2ms rows=6840.0 loops=1
+  Seq Scan actual=76.1ms rows=6840.0 loops=1
+--- so_weeks wall=0.093s ---
+execution_ms=86.46 planning_ms=1.771
+  Aggregate actual=85.8ms rows=10.0 loops=1
+  Sort actual=85.7ms rows=278.0 loops=1
+  Bitmap Heap Scan actual=85.5ms rows=278.0 loops=1
+  Seq Scan actual=73.1ms rows=6840.0 loops=1
+  Bitmap Index Scan actual=5.0ms rows=710.0 loops=1
+--- in_weeks wall=2.707s ---
+execution_ms=2689.14 planning_ms=7.457
+  Aggregate actual=2687.2ms rows=10.0 loops=1
+  Sort actual=2687.0ms rows=152.0 loops=1
+  Hash Join actual=2686.9ms rows=152.0 loops=1
+  Hash actual=1508.8ms rows=0.0 loops=1
+  Subquery Scan actual=1508.8ms rows=0.0 loops=1
+  CTE Scan actual=1508.8ms rows=0.0 loops=1
+  WindowAgg actual=1505.8ms rows=7789.0 loops=1
+  Sort actual=1445.4ms rows=7789.0 loops=1
+--- open_pairs wall=1.568s ---
+execution_ms=1557.254 planning_ms=1.572
+  Aggregate actual=1555.9ms rows=60.0 loops=1
+  Sort actual=1555.7ms rows=336.0 loops=1
+  Hash Join actual=1555.4ms rows=336.0 loops=1
+  Hash actual=1433.8ms rows=0.0 loops=1
+  Subquery Scan actual=1433.8ms rows=0.0 loops=1
+  CTE Scan actual=1433.8ms rows=0.0 loops=1
+  WindowAgg actual=1431.5ms rows=7789.0 loops=1
+  Sort actual=1384.3ms rows=7789.0 loops=1

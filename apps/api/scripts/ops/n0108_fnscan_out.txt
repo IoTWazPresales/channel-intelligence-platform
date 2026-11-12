@@ -1,0 +1,35 @@
+current_database=cip
+FUNC cip_product_line_visible:
+CREATE OR REPLACE FUNCTION public.cip_product_line_visible(line text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+          SELECT CASE
+            WHEN coalesce(current_setting('cip.product_lines', true), '') IN ('', '*') THEN true
+            WHEN current_setting('cip.product_lines', true) = '!' THEN false
+            ELSE line IS NOT NULL
+                 AND line = ANY (string_to_array(current_setting('cip.product_lines', true), ','))
+          END
+        $function$
+
+FUNC cip_product_line_editable:
+CREATE OR REPLACE FUNCTION public.cip_product_line_editable(line text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+          SELECT CASE
+            WHEN coalesce(current_setting('cip.editable_product_lines', true), '') IN ('', '*') THEN true
+            WHEN current_setting('cip.editable_product_lines', true) = '!' THEN false
+            ELSE line IS NOT NULL
+                 AND line = ANY (string_to_array(current_setting('cip.editable_product_lines', true), ','))
+          END
+        $function$
+
+product_lines='NB'
+Aggregate 745.859ms rows=1.0 
+  Seq Scan 745.268ms rows=8448.0 Relation Name=fact_inbound_shipment Schema=public filter=((fact_inbound_shipment.tenant_id = 'default'::text) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((fact_inbound_shi
+    Seq Scan 20.789ms rows=6840.0 Relation Name=dim_product Schema=public filter=(CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::t
+    Function Scan 670.945ms rows=2.0 Function Name=cip_inbound_shipment_lineage Schema=public filter=((ANY (m.inherited_product_id = (hashed SubPlan 2).col1)) OR ((m.inherited_product_id IS NULL) AND (COALESCE(current_setting('cip.request_role'::text, true), ''::text) = 'steward':
+      Seq Scan 18.649ms rows=6840.0 Relation Name=dim_product Schema=public filter=(CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::t

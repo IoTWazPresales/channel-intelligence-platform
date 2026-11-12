@@ -1,0 +1,34 @@
+current_database=cip
+inbound_null_product=765 line_null_product=7186 obs_tuples=120291 obs_size=515 MB line_size=480 MB
+execution_ms=576.095 planning_ms=102.899
+Aggregate 572.452ms rows=765.0
+  Bitmap Heap Scan 4.651ms rows=765.0 fact_inbound_shipment
+    Bitmap Index Scan 0.25ms rows=768.0 ix_fact_inbound_shipment_product_id
+    Seq Scan 0.0ms rows=0 dim_product
+    Function Scan 0.0ms rows=0
+      Seq Scan 0.0ms rows=0 dim_product
+  Sort 572.217ms rows=765.0
+    Nested Loop 571.822ms rows=765.0
+      Hash Join 209.119ms rows=765.0
+        Seq Scan 193.427ms rows=110938.0 shipment_evidence_line
+          Seq Scan 0.0ms rows=0 dim_product
+          Function Scan 0.0ms rows=0
+            Seq Scan 0.0ms rows=0 dim_product
+        Hash 5.106ms rows=765.0
+          CTE Scan 4.925ms rows=765.0
+      Materialize 0.426ms rows=759.0
+        Subquery Scan 305.774ms rows=759.0
+          Unique 296.162ms rows=759.0
+            Sort 295.993ms rows=1122.0
+              Hash Join 295.333ms rows=1122.0
+                Seq Scan 282.408ms rows=120291.0 shipment_evidence_observation
+                  Seq Scan 0.0ms rows=0 dim_product
+                  Function Scan 0.0ms rows=0
+                    Seq Scan 0.0ms rows=0 dim_product
+                Hash 0.334ms rows=759.0
+                  CTE Scan 0.165ms rows=765.0
+          Limit 0.012ms rows=0.0
+            Index Only Scan 0.012ms rows=0.0 shipment_evidence_observation ix_shipment_ev_obs_identity_latest
+              Seq Scan 0.0ms rows=0 dim_product
+              Function Scan 0.0ms rows=0
+                Seq Scan 0.0ms rows=0 dim_product

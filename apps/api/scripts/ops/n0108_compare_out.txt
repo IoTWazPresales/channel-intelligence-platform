@@ -1,0 +1,14 @@
+current_database=cip
+--- scope=unset setting='' ---
+old_rows=2481 seconds=0.661 new_rows=2481 seconds=0.289 equal=True
+--- scope=star setting='*' ---
+old_rows=2481 seconds=0.434 new_rows=2481 seconds=0.222 equal=True
+--- scope=one_line setting='NB' ---
+old_rows=1099 seconds=0.373 new_rows=1099 seconds=0.224 equal=True
+rollback=ok
+handler scope=unset database=cip product_lines=None
+brief_seconds=4.081 signals=6 cover_seconds=2.466 pairs=2481
+handler scope=star database=cip product_lines='*'
+brief_seconds=0.819 signals=6 cover_seconds=0.946 pairs=2481
+handler scope=one_line database=cip product_lines='NB'
+brief_seconds=3.062 signals=5 cover_seconds=8.559 pairs=1099

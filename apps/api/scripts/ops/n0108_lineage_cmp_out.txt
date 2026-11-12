@@ -1,0 +1,3 @@
+current_database=cip
+old_rows=765 seconds=0.741
+new_rows=765 seconds=0.092 equal=True
