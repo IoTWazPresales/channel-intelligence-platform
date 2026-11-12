@@ -387,7 +387,9 @@ def _stock_cover_source(
     latest: Any,
     conds: list[ColumnElement[bool]],
 ) -> Any:
-    """One row per requested breakdown: stock / 4-week rate, zero-rate customers left out.
+    """One row per requested breakdown: stock / 4-week rate. Left out of both sides: a customer
+    (or customer x breakdown) with a zero rate, or with no filtered stock row at its latest
+    stock date.
 
     Inner grain is the customer (and the breakdown). The outer row is the ratio of those sums,
     which is the overview's portfolio weeks of cover, not an average of ratios.
@@ -434,6 +436,11 @@ def _stock_cover_source(
         (and_(tcol == latest.c.d, f.c.reported_soh.is_not(None)), cast(f.c.reported_soh, Numeric)),
         else_=zero,
     )
+    # A filtered row at the latest stock date with a reported figure (zero counts). The overview
+    # only has a stock position for a customer when such a row exists (load_stock_positions
+    # applies the product filter to the rows at the latest date), so a customer without one is
+    # out of both sides rather than counted with stock 0.
+    has_stock = case((and_(tcol == latest.c.d, f.c.reported_soh.is_not(None)), 1), else_=0)
     marked_cols: list[Any] = [
         f.c.customer_id.label("_cover_customer"),
         tcol.label("_tcol"),
@@ -441,6 +448,7 @@ def _stock_cover_source(
         days.label("_days"),
         cast(func.coalesce(f.c.units_sold, 0), Numeric).label("_units"),
         soh_piece.label("_soh"),
+        has_stock.label("_has_stock"),
         func.max(period_end).over(partition_by=f.c.customer_id).label("_last_day"),
     ]
     key_names: list[str] = []
@@ -485,9 +493,11 @@ def _stock_cover_source(
         inner_group.append(marked.c[name])
     inner_cols.append(func.coalesce(func.sum(marked.c._soh), literal(0)).label("soh"))
     inner_cols.append(func.coalesce(func.sum(rate_piece), literal(0)).label("rate"))
+    inner_cols.append(func.coalesce(func.sum(marked.c._has_stock), literal(0)).label("stock_rows"))
     inner = select(*inner_cols).group_by(*inner_group).subquery("cover_customer")
-    soh_sum = func.sum(inner.c.soh).filter(inner.c.rate > 0)
-    rate_sum = func.sum(inner.c.rate).filter(inner.c.rate > 0)
+    counted = and_(inner.c.rate > 0, inner.c.stock_rows > 0)
+    soh_sum = func.sum(inner.c.soh).filter(counted)
+    rate_sum = func.sum(inner.c.rate).filter(counted)
     weeks = cast(soh_sum, Numeric) / func.nullif(cast(rate_sum, Numeric), 0)
     outer_cols = [inner.c[name] for name in key_names]
     outer_cols.append(weeks.label("weeks"))
