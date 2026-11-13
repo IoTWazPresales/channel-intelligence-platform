@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
-from sqlalchemy import func, select, update
+from sqlalchemy import bindparam, case, func, null, select, true, update
 from sqlalchemy.orm import Session
 
 from app.models.dimensions import DimProduct
@@ -20,7 +20,11 @@ from app.models.import_distributor_si import ImportDistributorSiStagingLine, Imp
 from app.models.mapping import ProductAlias
 from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.distributor_sales_inventory import _product_token_key
-from app.services.imports.shipment_evidence_rows import EvidenceRow, load_evidence_rows
+from app.services.imports.shipment_evidence_rows import (
+    EvidenceRow,
+    latest_observation_lateral,
+    load_evidence_rows,
+)
 from app.services.imports.product_resolution_index_cache import (
     get_product_resolution_index,
     invalidate_product_resolution_index_cache,
@@ -448,42 +452,80 @@ def _ensure_product_alias(
     return True, False
 
 
-def scan_open_gaps_for_matches(session: Session, *, limit: int = 500) -> dict[str, Any]:
-    """On-demand / post-PM: worklist unresolved tokens that now match PM."""
-    tokens: set[str] = set()
-    for line in _unresolved_shipment_rows(session):
-        for field in _line_tokens(line):
-            t = _norm_token(field)
-            if t:
-                tokens.add(t)
-                break
-    for c in session.scalars(
-        select(ImportEntityMappingCandidate).where(
+# Every character ``str.isspace()`` accepts: what ``str.strip()`` and ``re``'s ``\s`` remove in
+# ``_norm_token``. A field normalizes to "" iff it is NULL/empty or made only of these, so SQL can
+# decide "first non-empty" exactly.
+_PY_WHITESPACE = "\t\n\x0b\x0c\r\x1c\x1d\x1e\x1f \x85\xa0" + "".join(
+    map(chr, (0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000))
+)
+# PostgreSQL regex: the value holds at least one character ``_norm_token`` keeps.
+_HAS_TOKEN_CHAR_RE = f"[^{_PY_WHITESPACE}]"
+
+
+def _distinct_open_shipment_tokens(session: Session) -> list[str]:
+    """Raw value of each product-unresolved line's first non-empty token field, DISTINCT in SQL.
+
+    Same line set and field order as ``_unresolved_shipment_rows`` + ``_line_tokens``: the line's
+    ``product_resolution_token``, then the payload fields of its newest observation (all NULL when
+    the line has no observation).
+    """
+    lateral, obs = latest_observation_lateral()
+    fields = (
+        ShipmentEvidenceLine.product_resolution_token,
+        obs.item_code,
+        obs.ean_code,
+        obs.upc_code,
+        obs.sales_model_name,
+        obs.customer_item,
+        obs.mpor_item_no,
+    )
+    pattern = bindparam("has_token_char", _HAS_TOKEN_CHAR_RE)
+    first_field = case(*((field.op("~")(pattern), field) for field in fields), else_=null())
+    stmt = (
+        select(first_field)
+        .select_from(ShipmentEvidenceLine)
+        .outerjoin(lateral, true())
+        .where(
+            ShipmentEvidenceLine.product_id.is_(None),
+            ShipmentEvidenceLine.product_resolution_status.in_(tuple(_SHIPMENT_UNRESOLVED)),
+        )
+        .distinct()
+    )
+    return [raw for raw in session.scalars(stmt).all() if raw is not None]
+
+
+def _collect_open_gap_tokens(session: Session) -> set[str]:
+    """Normalized open catalogue-gap tokens from every source; SQL returns distinct values only."""
+    from app.services.imports.cst_mapping_candidates import CST_PRODUCT_ENTITY
+
+    raw_values: list[str | None] = list(_distinct_open_shipment_tokens(session))
+    raw_values += session.scalars(
+        select(ImportEntityMappingCandidate.normalized_key)
+        .where(
             ImportEntityMappingCandidate.entity_type == "product_identifier",
             ImportEntityMappingCandidate.status == "needs_review",
         )
-    ).all():
-        t = _norm_token(getattr(c, "normalized_key", None))
-        if t:
-            tokens.add(t)
-    from app.services.imports.cst_mapping_candidates import CST_PRODUCT_ENTITY
-
-    for c in session.scalars(
-        select(ImportEntityMappingCandidate).where(
+        .distinct()
+    ).all()
+    raw_values += session.scalars(
+        select(ImportEntityMappingCandidate.normalized_key)
+        .where(
             ImportEntityMappingCandidate.entity_type == CST_PRODUCT_ENTITY,
             ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
         )
-    ).all():
-        t = _norm_token(getattr(c, "normalized_key", None))
-        if t:
-            tokens.add(t)
-    for r in session.scalars(
-        select(CporClaimEvidenceLine).where(CporClaimEvidenceLine.product_id.is_(None))
-    ).all():
-        t = _norm_token(r.source_model_token)
-        if t:
-            tokens.add(t)
+        .distinct()
+    ).all()
+    raw_values += session.scalars(
+        select(CporClaimEvidenceLine.source_model_token)
+        .where(CporClaimEvidenceLine.product_id.is_(None))
+        .distinct()
+    ).all()
+    return {t for t in (_norm_token(raw) for raw in raw_values) if t}
 
+
+def scan_open_gaps_for_matches(session: Session, *, limit: int = 500) -> dict[str, Any]:
+    """On-demand / post-PM: worklist unresolved tokens that now match PM."""
+    tokens = _collect_open_gap_tokens(session)
     token_list = sorted(tokens)[:limit]
     preview = preview_gap_resolve(session, token_list)
     matched = [i for i in preview["items"] if i.get("matched")]
