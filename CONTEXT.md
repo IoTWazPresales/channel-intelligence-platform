@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-13 — **Memory refresh** on `docs/stage1-memory-refresh` (cut from `origin/main` `46368f6c`): CURRENT records an unresolved trunk split — `origin/main` is 882 commits behind `origin/feat/integrate-20261103` (`267ee883`); this tree's Alembic code head stays `20260818_0019`; live `cip` stamp not probed (no DB client, `docker info` failed). AGENTS.md checklist pointer moved off the WORKFLOW stub onto the charter + steward contract. No product change. No backlog deletions.
+
 - 2026-08-31 — **VERIFY debt cleared on `main` `12404bc`:** Opus CONSULT fourth-pass PASS for units 6f, 7, 8, 11, 12, 15B, B4 (`docs/verify/VERIFY_VERDICTS.md`); charter v1.3 amendment 7 satisfied; `docs/BACKLOG.md` register empty — promotion no longer gated by VERIFY debt. Arc: 19 web tests fixed (RBAC `5b2a6a4`); HL mapping parity closed; shipment S2/S3/S4 fixed; S11 stall = worker/API binding mismatch. Deferred: CPOR #313 on `cip`, evidence-chip pass unproven, HL disposition backend gap. NS-2 readiness: `docs/design/NS2_READINESS.md`.
 
 - 2026-08-30 — **Web test harness fix** on `fix/web-test-harness-authheaders` `6e96b9c`: RBAC commit `5b2a6a4` switched the imports upload path to `authHeaders()`; the `page.test.tsx` `@/lib/api` mock omitted that export and silently broke 19 historical_lineup vitest cases (undetected until VERIFY debt Session B). Fix is test-only (`importOriginal` partial mock + customers drawer wait for loaded locations). No product regression; operators could apply validated files throughout. Diagnosis: `docs/verify/WEB_TEST_FAILURE_DIAGNOSIS.md`.

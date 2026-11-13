@@ -1,44 +1,38 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-31 (VERIFY debt cleared; NS-2 readiness)
+**Last updated:** 2026-11-13 (memory refresh only; no product change)
 
-**Branch:** `main`
+**Branch:** `docs/stage1-memory-refresh`
 
-**Last content pin:** `12404bc` — confirm HEAD with `git rev-parse`
+**Cut from:** `origin/main` @ `46368f6c` (2026-08-31, `docs: NS-2 readiness report`). Local `main` matched `origin/main` at that sha. Confirm HEAD with `git rev-parse`. This file does not store its own commit hash.
 
-**Alembic (code):** `20260818_0019` (`20260818_0019_shipping_mailer_recipient.py`)
+## Unresolved — do not pick a winner
 
-**Alembic on cip:** `20260818_0019`
+1. **Trunk.** `origin/main` (`46368f6c`) is the merge-base of `origin/feat/integrate-20261103` and is **882 commits behind** it (0 commits the other way). Integrate tip read 2026-11-13: `267ee883` (`EIF ledger: N-0102 re-chartered...`). That branch's `docs/memory/CURRENT.md` still opens on a 2026-11-12 note (`4fce3b40`, lanes #88 #85 #86 #87 #84 merged) and says **next is repair the EIF guard**. This checkout does not contain that code. Nothing here was merged to `main`.
+2. **Alembic.** **This tree's** code head is `20260818_0019` (`20260818_0019_shipping_mailer_recipient.py`, revises `20260818_0018`). Integrate's tree has revisions through `20261110_0061`. Integrate's CURRENT **claims** `cip` was at `20261110_0061` on 2026-11-12. This session did not run `alembic current`: no Postgres client, `docker info` failed, `CURSOR_CLOUD` unset. Live stamp: **unknown**.
+3. **EIF files.** `docs/design/EIF_UNIT_DECLARATION.md` on this tree says `.eif/WORK_ITEM.md`, `DESIGN_EXPERIENCE_RECORD.md`, `programme-brownfield.md`, and `JOURNEYS.yaml` are present. `.eif/` is absent here and has never been on `origin/main` history. Those four paths **exist** on `origin/feat/integrate-20261103`. Still absent on that tip: `.eif/program/SCHEMA.md`, `tools/program.py`, and `.cursor/rules/eif-core.mdc` (the declaration quotes the rule). Programme mutator on that tip is `.eif/runtime/programme/program.py` (generated `.eif/CURRENT.md`). Not reconciled.
+4. **VERIFY register text.** This tree's `docs/BACKLOG.md` says the register is **Cleared** (empty) at `12404bc`. Integrate's backlog says the 6f–B4 clearance **stands** and **BACKLOG-209** (N-0034 ScopeBar) is **open**. This refresh does not copy that row in.
 
-## On main
+## What this tree contains (`origin/main` @ `46368f6c`)
 
-- **VERIFY debt cleared (2026-08-31 · `12404bc`).** All seven charter v1.3 amendment 7 units
-  (6f, 7, 8, 11, 12, 15B, B4) closed with Opus CONSULT fourth-pass PASS; register empty in
-  `docs/BACKLOG.md`. Promotion to `main` no longer gated by VERIFY debt.
-- **Design language FROZEN v1.1** + nav map + charter v1.3 governing (`83b4290` promotion).
-- **NS-1a display groundwork** in tree (`settle_readiness.py`, `missing_roe` on CPOR list/detail)
-  — BACKLOG-148 not formally VERIFY-closed as a north-star unit.
-- **NS-2 readiness** documented in `docs/design/NS2_READINESS.md` — discovery only; no
-  implementation this session.
+- VERIFY register text cleared for **6f, 7, 8, 11, 12, 15B, B4** (`12404bc`). Doc claim. Not re-run.
+- NS-2 on **this** tree is discovery only: `docs/design/NS2_READINESS.md`. `navConfig.ts` is still seven groups (`overview`, `channel-intelligence`, `commercial-planning`, `master-data`, `data-imports`, `admin`). No `/brief` page here.
+- Integrate **does** contain `apps/web/src/app/(app)/brief/page.tsx`. `origin/feat/ns-2-brief-nav-collapse` (`59033481`) is an ancestor of integrate (integrate is 202 commits ahead of it). Spine completeness was not audited.
+- NS-1a files exist here: `apps/api/app/services/cpor/settle_readiness.py` (`case_missing_roe`). BACKLOG-148 is still **Parked**. Not a VERIFY close.
+- Design language FROZEN v1.1 and charter v1.3 are on this tree (CONTEXT: promoted `83b4290`). Not re-audited.
+- Operator topology in the memory palace remains Mode B (Windows, local `cip`, web `:3000`, API `:8001`). Not re-proven from this VM.
 
-## VERIFY arc findings (retained)
+## In progress
 
-- 19 web tests broken by RBAC `5b2a6a4` — fixed via `importOriginal` partial mock
-  (`WEB_TEST_FAILURE_DIAGNOSIS.md`).
-- HL mapping parity gap closed (Unit 11 fix pass).
-- Shipment steward S2/S3/S4 closed (tab reset, debounced search, confidence band).
-- S11 apply stall = worker/API DB binding mismatch, not product defect.
-
-## Deferred (not VERIFY debt)
-
-- CPOR case #313 on `cip` (SESSION F fixture contamination).
-- Evidence-chip pass state unproven — no dev case with claim evidence rows.
-- HL disposition backend gap — no disposition channel; `mapping_override` only.
+- None on this branch. Convergence was not started.
 
 ## Next
 
-- **NS-2** (BACKLOG-149): nav collapse + Brief landing per `docs/design/NS2_READINESS.md` when
-  Warren schedules unit start (BACKLOG-148 FX display or waiver still on TRIGGER).
-- Shared shell extraction feeds NS-3–NS-7.
+- Wait for Warren's convergence prompt. Do not implement NS-2, EIF, or product work from this checkout.
+- Name the trunk before coding. This file does not select `main` or `feat/integrate-20261103`.
+- Live `alembic current` only after `current_database()` is `cip`. Do not upgrade.
 
-**Env:** local Windows. Web `:3000` + API `:8001`.
+## Blockers requiring Warren
+
+- Which branch is the Stage 1 trunk.
+- Live `cip` Alembic stamp (`20260818_0019` vs `20261110_0061` or later). Not measured here.

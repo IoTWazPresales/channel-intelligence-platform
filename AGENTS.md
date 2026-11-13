@@ -24,7 +24,9 @@ source is correct before implementing. Then update `CURRENT.md`.
 messages saying “done” or “parity” are claims until proven in the **running tree**
 (read the section/API, compare to the named canonical). Do not delete backlog or
 claim PASS on paper alone. Import/steward UX: see `.cursor/rules/import-parity.mdc`
-and `docs/WORKFLOW_DUAL_AGENT.md` confirmation checklist.
+and `docs/STEWARD_EXPERIENCE_CONTRACT.md` (rows S1–S14). Dual-agent product bar and
+the VERIFY checklist live in `docs/AUTONOMOUS_BUILD_CHARTER.md` § Dual-agent loop.
+`docs/WORKFLOW_DUAL_AGENT.md` is a pointer stub.
 
 **After completing any significant task:** update `docs/memory/CURRENT.md` and
 append one line to `CONTEXT.md` changelog. Use `Run cip-context-update` skill.
