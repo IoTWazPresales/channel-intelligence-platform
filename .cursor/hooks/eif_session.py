@@ -23,14 +23,8 @@ failure: an error/timeout callback, or an after-hook whose result reports
 isError/error. Neither host reports whether a failed or timed-out MCP call
 changed the server, so a dispatched mutation (for example a partially applied
 migration) is presumed possibly applied; denials, pre-dispatch protocol errors
-and read-only tools are never debt. A name is read-only only when every token
-is in an explicit read-only vocabulary. Any unknown verb or token is a
-mutation (`search_rollback`, `find_and_restart`, `get_and_invoke`). Names such
-as `get_settings` and `list_assets` stay read-only. A write word (`replace`,
-`edit`, `update`, `delete`, `create`, `set`, `put`, `patch`, `move`, `rename`,
-and similar) is a mutation even when the name starts with `search` or `find`.
-It clears on the exact call succeeding or through the external operator resolver
-after reviewing the external system.
+and read-only tools are never debt. It clears on the exact call succeeding or
+through the external operator resolver after reviewing the external system.
 """
 import hashlib
 import json
@@ -45,7 +39,6 @@ import tempfile
 import time
 import uuid
 
-import eif_state
 from eif_state import atomic_json, contained, file_lock, remaining_timeout
 
 LEDGER = ('.eif/program/PROGRAM.yaml', '.eif/program/PROGRAM_LOG.ndjson')
@@ -80,7 +73,6 @@ ACTION_INFRASTRUCTURE ACTION_IDENTITY_MUTATION ACTION_FORCE_VCS ACTION_REMOTE_PU
 ACTION_DESTRUCTIVE_DATA ACTION_DEPENDENCY ACTION_NETWORK NETWORK_DESTINATION
 ACTION_ARTIFACT_WRITE ACTION_WRITE ACTION_DELETE SHELL_DENY
 MCP_DESTRUCTIVE BROWSER_PUBLIC_MUTATE POST_EDIT_SECRET
-PROTECTED_DATABASE_WRITE DESTRUCTIVE_LINKED_TREE SECRET_STAGE PROTECTED_BRANCH_PUSH SHIM_TOOL_UNMAPPED
 POLICY_INTEGRITY SHELL_POLICY_REQUIRED MCP_POLICY_REQUIRED BOOTSTRAP BOOTSTRAP_MCP
 IDENTITY_READ IDENTITY_SHELL IDENTITY_MCP IDENTITY_TOOL IDENTITY_MISMATCH IDENTITY_UNVERIFIED
 HOOK_INPUT_INVALID UNKNOWN_REASON_CODE RUNTIME_INTEGRITY
@@ -96,38 +88,6 @@ IDENTITY_GIT_FAILURE RUNTIME_LOCK_FAILURE BUDGET_EXHAUSTED BROWSER_INTERACT_ORIG
 # tracked by prefix (MCP:<tool>), gated by eif_executed_mutation like Shell.
 FAILURE_TRACKED_TOOLS = frozenset({'Write', 'Delete', 'Shell'})
 MCP_EVENTS = frozenset({'beforeMCPExecution', 'afterMCPExecution'})
-
-
-# Operator session grants (tools/session_grant.py). A grant is an audited,
-# time-limited admission for ONE session of one lean BLOCK class; it is written
-# only by the operator tool from the separate EIF checkout, never by a hook.
-GRANT_CLASSES = frozenset({'db_write'})
-GRANT_MAX_SEC = 24 * 3600
-
-
-def valid_grant(state, grant_class, session_key, now):
-    """Newest unrevoked, unexpired grant of grant_class bound to session_key, else None."""
-    grants = state.get('grants') if isinstance(state, dict) else None
-    if not isinstance(grants, list) or grant_class not in GRANT_CLASSES:
-        return None
-    best = None
-    for grant in grants:
-        if not isinstance(grant, dict) or grant.get('class') != grant_class or grant.get('revoked_at'):
-            continue
-        if grant.get('session_key') != session_key:
-            continue
-        issued, expires = grant.get('issued_at'), grant.get('expires_at')
-        if (not isinstance(issued, (int, float)) or not isinstance(expires, (int, float))
-                or isinstance(issued, bool) or isinstance(expires, bool)
-                or not math.isfinite(issued) or not math.isfinite(expires)):
-            continue
-        if issued > now + 60 or now >= expires or expires - issued > GRANT_MAX_SEC:
-            continue
-        if not isinstance(grant.get('reason'), str) or not grant['reason'].strip() or not grant.get('actor'):
-            continue
-        if best is None or issued > best['issued_at']:
-            best = grant
-    return best
 
 
 def failure_tracked(tool):
@@ -478,12 +438,8 @@ def unresolved_report(root):
 
 
 def git(root, *args, allowed=(0,)):
-    started = time.perf_counter()
-    try:
-        result = subprocess.run(['git', '--no-optional-locks', '-C', str(root), *args],
-                                capture_output=True, encoding='utf-8', errors='strict', timeout=remaining_timeout())
-    finally:
-        eif_state._metric('git', (time.perf_counter() - started) * 1000)
+    result = subprocess.run(['git', '--no-optional-locks', '-C', str(root), *args],
+                            capture_output=True, encoding='utf-8', errors='strict', timeout=remaining_timeout())
     if result.returncode not in allowed:
         raise RuntimeError(f'git {args[0]} exited {result.returncode}: {result.stderr.strip()[:240]}')
     return result
@@ -730,24 +686,19 @@ def pre_check(root, data):
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
     if not state.get('started') or state.get('closure_protocol') != 2 or state['closure_required']:
-        result = boundary(root, data, quarantined=True)
+        result = boundary(root, data)
         if not result[0]:
             return result
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
-        # Re-read under the lock; rewrite (fsync + replace) only when the flag
-        # actually changes. Equal state is not written again.
-        if state.get('closure_activity') is not True:
-            state['closure_activity'] = True
-            atomic_json(path, state)
+        state['closure_activity'] = True
+        atomic_json(path, state)
     return True, '', ''
 
 
-def boundary(root, data, quarantined=False):
-    """quarantined=True: the caller ran legacy_denials() for this event already."""
+def boundary(root, data):
     path = state_path(root, data)
-    if not quarantined:
-        legacy_denials(root, data)
+    legacy_denials(root, data)
     failed = unresolved(root, data)
     if failed and data.get('hook_event_name') in {'stop', 'sessionEnd'}:
         return False, 'SESSION_RETRY_REQUIRED', (
@@ -760,7 +711,6 @@ def boundary(root, data, quarantined=False):
         context, result = None, (False, 'SESSION_GIT_FAILURE', 'Local Git closure inspection failed; repair Git and retry.')
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
-        before = json.dumps(state, sort_keys=True)
         phase = 'close' if data.get('hook_event_name') in {'stop', 'sessionEnd'} else state.get('closure_phase', 'start')
         if data.get('hook_event_name') == 'sessionStart':
             phase = 'start'
@@ -777,13 +727,7 @@ def boundary(root, data, quarantined=False):
             state['closure_request'] = request
             state.pop('closure_receipt', None)
         state['closure_phase'] = phase
-        # sessionStart/resume must not forget work that still needs a close
-        # proof, and must not mint a new request id: that superseded the
-        # command the agent was told to run ("Closure request is absent or
-        # superseded") on a fresh session that had not changed the ledger.
-        # Only the close phase consumes the activity flag.
-        if phase == 'close' or not state.get('closure_activity'):
-            state['closure_activity'] = False
+        state['closure_activity'] = False
         if result is None:
             receipt = state.get('closure_receipt') or {}
             if receipt.get('request') == request['id'] and receipt.get('context') == context:
@@ -794,8 +738,7 @@ def boundary(root, data, quarantined=False):
         state['closure_protocol'] = 2
         state['closure_required'] = not result[0]
         state['closure_reason'] = result[1]
-        if json.dumps(state, sort_keys=True) != before or not path.exists():
-            atomic_json(path, state)
+        atomic_json(path, state)
     return result
 
 

@@ -7,3 +7,7 @@
 .cursor/hooks/*.json text eol=lf
 .cursor/hooks/*.sh text eol=lf
 .cursor/hooks/*.cmd text eol=crlf
+
+# BACKLOG-225 decision B: digest-stable on Linux cloud checkouts (LF everywhere).
+.eif/PROJECT_MANIFEST.md text eol=lf
+.eif/ENVIRONMENT_POLICY.md text eol=lf

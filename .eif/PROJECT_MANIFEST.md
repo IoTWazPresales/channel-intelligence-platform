@@ -17,7 +17,8 @@ identity:
   root_commit: 8f7f1b53e3555dd3010244c7fe8b398ecb881548
   path_scopes:
   - '**'
-  additional_repositories: []
+  additional_repositories:
+  - path: /workspace
 policies:
   autonomy: AUTONOMY_POLICY.md
   environment: ENVIRONMENT_POLICY.md

@@ -13,7 +13,8 @@
     "write": true
   },
   "allowed_roots": [
-    "C:\\Users\\warren_eliason\\channel-intelligence-platform"
+    "C:\\Users\\warren_eliason\\channel-intelligence-platform",
+    "/workspace"
   ],
   "artifact_scopes": [
     ".eif/audit/**"
@@ -91,6 +92,14 @@
           "https://github.com/IoTWazPresales/channel-intelligence-platform.git"
         ],
         "expected_vcs_root": "C:\\Users\\warren_eliason\\channel-intelligence-platform",
+        "root_commit": "8f7f1b53e3555dd3010244c7fe8b398ecb881548"
+      },
+      {
+        "allowed_root": "/workspace",
+        "expected_remotes": [
+          "https://github.com/IoTWazPresales/channel-intelligence-platform.git"
+        ],
+        "expected_vcs_root": "/workspace",
         "root_commit": "8f7f1b53e3555dd3010244c7fe8b398ecb881548"
       }
     ],
@@ -208,7 +217,7 @@
     },
     "manifest": {
       "path": ".eif/PROJECT_MANIFEST.md",
-      "sha256": "6303fe24287d2fa6268f7447d739a1b2d71289192180f0e05917ae2e94355e35"
+      "sha256": "afe42ae4e9603f9d574394e52f558720170baaa302c411a1bda1c7bae23b0ed4"
     }
   },
   "state_root": ".eif"

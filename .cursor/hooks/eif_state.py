@@ -7,19 +7,6 @@ import tempfile
 import time
 
 DEADLINE = None
-# Per-invocation cost counters for the operator log. Diagnostic only: nothing
-# reads them to decide, and recording one can never raise. lock_ms is time
-# spent waiting to acquire (another holder), not time held.
-METRICS = {'lock_count': 0, 'lock_ms': 0.0, 'write_count': 0, 'write_ms': 0.0,
-           'git_count': 0, 'git_ms': 0.0}
-
-
-def _metric(name, ms):
-    try:
-        METRICS[name + '_count'] = METRICS.get(name + '_count', 0) + 1
-        METRICS[name + '_ms'] = round(METRICS.get(name + '_ms', 0.0) + ms, 3)
-    except Exception:
-        pass
 
 
 def remaining_timeout(limit=2.0):
@@ -58,7 +45,6 @@ def file_lock(path, timeout=2.0):
             stream.write(b'\0')
             stream.flush()
         deadline = time.monotonic() + timeout
-        waited_from = time.perf_counter()
         while True:
             try:
                 stream.seek(0)
@@ -71,10 +57,8 @@ def file_lock(path, timeout=2.0):
                 break
             except OSError:
                 if time.monotonic() >= deadline:
-                    _metric('lock', (time.perf_counter() - waited_from) * 1000)
                     raise TimeoutError(f'guard state lock timeout: {path.name}')
                 time.sleep(0.01)
-        _metric('lock', (time.perf_counter() - waited_from) * 1000)
         try:
             yield
         finally:
@@ -104,14 +88,6 @@ def _replace(source, target):
 
 
 def atomic_json(path, state):
-    started = time.perf_counter()
-    try:
-        _atomic_json(path, state)
-    finally:
-        _metric('write', (time.perf_counter() - started) * 1000)
-
-
-def _atomic_json(path, state):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=path.name + '.', suffix='.tmp', dir=path.parent)

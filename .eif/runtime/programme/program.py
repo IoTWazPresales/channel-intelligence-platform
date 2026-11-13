@@ -7,15 +7,6 @@ sys.dont_write_bytecode = True
 _ENTRY_BOOT_DIR = __file__.replace(chr(92), '/').rsplit('/', 1)[0].rstrip('/').casefold()
 sys.path[:] = [item for item in sys.path if item not in ('', '.') and
                item.replace(chr(92), '/').rstrip('/').casefold() != _ENTRY_BOOT_DIR]
-# Captured stderr must be UTF-8. The Windows console code page (often cp1252)
-# makes a loader that decodes stderr as UTF-8 throw before it can show the error.
-for _stream in (sys.stdout, sys.stderr):
-    _reconfigure = getattr(_stream, 'reconfigure', None)
-    if _reconfigure is not None:
-        try:
-            _reconfigure(encoding='utf-8', errors='backslashreplace')
-        except (OSError, ValueError):
-            pass
 """Stdlib-only delivered-runtime checks and cooperative reader/upgrade lock.
 
 The local manifest detects drift, not an attacker replacing code plus manifest.
