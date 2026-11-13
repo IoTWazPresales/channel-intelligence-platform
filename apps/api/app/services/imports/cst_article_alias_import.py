@@ -22,22 +22,15 @@ from sqlalchemy.orm import Session
 
 from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.dimensions import DimCustomer
+from app.models.import_distributor_si import CustomerSourceTokenAlias
 from app.services.imports.cst_d1 import normalize_article_token
-from app.services.imports.distributor_sales_inventory import _load_product_resolution_index
+from app.services.imports.distributor_sales_inventory import (
+    _load_product_resolution_index,
+    _norm_key,
+)
 from app.services.imports.product_resolution_standard import resolve_product_id_single_match
+from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.utils.json_safe import to_jsonable
-
-# SCM display name (lower) → preferred dim_customer.name (exact, case-insensitive).
-CUSTOMER_NAME_CANON: dict[str, str] = {
-    "amazon": "Amazon",
-    "computer mania": "Computer Mania",
-    "game": "Game",
-    "game online": "Game",
-    "hifi": "Hifi",
-    "incredible connection": "Incredible Connection",
-    "makro": "Makro",
-    "fnb": "FNB",
-}
 
 _CUSTOMER_HEADER = frozenset({"customer", "customer name", "customer_name", "retailer"})
 _ARTICLE_HEADER = frozenset(
@@ -132,19 +125,64 @@ def parse_article_alias_workbook(content: bytes) -> list[dict[str, str]]:
         wb.close()
 
 
-def _resolve_customer_id(session: Session, scm_name: str) -> int | None:
+def _resolve_customer_id(
+    session: Session,
+    scm_name: str,
+    *,
+    tenant_id: str | None = None,
+) -> int | None:
+    """Resolve a file's customer name with the platform's generic customer resolution.
+
+    1. ``dim_customer.name`` (trimmed, case-insensitive) in the tenant.
+    2. Approved ``customer_source_token_alias`` rows for the normalized name in the tenant,
+       any scope, used only when they agree on one customer after merge redirect (the
+       ``build_unique_approved_customer_alias_id_by_token`` rule the lineup resolver uses).
+
+    Both follow customer merges. Anything else is unresolved (None) and reported by the caller.
+    ``tenant_id`` None means the request tenant, else the default tenant.
+    """
+    from app.core.tenant_scope import request_tenant_id
+    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
     raw = (scm_name or "").strip()
     if not raw:
         return None
-    canon = CUSTOMER_NAME_CANON.get(raw.lower(), raw)
+    tid = effective_tenant_id(tenant_id if tenant_id is not None else request_tenant_id.get())
     row = session.scalar(
-        select(DimCustomer).where(func.lower(func.btrim(DimCustomer.name)) == canon.strip().lower())
+        select(DimCustomer).where(
+            func.lower(func.btrim(DimCustomer.name)) == raw.lower(),
+            DimCustomer.tenant_id == tid,
+        )
     )
-    if row is None:
-        return None
-    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+    if row is not None:
+        return follow_customer_merge_redirect_sync(session, int(row.id))
 
-    return follow_customer_merge_redirect_sync(session, int(row.id))
+    nt = _norm_key(raw)[:512]
+    if not nt:
+        return None
+    alias_rows = list(
+        session.execute(
+            select(
+                CustomerSourceTokenAlias.normalized_token,
+                CustomerSourceTokenAlias.customer_id,
+            ).where(
+                CustomerSourceTokenAlias.status == "approved",
+                CustomerSourceTokenAlias.normalized_token == nt,
+                tenant_scope_predicate(CustomerSourceTokenAlias, tid),
+            )
+        ).all()
+    )
+    if not alias_rows:
+        return None
+    from app.services.imports.shipment_evidence_resolution_plan import (
+        build_unique_approved_customer_alias_id_by_token,
+    )
+
+    redirect = {
+        int(cid): int(follow_customer_merge_redirect_sync(session, int(cid)) or cid)
+        for _, cid in alias_rows
+    }
+    return build_unique_approved_customer_alias_id_by_token(alias_rows, redirect=redirect).get(nt)
 
 
 def import_article_alias_rows(
@@ -153,6 +191,7 @@ def import_article_alias_rows(
     *,
     source: str = "scm_upload",
     actor: str | None = None,
+    tenant_id: str | None = None,
 ) -> AliasImportSummary:
     """Propose aliases from parsed rows. Does not confirm. Does not overwrite confirmed."""
     summary = AliasImportSummary(rows_read=len(rows))
@@ -175,6 +214,7 @@ def import_article_alias_rows(
     # Group models by (customer_id, article_key)
     grouped: dict[tuple[int, str], set[str]] = defaultdict(set)
     unresolved_customers: set[str] = set()
+    customer_by_name: dict[str, int | None] = {}
 
     for r in cleaned:
         cust_raw = (r.get("customer") or "").strip()
@@ -183,7 +223,11 @@ def import_article_alias_rows(
         if not cust_raw or not art_raw or not model_raw:
             summary.blank_skipped += 1
             continue
-        cid = _resolve_customer_id(session, cust_raw)
+        if cust_raw not in customer_by_name:
+            customer_by_name[cust_raw] = _resolve_customer_id(
+                session, cust_raw, tenant_id=tenant_id
+            )
+        cid = customer_by_name[cust_raw]
         if cid is None:
             summary.customer_unresolved += 1
             unresolved_customers.add(cust_raw)
