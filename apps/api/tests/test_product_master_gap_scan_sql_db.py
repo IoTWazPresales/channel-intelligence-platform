@@ -1,7 +1,8 @@
-"""Catalogue-gap scan: SQL DISTINCT token collection equals the old per-row Python loop.
+"""Catalogue-gap scan: SQL DISTINCT token collection and once-per-source preview equal the old code.
 
 Real PostgreSQL on cip_test, synthetic records only, one rolled-back transaction per test. The old
-implementation is kept below as a private copy and compared with the new one on the same data
+implementation (token collection, per-token preview, apply on top of it) is kept below as a
+private copy and compared with the new one on the same data
 (seeded rows plus whatever cip_test already holds). Seeded tokens start with ``!`` so they sort
 ahead of real catalogue tokens and fall inside a small ``limit``.
 """
@@ -17,7 +18,7 @@ from unittest.mock import patch
 import pytest
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporClaimEvidenceLine
-from app.models.dimensions import DimCustomer
+from app.models.dimensions import DimCustomer, DimProduct
 from app.models.iam import Tenant
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
@@ -96,10 +97,174 @@ def _old_collect_tokens(session) -> set[str]:
     return tokens
 
 
+# --- preview / apply before the per-source rewrite (b2aa6998), same meaning --------------------
+# ``load_once`` only hoists the read-only shipment load out of the token loop (the session is not
+# changed inside a preview, so every per-token load returns the same rows); the per-token matching
+# is verbatim. Default False is the old code exactly.
+
+
+def _old_count_shipment(session, tok: str, rows=None) -> tuple[int, set[int]]:
+    jobs: set[int] = set()
+    n = 0
+    lines = gap._unresolved_shipment_rows(session) if rows is None else rows
+    for line in lines:
+        if gap._line_token_match(line, tok):
+            n += 1
+            if line.import_job_id is not None:
+                jobs.add(int(line.import_job_id))
+    return n, jobs
+
+
+def _old_count_dsi_staging(session, tok: str) -> tuple[int, set[int]]:
+    cands = session.scalars(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.entity_type == "product_identifier",
+            ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
+        )
+    ).all()
+    jobs: set[int] = set()
+    n = 0
+    for c in cands:
+        if gap._norm_token(getattr(c, "normalized_key", None)) == tok:
+            n += 1
+            if c.import_job_id is not None:
+                jobs.add(int(c.import_job_id))
+    return n, jobs
+
+
+def _old_count_cpor_claims(session, tok: str) -> tuple[int, set[int]]:
+    rows = session.scalars(
+        select(CporClaimEvidenceLine).where(CporClaimEvidenceLine.product_id.is_(None))
+    ).all()
+    jobs: set[int] = set()
+    n = 0
+    for r in rows:
+        if gap._norm_token(r.source_model_token) == tok:
+            n += 1
+            if r.import_job_id is not None:
+                jobs.add(int(r.import_job_id))
+    return n, jobs
+
+
+def _old_count_cst_staging(session, tok: str) -> tuple[int, set[int]]:
+    cands = session.scalars(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.entity_type == CST_PRODUCT_ENTITY,
+            ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
+        )
+    ).all()
+    jobs: set[int] = set()
+    n = 0
+    for c in cands:
+        if gap._norm_token(getattr(c, "normalized_key", None)) == tok:
+            n += int(c.row_count or 1)
+            if c.import_job_id is not None:
+                jobs.add(int(c.import_job_id))
+    return n, jobs
+
+
+def _old_preview(session, tokens: list[str], *, load_once: bool = False) -> dict[str, Any]:
+    ship_rows = gap._unresolved_shipment_rows(session) if load_once and tokens else None
+    items: list[dict[str, Any]] = []
+    for raw in tokens:
+        m = gap.match_token_to_product(session, raw)
+        tok = m.get("token") or gap._norm_token(raw)
+        ship_n, ship_jobs = _old_count_shipment(session, tok, ship_rows)
+        dsi_n, dsi_jobs = _old_count_dsi_staging(session, tok)
+        claim_n, claim_jobs = _old_count_cpor_claims(session, tok)
+        cst_n, cst_jobs = _old_count_cst_staging(session, tok)
+        flags: list[str] = []
+        flag_detail: str | None = None
+        if dsi_n > 0:
+            flags.append("dsi_facts_repoint_deferred")
+            flag_detail = (
+                "DSI fact source_key includes product_id — staging-only repoint this unit; "
+                "leftovers remain FLAG not BLOCK"
+            )
+        items.append(
+            {
+                **m,
+                "counts": {
+                    "shipment": ship_n,
+                    "dsi_staging": dsi_n,
+                    "cpor_claim": claim_n,
+                    "cst_staging": cst_n,
+                    "dsi_facts": 0,
+                },
+                "flags": flags,
+                "flag_detail": flag_detail,
+                "affected_job_ids": sorted(ship_jobs | dsi_jobs | claim_jobs | cst_jobs),
+            }
+        )
+    return {
+        "items": items,
+        "matched_count": sum(1 for i in items if i.get("matched")),
+        "unmatched_count": sum(1 for i in items if not i.get("matched")),
+        "data_unavailable": False,
+    }
+
+
+def _old_apply(session, *, tokens: list[str], confirm: bool, write_alias: bool = True, actor=None):
+    if not confirm:
+        return {"ok": False, "error": "confirm_required", "applied": False}
+
+    preview = _old_preview(session, tokens)
+    applied: list[dict[str, Any]] = []
+    total = len(preview["items"])
+
+    for item in preview["items"]:
+        if not item.get("matched"):
+            applied.append({**item, "action": "skipped_unmatched"})
+            continue
+        pid = int(item["product_id"])
+        tok = str(item["token"])
+        ship_u = gap._repoint_shipment(session, tok, pid)
+        dsi_u = gap._repoint_dsi_staging(session, tok, pid)
+        claim_u = gap._repoint_cpor_claims(session, tok, pid)
+        cst_u = gap._repoint_cst_staging(session, tok, pid)
+        alias_written = False
+        alias_skipped_conflict = False
+        if write_alias and (ship_u or dsi_u or claim_u or cst_u):
+            alias_written, alias_skipped_conflict = gap._ensure_product_alias(session, tok, pid)
+        applied.append(
+            {
+                "token": tok,
+                "product_id": pid,
+                "match_tier": item.get("match_tier"),
+                "action": "repointed",
+                "updated": {
+                    "shipment_lines": ship_u,
+                    "dsi_staging_candidates": dsi_u,
+                    "cpor_claim_lines": claim_u,
+                    "cst_staging_candidates": cst_u,
+                    "dsi_facts": 0,
+                },
+                "flags": item.get("flags") or [],
+                "flag_detail": item.get("flag_detail"),
+                "alias_written": alias_written,
+                "alias_skipped_conflict": alias_skipped_conflict,
+                "actor": actor,
+            }
+        )
+
+    session.flush()
+    gap.invalidate_product_resolution_index_cache()
+    return {
+        "ok": True,
+        "applied": True,
+        "items": applied,
+        "summary": {
+            "tokens": total,
+            "repointed": sum(1 for a in applied if a.get("action") == "repointed"),
+            "skipped": sum(1 for a in applied if a.get("action") != "repointed"),
+        },
+    }
+
+
 def _old_scan(session, *, limit: int = 500) -> dict[str, Any]:
     tokens = _old_collect_tokens(session)
     token_list = sorted(tokens)[:limit]
-    preview = gap.preview_gap_resolve(session, token_list)
+    preview = _old_preview(session, token_list)
     matched = [i for i in preview["items"] if i.get("matched")]
     return {
         "scanned_tokens": len(token_list),
@@ -262,10 +427,12 @@ def _seed(db) -> dict[str, Any]:
             "RESOLVED-ITEM", "CAND-IGNORED", "CST-RESOLVED",
         )
     }
-    return {"prefix": up, "expected": expected, "absent": absent}
+    return {"prefix": up, "expected": expected, "absent": absent, "tag": tag, "job_id": int(job.id)}
 
 
-def _index_matching(tokens: list[str]) -> ProductResolutionIndex:
+def _index_matching(tokens: list[str], ids: list[int] | None = None) -> ProductResolutionIndex:
+    if ids is None:
+        ids = [900_000 + i for i in range(len(tokens))]
     return ProductResolutionIndex(
         sku_to_id={},
         part_number_to_ids={},
@@ -274,7 +441,9 @@ def _index_matching(tokens: list[str]) -> ProductResolutionIndex:
         marketing_name_to_ids={},
         ean_to_ids={},
         upc_to_ids={},
-        alias_value_to_ids={_product_token_key(t): (900_000 + i,) for i, t in enumerate(tokens)},
+        alias_value_to_ids={
+            _product_token_key(t): (pid,) for t, pid in zip(tokens, ids, strict=True)
+        },
         steward_alias_by_key={},
         products_by_id={},
     )
@@ -304,7 +473,7 @@ def test_scan_result_identical_to_old_with_truncation(db):
     ordered = sorted(seeded["expected"])
     # Match every other seeded token so the matched list has gaps; its order must survive.
     index = _index_matching(ordered[::2])
-    # Small window: preview_gap_resolve reloads every open shipment line once per token.
+    # Small window: the old preview reloads every open shipment line once per token.
     limit = 3
     with patch.object(gap, "get_product_resolution_index", return_value=index):
         new = gap.scan_open_gaps_for_matches(db, limit=limit)
@@ -315,3 +484,172 @@ def test_scan_result_identical_to_old_with_truncation(db):
     # Seeded tokens sort first, so the scanned window is ours and the matched tokens are known.
     assert [m["token"] for m in new["matched"]] == ordered[:limit:2]
     assert new["matched_count"] == len(new["matched"]) > 0
+
+
+def _seed_preview_extras(db, seeded: dict[str, Any]) -> None:
+    """Grouping cases on top of ``_seed``: identical lines, 2nd job, multi-field hit, CST 0 rows."""
+    tag, p = seeded["tag"], seeded["prefix"]
+    job2 = _job(db, f"{tag}-2")
+    n = 0
+
+    def line(job_id: int, **fields) -> None:
+        nonlocal n
+        n += 1
+        add_evidence_line(
+            db,
+            import_job_id=job_id,
+            source_sheet="S",
+            source_row_number=1000 + n,
+            source_key=f"gs:{tag}:x{n}",
+            product_resolution_status="ambiguous",
+            raw_source_row={"r": n},
+            quantity=1,
+            **fields,
+        )
+
+    # Two identical lines in one job (one SQL group of 2) and one more in another job.
+    line(seeded["job_id"], product_resolution_token=f"{p}-GRP")
+    line(seeded["job_id"], product_resolution_token=f"{p}-GRP")
+    line(int(job2.id), item_code=f"{p.lower()}-grp ")
+    # The same key in two fields of one line counts the line once.
+    line(seeded["job_id"], product_resolution_token=f"{p}-MULTI", ean_code=f" {p}-multi")
+    for job_id, key, count in ((int(job2.id), f"{p}-cst1", 3), (int(job2.id), f"{p}-cst0", 0)):
+        db.add(
+            ImportEntityMappingCandidate(
+                import_job_id=job_id,
+                entity_type=CST_PRODUCT_ENTITY,
+                normalized_key=key,
+                status="needs_review",
+                row_count=count,
+            )
+        )
+    db.flush()
+
+
+def _by_token(preview: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {i["token"]: i for i in preview["items"]}
+
+
+def test_preview_identical_to_old_on_seeded_and_existing_tokens(db):
+    seeded = _seed(db)
+    _seed_preview_extras(db, seeded)
+    p = seeded["prefix"]
+    suffixes = (
+        "TOK1", "ITEM-SHADOWED", "EAN-SHADOWED", "CUST-SHADOWED", "UPC2", "MODEL X", "MPOR7",
+        "TOK3", "OLD-ITEM", "NEW-ITEM", "RESOLVED-TOK", "RESOLVED-ITEM", "CAND1", "CAND-IGNORED",
+        "CST1", "CST2", "CST-RESOLVED", "CPOR1", "GRP", "MULTI", "CST0", "NOWHERE",
+    )
+    seeded_tokens = [f"{p}-{s}" for s in suffixes]
+    real = sorted(t for t in gap._collect_open_gap_tokens(db) if not t.startswith("!GS-"))
+    existing = real[:2] + real[-2:]
+    tokens = [
+        *seeded_tokens,
+        f"  {p.lower()}-tok1 ",  # padded, lower case
+        f"{p}-TOK1",  # duplicate
+        f"{p.lower()}-model   x",  # inner whitespace
+        "",
+        " ",
+        EM_SPACE,
+        *existing,
+    ]
+    index = _index_matching(seeded_tokens[::2] + existing[:1])
+    with patch.object(gap, "get_product_resolution_index", return_value=index):
+        # The new preview never loads open shipment lines row by row.
+        with patch.object(gap, "_unresolved_shipment_rows", side_effect=AssertionError("row load")):
+            new = gap.preview_gap_resolve(db, tokens)
+        old = _old_preview(db, tokens, load_once=True)
+    assert new == old
+    assert len(new["items"]) == len(tokens)
+    assert 0 < new["matched_count"] < len(tokens)
+
+    by = _by_token(new)
+    job = seeded["job_id"]
+    grp = by[f"{p}-GRP"]
+    assert grp["counts"]["shipment"] == 3
+    assert job in grp["affected_job_ids"] and len(grp["affected_job_ids"]) == 2
+    assert by[f"{p}-MULTI"]["counts"]["shipment"] == 1
+    assert by[f"{p}-TOK1"]["counts"]["shipment"] == 2
+    assert by[f"{p}-TOK1"]["counts"]["dsi_staging"] == 1
+    # Preview counts a line when ANY field matches, so shadowed payload values still count.
+    assert by[f"{p}-ITEM-SHADOWED"]["counts"]["shipment"] == 1
+    assert by[f"{p}-OLD-ITEM"]["counts"]["shipment"] == 0
+    assert by[f"{p}-CAND-IGNORED"]["counts"]["dsi_staging"] == 1
+    assert by[f"{p}-CST1"]["counts"]["cst_staging"] == 2 + 3
+    assert by[f"{p}-CST0"]["counts"]["cst_staging"] == 1
+    assert by[f"{p}-CPOR1"]["counts"]["cpor_claim"] == 2
+    assert by[f"{p}-NOWHERE"]["counts"] == {
+        "shipment": 0, "dsi_staging": 0, "cpor_claim": 0, "cst_staging": 0, "dsi_facts": 0,
+    }
+
+
+def test_preview_empty_token_list(db):
+    assert gap.preview_gap_resolve(db, []) == _old_preview(db, [])
+
+
+def _apply_snapshot(db, job_id: int) -> dict[str, Any]:
+    db.flush()
+    return {
+        "lines": db.execute(
+            select(
+                ShipmentEvidenceLine.id,
+                ShipmentEvidenceLine.product_id,
+                ShipmentEvidenceLine.product_resolution_status,
+                ShipmentEvidenceLine.product_resolution_detail,
+            )
+            .where(ShipmentEvidenceLine.import_job_id == job_id)
+            .order_by(ShipmentEvidenceLine.id)
+        ).all(),
+        "candidates": db.execute(
+            select(
+                ImportEntityMappingCandidate.id,
+                ImportEntityMappingCandidate.status,
+                ImportEntityMappingCandidate.suggested_entity_id,
+                ImportEntityMappingCandidate.match_reason,
+                ImportEntityMappingCandidate.context,
+            )
+            .where(ImportEntityMappingCandidate.import_job_id == job_id)
+            .order_by(ImportEntityMappingCandidate.id)
+        ).all(),
+        "claims": db.execute(
+            select(CporClaimEvidenceLine.id, CporClaimEvidenceLine.product_id)
+            .where(CporClaimEvidenceLine.import_job_id == job_id)
+            .order_by(CporClaimEvidenceLine.id)
+        ).all(),
+    }
+
+
+def test_apply_identical_to_old_in_savepoints(db):
+    seeded = _seed(db)
+    p, tag, job = seeded["prefix"], seeded["tag"], seeded["job_id"]
+    products = [
+        DimProduct(tenant_id="default", sku=f"GS-{tag}-P{i}", name="Gap scan fixture product")
+        for i in (1, 2)
+    ]
+    db.add_all(products)
+    db.flush()
+    p1, p2 = (int(x.id) for x in products)
+    tokens = [f"{p}-TOK1", f"  {p.lower()}-tok1 ", f"{p}-CPOR1", f"{p}-CST1", f"{p}-NOWHERE"]
+    index = _index_matching([f"{p}-TOK1", f"{p}-CPOR1", f"{p}-CST1"], [p1, p2, p2])
+    before = _apply_snapshot(db, job)
+
+    def run(fn) -> tuple[dict[str, Any], dict[str, Any]]:
+        savepoint = db.begin_nested()
+        try:
+            out = fn(db, tokens=tokens, confirm=True, write_alias=False, actor="parity")
+            return out, _apply_snapshot(db, job)
+        finally:
+            savepoint.rollback()
+            db.expire_all()
+
+    with patch.object(gap, "get_product_resolution_index", return_value=index):
+        new_out, new_state = run(gap.apply_gap_resolve)
+        assert _apply_snapshot(db, job) == before
+        old_out, old_state = run(_old_apply)
+        assert _apply_snapshot(db, job) == before
+    assert new_out == old_out
+    assert new_state == old_state
+    assert new_state != before
+    assert new_out["summary"] == {"tokens": 5, "repointed": 4, "skipped": 1}
+    first = new_out["items"][0]
+    assert first["updated"]["shipment_lines"] == 2
+    assert first["updated"]["dsi_staging_candidates"] == 1

@@ -91,15 +91,6 @@ def test_match_ambiguous_sales_model(mock_idx: MagicMock) -> None:
 @patch("app.services.imports.product_master_gap_resolve.get_product_resolution_index")
 def test_preview_counts_and_dsi_facts_flag(mock_idx: MagicMock) -> None:
     mock_idx.return_value = _idx(sku_to_id={"gap-sku": 10})
-    from tests.shipment_evidence_fixtures import make_row
-
-    ship = make_row(
-        import_job_id=100,
-        product_resolution_token="GAP-SKU",
-        product_resolution_status="no_match",
-        product_id=None,
-    )
-    ship.line.id = 1
     cand = SimpleNamespace(
         normalized_key="GAP-SKU",
         import_job_id=200,
@@ -112,8 +103,8 @@ def test_preview_counts_and_dsi_facts_flag(mock_idx: MagicMock) -> None:
     )
     session = _session_returning([cand], [claim], [])
     with patch(
-        "app.services.imports.product_master_gap_resolve._unresolved_shipment_rows",
-        return_value=[ship],
+        "app.services.imports.product_master_gap_resolve._shipment_counts_by_key",
+        return_value={"GAP-SKU": (1, {100})},
     ):
         out = preview_gap_resolve(session, ["GAP-SKU"])
     item = out["items"][0]

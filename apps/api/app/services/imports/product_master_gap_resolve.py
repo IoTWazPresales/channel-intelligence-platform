@@ -93,15 +93,29 @@ def preview_gap_resolve(
     session: Session,
     tokens: list[str],
 ) -> dict[str, Any]:
-    """Read-only: match + affected counts by source. No writes."""
+    """Read-only: match + affected counts by source. No writes.
+
+    Each source is read once per call (not once per token) and tallied by key in Python; a token's
+    key is its match token, or its normalized raw value when that is empty.
+    """
+    matches = [match_token_to_product(session, raw) for raw in tokens]
+    keys = [m.get("token") or _norm_token(raw) for m, raw in zip(matches, tokens, strict=True)]
+    wanted = set(keys)
+    ship: _Tally = {}
+    dsi: _Tally = {}
+    claims: _Tally = {}
+    cst: _Tally = {}
+    if wanted:
+        ship = _shipment_counts_by_key(session, wanted)
+        dsi = _dsi_staging_counts_by_key(session, wanted)
+        claims = _cpor_claim_counts_by_key(session, wanted)
+        cst = _cst_staging_counts_by_key(session, wanted)
     items: list[dict[str, Any]] = []
-    for raw in tokens:
-        m = match_token_to_product(session, raw)
-        tok = m.get("token") or _norm_token(raw)
-        ship_n, ship_jobs = _count_shipment(session, tok)
-        dsi_n, dsi_jobs = _count_dsi_staging(session, tok)
-        claim_n, claim_jobs = _count_cpor_claims(session, tok)
-        cst_n, cst_jobs = _count_cst_staging(session, tok)
+    for m, tok in zip(matches, keys, strict=True):
+        ship_n, ship_jobs = ship.get(tok, _NO_HITS)
+        dsi_n, dsi_jobs = dsi.get(tok, _NO_HITS)
+        claim_n, claim_jobs = claims.get(tok, _NO_HITS)
+        cst_n, cst_jobs = cst.get(tok, _NO_HITS)
         flags: list[str] = []
         flag_detail: str | None = None
         if dsi_n > 0:
@@ -133,16 +147,53 @@ def preview_gap_resolve(
     }
 
 
-def _count_shipment(session: Session, tok: str) -> tuple[int, set[int]]:
-    jobs: set[int] = set()
-    n = 0
-    lines = _unresolved_shipment_rows(session)
-    for line in lines:
-        if _line_token_match(line, tok):
-            n += 1
-            if line.import_job_id is not None:
-                jobs.add(int(line.import_job_id))
-    return n, jobs
+# key -> (affected row count, affected import job ids)
+_Tally = dict[str, tuple[int, set[int]]]
+_NO_HITS: tuple[int, frozenset[int]] = (0, frozenset())
+
+
+def _tally_add(tally: _Tally, key: str, n: int, job_id: Any) -> None:
+    count, jobs = tally.get(key, (0, set()))
+    if job_id is not None:
+        jobs.add(int(job_id))
+    tally[key] = (count + n, jobs)
+
+
+def _shipment_counts_by_key(session: Session, keys: set[str]) -> _Tally:
+    """Open shipment lines per key: a line counts once for each key ANY of its fields normalizes to.
+
+    One grouped query over the same line set and fields as ``_unresolved_shipment_rows`` +
+    ``_line_tokens``: lines sharing job, observation presence and all seven raw fields form one
+    group, normalized once. Payload fields count only when the line has an observation.
+    """
+    lateral, obs = latest_observation_lateral()
+    group = (
+        ShipmentEvidenceLine.import_job_id,
+        obs.id.is_not(None),
+        ShipmentEvidenceLine.product_resolution_token,
+        obs.item_code,
+        obs.ean_code,
+        obs.upc_code,
+        obs.sales_model_name,
+        obs.customer_item,
+        obs.mpor_item_no,
+    )
+    stmt = (
+        select(*group, func.count())
+        .select_from(ShipmentEvidenceLine)
+        .outerjoin(lateral, true())
+        .where(
+            ShipmentEvidenceLine.product_id.is_(None),
+            ShipmentEvidenceLine.product_resolution_status.in_(tuple(_SHIPMENT_UNRESOLVED)),
+        )
+        .group_by(*group)
+    )
+    tally: _Tally = {}
+    for job_id, has_payload, line_token, *payload, n in session.execute(stmt).all():
+        fields = (line_token, *payload) if has_payload else (line_token,)
+        for key in {_norm_token(field) for field in fields} & keys:
+            _tally_add(tally, key, int(n), job_id)
+    return tally
 
 
 def _unresolved_shipment_rows(session: Session) -> list[EvidenceRow]:
@@ -170,38 +221,34 @@ def _line_token_match(line: EvidenceRow, tok: str) -> bool:
     return any(_norm_token(field) == tok for field in _line_tokens(line))
 
 
-def _count_dsi_staging(session: Session, tok: str) -> tuple[int, set[int]]:
+def _dsi_staging_counts_by_key(session: Session, keys: set[str]) -> _Tally:
     cands = session.scalars(
         select(ImportEntityMappingCandidate).where(
             ImportEntityMappingCandidate.entity_type == "product_identifier",
             ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
         )
     ).all()
-    jobs: set[int] = set()
-    n = 0
+    tally: _Tally = {}
     for c in cands:
-        if _norm_token(getattr(c, "normalized_key", None)) == tok:
-            n += 1
-            if c.import_job_id is not None:
-                jobs.add(int(c.import_job_id))
-    return n, jobs
+        key = _norm_token(getattr(c, "normalized_key", None))
+        if key in keys:
+            _tally_add(tally, key, 1, c.import_job_id)
+    return tally
 
 
-def _count_cpor_claims(session: Session, tok: str) -> tuple[int, set[int]]:
+def _cpor_claim_counts_by_key(session: Session, keys: set[str]) -> _Tally:
     rows = session.scalars(
         select(CporClaimEvidenceLine).where(CporClaimEvidenceLine.product_id.is_(None))
     ).all()
-    jobs: set[int] = set()
-    n = 0
+    tally: _Tally = {}
     for r in rows:
-        if _norm_token(r.source_model_token) == tok:
-            n += 1
-            if r.import_job_id is not None:
-                jobs.add(int(r.import_job_id))
-    return n, jobs
+        key = _norm_token(r.source_model_token)
+        if key in keys:
+            _tally_add(tally, key, 1, r.import_job_id)
+    return tally
 
 
-def _count_cst_staging(session: Session, tok: str) -> tuple[int, set[int]]:
+def _cst_staging_counts_by_key(session: Session, keys: set[str]) -> _Tally:
     from app.services.imports.cst_mapping_candidates import CST_PRODUCT_ENTITY
 
     cands = session.scalars(
@@ -210,14 +257,12 @@ def _count_cst_staging(session: Session, tok: str) -> tuple[int, set[int]]:
             ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
         )
     ).all()
-    jobs: set[int] = set()
-    n = 0
+    tally: _Tally = {}
     for c in cands:
-        if _norm_token(getattr(c, "normalized_key", None)) == tok:
-            n += int(c.row_count or 1)
-            if c.import_job_id is not None:
-                jobs.add(int(c.import_job_id))
-    return n, jobs
+        key = _norm_token(getattr(c, "normalized_key", None))
+        if key in keys:
+            _tally_add(tally, key, int(c.row_count or 1), c.import_job_id)
+    return tally
 
 
 def apply_gap_resolve(
