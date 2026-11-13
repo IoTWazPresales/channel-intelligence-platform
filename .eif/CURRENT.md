@@ -25,7 +25,7 @@
 - **N-0097** Lineup follow-ons: PF quantity columns, workbench identifier split, supersession hardening, margin amounts (feature, R2, stage=None)
 - **N-0099** Independent second-look verification of self-verified closed nodes before the branch goes to main (feature, R2, stage=None)
 - **N-0108** Brief and Cover speed: stop sorting the whole weeks-of-cover table to keep the latest rows (feature, R2, stage=None)
-- **N-0102** N-0085 U2: per-retailer page reader framework (Takealot, Evetech, Amazon), N-0078 fields, registry migrations, discovery for Takealot and Evetech (feature, R2, stage=None)
+- **N-0102** Listings and competition, generic: one discovery and reader pipeline for every flagged reporting customer (folds in N-0104, N-0105, N-0106 per Warren brief 2026-11-13) (feature, R2, stage=None)
 
 ## In progress / leased
 

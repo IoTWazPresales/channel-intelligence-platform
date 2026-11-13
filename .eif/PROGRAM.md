@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2921
+**Snapshot revision:** 2925
 
 ## Outcome (verbatim)
 
@@ -123,11 +123,11 @@ _none_
 | N-0099 | Independent second-look verification of self-verified closed nodes before the branch goes to main | feature | proposed | proposed | yes |  | full loop |
 | N-0100 | CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136) | feature | ready | ready | yes |  | full loop |
 | N-0101 | N-0085 U1: listing polling on under the supervisor, restock seen again, dead-link back-off, per-site 403/429 pause, run time limit | feature | complete | complete | yes |  | full loop |
-| N-0102 | N-0085 U2: per-retailer page reader framework (Takealot, Evetech, Amazon), N-0078 fields, registry migrations, discovery for Takealot and Evetech | feature | proposed | proposed | yes |  | full loop |
+| N-0102 | Listings and competition, generic: one discovery and reader pipeline for every flagged reporting customer (folds in N-0104, N-0105, N-0106 per Warren brief 2026-11-13) | feature | proposed | proposed | yes |  | full loop |
 | N-0103 | N-0085 U6: Proposed listings steward worklist with bulk confirm, and a per-customer Coverage lens | feature | proposed | proposed | yes |  | full loop |
-| N-0104 | N-0085 U4: Computer Mania reader and discovery (Shopify search, sku/barcode corroboration) | feature | proposed | proposed | yes |  | full loop |
-| N-0105 | N-0085 U3: Game and Makro readers and discovery (Makro site search per D-0063) | feature | proposed | proposed | yes |  | full loop |
-| N-0106 | N-0085 U5: Incredible Connection and HiFi Corp shared reader and discovery | feature | proposed | proposed | yes |  | full loop |
+| N-0104 | N-0085 U4: Computer Mania reader and discovery (Shopify search, sku/barcode corroboration) | feature | rejected | rejected | yes |  | full loop |
+| N-0105 | N-0085 U3: Game and Makro readers and discovery (Makro site search per D-0063) | feature | rejected | rejected | yes |  | full loop |
+| N-0106 | N-0085 U5: Incredible Connection and HiFi Corp shared reader and discovery | feature | rejected | rejected | yes |  | full loop |
 | N-0107 | Supervisor recognises a network that blocks the tunnel port and stops churning the quick tunnel | feature | complete | complete | yes |  | full loop |
 | N-0108 | Brief and Cover speed: stop sorting the whole weeks-of-cover table to keep the latest rows | feature | proposed | proposed | yes |  | full loop |
 | N-0109 | Reports, dashboards and KPI tiles on the design lab system: one chart system, one KPI tile, one table style (build to mockup-report-system) | feature | complete | complete | yes |  | full loop |
