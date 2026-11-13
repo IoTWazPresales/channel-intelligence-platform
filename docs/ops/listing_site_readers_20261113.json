@@ -1,0 +1,59 @@
+{
+  "about": "Listing-site reader configuration that lived in code until commit 3ea6cce4 (2026-11-03) and was not carried into listing_site by migration 20261103_0053. Input for apps/api/scripts/ops/restore_listing_site_readers.py. The script fills only columns that are empty on the site row today; a steward's value is never replaced. Review every value before --apply.",
+  "recovered_from": {
+    "commit": "3ea6cce4aa15fb3d6cd554e4a103b591c8af2e2f",
+    "parent": "dd0a3fb061d0c07985f97d830d87d08c362880c4",
+    "files": [
+      "apps/api/app/services/listing_capture/takealot_fetch.py (deleted)",
+      "apps/api/app/services/listing_capture/auto_finder.py (deleted)",
+      "apps/api/app/services/listing_capture/observation.py (RATE_LIMIT_SECONDS removed)",
+      "apps/api/app/services/listing_capture/quality.py (EXPECTED_SELLER removed)",
+      "apps/api/app/services/listing_capture/registry.py (per-marketplace fetch dispatch removed)"
+    ]
+  },
+  "tenant_id": "default",
+  "sites": {
+    "takealot": {
+      "adapter_key": "rest_buybox_json",
+      "details_url_pattern": "https://api.takealot.com/rest/v-1-16-0/product-details/PLID{page_id}?platform=desktop",
+      "search_url_pattern": "https://api.takealot.com/rest/v-1-16-0/searches/products?qsearch={query}",
+      "product_url_pattern": "https://www.takealot.com/x/PLID{page_id}",
+      "page_id_pattern": "(?:PLID|plid)(\\d{5,12})",
+      "first_party_seller": "Takealot",
+      "rate_limit_seconds": 2.0
+    },
+    "amazon": {
+      "adapter_key": "html_page",
+      "product_url_pattern": "https://www.amazon.co.za/dp/{page_id}",
+      "rate_limit_seconds": 2.0
+    },
+    "evetech": {
+      "adapter_key": "html_page",
+      "product_url_pattern": "https://www.evetech.co.za/asus-laptops/laptops-for-sale/{page_id}",
+      "first_party_seller": "Evetech",
+      "rate_limit_seconds": 2.0
+    }
+  },
+  "provenance": {
+    "takealot.adapter_key": "registry.record_observation sent this marketplace to takealot_fetch.fetch_takealot_listing (REST product-details + buy box). Its data-driven successor is the rest_buybox_json reader.",
+    "takealot.details_url_pattern": "takealot_fetch.product_details_url: f\"{TAKEALOT_API_ORIGIN}/rest/{TAKEALOT_REST_VERSION}/product-details/PLID{digits}?platform=desktop\" with TAKEALOT_API_ORIGIN = https://api.takealot.com and TAKEALOT_REST_VERSION = v-1-16-0. {page_id} is the digits only, so the site's page_id_pattern must capture the digits after PLID (the dry run prints a sample details URL from a stored listing to check this).",
+    "takealot.search_url_pattern": "takealot_fetch.ean_search_url: f\"{TAKEALOT_API_ORIGIN}/rest/{TAKEALOT_REST_VERSION}/searches/products?qsearch={ean}\".",
+    "takealot.product_url_pattern": "auto_finder._LISTING_URL_TEMPLATES and auto_finder.takealot_product_url: https://www.takealot.com/x/PLID<n>.",
+    "takealot.page_id_pattern": "takealot_fetch._PLID_IN_URL_RE = (?:PLID|plid)(\\d{5,12}), used by extract_plid on the stored URL.",
+    "takealot.first_party_seller": "quality.EXPECTED_SELLER (the buy-box seller the quality check expected for this marketplace).",
+    "takealot.rate_limit_seconds": "observation.RATE_LIMIT_SECONDS.",
+    "amazon.adapter_key": "registry.record_observation fetched the stored URL and ran the generic parse_snapshot_text for every marketplace except takealot. Its successor is the html_page reader (no required columns).",
+    "amazon.product_url_pattern": "auto_finder._LISTING_URL_TEMPLATES: https://www.amazon.co.za/dp/{external_id} (placeholder renamed to {page_id}).",
+    "amazon.rate_limit_seconds": "observation.RATE_LIMIT_SECONDS.",
+    "evetech.adapter_key": "As amazon (generic stored-URL fetch + parse_snapshot_text). On cip it already has html_page since autoconfigure 2026-11-12, so the script keeps it.",
+    "evetech.product_url_pattern": "auto_finder._LISTING_URL_TEMPLATES: https://www.evetech.co.za/asus-laptops/laptops-for-sale/{external_id} (placeholder renamed to {page_id}).",
+    "evetech.first_party_seller": "quality.EXPECTED_SELLER.",
+    "evetech.rate_limit_seconds": "observation.RATE_LIMIT_SECONDS."
+  },
+  "not_in_code_warren_must_supply": [
+    "Each reporting customer's own seller names / seller ids per site (listing_site_seller). Code never held them; enter them on Sites & sellers or in the customer's listing_seed.",
+    "amazon.page_id_pattern: code only had an ASIN check on the report token (^B0[A-Z0-9]{8}$), not a URL pattern. Not needed by html_page.",
+    "amazon.first_party_seller: code never named one (quality.EXPECTED_SELLER had no entry). Leave empty unless the page-shown own-stock seller is known; on a marketplace with third-party sellers a wrong value would mark other sellers' offers as the store's own.",
+    "Product links for the amazon listings that have no product_id (see LISTING_CAPTURE_CHECK_20261113 Q2)."
+  ]
+}

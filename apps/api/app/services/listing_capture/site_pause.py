@@ -71,11 +71,12 @@ class MemorySitePauseStore:
 
 
 class RedisSitePauseStore:
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, *, prefix: str = KEY_PREFIX) -> None:
         self._client = client
+        self._prefix = prefix
 
     def get(self, marketplace: str) -> dict[str, Any] | None:
-        raw = self._client.get(KEY_PREFIX + marketplace)
+        raw = self._client.get(self._prefix + marketplace)
         if not raw:
             return None
         try:
@@ -85,10 +86,11 @@ class RedisSitePauseStore:
         return data if isinstance(data, dict) else None
 
     def set(self, marketplace: str, record: dict[str, Any], *, ttl_seconds: int) -> None:
-        self._client.set(KEY_PREFIX + marketplace, json.dumps(record), ex=int(ttl_seconds))
+        payload = json.dumps(record, default=str)
+        self._client.set(self._prefix + marketplace, payload, ex=int(ttl_seconds))
 
     def delete(self, marketplace: str) -> None:
-        self._client.delete(KEY_PREFIX + marketplace)
+        self._client.delete(self._prefix + marketplace)
 
 
 _memory_store = MemorySitePauseStore()
@@ -199,3 +201,56 @@ def clear_site_pause(store: SitePauseStore, marketplace: str) -> None:
         store.delete(marketplace)
     except Exception:  # noqa: BLE001
         logger.warning("listing capture: site pause clear failed for %s", marketplace, exc_info=True)
+
+
+# ---------------------------------------------------------------- last run records
+#
+# The poll and the autoconfigure task each keep their latest run record here, so the
+# capture-health endpoint can say which sites were skipped and why. Same storage as the
+# pause records (Redis, process-local fallback) until a site-state table exists. The key
+# carries the database name, so a run against one database never replaces another's record.
+
+RUN_STATE_PREFIX = "cip:listing_capture:last_run:"
+RUN_STATE_TTL_SECONDS = 7 * 24 * 3600
+RUN_POLL = "poll"
+RUN_AUTOCONFIGURE = "autoconfigure"
+_memory_run_store = MemorySitePauseStore()
+
+
+def _database_name() -> str:
+    from sqlalchemy.engine import make_url
+
+    try:
+        return make_url(get_settings().database_url_sync).database or "unknown"
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+def default_run_state_store() -> SitePauseStore:
+    """Redis when reachable, else the process-local store (the pause store warns of an outage)."""
+    client = _redis_client()
+    try:
+        client.ping()
+    except _REDIS_UNREACHABLE_ERRORS:
+        return _memory_run_store
+    return RedisSitePauseStore(client, prefix=f"{RUN_STATE_PREFIX}{_database_name()}:")
+
+
+def save_run_state(
+    name: str, record: dict[str, Any], *, store: SitePauseStore | None = None
+) -> None:
+    """Keep the latest record for ``name``. A storage failure is logged, never raised."""
+    try:
+        target = store if store is not None else default_run_state_store()
+        target.set(name, record, ttl_seconds=RUN_STATE_TTL_SECONDS)
+    except Exception:  # noqa: BLE001
+        logger.warning("listing capture: could not keep the %s run record", name, exc_info=True)
+
+
+def load_run_state(name: str, *, store: SitePauseStore | None = None) -> dict[str, Any] | None:
+    try:
+        target = store if store is not None else default_run_state_store()
+        return target.get(name)
+    except Exception:  # noqa: BLE001
+        logger.warning("listing capture: could not read the %s run record", name, exc_info=True)
+        return None

@@ -41,6 +41,7 @@ Seed shape (all optional, all data)::
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any, Callable
 
 from sqlalchemy import func, select, text
@@ -53,7 +54,13 @@ from app.models.listing_site import ListingSite
 from app.services.listing_capture.adapters import SiteConfig, configured_adapter
 from app.services.listing_capture.adapters.html_page import ADAPTER_KEY as HTML_PAGE_ADAPTER
 from app.services.listing_capture.identity import corroboration, page_facts_from_html
-from app.services.listing_capture.registry import POLLED_LISTING_STATUSES
+from app.services.listing_capture.registry import POLLED_LISTING_STATUSES, not_configured_reason
+from app.services.listing_capture.site_pause import (
+    RUN_AUTOCONFIGURE,
+    RUN_POLL,
+    load_run_state,
+    save_run_state,
+)
 from app.services.listing_capture.sites import (
     INFERRED_SELLER_ACTOR,
     SITE_KEY_RE,
@@ -76,6 +83,7 @@ REASON_FAILED = "autoconfigure_failed"
 OUTCOME_CONFIGURED = "configured"
 OUTCOME_EXCLUDED = "excluded"
 OUTCOME_NEEDS_PATTERN = "needs_pattern"
+NOT_POLLED_NO_READER = "no_reader_configured"
 
 _FILLABLE = (
     "adapter_key",
@@ -94,26 +102,98 @@ def autoconfigure_sites(
     *,
     tenant_id: str | None = None,
     http_get: _HttpGet | None = None,
+    run_store=None,
 ) -> dict[str, Any]:
     """Create or fill listing sites for reporting customers. Idempotent under an advisory lock.
 
     ``tenant_id`` limits the run to one tenant. The beat task passes none and walks every
     tenant that has a reporting customer, filtering every read and write by that tenant.
+
+    ``run.sites`` in the report is the per-site state after the run (listings the poll will skip
+    as not configured, the empty columns, each probe's outcome). A site that still has no
+    reader and has due listings is logged at WARNING, and the summary is kept as the
+    tenant's latest autoconfigure run for capture health.
     """
     from app.services.listing_capture.observation import listing_live_fetch_enabled
 
     live = listing_live_fetch_enabled()
     _advisory_lock(session)
     entries: list[dict[str, Any]] = []
-    for tid in _tenant_ids(session, tenant_id):
+    tenants = _tenant_ids(session, tenant_id)
+    for tid in tenants:
         entries.extend(_configure_tenant(session, tid, http_get=http_get if live else None))
     report = _bucket(entries)
     report["live_fetch_disabled"] = not live
+    # A dict, not a top-level list: the top-level lists are the customer buckets.
+    report["run"] = {"sites": []}
+    for tid in tenants:
+        summary = _site_run_summary(session, tid, entries)
+        report["run"]["sites"].extend(summary)
+        _warn_unconfigured(summary)
+        save_run_state(
+            run_state_key_autoconfigure(tid),
+            {
+                "finished_at": datetime.now(UTC).isoformat(),
+                "tenant_id": tid,
+                "live_fetch_disabled": not live,
+                "sites": summary,
+            },
+            store=run_store,
+        )
     return report
 
 
-def capture_health(session: Session, *, tenant_id: str) -> dict[str, Any]:
-    """Read-only capture posture for one tenant. Does not fetch and does not write."""
+def run_state_key_autoconfigure(tenant_id: str) -> str:
+    return f"{RUN_AUTOCONFIGURE}:{tenant_id}"
+
+
+def _site_run_summary(
+    session: Session, tenant_id: str, entries: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Per site after this run: configured, unpolled listings, missing columns, probe outcomes."""
+    probes: dict[str, list[dict[str, Any]]] = {}
+    for entry in entries:
+        if entry.get("tenant_id") != tenant_id or not entry.get("site_key"):
+            continue
+        if entry.get("probe") is None:
+            continue
+        found = {"customer_id": entry["customer_id"], **entry["probe"]}
+        probes.setdefault(str(entry["site_key"]), []).append(found)
+    return [
+        {"tenant_id": tenant_id, **row, "probes": probes.get(row["site_key"], [])}
+        for row in _site_health(session, tenant_id)
+    ]
+
+
+def _probe_text(probe: dict[str, Any]) -> str:
+    status = probe.get("status")
+    suffix = f" (HTTP {status})" if status else ""
+    return f"customer {probe.get('customer_id')}: {probe.get('reason')}{suffix}"
+
+
+def _warn_unconfigured(summary: list[dict[str, Any]]) -> None:
+    for site in summary:
+        if site["configured"] or int(site["skipped_not_configured"]) <= 0:
+            continue
+        logger.warning(
+            "listing autoconfigure: site %s (tenant %s) still has no reader: "
+            "%s listings not polled (missing: %s; probe: %s)",
+            site["site_key"],
+            site["tenant_id"],
+            site["skipped_not_configured"],
+            ", ".join(site["missing_fields"]) or "unknown",
+            "; ".join(_probe_text(p) for p in site["probes"]) or "not run",
+        )
+
+
+def capture_health(session: Session, *, tenant_id: str, run_store=None) -> dict[str, Any]:
+    """Read-only capture posture for one tenant. Does not fetch and does not write.
+
+    ``not_polled`` lists each site whose due listings the poll skips because it has no
+    reader (with the empty columns and the latest probe outcome). ``last_poll_run`` and
+    ``last_autoconfigure_run`` are the latest run records for this tenant (None when no run
+    has been kept yet).
+    """
     tid = str(tenant_id)
     entries = _configure_tenant(session, tid, http_get=None, apply=False)
     sites = _site_health(session, tid)
@@ -125,16 +205,55 @@ def capture_health(session: Session, *, tenant_id: str) -> dict[str, Any]:
         for row in sites
         if int(row["skipped_not_configured"]) > 0
     }
+    last_poll = _last_poll_run(tid, run_store)
+    last_auto = _last_autoconfigure_run(tid, run_store)
+    probes = {s["site_key"]: s.get("probes") or [] for s in (last_auto or {}).get("sites") or []}
+    not_polled = [
+        {
+            "site_key": row["site_key"],
+            "site_id": row["site_id"],
+            "listings": row["skipped_not_configured"],
+            "reason": NOT_POLLED_NO_READER,
+            "missing_fields": row["missing_fields"],
+            "last_probes": probes.get(row["site_key"], []),
+        }
+        for row in sites
+        if int(row["skipped_not_configured"]) > 0
+    ]
     return {
         "tenant_id": tid,
         "data_unavailable": False,
         "sites": sites,
         "listings_due": sum(int(row["listings_due"]) for row in sites),
         "skipped_not_configured": skipped,
+        "not_polled": not_polled,
+        "last_poll_run": last_poll,
+        "last_autoconfigure_run": last_auto,
         "exclusions": [entry for entry in entries if entry["outcome"] != OUTCOME_CONFIGURED],
         "configured": [entry for entry in entries if entry["outcome"] == OUTCOME_CONFIGURED],
         "coverage": coverage,
     }
+
+
+def _last_poll_run(tenant_id: str, run_store) -> dict[str, Any] | None:
+    """The latest poll run, cut to this tenant (the poll covers every tenant)."""
+    record = load_run_state(RUN_POLL, store=run_store)
+    if not record:
+        return None
+    mine = [e for e in record.get("not_configured_sites") or [] if e.get("tenant_id") == tenant_id]
+    return {
+        "finished_at": record.get("finished_at"),
+        "stopped_reason": record.get("stopped_reason"),
+        "not_configured_sites": mine,
+        "listings_not_polled": sum(int(e.get("listings") or 0) for e in mine),
+    }
+
+
+def _last_autoconfigure_run(tenant_id: str, run_store) -> dict[str, Any] | None:
+    record = load_run_state(run_state_key_autoconfigure(tenant_id), store=run_store)
+    if not record or record.get("tenant_id") != tenant_id:
+        return None
+    return record
 
 
 def _advisory_lock(session: Session) -> None:
@@ -277,6 +396,7 @@ def _configure_site(
     else:
         pattern_status = "none"
     row = _load_site(session, tenant_id, site_key)
+    probe: dict[str, Any] | None = None
 
     if apply:
         if row is None:
@@ -294,13 +414,14 @@ def _configure_site(
                     raise
                 row = _load_site(session, tenant_id, site_key)
         if row is not None:
-            probe_ok = _html_probe(
+            probe = _html_probe(
                 session,
                 tenant_id=tenant_id,
                 listings=listings,
                 http_get=http_get,
                 adapter_blank=_is_blank(row.adapter_key),
             )
+            probe_ok = bool(probe["corroborated"])
             fill = _fill_fields(row, seed=seed, derived=derived, probe_ok=probe_ok)
             _apply_fill(session, row, fill)
             _ensure_seller(session, row, customer=customer, seed=seed)
@@ -331,6 +452,7 @@ def _configure_site(
         reasons=reasons,
         site_id=int(row.id) if row is not None and row.id is not None else None,
         pattern_status=pattern_status,
+        probe=probe,
     )
 
 
@@ -375,6 +497,35 @@ def _load_site(session: Session, tenant_id: str, site_key: str) -> ListingSite |
     return row if isinstance(row, ListingSite) else None
 
 
+PROBE_CORROBORATED = "corroborated"
+PROBE_NOT_NEEDED = "adapter_already_set"
+PROBE_NO_FETCH = "no_live_fetch"
+PROBE_NO_LISTING = "no_listing_with_product_and_url"
+PROBE_NO_PRODUCT = "product_not_found"
+PROBE_FETCH_ERROR = "fetch_error"
+PROBE_HTTP_STATUS = "http_status_not_200"
+PROBE_EMPTY_BODY = "empty_body"
+PROBE_NO_MATCH = "no_barcode_or_model_match"
+
+
+def _probe(
+    reason: str,
+    *,
+    status: int | None = None,
+    listing_id: int | None = None,
+    detail: str | None = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "corroborated": reason == PROBE_CORROBORATED,
+        "reason": reason,
+        "status": status,
+        "listing_id": listing_id,
+    }
+    if detail:
+        out["detail"] = detail[:200]
+    return out
+
+
 def _html_probe(
     session: Session,
     *,
@@ -382,18 +533,23 @@ def _html_probe(
     listings: list[CustomerListing],
     http_get: _HttpGet | None,
     adapter_blank: bool,
-) -> bool:
+) -> dict[str, Any]:
     """One stored-URL read plus the same identity corroboration the link learner uses.
 
     A page corroborates when its gtin/mpn/model equals the product. A stock code does not.
+    Returns the outcome (``corroborated``, ``reason``, HTTP ``status``) so a site that stays
+    unconfigured says why.
     """
     from app.services.listing_capture.observation import listing_live_fetch_enabled
 
-    if not adapter_blank or http_get is None or not listing_live_fetch_enabled():
-        return False
+    if not adapter_blank:
+        return _probe(PROBE_NOT_NEEDED)
+    if http_get is None or not listing_live_fetch_enabled():
+        return _probe(PROBE_NO_FETCH)
     listing = next((row for row in listings if row.product_id and str(row.url or "").strip()), None)
     if listing is None:
-        return False
+        return _probe(PROBE_NO_LISTING)
+    lid = int(listing.id) if listing.id is not None else None
     product = session.scalar(
         select(DimProduct).where(
             DimProduct.id == int(listing.product_id),
@@ -401,14 +557,19 @@ def _html_probe(
         )
     )
     if not isinstance(product, DimProduct):
-        return False
+        return _probe(PROBE_NO_PRODUCT, listing_id=lid)
     try:
         status, body = http_get(str(listing.url))
-    except (OSError, ValueError, RuntimeError):
-        return False
-    if int(status or 0) != 200 or not body:
-        return False
-    return corroboration(page_facts_from_html(body), product) in {"barcode", "model"}
+    except (OSError, ValueError, RuntimeError) as exc:
+        return _probe(PROBE_FETCH_ERROR, listing_id=lid, detail=type(exc).__name__)
+    code = int(status or 0)
+    if code != 200:
+        return _probe(PROBE_HTTP_STATUS, status=code, listing_id=lid)
+    if not body:
+        return _probe(PROBE_EMPTY_BODY, status=code, listing_id=lid)
+    if corroboration(page_facts_from_html(body), product) in {"barcode", "model"}:
+        return _probe(PROBE_CORROBORATED, status=code, listing_id=lid)
+    return _probe(PROBE_NO_MATCH, status=code, listing_id=lid)
 
 
 def _fill_fields(
@@ -702,8 +863,9 @@ def _site_health(session: Session, tenant_id: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for key in keys:
         row = by_key.get(key)
+        config = site_config_from_row(row) if row is not None else None
         configured = bool(
-            row is not None and row.is_active and configured_adapter(site_config_from_row(row)) is not None
+            row is not None and row.is_active and configured_adapter(config) is not None
         )
         due = int(due_by_key.get(key, 0))
         out.append(
@@ -711,6 +873,7 @@ def _site_health(session: Session, tenant_id: str) -> list[dict[str, Any]]:
                 "site_id": int(row.id) if row is not None else None,
                 "site_key": key,
                 "configured": configured,
+                "missing_fields": [] if configured else not_configured_reason(config),
                 "newest_observation": newest_by_key.get(key),
                 "listings_due": due,
                 "skipped_not_configured": 0 if configured else due,
@@ -729,6 +892,7 @@ def _entry(
     reasons: list[str] | None = None,
     site_id: int | None = None,
     pattern_status: str | None = None,
+    probe: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     listed = list(reasons) if reasons is not None else ([reason] if reason else [])
     return {
@@ -740,6 +904,7 @@ def _entry(
         "reason": reason,
         "reasons": listed,
         "pattern_status": pattern_status,
+        "probe": probe,
     }
 
 
