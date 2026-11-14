@@ -411,6 +411,9 @@ def _append_operator_log(code, message, extra=None):
         p = _operator_log_path()
         p.parent.mkdir(parents=True, exist_ok=True)
         rec = {'ts': int(time.time()), 'reason_code': code, 'message': message}
+        if _SUPPORT_READY and isinstance(_ACTIVE_DATA, dict):
+            # BACKLOG-232: which records ran under a transcript_path identity.
+            rec.update(support('eif_session').identity_log_fields(_ACTIVE_DATA))
         if extra:
             for k, v in extra.items():
                 if k not in rec:
@@ -3725,7 +3728,7 @@ def browser_action_kind(name):
     return 'observe'
 
 def _browser_state_path(root: Path, data):
-    conv=re.sub(r'[^A-Za-z0-9_.-]','_',str(data.get('conversation_id') or 'unknown'))[:120]
+    conv=re.sub(r'[^A-Za-z0-9_.-]','_',support('eif_session').conversation(data))[:120]
     d=root/'.eif'/'runtime-budget'; d.mkdir(parents=True, exist_ok=True)
     return d/f'browser-{conv}.json'
 

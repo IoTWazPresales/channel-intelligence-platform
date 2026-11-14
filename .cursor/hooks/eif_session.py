@@ -148,8 +148,50 @@ def verifier_command(command):
     return isinstance(command, str) and re.fullmatch(VERIFY_COMMAND, command) is not None
 
 
+# BACKLOG-232. Cursor Project helpers on Windows send empty conversation_id and
+# session_id but a transcript_path (IDENTITY_TOOL denial, ts 1794688772). When
+# both ids are empty, a non-empty ABSOLUTE transcript_path identifies the
+# session: 'tp-' + sha256(normalised path)[:32]. The raw path (it contains the
+# user's profile directory) is never a key, a log value or a message.
+# generation_id, tool_use_id, model, cwd, workspace_roots and user_email are
+# never identity. Anything else keeps 'unknown' (IDENTITY_TOOL for mutations).
+_WINDOWS_ABSOLUTE = re.compile(r'^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)')
+
+
+def transcript_session_key(data):
+    """'tp-<32 hex>' from an absolute transcript_path, else None. Host independent:
+    a Windows path is normalised the Windows way (case and separators folded)."""
+    raw = data.get('transcript_path') if isinstance(data, dict) else None
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text or '\x00' in text:
+        return None
+    if _WINDOWS_ABSOLUTE.match(text):
+        import ntpath
+        norm = ntpath.normcase(ntpath.normpath(text))
+    elif text.startswith('/'):
+        import posixpath
+        norm = posixpath.normpath(text)
+    else:
+        return None
+    return 'tp-' + hashlib.sha256(norm.encode('utf-8')).hexdigest()[:32]
+
+
 def conversation(data):
-    return str(data.get('conversation_id') or data.get('session_id') or 'unknown')
+    explicit = data.get('conversation_id') or data.get('session_id')
+    if explicit:
+        return str(explicit)
+    return transcript_session_key(data) or 'unknown'
+
+
+def identity_log_fields(data):
+    """Log fields for a session identified by transcript_path, else {}.
+    The key prefix (12 hex) lets the operator read per-helper stability."""
+    if not isinstance(data, dict) or data.get('conversation_id') or data.get('session_id'):
+        return {}
+    key = transcript_session_key(data)
+    return {'identity_source': 'transcript_path', 'identity_key_prefix': key[3:15]} if key else {}
 
 
 def state_path(root, data):
