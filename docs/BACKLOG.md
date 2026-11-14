@@ -3512,14 +3512,15 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **In progress** — 2026-11-10. Step 1 (launcher) is in this PR. Steps 2-5 are **held for Warren**: they change accepted EIF policy (identity) or line-ending rules, which this item was not approved to touch. Until then, cloud agents cannot do any work on this repo, and EIF-governed coding stays on Warren's PC. |
+| **Status / parked** | **Done** — 2026-11-14. Closed on the evidence below. The 2026-11-10 "in progress / held" wording described the launcher-only step; it is not the current status. |
 | **Source** | 2026-11-10 13:04 SAST: six Cursor cloud runs were blocked on every tool call with `/bin/bash: line 1: .cursor/hooks/eif_guard.cmd: Permission denied` (exit 126). The hooks are fail-closed, so nothing ran. One run then tried to chmod or delete hook files and was cancelled. |
 | **Root cause (proven)** | Proof: a scratch clone of `368091f7` under WSL Ubuntu (Python 3.12.3) on Warren's PC, never pushed. The hook command was run the way Cursor runs it on Linux (`/bin/bash -c "<command>"`, JSON on stdin), peeling the blockers one at a time. **1. Launcher.** The EIF installer writes `.cursor/hooks.json` for the OS it runs on (`runtime/cursor/hook_adapter.py` in the EIF framework: Windows gets `eif_guard.cmd`, POSIX gets `eif_guard.sh`). This repo was installed on Windows, and its hook files are mode 100644. bash cannot execute the batch launcher, so it exits 126. **2. Runtime integrity.** `.cursor/eif-runtime-manifest.json` hashes `eif_guard.py` and `eif_session.py` with CRLF line endings. Warren's local `.git/info/attributes` (not committed) forces `eol=crlf` on those two files and on `.eif/PROJECT_MANIFEST.md` and `.eif/ENVIRONMENT_POLICY.md`. A Linux checkout gets LF, so the result is `RUNTIME_INTEGRITY` (runtime digest mismatch). **3. Policy integrity.** For the same reason, the policy source hashes fail: `POLICY_INTEGRITY` (`.eif/ENVIRONMENT_POLICY.md`). **4. Identity.** The compiled policy pins `expected_vcs_root`, `allowed_roots` and the repository anchor to `C:\Users\warren_eliason\channel-intelligence-platform`. Any other path gets `IDENTITY_MISMATCH` (`IDENTITY_TOOL` / `IDENTITY_READ` / `IDENTITY_SHELL`) or `FOREIGN_READ`: cloud VMs use `/workspace`, and the PC's `.worktrees/*` are affected too. **5. Closure.** A fresh local branch with no upstream gets `SESSION_PUSH_REQUIRED`. Every step failed closed. |
 | **Step 1 (this PR)** | One POSIX dispatch line goes at the top of `.cursor/hooks/eif_guard.cmd`: `:; exec /bin/sh "$(dirname -- "$0")/eif_guard.sh" "$@"; exit 126 #`. To `cmd.exe` it is a label line, which is skipped. Under bash it runs as a shell script and hands over to the reviewed EIF POSIX launcher `eif_guard.sh`, which is unchanged and already fails closed (no Python, a crash or invalid JSON all lead to a deny). The git mode of `eif_guard.cmd` is now 100755. The digest of `eif_guard.cmd` in `.cursor/eif-runtime-manifest.json` is updated; nothing else in the manifest changed. `.cursor/hooks.json`, `eif_guard.py`, `eif_guard.sh` and the policy are unchanged. **Windows proof:** in the worktree, the old and new launcher were run with seven payloads through Cursor's PowerShell wrapper. Permission, decision kind and reason code were identical for every payload, with one JSON line of stdout and no extra output. **Linux proof:** the exit-126 failure is gone. The guard now runs and fails closed with its own reason codes (see 2-5); exit 2 on a policy deny reaches the caller. |
 | **Decision needed (Warren)** | (A) Keep EIF-governed coding on the PC, with Cursor on the main checkout editing `.worktrees/*`, which the change scopes already allow. Or (B) approve an EIF policy change: make the four files hash the same on every OS (commit their CRLF rule in `.gitattributes`, or re-hash on LF), and add a Linux identity anchor for the cloud checkout (`/workspace`, same remote and root commit). Then recompile through `python tools/install_project.py upgrade <project>` from the EIF framework checkout. (B) widens where the guard accepts the project, so it needs Warren's explicit go-ahead. |
 | **Out of scope** | Identity anchors, allowed roots, `.gitattributes` / `.git/info/attributes`, policy recompile, programme ledger, budgets, the EIF framework repo. |
 | **Upstream note** | An EIF `install_project.py upgrade` rewrites `eif_guard.cmd` and the manifest. The dispatch line should be upstreamed into EIF `runtime/cursor/.cursor/hooks/eif_guard.cmd`, or it has to be re-applied after an upgrade. |
-| **TRIGGER** | Close when a Cursor cloud agent on this repo gets a guard `allow` for a normal read and a policy `deny` for a forbidden action. |
+| **Closed 2026-11-14** | Trunk `feat/integrate-20261103` @ `efe3643a` carries the guard from EIF `fix/backlog-225-cross-host` @ `fa2dbbb` (lean, cross-host): `35d5c6f7` (LF-hashed files, `/workspace` anchor) and `efe3643a`. Evidence named for the close: Windows probes 8/8; a Linux LF clone check; a cloud probe in which read, shell, closure without a push, and write were allowed, and a push to `main` was denied `PROTECTED_BRANCH_PUSH`. `fix/backlog-225-eif-linux-identity` (`f4f4272b`) was not merged. |
+| **TRIGGER** | Fired 2026-11-14. Do not reopen for the same launcher, hash, or `/workspace` anchor. A Project-helper identity refusal is BACKLOG-232. A `python` versus `python3` closure message is BACKLOG-233. |
 
 ---
 
@@ -3603,3 +3604,35 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Why it matters** | No lane or merge can run web lint today; only tsc and vitest gate web changes. |
 | **Regression traps** | Do not turn on new rules in the same change; first restore the old rule set, then record the count of existing warnings as the baseline. |
 | **TRIGGER** | Next web change that needs a lint gate, or CI work. |
+
+---
+
+## BACKLOG-232 — Cursor Project helper identity (`IDENTITY_TOOL`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-14. Cloud agents are allowed (BACKLOG-225 closed). Project helpers on Warren's PC stay refused. Do not use a helper to get past this. |
+| **Source** | `IDENTITY_TOOL` denials on Warren's PC, 2026-11-13/14. Payload keys seen: `conversation_id`, `cursor_version`, `generation_id`, `hook_event_name`, `model`, `session_id`, `tool_input`, `tool_name`, `tool_use_id`, `transcript_path`, `user_email`, `workspace_roots`. `conversation_id` and `session_id` were empty. |
+| **Idea** | Give a Cursor Project helper a stable identity the lean guard can accept, without treating an empty session id as the proof. |
+| **Why it matters / deferrable** | Helpers on the PC cannot run governed tools. Cloud agents already can. Deferrable while work stays on cloud agents or on a session the guard already accepts. |
+| **What the work is** | On the next denials, hash `transcript_path` and check that the hash is stable for one helper before any identity rule is widened to accept it. |
+| **Regression traps** | Do not accept a helper because `conversation_id` or `session_id` is empty. Do not copy the rejected branch `fix/backlog-225-eif-linux-identity`. Do not weaken `PROTECTED_BRANCH_PUSH` or the `cip` write refusal. |
+| **Behavior to retain** | Cloud read, shell, closure-without-push, and write stay allowed. A push to `main` stays denied. |
+| **Out of scope** | Recompiling policy before the transcript-path hash is shown to be stable. Using a Windows Project helper as the orchestrator. |
+| **TRIGGER** | Warren asks to let Project helpers run, and a denial log shows `transcript_path` hashes that stay the same for one helper. |
+
+---
+
+## BACKLOG-233 — Closure verifier tells the operator to run `python`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-14. |
+| **Source** | Cloud VM, 2026-11-14. The guard's `SESSION_CLOSURE_REQUIRED` text says `python -B .cursor/hooks/eif_guard.py --verify-closure …`. `python` is not on PATH (`command not found`, exit 127). `python3` with the same arguments returned `SESSION_CLOSURE_OK`. |
+| **Idea** | The closure message should name an interpreter this machine has, or try `python3` when `python` is absent. |
+| **Why it matters / deferrable** | The first actionable call on a cloud VM stops until someone knows to swap in `python3`. The verify command itself works. Deferrable while operators use `python3` for that one command. |
+| **What the work is** | Change the verifier message (EIF side) so a host with only `python3` is told the command that succeeds. |
+| **Regression traps** | Do not skip closure. Do not treat a failed `python` lookup as a closed session. |
+| **Behavior to retain** | Closure still requires the verifier to return `SESSION_CLOSURE_OK` before actionable calls. |
+| **Out of scope** | Installing a `python` alias on cloud VMs as the product fix. CIP application code. |
+| **TRIGGER** | The next EIF change that edits the closure denial text, or the next cloud session that stops because `python` is missing. |
