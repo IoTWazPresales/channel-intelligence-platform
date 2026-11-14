@@ -402,7 +402,40 @@ def identity_payload_key_fields(data):
     omitted = len(data) - len(fields['payload_keys'])
     if omitted:
         fields['payload_keys_omitted'] = omitted
+    fields.update(transcript_path_shape_fields(data))
     return fields
+
+
+# BACKLOG-232 diagnostic. The shape of transcript_path on an IDENTITY_TOOL
+# denial, never its value: missing | empty | windows_abs | posix_abs | relative
+# | other (a non-string, a URI such as file:///..., or a NUL), its length when
+# it is a string, and its JSON type when it is not.
+_URI_SCHEME = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:')
+
+
+def transcript_path_shape_fields(data):
+    if 'transcript_path' not in data:
+        return {'transcript_path_shape': 'missing'}
+    value = data['transcript_path']
+    if not isinstance(value, str):
+        kind = ('null' if value is None else 'bool' if isinstance(value, bool)
+                else 'number' if isinstance(value, (int, float)) else 'array' if isinstance(value, list)
+                else 'object' if isinstance(value, dict) else 'other')
+        return {'transcript_path_shape': 'other', 'transcript_path_type': kind}
+    text = value.strip()
+    if not text:
+        shape = 'empty'
+    elif '\x00' in text:
+        shape = 'other'
+    elif re.match(r'^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)', text):
+        shape = 'windows_abs'
+    elif text.startswith('/'):
+        shape = 'posix_abs'
+    elif _URI_SCHEME.match(text):
+        shape = 'other'
+    else:
+        shape = 'relative'
+    return {'transcript_path_shape': shape, 'transcript_path_length': len(value)}
 
 
 def _append_operator_log(code, message, extra=None):
@@ -2683,6 +2716,8 @@ FIND_WRITERS = frozenset({'-delete', '-exec', '-execdir', '-ok', '-okdir', '-fpr
 
 def _segment_read_only(words):
     prog = _prog(words)
+    if prog == 'rg' and any(w.split('=', 1)[0] in {'--pre', '--hostname-bin'} for w in words[1:]):
+        return False  # ripgrep runs the named helper program.
     if prog in LEAN_READ_ONLY_PROGRAMS:
         return True
     if prog == 'find':

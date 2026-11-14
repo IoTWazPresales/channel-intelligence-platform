@@ -367,6 +367,7 @@ pwd ls dir cat head tail wc grep egrep fgrep rg echo stat du df uname whoami id
 basename dirname realpath readlink true which
 get-location gl get-content gc get-childitem gci test-path resolve-path get-item gi select-string sls
 '''.split())
+READ_ONLY_RG_EXEC = frozenset({'--pre', '--hostname-bin'})
 READ_ONLY_FIND_WRITERS = frozenset({'-delete', '-exec', '-execdir', '-ok', '-okdir',
                                     '-fprint', '-fprint0', '-fprintf', '-fls'})
 READ_ONLY_GIT = frozenset('''status diff log show rev-parse ls-files ls-tree cat-file blame
@@ -437,8 +438,10 @@ def read_only_shell(command):
             if any(w.casefold() in READ_ONLY_FIND_WRITERS for w in words[1:]):
                 return False
         elif program == 'rg':
-            if any(w == '--pre' or w.startswith('--pre=') for w in words[1:]):
-                return False  # --pre runs a program on every file.
+            # --pre runs a program on every file; --hostname-bin runs one to
+            # get the hostname for hyperlinks.
+            if any(w.split('=', 1)[0] in READ_ONLY_RG_EXEC for w in words[1:]):
+                return False
         elif program not in READ_ONLY_PROGRAMS:
             return False
     return True
