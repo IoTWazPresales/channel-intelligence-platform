@@ -7,3 +7,17 @@
 .cursor/hooks/*.json text eol=lf
 .cursor/hooks/*.sh text eol=lf
 .cursor/hooks/*.cmd text eol=crlf
+
+# >>> EIF hashed runtime files: one byte form on every OS (managed by the EIF installer; do not edit) >>>
+.eif/PROJECT_MANIFEST.md text eol=lf
+.eif/AUTONOMY_POLICY.md text eol=lf
+.eif/ENVIRONMENT_POLICY.md text eol=lf
+.cursor/eif-runtime-policy.json text eol=lf
+.cursor/eif-runtime-manifest.json text eol=lf
+.cursor/hooks.json text eol=lf
+.cursor/hooks/*.py text eol=lf
+.cursor/hooks/*.json text eol=lf
+.cursor/hooks/*.sh text eol=lf
+.cursor/hooks/*.cmd text eol=crlf
+.eif/runtime/programme/** text eol=lf
+# <<< EIF hashed runtime files <<<

@@ -80,6 +80,13 @@
   },
   "framework_version": "0.4.0-draft",
   "identity": {
+    "declared_anchors": [
+      {
+        "path": "/workspace",
+        "remote": "https://github.com/IoTWazPresales/channel-intelligence-platform.git",
+        "root_commit": "8f7f1b53e3555dd3010244c7fe8b398ecb881548"
+      }
+    ],
     "expected_remotes": [
       "https://github.com/IoTWazPresales/channel-intelligence-platform.git"
     ],
@@ -204,11 +211,11 @@
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",
-      "sha256": "8202535e3b52d65e9e7209c07c5bf1ce64cbfa094fa89c8fa43f549108d2e815"
+      "sha256": "5f597113e9480cf21e4a937dcb43a686e2eddb930925bdbd98d1d0ca97d70a20"
     },
     "manifest": {
       "path": ".eif/PROJECT_MANIFEST.md",
-      "sha256": "6303fe24287d2fa6268f7447d739a1b2d71289192180f0e05917ae2e94355e35"
+      "sha256": "7d5fabce39f05827f33b521f546f4c8cba840f4252033c1e1a68ef891f75ee89"
     }
   },
   "state_root": ".eif"

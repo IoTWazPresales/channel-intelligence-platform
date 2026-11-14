@@ -36,7 +36,7 @@ _bootstrap_dir = __file__.replace('\\', '/').rsplit('/', 1)[0].rstrip('/').casef
 sys.path[:] = [entry for entry in sys.path if entry not in {'', '.'}
                and entry.replace('\\', '/').rstrip('/').casefold() != _bootstrap_dir]
 import codecs, fnmatch, glob, hashlib, json, math, os, re, stat, subprocess, sys, threading, time, types
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlparse
 
 CONTROL_PLANE_DEFAULTS = [
@@ -384,6 +384,27 @@ def watchdog_sec() -> float:
     return WATCHDOG_DEFAULT_SEC
 
 
+# IDENTITY_TOOL diagnostic (BACKLOG-225, approved 2026-11-14). An IDENTITY_TOOL
+# denial records the sorted NAMES of the top-level hook payload keys, never a
+# value, so the operator can see which fields a Cursor subagent/CLI payload
+# carries. It changes no decision and no identity rule. A name is logged only
+# when it looks like an identifier; anything else is counted, not shown, so a
+# value smuggled in as a key name cannot reach the logs.
+_PAYLOAD_KEY_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_.-]{0,63}')
+_PAYLOAD_KEYS_MAX = 64
+
+
+def identity_payload_key_fields(data):
+    if not isinstance(data, dict):
+        return {}
+    names = sorted(k for k in data if isinstance(k, str) and _PAYLOAD_KEY_NAME.fullmatch(k))
+    fields = {'payload_keys': names[:_PAYLOAD_KEYS_MAX]}
+    omitted = len(data) - len(fields['payload_keys'])
+    if omitted:
+        fields['payload_keys_omitted'] = omitted
+    return fields
+
+
 def _append_operator_log(code, message, extra=None):
     """Append a line an operator can open in the editor; no CLI required."""
     try:
@@ -523,6 +544,7 @@ def out(permission='allow', message=None, extra=None):
             **({'retry_admitted': bool(retry_admitted)} if permission == 'deny' else {}),
             **({'denial_class': denial_class} if denial_class else {}),
             **{key: obj[key] for key in ('enforcement', 'node', 'risk_class', 'advisories') if key in obj},
+            **(identity_payload_key_fields(_ACTIVE_DATA) if reason == 'IDENTITY_TOOL' else {}),
         })
         if not logged or _AUDIT_ERROR:
             # Validated presentation admission is deliberately nonblocking on
@@ -723,7 +745,80 @@ def load_policy(root: Path):
             if sha256(src).lower()!=expected.lower(): return 'INVALID',pol,p,f'policy source hash mismatch: {rel}; recompile accepted policy'
         except OSError as exc:
             return 'INVALID',pol,p,f'cannot read policy source {rel}: {type(exc).__name__}'
-    return 'OK',pol,p,'ok'
+    try:
+        validate_declared_anchors(pol)
+    except ValueError as e:
+        return 'INVALID',pol,p,str(e)
+    return 'OK',apply_declared_anchor(root, pol),p,'ok'
+
+# Declared repository anchors (BACKLOG-225, Volume 22). The project manifest may
+# declare another checkout of the SAME repository at a fixed POSIX path, such as
+# a Linux cloud agent's /workspace: {path, remote, root_commit}. compile_policy
+# records the path as text; it is never resolved on the compiling machine.
+# On a POSIX host whose selected project root is exactly that path, the
+# effective identity becomes that anchor: root commit, remote set and VCS root
+# must all match, and the anchor path is the only allowed root. Windows hosts
+# never apply a declared anchor; their identity checks are unchanged.
+_HOST_IS_WINDOWS = os.name == 'nt'
+_ANCHOR_COMMIT = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
+
+def validate_declared_anchors(pol):
+    ident = pol.get('identity') or {}
+    anchors = ident.get('declared_anchors')
+    if anchors is None:
+        return
+    if not isinstance(anchors, list):
+        raise ValueError('identity.declared_anchors must be a list')
+    root = str(ident.get('root_commit') or '').lower()
+    for a in anchors:
+        if not isinstance(a, dict) or set(a) != {'path', 'remote', 'root_commit'}:
+            raise ValueError('declared anchor requires exactly path, remote and root_commit')
+        path, remote, commit = a['path'], a['remote'], a['root_commit']
+        if (not isinstance(path, str) or not path.startswith('/') or path.startswith('//') or '\\' in path
+                or ':' in path or path != str(PurePosixPath(path)) or path == '/'
+                or any(part in {'.', '..'} for part in path.split('/'))):
+            raise ValueError(f'declared anchor path must be a normalised absolute POSIX path: {path!r}')
+        if not isinstance(remote, str) or not remote or any(c.isspace() for c in remote):
+            raise ValueError(f'declared anchor {path} requires one remote URL')
+        if not isinstance(commit, str) or not _ANCHOR_COMMIT.fullmatch(commit) or commit != root:
+            raise ValueError(f'declared anchor {path} root_commit must equal identity.root_commit')
+
+def active_declared_anchor(root, pol, *, windows=None):
+    """The declared anchor whose path is this POSIX host's project root, else None."""
+    if _HOST_IS_WINDOWS if windows is None else windows:
+        return None
+    anchors = (pol.get('identity') or {}).get('declared_anchors') or []
+    if not anchors or root is None:
+        return None
+    here = PurePosixPath(Path(root).as_posix())
+    for a in anchors:
+        if PurePosixPath(a['path']) == here:
+            return a
+        try:
+            if Path(a['path']).resolve() == Path(root).resolve():
+                return a
+        except (OSError, RuntimeError, ValueError):
+            continue
+    return None
+
+def apply_declared_anchor(root, pol, *, windows=None):
+    """Return the effective policy for this checkout. The stored file is untouched."""
+    a = active_declared_anchor(root, pol, windows=windows)
+    if a is None:
+        return pol
+    eff = dict(pol)
+    eff['identity'] = {
+        'root_commit': a['root_commit'],
+        'expected_remotes': [a['remote']],
+        'expected_vcs_root': a['path'],
+        # Other repositories' anchors name machine-local paths of the
+        # compiling host; they are not roots of this checkout.
+        'repository_anchors': [],
+        'declared_anchors': [a],
+        'active_declared_anchor': a['path'],
+    }
+    eff['allowed_roots'] = [a['path']]
+    return eff
 
 def declared_roots(data, policy, root):
     """Return only roots accepted by EIF policy.
@@ -1300,6 +1395,8 @@ def audit(root: Path, data, decision, code, rel=None, extra=None):
                 if k not in rec: rec[k]=v
         if _ADVISORIES:
             rec['advisories']=[a['reason_code'] for a in _ADVISORIES]
+        if code=='IDENTITY_TOOL':
+            rec.update(identity_payload_key_fields(data))
         # Probe markers are safe synthetic identifiers; do not log command/tool payloads.
         pid=extract_probe_id(probe_marker_blob(data), str(rel or ''))
         if pid: rec['probe_id']=pid

@@ -25,7 +25,14 @@ def read_utf8(path, *, encoding=UTF8, errors=None) -> str:
     if errors is not None: kw['errors']=errors
     return Path(path).read_text(**kw)
 
-def write_utf8(path, text: str, *, encoding=UTF8, newline=None) -> None:
+def write_utf8(path, text: str, *, encoding=UTF8, newline='\n') -> None:
+    """Write UTF-8 text with LF line endings on every OS.
+
+    EIF hashes exact bytes (policy sources, runtime policy, manifests). A
+    platform newline would give a Windows install CRLF bytes that a Linux
+    checkout of the same commit cannot match (BACKLOG-225). Pass
+    newline=None only for a file that must follow the host convention.
+    """
     kw={'encoding':encoding}
     if newline is not None: kw['newline']=newline
     Path(path).write_text(text, **kw)

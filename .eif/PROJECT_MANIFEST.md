@@ -11,6 +11,10 @@ state_root: .eif
 lifecycle: brownfield
 sensitivity: unknown
 identity:
+  declared_anchors:
+  - path: /workspace
+    remote: https://github.com/IoTWazPresales/channel-intelligence-platform.git
+    root_commit: 8f7f1b53e3555dd3010244c7fe8b398ecb881548
   vcs_root: C:/Users/warren_eliason/channel-intelligence-platform
   remotes:
   - https://github.com/IoTWazPresales/channel-intelligence-platform.git
