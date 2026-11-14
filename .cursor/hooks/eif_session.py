@@ -38,6 +38,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -295,9 +296,110 @@ def recovery_action(data):
     command = inp.get('command', '')
     if verifier_command(command):
         return True
-    if not isinstance(command, str) or RECOVERY_UNSAFE.search(command):
+    if not isinstance(command, str):
+        return False
+    if read_only_shell(command):
+        return True
+    if RECOVERY_UNSAFE.search(command):
         return False
     return RECOVERY_COMMAND.fullmatch(command) is not None
+
+
+# Read-only shell passes the closure gate the same way the Read tool does
+# ("reads remain available"). Workflow exception only: the guard's shell policy
+# (identity, control plane, scopes, lean B1-B5) still decides afterwards.
+# Deliberately narrow: only text that is provably plain words, on every shell.
+# The command may use ASCII letters, digits, space, tab, quotes and
+# _ . / \ : = + ~ * ? - plus the separators ; | && ||. Anything else is refused,
+# quoted or not: redirection and process substitution (< >), every PowerShell or
+# bash expression form (( ) { } [ ] @( $( $ , % ! ^ # and backticks: grouping,
+# subexpressions, arrays, script blocks, ForEach-Object's `%`, history), a
+# single & (call operator or background), newlines, and non-ASCII (PowerShell
+# reads typographic dashes and quotes as operators). Every simple command must
+# also be a listed program, so dot-sourcing (`. x.ps1`), Invoke-Expression/iex
+# and ForEach-Object are refused, and so is a -ArgumentList style parameter.
+READ_ONLY_SHELL_PLAIN = re.compile(r'''[A-Za-z0-9 \t_./\\:=+~*?'";|&-]*''')
+READ_ONLY_SHELL_SPLIT = re.compile(r'&&|\|\||[;|]')
+READ_ONLY_PROGRAMS = frozenset('''
+pwd ls dir cat head tail wc grep egrep fgrep rg echo stat du df uname whoami id
+basename dirname realpath readlink true which
+get-location gl get-content gc get-childitem gci test-path resolve-path get-item gi select-string sls
+'''.split())
+READ_ONLY_FIND_WRITERS = frozenset({'-delete', '-exec', '-execdir', '-ok', '-okdir',
+                                    '-fprint', '-fprint0', '-fprintf', '-fls'})
+READ_ONLY_GIT = frozenset('''status diff log show rev-parse ls-files ls-tree cat-file blame
+show-ref for-each-ref describe shortlog grep'''.split())
+# Options that write a file or run a program from an otherwise read-only git command.
+READ_ONLY_GIT_WRITERS = ('--output', '-O', '--open-files-in-pager', '--ext-diff', '--exec')
+READ_ONLY_GIT_BRANCH = frozenset({'-a', '-r', '-v', '-vv', '--all', '--remotes', '--verbose',
+                                  '--list', '--show-current', '--no-color'})
+READ_ONLY_GIT_CONFIG = frozenset({'--get', '--get-all', '--get-regexp', '--list', '-l'})
+
+
+def read_only_git(words):
+    i = 1
+    while i < len(words) and words[i].startswith('-'):
+        if words[i] == '-C' and i + 1 < len(words):
+            i += 2
+        elif words[i] == '--no-pager':
+            i += 1
+        else:
+            return False  # -c/--git-dir/--exec-path and the like can run code.
+    if i >= len(words):
+        return False
+    sub, args = words[i].casefold(), words[i + 1:]
+    if sub in READ_ONLY_GIT:
+        return not any(a.startswith(READ_ONLY_GIT_WRITERS) for a in args)
+    if sub == 'remote':
+        return (all(a in {'-v', '--verbose'} for a in args)
+                or (bool(args) and args[0] == 'get-url' and len([a for a in args[1:] if not a.startswith('-')]) <= 1
+                    and all(a in {'--push', '--all'} for a in args[1:] if a.startswith('-'))))
+    if sub == 'branch':
+        return all(a in READ_ONLY_GIT_BRANCH for a in args)
+    if sub == 'config':
+        return bool(args) and args[0] in READ_ONLY_GIT_CONFIG and len(args) <= 2
+    return False
+
+
+def _script_parameter(word):
+    """-ArgumentList (any unambiguous prefix, as PowerShell accepts) or -Args."""
+    name = word.casefold()
+    return name == '-args' or (len(name) >= 4 and name.startswith('-') and 'argumentlist'.startswith(name[1:]))
+
+
+def read_only_shell(command):
+    """True only for shell text made of listed read-only simple commands."""
+    if not isinstance(command, str) or not command.strip() or not READ_ONLY_SHELL_PLAIN.fullmatch(command):
+        return False
+    for segment in READ_ONLY_SHELL_SPLIT.split(command):
+        if '&' in segment:
+            return False  # A single &: PowerShell's call operator, or background.
+        try:
+            words = shlex.split(segment, posix=True)
+        except ValueError:
+            return False
+        if not words or words[0] in {'.', 'source'}:
+            return False
+        if any(_script_parameter(w) for w in words[1:]):
+            return False
+        # A path-qualified program (./scripts/ls, .\scripts\cat.ps1, /usr/bin/ls)
+        # runs whatever is at that path, not the listed command. Read the raw
+        # token: POSIX shlex drops backslashes.
+        if re.search(r'[\\/]', segment.split(None, 1)[0]):
+            return False
+        program = words[0].casefold().removesuffix('.exe')
+        if program == 'git':
+            if not read_only_git(words):
+                return False
+        elif program == 'find':
+            if any(w.casefold() in READ_ONLY_FIND_WRITERS for w in words[1:]):
+                return False
+        elif program == 'rg':
+            if any(w == '--pre' or w.startswith('--pre=') for w in words[1:]):
+                return False  # --pre runs a program on every file.
+        elif program not in READ_ONLY_PROGRAMS:
+            return False
+    return True
 
 
 def record_block(root, data, code, outside_boundary=False):
@@ -489,6 +591,26 @@ def git(root, *args, allowed=(0,)):
     return result
 
 
+_URL_USERINFO = re.compile(r'^([A-Za-z][A-Za-z0-9+.-]*://)[^/?#]*@')
+NO_UPSTREAM_MESSAGE = ('No upstream branch and no single project remote to check. Push your own branch with an '
+                       'upstream (git push -u origin <your-branch>); local refs are not remote evidence.')
+NOT_ON_REMOTE_MESSAGE = ('The programme ledger commit is not in any branch of {remote}. Push your own branch '
+                         '(git push -u {remote} <your-branch>), then rerun the verifier.')
+REMOTE_HEADS_CAP = 256
+
+
+def url_without_userinfo(url):
+    return _URL_USERINFO.sub(r'\1', url.strip())
+
+
+def sole_remote(root):
+    """The remote a branch without upstream is proven against: the only one, else origin."""
+    names = git(root, 'remote').stdout.split()
+    if len(names) == 1:
+        return names[0]
+    return 'origin' if 'origin' in names else ''
+
+
 def closure_context(root):
     """Local-only snapshot. URLs are hashed because they may contain credentials."""
     if not any((Path(root) / path).exists() for path in LEDGER):
@@ -500,16 +622,24 @@ def closure_context(root):
     if not commit:
         return None, (False, 'SESSION_COMMIT_REQUIRED', 'Programme ledger has no committed history.')
     branch = git(root, 'symbolic-ref', '--short', 'HEAD', allowed=(0, 1)).stdout.strip()
-    if not branch:
-        return None, (False, 'SESSION_PUSH_REQUIRED', 'Detached HEAD has no verifiable upstream closure.')
-    remote = git(root, 'config', '--get', f'branch.{branch}.remote', allowed=(0, 1)).stdout.strip()
-    remote_ref = git(root, 'config', '--get', f'branch.{branch}.merge', allowed=(0, 1)).stdout.strip()
+    remote = remote_ref = ''
+    if branch:
+        remote = git(root, 'config', '--get', f'branch.{branch}.remote', allowed=(0, 1)).stdout.strip()
+        remote_ref = git(root, 'config', '--get', f'branch.{branch}.merge', allowed=(0, 1)).stdout.strip()
     if not remote or remote == '.' or not remote_ref.startswith('refs/heads/'):
-        return None, (False, 'SESSION_PUSH_REQUIRED', 'Set and push an authorised upstream branch; local refs are not remote evidence.')
+        # No upstream: a fresh cloud branch, or a detached HEAD. The verifier
+        # then asks the project's remote itself (ls-remote, off-hook) whether
+        # the ledger commit is already in one of its branches. Local
+        # remote-tracking refs are still never evidence.
+        remote, remote_ref = sole_remote(root), None
+        if not remote:
+            return None, (False, 'SESSION_PUSH_REQUIRED', NO_UPSTREAM_MESSAGE)
     url = git(root, 'remote', 'get-url', remote).stdout.strip()
     context = dict(root=os.path.normcase(str(Path(root).resolve())), ledger_commit=commit,
-                   branch=branch, remote=remote, remote_ref=remote_ref,
-                   remote_url_sha256=hashlib.sha256(url.encode()).hexdigest())
+                   branch=branch or None, remote=remote, remote_ref=remote_ref,
+                   # Userinfo (a cloud host's rotating access token) is not
+                   # part of the remote's identity and must not change it.
+                   remote_url_sha256=hashlib.sha256(url_without_userinfo(url).encode()).hexdigest())
     for name in ('.cursor/eif-runtime-policy.json', '.cursor/eif-runtime-manifest.json'):
         path = contained(root, name)
         context[name] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
@@ -628,6 +758,44 @@ def network_git(root, *args):
         return raw.decode('utf-8', errors='strict')
 
 
+def _closure_check_any_branch(root, context):
+    """No upstream: the ledger commit must be in a branch the remote reports now.
+
+    Evidence is the remote's own answer (ls-remote, off-hook, bounded), never a
+    local remote-tracking ref. A remote head counts only when its commit is
+    present locally and the ledger commit is its ancestor; the remote's default
+    branch (HEAD) is tried first. A fresh clone of a pushed commit passes
+    without any push. New ledger commits are on no remote branch until the
+    agent pushes them, so closure after new work still needs a real push.
+    """
+    # Only HEAD and branches: tags (or any other ref namespace) are neither
+    # asked for nor counted, and cannot fill the bounded response.
+    output = network_git(root, 'ls-remote', '--', context['remote'], 'HEAD', 'refs/heads/*')
+    heads, default = [], []
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) != 2 or not re.fullmatch(r'[0-9a-f]{40}(?:[0-9a-f]{24})?', parts[0]):
+            continue
+        if parts[1] == 'HEAD':
+            default.append(parts[0])
+        elif parts[1].startswith('refs/heads/'):
+            heads.append(parts[0])
+    seen = set()
+    for sha in default + heads:
+        if sha in seen:
+            continue
+        seen.add(sha)
+        if len(seen) > REMOTE_HEADS_CAP:
+            break
+        # 0: ancestor; 1: not an ancestor; 128: commit unknown locally (no proof).
+        if git(root, 'merge-base', '--is-ancestor', context['ledger_commit'], sha, allowed=(0, 1, 128)).returncode == 0:
+            current, failure = closure_context(root)
+            if failure or current != context:
+                return False, 'SESSION_CLOSURE_REQUIRED', 'Git or runtime context changed during verification; request a new proof.'
+            return True, 'SESSION_CLOSURE_OK', f'ledger_commit={context["ledger_commit"]}; verified_remote_head={sha}; no upstream'
+    return False, 'SESSION_PUSH_REQUIRED', NOT_ON_REMOTE_MESSAGE.format(remote=context['remote'])
+
+
 def closure_check(root, context=None):
     """Explicit off-hook proof; remote-tracking refs are never push evidence."""
     try:
@@ -635,6 +803,8 @@ def closure_check(root, context=None):
             context, result = closure_context(root)
             if result:
                 return result
+        if context['remote_ref'] is None:
+            return _closure_check_any_branch(root, context)
         output = network_git(root, 'ls-remote', '--exit-code', '--', context['remote'], context['remote_ref'])
         matches = [line.split()[0] for line in output.splitlines()
                    if len(line.split()) == 2 and line.split()[1] == context['remote_ref']]

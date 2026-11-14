@@ -3,13 +3,13 @@
   "files": {
     ".cursor/hooks.json": "d7d7c183e44342e4674a83e969a1d79400b3af2763fa1a352239afc2f7a58167",
     ".cursor/hooks/eif_guard.cmd": "4fb354978ff1459d309fe9f4768336adfac7271dbb74e4a544b483320b469556",
-    ".cursor/hooks/eif_guard.py": "a03e51db9c1851907adc3371c1fa5998ffa47aeda51752f56af166085a47879f",
+    ".cursor/hooks/eif_guard.py": "1679aad5383a734ce3f1129fed387c0ef19b3455beb890a1d0e17de271dc533d",
     ".cursor/hooks/eif_guard.sh": "228ed8d88af7362332b562f5a7f1c96d851d545b8ffc69195d83d99799f5df60",
     ".cursor/hooks/eif_guard_crash.json": "00d7f2cdaee97215a9d7a6ccd3a12cf352cc34bd7418be4f2a1410e6e1099a4f",
     ".cursor/hooks/eif_guard_failclosed.json": "b8a84d7b95a7da709f8f26449c96ef636d7796ff82bc7416af70d9b8bfe522f4",
     ".cursor/hooks/eif_integrity.py": "1ba6629252eeef5df5d5fb89ab94fd588bed29a1f0e5ece0413bdb4b1ec9d877",
     ".cursor/hooks/eif_reason_codes.py": "7234f1ce535733a6d2cb568ddc2eb915df7cdeb9ceda7f14f33e3243f014d47b",
-    ".cursor/hooks/eif_session.py": "a0eddb31bbaeb65dcb8f121c9310926a26ea424b93389dfacaf98ececfb7bc34",
+    ".cursor/hooks/eif_session.py": "92ee1acfcef31b8bed39774974184bab16a517bdf8035bae7af256d1b75a3fdf",
     ".cursor/hooks/eif_state.py": "cbfd6695ffb776d891b60a3e9604017313026e40a94264e0451dea45cc9fad18"
   },
   "product_version": "0.7.0-draft"

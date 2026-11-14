@@ -415,6 +415,7 @@ def _append_operator_log(code, message, extra=None):
             for k, v in extra.items():
                 if k not in rec:
                     rec[k] = v
+        rec = redact_userinfo(rec)
         with p.open('a', encoding='utf-8') as f:
             f.write(json.dumps(rec, ensure_ascii=True, separators=(',', ':')) + '\n')
             f.flush()
@@ -465,7 +466,7 @@ def _write_stdout_bytes(data: bytes) -> bool:
 
 def _stderr_log(record):
     try:
-        sys.stderr.write(json.dumps(record, ensure_ascii=True, separators=(',', ':')) + '\n')
+        sys.stderr.write(json.dumps(redact_userinfo(record), ensure_ascii=True, separators=(',', ':')) + '\n')
         sys.stderr.flush()
     except Exception:
         pass
@@ -565,7 +566,7 @@ def out(permission='allow', message=None, extra=None):
                 'EIF harness fault: guard logging failed. Action remains blocked; repair the guard before retrying.'
             )
             _stderr_log(obj)
-        raw = (json.dumps(obj, ensure_ascii=True, separators=(',', ':')) + '\n').encode('ascii')
+        raw = (json.dumps(redact_userinfo(obj), ensure_ascii=True, separators=(',', ':')) + '\n').encode('ascii')
         wrote = _write_stdout_bytes(raw)
         _EMITTED = True
         _DONE.set()
@@ -663,10 +664,54 @@ def sha256(path: Path):
         for c in iter(lambda:f.read(1024*1024), b''): h.update(c)
     return h.hexdigest()
 
+# Remote URL userinfo (user, password, token) is credential material, never
+# identity. A cloud checkout's origin can be
+# https://x-access-token:<TOKEN>@github.com/org/repo; the token rotates and must
+# never be compared, logged or echoed. Identity is the scheme, host (with port)
+# and path only.
+_URL_SCHEME = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*://')
+_SCP_REMOTE = re.compile(r'^(?:[^/\s]*@)?([^@/:\s]+):(?!//)(.*)$')
+# Text form: scheme://userinfo@ anywhere in a message. The userinfo part stops at
+# the first '/', whitespace or quote, and runs to the LAST '@' before that, so a
+# password containing '@' is covered too.
+_URL_USERINFO_TEXT = re.compile(r'([A-Za-z][A-Za-z0-9+.-]*://)[^/\s\'"<>]*@')
+REDACTED_USERINFO = '<redacted>@'
+
+
+def strip_url_userinfo(url):
+    """URL without its userinfo; scp-style user@host:path becomes ssh://host/path."""
+    s = (url or '').strip()
+    m = _URL_SCHEME.match(s)
+    if m:
+        rest = s[m.end():]
+        cut = min([i for i in (rest.find('/'), rest.find('?'), rest.find('#')) if i >= 0] or [len(rest)])
+        authority = rest[:cut].rpartition('@')[2]
+        return m.group(0) + authority + rest[cut:]
+    scp = _SCP_REMOTE.match(s)
+    if scp and not re.match(r'^[A-Za-z]:[\\/]', s):  # not a Windows drive path
+        return f'ssh://{scp.group(1)}/{scp.group(2)}'
+    return s
+
+
+def redact_userinfo(value):
+    """Copy of value with every scheme://userinfo@ replaced by scheme://<redacted>@.
+
+    Applied to every record the guard emits (stdout decision, stderr, operator
+    log, runtime events), so a credential embedded in a remote URL never leaves
+    the process, whichever message happens to carry the URL."""
+    if isinstance(value, str):
+        return _URL_USERINFO_TEXT.sub(lambda m: m.group(1) + REDACTED_USERINFO, value) if '@' in value else value
+    if isinstance(value, dict):
+        return {redact_userinfo(k): redact_userinfo(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [redact_userinfo(v) for v in value]
+    return value
+
+
 def normalized_remote(s):
-    s=(s or '').strip().removesuffix('.git')
-    if s.startswith('git@') and ':' in s: s='ssh://git@'+s[4:].replace(':','/',1)
-    return s.lower().rstrip('/')
+    """Comparison form: userinfo stripped, scheme/host/path lower case, no trailing / or .git."""
+    s = strip_url_userinfo(s).removesuffix('.git')
+    return s.lower().rstrip('/').removesuffix('.git')
 
 def git(root: Path, *args):
     key = (str(root.resolve()), args)
@@ -1400,6 +1445,7 @@ def audit(root: Path, data, decision, code, rel=None, extra=None):
         # Probe markers are safe synthetic identifiers; do not log command/tool payloads.
         pid=extract_probe_id(probe_marker_blob(data), str(rel or ''))
         if pid: rec['probe_id']=pid
+        rec=redact_userinfo(rec)
         with p.open('a', encoding='utf-8') as f: f.write(json.dumps(rec,separators=(',',':'))+'\n')
     except Exception as exc:
         _AUDIT_ERROR = type(exc).__name__
@@ -2643,6 +2689,10 @@ def _segment_read_only(words):
                        for w in words[1:])
     git = _git_parts(words)
     if git:
+        if git[1] in {'remote', 'branch', 'config'}:
+            # Listing forms only (git remote -v, get-url; branch --show-current/-a;
+            # config --get/--list); any other form can change identity or refs.
+            return support('eif_session').read_only_git(words)
         return git[1] in LEAN_READ_ONLY_GIT and not any(_writer_option('git', w) for w in git[2])
     return False
 
@@ -2684,6 +2734,16 @@ def _copy_destination(words):
     return positional[-1] if len(positional) >= 2 else ''
 
 
+def _unquoted_expression(cmd):
+    """True when shell text has ( ) { } outside quotes (PowerShell grouping,
+    subexpression, array @( ) or script block), or quoting that cannot be read.
+    Inside quotes they are literal, except `$(`, which callers refuse separately."""
+    segs = _quote_segments(cmd)
+    if segs is None:
+        return bool(re.search(r'[(){}]', cmd))
+    return any(not quoted and re.search(r'[(){}]', text) for text, quoted, _, _ in segs)
+
+
 def _lean_control_plane_mutation(cmd, policy):
     """B4 for shell: deny a shell command that could modify a governed path.
 
@@ -2709,6 +2769,11 @@ def _lean_control_plane_mutation(cmd, policy):
     if not _cp_mentions(cmd, policy, exempt):
         return None
     if re.search(r'\$\(|`|<\(|>\(', cmd):
+        return deny
+    if _unquoted_expression(cmd):
+        # PowerShell runs a parenthesised or braced expression wherever it
+        # appears, so `echo (Set-Content <control-plane path> x)` is a write
+        # even though echo is read-only.
         return deny
     for seg in _command_segments(cmd):
         words = _program_words(seg)
@@ -4357,7 +4422,7 @@ def verify_closure_cli(arguments):
         payload['log_delivery'] = 'unconfirmed'
         _stderr_log({'reason_code': 'HOOK_LOG_FAILURE', 'decision_kind': 'harness_fault',
                      'message': 'Closure verifier log delivery unconfirmed; inspect its receipt and JSON result.'})
-    wrote = _write_stdout_bytes((json.dumps(payload, ensure_ascii=True) + '\n').encode('ascii'))
+    wrote = _write_stdout_bytes((json.dumps(redact_userinfo(payload), ensure_ascii=True) + '\n').encode('ascii'))
     return 0 if ok and wrote else 1
 
 

@@ -54,6 +54,17 @@ def retry_transient_io(action, *, attempts=8):
             time.sleep(delay)
             delay = min(delay * 2, 0.25)
 
+_URL_USERINFO = re.compile(r'^([A-Za-z][A-Za-z0-9+.-]*://)[^/?#]*@')
+
+
+def url_without_userinfo(url: str) -> str:
+    """Remote URL without user, password or token (scheme://user:token@host -> scheme://host).
+
+    Identity records keep the scheme, host and path only; a credential embedded
+    in a remote URL is never written into a manifest or compiled policy."""
+    return _URL_USERINFO.sub(r'\1', url.strip())
+
+
 def sha256_path(path: Path) -> str:
     h=hashlib.sha256();
     with path.open('rb') as f:
