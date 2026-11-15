@@ -3638,3 +3638,19 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | Closure still requires the verifier to return `SESSION_CLOSURE_OK` before actionable calls. |
 | **Out of scope** | Installing a `python` alias on cloud VMs as the product fix. CIP application code. |
 | **TRIGGER** | The next EIF change that edits the closure denial text, or the next cloud session that stops because `python` is missing. |
+
+---
+
+## BACKLOG-234 — Listing reader snapshot holds tenant data in the product repo
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** — 2026-11-15. Recorded with the W1-D listing-poll merge (`3b64c6df`). |
+| **Source** | `docs/ops/listing_site_readers_20261113.json` on `fix/w1d-listing-poll-20261113` @ `3b64c6df`. |
+| **Idea** | `docs/ops/listing_site_readers_20261113.json` holds tenant data in the product repo; move it outside. |
+| **Why it matters (and why deferrable)** | The file is one tenant's recovered site-reader snapshot. The running app does not read it as live config; only the explicit restore script uses it. Deferrable while that is the only tenant, because nothing else in the product depends on the file living in the repo. |
+| **What the work is** | Move the JSON, and any later tenant snapshots, outside the product repo. Point the restore script and its test at that outside path. |
+| **Regression traps** | Do not run the reader restore script against `cip`. Keep the database-name gate. A dry run stays read-only. |
+| **Behavior to retain** | Sites without a reader stay loud. The restore stays steward-run and refuses the wrong database. |
+| **Out of scope** | Changing reader resolution or polling. Writing the snapshot into a database. |
+| **TRIGGER** | Before any second tenant. |
