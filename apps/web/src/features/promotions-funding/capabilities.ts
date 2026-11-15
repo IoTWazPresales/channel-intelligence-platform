@@ -5,7 +5,7 @@ export const PLANNER_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Propose a plan from history, cover, forecast and MAC',
     state: 'partial',
-    note: 'Build a plan from the customer and period: the lineup first, then that customer’s history. A seed case is optional. Slow or unsold stock can raise a draft promotion, or a move or return that is not a support claim. Listing, competitor price, and observed cover show on the line and do not set the quantity.',
+    note: 'Build a plan from the customer and period: the lineup first, then that customer’s history. Use CIP quantities fills each line from cover, forecast and that customer’s history. Flags do not block. A seed case is optional. Slow or unsold stock can raise a draft promotion, or a move or return that is not a support claim.',
   },
   {
     label: 'Create and edit plans manually (lines, layers, parameters)',
@@ -20,12 +20,12 @@ export const PLANNER_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Evidence behind each line in one view',
     state: 'live',
-    note: 'Each proposed line has an Evidence column: listed or not, a competitor price when an approved map exists, otherwise none, and observed cover as a flag. High cover does not set the quantity and it does not write cover policy. Uplift from claim evidence is not derived.',
+    note: 'Each line shows forecast, this customer’s history and cover surplus behind the suggested quantity. High cover does not write cover policy and does not block a save. Uplift from claim evidence is not derived.',
   },
   {
     label: 'Export in the customer’s promotion-plan format',
     state: 'partial',
-    note: 'A saved workbook exists. The layout is fixed. Writing a plan back into the customer layout is not built.',
+    note: 'Export writes the plan in the stored mapping profile’s headers. The older fixed workbook route is unchanged.',
   },
   {
     label: 'Uplift, elasticity, effectiveness',
@@ -57,7 +57,7 @@ export const TEMPLATE_CAPABILITIES: CapabilityItem[] = [
   },
   {
     label: 'Render an export in the profile’s layout',
-    state: 'planned',
-    note: 'Export uses a fixed layout today. Writing a plan back into the customer layout is not built.',
+    state: 'live',
+    note: 'Export writes a plan back into the stored column layout. The older fixed workbook route is unchanged.',
   },
 ];

@@ -161,6 +161,19 @@ describe('PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)', (
     expect(await screen.findByTestId('plan-fx-basis')).toHaveTextContent('manual override: Hedge contract');
   });
 
+  it('fills CIP quantities on a draft and does not block', async () => {
+    detail = { ...baseCase, status: 'draft', allowed_next: ['proposed', 'cancelled'], needs_reapproval: false };
+    const { apiPost } = await import('@/lib/api');
+    vi.mocked(apiPost).mockResolvedValueOnce({ lines: [{ line_id: 1, blocks: false }], blocks: false });
+    renderWorkspace();
+    const button = await screen.findByTestId('plan-use-cip-qty');
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/api/v1/cpor/cases/77/cip-quantities', {}),
+    );
+  });
+
   it('edits FX mode and the proposed rate on a draft through the existing PATCH', async () => {
     detail = { ...baseCase, status: 'draft', allowed_next: ['proposed', 'cancelled'], needs_reapproval: false };
     const { apiPatch } = await import('@/lib/api');

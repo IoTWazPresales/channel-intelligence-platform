@@ -600,8 +600,8 @@ def customer_sku_cover_from_rows(
         "soh_units": None if soh_total is None else round(float(soh_total), 4),
         "weekly_rate": None if rate is None else round(float(rate), 4),
         "note": (
-            "Observed customer and product cover is a flag only. "
-            "It does not change the cover target and it is not stored."
+            "Observed cover does not change the stored cover target and it is not stored. "
+            "Units above that target can feed the suggested quantity. The flag does not block a save."
         ),
     }
 
@@ -677,8 +677,8 @@ def load_promotion_line_evidence(
         "soh_units": None,
         "weekly_rate": None,
         "note": (
-            "Observed customer and product cover is a flag only. "
-            "It does not change the cover target and it is not stored."
+            "Observed cover does not change the stored cover target and it is not stored. "
+            "Units above that target can feed the suggested quantity. The flag does not block a save."
         ),
     }
     try:
@@ -775,6 +775,119 @@ def load_promotion_line_evidence(
     }
 
 
+QUANTITY_FORMULA = (
+    "Mean of the positive signals: forecast units, this customer's earlier estimate "
+    "for the same product, and units of stock above the cover target. A missing signal "
+    "is left out. When none of those are positive, the mean of this customer's comparable "
+    "cases is used, then the line's own estimate. Nothing here blocks a save."
+)
+
+
+def cover_surplus_units(
+    soh_units: float | None,
+    weekly_rate: float | None,
+    target_weeks: float | None,
+) -> float | None:
+    """Units of reported stock above the cover target. None when cover cannot be measured."""
+    if soh_units is None or weekly_rate is None or target_weeks is None:
+        return None
+    rate = float(weekly_rate)
+    target = float(target_weeks)
+    if rate <= 0 or target <= 0:
+        return None
+    surplus = float(soh_units) - rate * target
+    if surplus <= 0:
+        return 0.0
+    return round(surplus, 4)
+
+
+def customer_product_history_units(
+    session: Session,
+    *,
+    customer_id: int,
+    product_id: int,
+    exclude_case_id: int | None,
+) -> dict[str, Any]:
+    """Mean estimate on this customer's other cases for the same product.
+
+    Other customers are not read. The case being filled is excluded so a second
+    click does not blend the quantity it just wrote.
+    """
+    stmt = (
+        select(CporCaseLine.estimate_qty)
+        .join(CporCase, CporCase.id == CporCaseLine.case_id)
+        .where(
+            CporCase.customer_id == int(customer_id),
+            CporCaseLine.product_id == int(product_id),
+            CporCase.superseded_by_case_id.is_(None),
+            where_commercial_intelligence(),
+        )
+    )
+    if exclude_case_id is not None:
+        stmt = stmt.where(CporCase.id != int(exclude_case_id))
+    values: list[float] = []
+    for (qty,) in session.execute(stmt).all():
+        try:
+            number = float(qty or 0)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            values.append(number)
+    mean = (sum(values) / len(values)) if values else None
+    return {
+        "mean": None if mean is None else round(mean, 4),
+        "line_count": len(values),
+        "blocks": False,
+    }
+
+
+def blend_cip_quantity(
+    *,
+    forecast_units: float,
+    history_units: float | None,
+    cover_surplus_units: float | None,
+    comparable_cases: list[dict[str, Any]] | None,
+    spec_units: float,
+) -> dict[str, Any]:
+    """Suggested line quantity. Flags explain the inputs. They never block."""
+    signals: list[tuple[str, float]] = []
+    forecast = float(forecast_units or 0)
+    if forecast > 0:
+        signals.append(("forecast", forecast))
+    if history_units is not None and float(history_units) > 0:
+        signals.append(("history", float(history_units)))
+    if cover_surplus_units is not None and float(cover_surplus_units) > 0:
+        signals.append(("cover", float(cover_surplus_units)))
+    fallback: str | None = None
+    if signals:
+        qty = sum(units for _, units in signals) / len(signals)
+    else:
+        estimates = [float(item.get("estimate_qty") or 0) for item in (comparable_cases or [])]
+        estimates = [item for item in estimates if item > 0]
+        if estimates:
+            qty = sum(estimates) / len(estimates)
+            fallback = "comparable_case_mean"
+        else:
+            qty = float(spec_units or 0)
+            fallback = "line_estimate"
+    flags = [f"cip_qty_{name}" for name, _ in signals]
+    if fallback:
+        flags.append(f"cip_qty_{fallback}")
+    return {
+        "suggested_estimate_qty": round(float(qty), 4),
+        "signals": [{"source": name, "units": round(float(units), 4)} for name, units in signals],
+        "fallback": fallback,
+        "cover_surplus_units": (
+            None if cover_surplus_units is None else round(float(cover_surplus_units), 4)
+        ),
+        "history_units": None if history_units is None else round(float(history_units), 4),
+        "forecast_units": round(forecast, 4),
+        "blocks": False,
+        "formula": QUANTITY_FORMULA,
+        "flags": flags,
+    }
+
+
 def _compose_suggestion_row(
     session: Session,
     *,
@@ -836,15 +949,6 @@ def _compose_suggestion_row(
         customer_id=customer_id,
         horizon_weeks=horizon_weeks,
     )
-    suggested_qty = float(volume.get("forecast_units") or 0)
-    if suggested_qty <= 0 and top_comparables:
-        ests = [float(t.get("estimate_qty") or 0) for t in top_comparables]
-        ests = [e for e in ests if e > 0]
-        if ests:
-            suggested_qty = sum(ests) / len(ests)
-    if suggested_qty <= 0:
-        suggested_qty = float(spec.get("estimate_qty") or 0)
-
     srp = spec.get("srp")
     pod_quarter = spec.get("pod_quarter") or (
         period_label
@@ -863,9 +967,35 @@ def _compose_suggestion_row(
         target_weeks=float(weeks) if weeks is not None else None,
         tenant_id=tenant_id,
     )
+    observed = evidence.get("observed_cover") or {}
+    history = (
+        customer_product_history_units(
+            session,
+            customer_id=int(customer_id),
+            product_id=pid,
+            exclude_case_id=int(seed.id) if seed is not None else None,
+        )
+        if customer_id is not None
+        else {"mean": None, "line_count": 0, "blocks": False}
+    )
+    quantity = blend_cip_quantity(
+        forecast_units=float(volume.get("forecast_units") or 0),
+        history_units=history.get("mean"),
+        cover_surplus_units=cover_surplus_units(
+            observed.get("soh_units"),
+            observed.get("weekly_rate"),
+            float(weeks) if weeks is not None else None,
+        ),
+        comparable_cases=top_comparables,
+        spec_units=float(spec.get("estimate_qty") or 0),
+    )
+    quantity["history_line_count"] = int(history.get("line_count") or 0)
     flags = list(intake_json.get("flags") or [])
-    if (evidence.get("observed_cover") or {}).get("flag") == "high_cover":
+    if observed.get("flag") == "high_cover":
         flags.append("observed_cover_high")
+    for flag in quantity["flags"]:
+        if flag not in flags:
+            flags.append(flag)
     return {
         "row_key": _row_key(
             product_id=pid,
@@ -882,7 +1012,8 @@ def _compose_suggestion_row(
         "customer_id": int(customer_id) if customer_id is not None else None,
         "pod_quarter": pod_quarter,
         "srp": float(srp) if srp is not None else None,
-        "suggested_estimate_qty": round(float(suggested_qty), 4),
+        "suggested_estimate_qty": quantity["suggested_estimate_qty"],
+        "quantity_evidence": quantity,
         "suggested_cost_basis": intake_json.get("cost_basis"),
         "suggested_cost_source": intake_json.get("cost_source"),
         "cover": {
@@ -1137,7 +1268,7 @@ def build_promo_plan_draft(
             "Budget uses B2 lineup-derived reservation when planned_support_usd omitted",
             "Dirty-flag is client-owned; Refresh must not clobber dirty cells",
             "Customer+period product set is lineup then same-customer history; never other customers",
-            "Listing joins by customer and product. Competitor price is the latest approved map, or empty. Observed customer and product cover is a flag and does not write the cover target or the quantity.",
+            "Listing joins by customer and product. Competitor price is the latest approved map, or empty. Suggested quantity is the mean of forecast, this customer's history for the product, and units above the cover target. Cover policy is not written. Flags do not block.",
         ],
         "uncovered": [
             "uplift_from_claim_evidence",
@@ -1522,4 +1653,82 @@ def create_case_from_promo_draft(
         "budget_status": budget.get("tracks", {}).get("money", {}).get("status"),
         "draft": draft,
         "href": f"/commercial-planner/cpor-cases/{case.id}",
+    }
+
+
+def _quantity_public_row(row: dict[str, Any]) -> dict[str, Any]:
+    evidence = dict(row.get("quantity_evidence") or {})
+    evidence["blocks"] = False
+    return {
+        "line_id": int(row["seed_line_id"]) if row.get("seed_line_id") is not None else None,
+        "product_id": row.get("product_id"),
+        "suggested_estimate_qty": row.get("suggested_estimate_qty"),
+        "quantity_evidence": evidence,
+        "flags": list(row.get("flags") or []),
+        "blocks": False,
+    }
+
+
+def preview_cip_quantities(
+    session: Session,
+    *,
+    case_id: int,
+    tenant_id: str = "default",
+) -> dict[str, Any]:
+    """Suggested quantities for the case's lines. Does not write."""
+    case = session.get(CporCase, int(case_id))
+    if case is None:
+        raise ValueError("case_not_found")
+    draft = build_promo_plan_draft(
+        session,
+        seed_case_id=int(case.id),
+        customer_id=int(case.customer_id),
+        tenant_id=tenant_id,
+    )
+    return {
+        "case_id": int(case.id),
+        "blocks": False,
+        "formula": QUANTITY_FORMULA,
+        "lines": [_quantity_public_row(row) for row in draft.get("lines") or []],
+    }
+
+
+def apply_cip_quantities(
+    session: Session,
+    case: CporCase,
+    *,
+    tenant_id: str = "default",
+) -> dict[str, Any]:
+    """Write each line's suggested quantity and recompute support. Does not block."""
+    from app.services.cpor.recompute import recompute_case_line
+
+    preview = preview_cip_quantities(session, case_id=int(case.id), tenant_id=tenant_id)
+    by_line = {
+        int(row["line_id"]): row
+        for row in preview["lines"]
+        if row.get("line_id") is not None
+    }
+    written: list[dict[str, Any]] = []
+    for line in session.scalars(
+        select(CporCaseLine).where(CporCaseLine.case_id == case.id).order_by(CporCaseLine.id.asc())
+    ).all():
+        row = by_line.get(int(line.id))
+        if row is None:
+            continue
+        line.estimate_qty = float(row.get("suggested_estimate_qty") or 0)
+        recompute_case_line(session, line, case=case, write_event=False)
+        written.append(
+            {
+                "line_id": int(line.id),
+                "estimate_qty": float(line.estimate_qty or 0),
+                "quantity_evidence": row.get("quantity_evidence"),
+                "flags": row.get("flags") or [],
+                "blocks": False,
+            }
+        )
+    return {
+        "case_id": int(case.id),
+        "blocks": False,
+        "formula": QUANTITY_FORMULA,
+        "lines": written,
     }

@@ -43,7 +43,12 @@ from app.services.cpor.lifecycle import (
 from app.services.cpor.line_window import default_line_window, follow_case_window
 from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
-from app.services.cpor.promo_plan_builder import build_promo_plan_draft, create_case_from_promo_draft
+from app.services.cpor.promo_plan_builder import (
+    apply_cip_quantities,
+    build_promo_plan_draft,
+    create_case_from_promo_draft,
+    preview_cip_quantities,
+)
 from app.services.store_dc.stock_actions import (
     auto_propose_from_intelligence,
     execute_aged_stock_action,
@@ -1221,6 +1226,51 @@ def patch_line(
         session.refresh(line)
         prod = session.get(DimProduct, line.product_id)
         return _line_json(line, prod)
+
+
+@router.get("/cases/{case_id}/cip-quantities")
+def get_cip_quantities(case_id: int, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    """Suggested line quantities from cover, forecast and this customer's history. No write."""
+    with SessionLocal() as session:
+        case = _load_case(session, case_id, user)
+        try:
+            return preview_cip_quantities(
+                session, case_id=int(case.id), tenant_id=tenant_id_from_user(user)
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/cases/{case_id}/cip-quantities")
+def post_cip_quantities(case_id: int, user: dict = Depends(_require_cpor_planner)) -> dict[str, Any]:
+    """Fill estimate qty from the suggestion. Flags are returned and never block the write."""
+    actor = _actor(user)
+    with SessionLocal() as session:
+        case = _load_case(session, case_id, user)
+        if case.status not in EDITABLE_STATUSES:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Lines not editable in status={case.status}",
+            )
+        try:
+            result = apply_cip_quantities(
+                session, case, tenant_id=tenant_id_from_user(user)
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _record_event(
+            session,
+            case_id=case.id,
+            event_type="cip_quantities_applied",
+            actor=actor,
+            payload={
+                "line_count": len(result.get("lines") or []),
+                "blocks": False,
+            },
+            user=user,
+        )
+        session.commit()
+        return result
 
 
 @router.post("/cases/{case_id}/lines/{line_id}/void")

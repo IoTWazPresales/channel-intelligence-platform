@@ -307,7 +307,7 @@ export function PromoPlanBuilderPanel() {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         Pick a customer and period. Lines come from that customer’s lineup for the period, or from that
         customer’s own history — not from other customers. The Evidence column shows listing, competitor
-        price, and observed cover; it does not set the quantity.
+        price, and a suggested quantity from cover, forecast and this customer’s history. Flags do not block.
       </Typography>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
         <Box sx={{ minWidth: 280, flex: 1 }}>
