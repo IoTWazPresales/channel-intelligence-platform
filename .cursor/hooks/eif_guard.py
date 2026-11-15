@@ -689,7 +689,20 @@ def _arm_watchdog():
         if _DONE.wait(sec):
             return
         rc = _watchdog_fire()
-        os._exit(0 if rc == 0 else (rc or 1))
+        code = 0 if rc == 0 else (rc or 1)
+        # The Windows launcher's bootstrap (eif_guard.cmd) validates the
+        # captured reply after the guard and returns the exit code that
+        # reports it; os._exit would skip it, so call it here. Absent when
+        # the guard runs as a script (POSIX launcher, CLI).
+        finish = globals().get('_EIF_LAUNCHER_FINISH')
+        if callable(finish):
+            try:
+                result = finish(code)
+                if type(result) is int:
+                    code = result
+            except Exception:
+                pass
+        os._exit(code)
 
     threading.Thread(target=run, daemon=True, name='eif-hook-watchdog').start()
 

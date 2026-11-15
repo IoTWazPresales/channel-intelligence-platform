@@ -2,8 +2,8 @@
   "eif": "hook-runtime-manifest",
   "files": {
     ".cursor/hooks.json": "d7d7c183e44342e4674a83e969a1d79400b3af2763fa1a352239afc2f7a58167",
-    ".cursor/hooks/eif_guard.cmd": "4fb354978ff1459d309fe9f4768336adfac7271dbb74e4a544b483320b469556",
-    ".cursor/hooks/eif_guard.py": "1b9e4393ca16bb27b71e3dbc71d9e2e84add5ac4f4090155fe052c2aead4d86b",
+    ".cursor/hooks/eif_guard.cmd": "61bcc7ef48d24b5f272f87911299915bf5822e1933760eccd641773189ed3e5c",
+    ".cursor/hooks/eif_guard.py": "45cea2336d207c8fdb865dcddc489d174a65c45845f3f8a4c2e43a5fdb57b724",
     ".cursor/hooks/eif_guard.sh": "228ed8d88af7362332b562f5a7f1c96d851d545b8ffc69195d83d99799f5df60",
     ".cursor/hooks/eif_guard_crash.json": "00d7f2cdaee97215a9d7a6ccd3a12cf352cc34bd7418be4f2a1410e6e1099a4f",
     ".cursor/hooks/eif_guard_failclosed.json": "b8a84d7b95a7da709f8f26449c96ef636d7796ff82bc7416af70d9b8bfe522f4",
