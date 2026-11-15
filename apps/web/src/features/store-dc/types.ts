@@ -7,6 +7,15 @@ export type StoreMapLine = {
   weeks_of_cover: number | null;
 };
 
+export type LocationSuggestion = {
+  outcome: 'suggest' | 'manual';
+  reason: 'match' | 'none' | 'multiple';
+  place: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  licence: string;
+};
+
 export type StoreMapStore = {
   customer_id: number;
   customer_name: string | null;
@@ -15,6 +24,7 @@ export type StoreMapStore = {
   latitude: number | null;
   longitude: number | null;
   pinned: boolean;
+  location_suggestion?: LocationSuggestion | null;
   last_week_units: number;
   stock_on_hand: number | null;
   weeks_of_cover: number | null;

@@ -78,13 +78,7 @@ export function StoreMap() {
   const selected = visible.find((store) => storeKey(store) === selectedKey) ?? null;
   const hover = visible.find((store) => storeKey(store) === hoverKey) ?? null;
 
-  async function savePin(store: StoreMapStore) {
-    const lat = Number(latitude);
-    const lon = Number(longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      setPinError('Enter both coordinates.');
-      return;
-    }
+  async function postPin(store: StoreMapStore, lat: number, lon: number) {
     setSaving(true);
     setPinError(null);
     try {
@@ -103,6 +97,24 @@ export function StoreMap() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function savePin(store: StoreMapStore) {
+    const lat = Number(latitude);
+    const lon = Number(longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      setPinError('Enter both coordinates.');
+      return;
+    }
+    await postPin(store, lat, lon);
+  }
+
+  async function confirmSuggestion(store: StoreMapStore) {
+    const suggestion = store.location_suggestion;
+    if (suggestion?.outcome !== 'suggest' || suggestion.latitude == null || suggestion.longitude == null) {
+      return;
+    }
+    await postPin(store, suggestion.latitude, suggestion.longitude);
   }
 
   return (
@@ -274,6 +286,28 @@ export function StoreMap() {
                       · {store.customer_name}
                     </Box>
                   </Typography>
+                  {store.location_suggestion?.outcome === 'suggest' ? (
+                    <Typography variant="caption" sx={{ display: 'block', color: tokens.text.secondary }} data-testid="place-suggestion">
+                      Suggested place: {store.location_suggestion.place}. {store.location_suggestion.licence}. Nothing is saved until you confirm.
+                    </Typography>
+                  ) : null}
+                  {store.location_suggestion?.outcome === 'manual' ? (
+                    <Typography variant="caption" sx={{ display: 'block', color: tokens.text.secondary }} data-testid="place-manual">
+                      {store.location_suggestion.reason === 'multiple'
+                        ? 'More than one place matches. Drop a pin.'
+                        : 'No place match. Drop a pin.'}
+                    </Typography>
+                  ) : null}
+                  {store.location_suggestion?.outcome === 'suggest' ? (
+                    <Button
+                      size="small"
+                      data-testid="confirm-suggestion"
+                      disabled={saving}
+                      onClick={() => void confirmSuggestion(store)}
+                    >
+                      Confirm suggestion
+                    </Button>
+                  ) : null}
                   <Button size="small" data-testid="drop-pin" onClick={() => { setPinFor(key); setPinError(null); }}>
                     Drop pin
                   </Button>
