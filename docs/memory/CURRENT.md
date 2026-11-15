@@ -24,6 +24,8 @@
 
 **EIF guard (2026-11-15):** installed from EIF `fix/backlog-225-cross-host` @ `34c2dfc` as `945f6f0b` (lean). **BACKLOG-232 closed:** Cursor Project helpers on this PC can write. Cursor sends blank ids on tool hooks (a Cursor bug), so under lean an id-less call joins the shared `anon-lean` pool: all hard blocks apply (proven: push to main and a manifest edit denied), no operator grants, closure and retry debt advisory. Calls with real ids keep full per-session checks. Decisions and evidence: `docs/BACKLOG.md` BACKLOG-232.
 
+**EIF upgrade source (verified on this PC 2026-11-15):** EIF branches `feat/lean-enforcement-profile` (`56b41d0`) and `fix/backlog-225-cross-host` (`4b14e09`) are not merged to EIF `main` (`f03832d`; local `main` and `origin/main` match in both checkouts). `C:\AI\engineering-intelligence-framework` is on WIP branch `fix/session-local-retry-policy` (`1061934`, dirty working tree, behind its origin by 3) and must never be an upgrade source. Upgrades come only from `C:\AI\eif-lean` at a Codex-reviewed SHA via `C:\AI\update-eif-guard.ps1` (that script's EIF checkout is `C:\AI\eif-lean`, and it requires `-ReviewedSha`).
+
 **EIF guard issues seen in the 2026-11-11/12 run (status of each not re-checked on 2026-11-15):**
 - `HOOK_TIMEOUT` (harness fault): the guard's session phase takes 6.1 to 7.6 s of the 8 s watchdog, so calls fail at random even on an idle machine. Lanes ran under a temporary rule: retry the byte-identical call once, at most 5 retries per run.
 - False `FOREIGN_PATH`: any `<rev>:<path>` text (`git show HEAD:apps/...`, `git push origin HEAD:<branch>`) is read as a drive path. Use `git push origin <local-branch>` instead.
