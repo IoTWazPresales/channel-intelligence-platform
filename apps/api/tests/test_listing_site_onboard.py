@@ -210,6 +210,91 @@ def test_onboard_keeps_a_pattern_already_on_the_site(db_session: Session) -> Non
     assert site.display_name == "kept label"
 
 
+def test_onboard_refuses_a_domain_that_conflicts_with_the_existing_site(db_session: Session) -> None:
+    tenant = f"t-clash-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, None)
+    kept = "https://shop-a.example.test/p/{page_id}"
+    db_session.add(
+        ListingSite(
+            tenant_id=tenant,
+            site_key="shop-a",
+            display_name="kept label",
+            product_url_pattern=kept,
+            search_url_pattern="https://shop-a.example.test/s?q={query}",
+        )
+    )
+    db_session.flush()
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-b.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "domain_conflict"
+    site = _site(db_session, tenant, "shop-a")
+    assert site.product_url_pattern == kept
+    assert site.search_url_pattern == "https://shop-a.example.test/s?q={query}"
+    config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer.id))
+    seed = (config.feed_profile_json or {}).get("listing_seed") if isinstance(config.feed_profile_json, dict) else None
+    assert not isinstance(seed, dict) or seed.get("marketplace") in (None, "")
+
+
+def test_onboard_allows_another_customer_on_the_same_domain(db_session: Session) -> None:
+    tenant = f"t-share-{uuid.uuid4().hex[:6]}"
+    first = _customer(db_session, tenant)
+    second = _customer(db_session, tenant)
+    _report(db_session, first, None)
+    _report(db_session, second, None)
+    record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(first.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    shared = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(second.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    assert shared["created_site"] is False
+    assert shared["domain"] == "shop-a.example.test"
+    second_config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == second.id))
+    assert second_config.feed_profile_json["listing_seed"]["marketplace"] == "shop-a"
+    assert second_config.feed_profile_json["listing_seed"]["site"]["domain"] == "shop-a.example.test"
+    assert db_session.scalar(
+        select(func.count()).select_from(ListingSite).where(ListingSite.tenant_id == tenant, ListingSite.site_key == "shop-a")
+    ) == 1
+
+    third = _customer(db_session, tenant)
+    _report(db_session, third, None)
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(third.id),
+            site_key="shop-a",
+            domain="shop-b.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "domain_conflict"
+    third_config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == third.id))
+    third_seed = (third_config.feed_profile_json or {}).get("listing_seed") if isinstance(third_config.feed_profile_json, dict) else None
+    assert not isinstance(third_seed, dict) or third_seed.get("marketplace") in (None, "")
+
+
 def test_onboard_refuses_a_customer_that_already_has_a_site_key(db_session: Session) -> None:
     tenant = f"t-has-{uuid.uuid4().hex[:6]}"
     customer = _customer(db_session, tenant)

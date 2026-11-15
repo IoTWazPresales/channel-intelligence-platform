@@ -4,7 +4,9 @@ This is the path out of ``no_site_key``. It writes that customer's listing seed 
 when the site row is missing, creates the row. It does not fetch a page, does not
 name a customer or a retailer, and does not invent a seller. A page pattern is
 derived only from product URLs the steward pastes, and only into columns that are
-still empty. A customer that already has a site key is left unchanged.
+still empty. A customer that already has a site key is left unchanged. An existing
+site is attached only when every stored link host and every other customer's
+recorded domain for that key is this domain, or none is recorded yet.
 """
 
 from __future__ import annotations
@@ -112,6 +114,15 @@ def record_customer_site(
     row = session.scalar(
         select(ListingSite).where(ListingSite.tenant_id == tenant_id, ListingSite.site_key == key)
     )
+    if isinstance(row, ListingSite):
+        _reject_conflicting_domain(
+            session,
+            tenant_id=tenant_id,
+            site_key=key,
+            row=row,
+            customer_id=int(customer.id),
+            host=host,
+        )
     created = False
     if not isinstance(row, ListingSite):
         row = create_site(
@@ -199,6 +210,85 @@ def _recorded_keys(session: Session, *, customer_id: int, seed: dict[str, Any]) 
 
 def _blank(value: Any) -> bool:
     return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _host_in_pattern(pattern: Any) -> str | None:
+    """Host of a stored link pattern, or None when the pattern is not an http(s) URL."""
+    if not isinstance(pattern, str) or not pattern.strip():
+        return None
+    parts = urlsplit(pattern.strip())
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None
+    host = parts.hostname.lower().rstrip(".")
+    if not _HOST.fullmatch(host):
+        return None
+    return host
+
+
+def _other_recorded_domains(
+    session: Session, *, tenant_id: str, site_key: str, customer_id: int
+) -> set[str]:
+    """Domains other customers in this tenant already recorded for ``site_key``."""
+    profiles = session.scalars(
+        select(CustomerReportConfig.feed_profile_json)
+        .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
+        .where(
+            DimCustomer.tenant_id == tenant_id,
+            CustomerReportConfig.customer_id != int(customer_id),
+        )
+    ).all()
+    hosts: set[str] = set()
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        seed = profile.get("listing_seed")
+        if not isinstance(seed, dict):
+            continue
+        named = seed.get("marketplace")
+        if not isinstance(named, str) or named.strip().lower() != site_key:
+            continue
+        site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
+        raw = site.get("domain")
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        try:
+            hosts.add(normalize_domain(raw))
+        except SiteOnboardError:
+            continue
+    return hosts
+
+
+def _reject_conflicting_domain(
+    session: Session,
+    *,
+    tenant_id: str,
+    site_key: str,
+    row: ListingSite,
+    customer_id: int,
+    host: str,
+) -> None:
+    """Refuse to attach an existing site to a domain it is not already using.
+
+    A site with no link host and no other recorded domain can take this domain.
+    Customers that record the same domain share the site.
+    """
+    known = {
+        found
+        for found in (
+            _host_in_pattern(row.product_url_pattern),
+            _host_in_pattern(row.search_url_pattern),
+            _host_in_pattern(row.details_url_pattern),
+        )
+        if found
+    }
+    known.update(
+        _other_recorded_domains(session, tenant_id=tenant_id, site_key=site_key, customer_id=customer_id)
+    )
+    if known and known != {host}:
+        raise SiteOnboardError(
+            "domain_conflict",
+            "This site is already configured for a different domain.",
+        )
 
 
 def _patterns(
