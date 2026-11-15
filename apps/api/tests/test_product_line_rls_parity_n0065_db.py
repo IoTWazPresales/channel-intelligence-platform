@@ -70,6 +70,12 @@ NO_PRODUCT_STEWARD = frozenset(
 # (20261022_0047) adds DELETE, used only by the import job delete for the records a deleted job owns.
 # They are left out of the measured set and checked for their policy shape below.
 APPEND_ONLY = frozenset({"fact_customer_sellthrough_superseded", "fact_distributor_line_superseded"})
+# 20261113_0062: the budget ledger is append-only with no delete path at all (the app role has
+# SELECT and INSERT only, a trigger refuses UPDATE and DELETE), so it has SELECT and INSERT
+# policies and neither an UPDATE nor a DELETE policy. Left out of the measured set like
+# APPEND_ONLY and checked for its own shape below.
+APPEND_ONLY_NO_DELETE = frozenset({"budget_ledger_entry"})
+_M62 = "20261113_0062"
 STEWARD = "steward"
 ALL = "ALL"
 NULL_PID = None
@@ -310,7 +316,8 @@ def run_version(ver: int) -> dict:
             ).scalar_one()
             definer_rls = not bool(definer)
             out["definer_bypasses_rls"] = bool(definer)
-            tables = [(t, c) for t, c in m25.protected_tables(conn) if t not in APPEND_ONLY]
+            tables = [(t, c) for t, c in m25.protected_tables(conn)
+                      if t not in APPEND_ONLY and t not in APPEND_ONLY_NO_DELETE]
             out["n_tables"] = len(tables) + 1
             tag = uuid.uuid4().hex[:6]
             names = {"A": f"N0065P-A-{tag}", "B": f"N0065P-B-{tag}", "C": f"N0065P-C-{tag}"}
@@ -598,7 +605,9 @@ def test_parity_0024_to_0027_every_protected_table() -> None:
     print(json.dumps({k: v for k, v in report.items() if not k.startswith("per_table")}, indent=1,
                      default=str)[:20000])
     # 45 when written; N-0087 dropped four scaffold tables (20261011_0032), and the append-only
-    # superseded table is measured separately (APPEND_ONLY). A new protected table must be added here.
+    # superseded table is measured separately (APPEND_ONLY). Still 42 with 20261113_0062
+    # applied: the budget ledger is append-only with no UPDATE/DELETE policy and is checked
+    # separately (APPEND_ONLY_NO_DELETE). A new protected table must be added here.
     assert r25["n_tables"] == 42 and r26["n_tables"] == 42 and r27["n_tables"] == 42
     assert not s24["mismatches"], s24["mismatches"][:5]
     assert not s25["mismatches"], s25["mismatches"][:5]
@@ -658,5 +667,44 @@ def test_append_only_audit_tables_have_select_insert_and_delete_policies_and_no_
                     {"t": table},
                 ).one()
                 assert tuple(rls) == (True, True), table
+    finally:
+        eng.dispose()
+
+
+def test_append_only_no_delete_tables_have_select_insert_policies_only():
+    eng = _engine()
+    try:
+        with eng.connect() as conn:
+            if conn.execute(text("select current_database()")).scalar_one() != "cip_test":
+                pytest.skip("policy shape is read on cip_test only")
+            rev = conn.execute(text("select version_num from alembic_version")).scalar_one()
+            from alembic.config import Config
+            from alembic.script import ScriptDirectory
+
+            ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+            script = ScriptDirectory.from_config(Config(str(ini)))
+            if _M62 not in {r.revision for r in script.walk_revisions(base="base", head=rev)}:
+                pytest.skip(f"{_M62} is not applied on cip_test (is {rev})")
+            scanned = {t for t, _ in _load(_M25).protected_tables(conn)}
+            for table in sorted(APPEND_ONLY_NO_DELETE):
+                cmds = {
+                    r[0]: r[1]
+                    for r in conn.execute(
+                        text("select cmd, policyname from pg_policies where tablename = :t"),
+                        {"t": table},
+                    )
+                }
+                assert cmds == {"INSERT": "cip_pl_insert", "SELECT": "cip_pl_select"}, (table, cmds)
+                rls = conn.execute(
+                    text(
+                        "select relrowsecurity, relforcerowsecurity from pg_class"
+                        " where relname = :t"
+                    ),
+                    {"t": table},
+                ).one()
+                assert tuple(rls) == (True, True), table
+                # The generic protected-table scan still finds it, so the exclusion from the
+                # measured matrix is deliberate, not an accident of the scan.
+                assert table in scanned, table
     finally:
         eng.dispose()

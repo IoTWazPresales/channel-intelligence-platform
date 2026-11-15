@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -80,11 +80,39 @@ def add_entry(session: Session, **fields: Any) -> BudgetLedgerEntry:
     return row
 
 
+def _select_across_product_lines(session: Session, stmt):
+    """Run one ledger read for every product line, then restore the caller's scope.
+
+    The portfolio ceiling and the campaign draw count the whole tenant. Product-line
+    row security stays on the table, so listing reads are unchanged. This statement
+    opens the read gate and puts the caller's lines back before it returns. None when
+    the table is not there yet.
+    """
+    nested = session.begin_nested()
+    try:
+        saved = session.execute(
+            text("SELECT current_setting('cip.product_lines', true)")
+        ).scalar_one()
+        session.execute(text("SELECT set_config('cip.product_lines', '*', true)"))
+        rows = list(session.execute(stmt).all())
+        # '' matches an unset gate. A named scope is restored unchanged.
+        session.execute(
+            text("SELECT set_config('cip.product_lines', :saved, true)"),
+            {"saved": "" if saved is None else str(saved)},
+        )
+        nested.commit()
+    except ProgrammingError:
+        nested.rollback()
+        return None
+    return rows
+
+
 def used_usd(session: Session, *, landed_quarter: str | None = None) -> float | None:
-    """Campaign headroom from the ledger. None when the table is not there yet.
+    """Campaign headroom for every product line. None when the table is not there yet.
 
     A cap is not money in the draw. A non-campaign reserve is not the campaign
-    budget. Draft and cancelled cases are not left as open commitment.
+    budget. Draft and cancelled cases are not left as open commitment. The sum is
+    the tenant's draw, not the caller's product-line listing.
     """
     stmt = select(
         BudgetLedgerEntry.entry_type,
@@ -93,14 +121,11 @@ def used_usd(session: Session, *, landed_quarter: str | None = None) -> float | 
     ).group_by(BudgetLedgerEntry.entry_type, BudgetLedgerEntry.source_tag)
     if landed_quarter:
         stmt = stmt.where(BudgetLedgerEntry.landed_quarter == landed_quarter)
-    nested = session.begin_nested()
-    try:
-        rows = list(session.execute(stmt).all())
-        nested.commit()
-    except ProgrammingError:
-        nested.rollback()
+    rows = _select_across_product_lines(session, stmt)
+    if rows is None:
         return None
-    return headroom_used_from_tagged([(str(kind), float(amount), tag) for kind, amount, tag in rows])
+    tagged = [(str(kind), float(amount), tag) for kind, amount, tag in rows]
+    return headroom_used_from_tagged(tagged)
 
 
 def position_with_pending(

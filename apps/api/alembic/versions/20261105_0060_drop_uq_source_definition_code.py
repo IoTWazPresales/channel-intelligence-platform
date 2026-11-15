@@ -18,7 +18,8 @@ Downgrade recreates the unique on ``(code)`` only when that name is absent
 and no duplicate ``code`` values exist. Duplicate codes: skip (see the
 comment in ``downgrade``). ``uq_source_definition_tenant_code`` is not touched.
 
-NOT applied. This revision is authored only; it has not been run against any database.
+Applied to cip (truth audit 2026-11-12: cip is at 20261110_0061, which follows this revision,
+and ``uq_source_definition_tenant_code`` is in place).
 """
 
 from __future__ import annotations
