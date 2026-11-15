@@ -36,6 +36,7 @@ export function StoreMap() {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
+  const [pinErrorKey, setPinErrorKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [unpinnedQuery, setUnpinnedQuery] = useState('');
 
@@ -79,8 +80,10 @@ export function StoreMap() {
   const hover = visible.find((store) => storeKey(store) === hoverKey) ?? null;
 
   async function postPin(store: StoreMapStore, lat: number, lon: number) {
+    const key = storeKey(store);
     setSaving(true);
     setPinError(null);
+    setPinErrorKey(key);
     try {
       await apiPost('/api/v1/store-dc/pins', {
         customer_id: store.customer_id,
@@ -91,9 +94,11 @@ export function StoreMap() {
       setPinFor(null);
       setLatitude('');
       setLongitude('');
+      setPinErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['store-dc-map'] });
     } catch (error) {
       setPinError(safeDisplayError(error));
+      setPinErrorKey(key);
     } finally {
       setSaving(false);
     }
@@ -104,6 +109,7 @@ export function StoreMap() {
     const lon = Number(longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
       setPinError('Enter both coordinates.');
+      setPinErrorKey(storeKey(store));
       return;
     }
     await postPin(store, lat, lon);
@@ -308,7 +314,12 @@ export function StoreMap() {
                       Confirm suggestion
                     </Button>
                   ) : null}
-                  <Button size="small" data-testid="drop-pin" onClick={() => { setPinFor(key); setPinError(null); }}>
+                  {pinError && pinErrorKey === key ? (
+                    <Typography variant="caption" color="error" data-testid="pin-error" sx={{ display: 'block' }}>
+                      {pinError}
+                    </Typography>
+                  ) : null}
+                  <Button size="small" data-testid="drop-pin" onClick={() => { setPinFor(key); setPinError(null); setPinErrorKey(null); }}>
                     Drop pin
                   </Button>
                   {pinFor === key ? (
@@ -327,11 +338,6 @@ export function StoreMap() {
                         onChange={(event) => setLongitude(event.target.value)}
                         inputProps={{ 'data-testid': 'pin-longitude' }}
                       />
-                      {pinError ? (
-                        <Typography variant="caption" color="error">
-                          {pinError}
-                        </Typography>
-                      ) : null}
                       <Button size="small" variant="contained" disabled={saving} onClick={() => void savePin(store)}>
                         Save pin
                       </Button>
