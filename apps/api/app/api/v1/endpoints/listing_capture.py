@@ -153,6 +153,39 @@ def post_site(body: SiteCreate, user: dict = Depends(require_roles(Role.STEWARD)
         return _site_payload(session, site_service.get_site(session, row.id))
 
 
+class SiteOnboardBody(BaseModel):
+    customer_id: int
+    site_key: str = Field(min_length=1, max_length=32)
+    domain: str = Field(min_length=1, max_length=253)
+    example_urls: list[str] = Field(default_factory=list, max_length=8)
+
+
+@router.post("/sites/onboard")
+def post_site_onboard(body: SiteOnboardBody, user: dict = Depends(require_roles(Role.STEWARD))):
+    """Record a site key and domain for a reporting customer that has neither. Steward only."""
+    from app.services.listing_capture.site_onboarding import SiteOnboardError, record_customer_site
+
+    with SessionLocal() as session:
+        try:
+            result = record_customer_site(
+                session,
+                tenant_id=tenant_id_from_user(user),
+                customer_id=body.customer_id,
+                site_key=body.site_key,
+                domain=body.domain,
+                example_urls=body.example_urls,
+                actor=_user_actor(user),
+            )
+            session.commit()
+        except SiteOnboardError as exc:
+            session.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ValueError as exc:
+            session.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return result
+
+
 @router.patch("/sites/{site_id}")
 def patch_site(site_id: int, body: SiteFields, user: dict = Depends(require_roles(Role.STEWARD))):
     with SessionLocal() as session:

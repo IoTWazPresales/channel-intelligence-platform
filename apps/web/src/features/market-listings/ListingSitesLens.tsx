@@ -9,10 +9,13 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
+import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
+
+type CustomerPick = { id: number; customer_code: string; customer_name: string };
 
 type Seller = {
   customer_id: number;
@@ -63,6 +66,20 @@ export function ListingSitesLens() {
   const [draft, setDraft] = useState(EMPTY);
   const [newKey, setNewKey] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [customer, setCustomer] = useState<CustomerPick | null>(null);
+  const [onboardKey, setOnboardKey] = useState('');
+  const [domain, setDomain] = useState('');
+  const [exampleUrls, setExampleUrls] = useState('');
+  const [onboardNote, setOnboardNote] = useState<string | null>(null);
+
+  const fetchCustomers = useCallback(async (q: string, signal: AbortSignal) => {
+    const page = await apiGet<{ items?: CustomerPick[] }>(
+      `/api/v1/customers?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+      { signal },
+    );
+    return page.items ?? [];
+  }, []);
+  const customerLabel = useCallback((row: CustomerPick) => row.customer_name || row.customer_code, []);
 
   const rows = sites.data?.items ?? [];
   const selected = rows.find((r) => r.id === selectedId) ?? null;
@@ -103,6 +120,35 @@ export function ListingSitesLens() {
     },
     onError: (e: Error) => setError(e.message),
   });
+  const onboard = useMutation({
+    mutationFn: () =>
+      apiPost<{ pattern_status: string }>('/api/v1/listing-capture/sites/onboard', {
+        customer_id: customer?.id,
+        site_key: onboardKey.trim(),
+        domain: domain.trim(),
+        example_urls: exampleUrls
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean),
+      }),
+    onSuccess: async (row) => {
+      setError(null);
+      setOnboardNote(
+        row.pattern_status === 'derived'
+          ? 'Site recorded. The page pattern was taken from the product links.'
+          : row.pattern_status === 'kept'
+            ? 'Site recorded. The page pattern already stored was left as it is.'
+            : row.pattern_status === 'not_shared'
+              ? 'Site recorded. Those product links do not share one page pattern.'
+              : 'Site recorded. Paste product links when you have them, to derive the page pattern.',
+      );
+      await qc.invalidateQueries({ queryKey: ['listing-capture', 'sites'] });
+    },
+    onError: (e: Error) => {
+      setOnboardNote(null);
+      setError(e.message);
+    },
+  });
 
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="listing-sites-lens">
@@ -112,6 +158,56 @@ export function ListingSitesLens() {
       </Typography>
       {sites.data?.data_unavailable ? <Alert severity="warning">Sites could not be loaded.</Alert> : null}
       {error ? <Alert severity="error">{error}</Alert> : null}
+      {onboardNote ? <Alert severity="success">{onboardNote}</Alert> : null}
+      {canEdit ? (
+        <Stack spacing={1} data-testid="listing-site-onboard">
+          <Typography variant="subtitle2">Customer with no site</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Record the site key and domain for a reporting customer that has neither. Paste product links, one per
+            line, when they share one page pattern. Discovery still fills the own seller. It is not typed here.
+          </Typography>
+          <EntitySearchAutocomplete<CustomerPick>
+            label="Customer"
+            size="small"
+            value={customer}
+            onChange={setCustomer}
+            fetchOptions={fetchCustomers}
+            getOptionLabel={customerLabel}
+          />
+          <TextField
+            size="small"
+            label="Site key"
+            value={onboardKey}
+            onChange={(e) => setOnboardKey(e.target.value)}
+            data-testid="listing-site-onboard-key"
+          />
+          <TextField
+            size="small"
+            label="Domain"
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+            helperText="Host name only, such as shop.example.test"
+            data-testid="listing-site-onboard-domain"
+          />
+          <TextField
+            size="small"
+            label="Product links"
+            value={exampleUrls}
+            onChange={(e) => setExampleUrls(e.target.value)}
+            multiline
+            minRows={2}
+            data-testid="listing-site-onboard-urls"
+          />
+          <Button
+            variant="contained"
+            disabled={!customer || !onboardKey.trim() || !domain.trim() || onboard.isPending}
+            onClick={() => onboard.mutate()}
+            data-testid="listing-site-onboard-save"
+          >
+            Record site
+          </Button>
+        </Stack>
+      ) : null}
       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
         {rows.map((row) => (
           <Button

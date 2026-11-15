@@ -26,6 +26,8 @@ Seed shape (all optional, all data)::
         "seller_ids": ["<id>"],
         "seller": {"names": ["<seller>"], "ids": ["<id>"]},
         "site": {
+            "domain": "<host, no scheme>",
+            "example_urls": ["https://host/p/1"],
             "adapter_key": "html_page" | "rest_buybox_json",
             "product_url_pattern": "https://host/p/{page_id}",
             "page_id_pattern": "...one capture group...",
@@ -36,6 +38,9 @@ Seed shape (all optional, all data)::
             "display_name": "<label used only when the site row is created>"
         }
     }
+
+``domain`` and ``example_urls`` are recorded by the steward onboarding path. They are
+not site columns. A pattern is copied into an empty column; a filled column is left.
 """
 
 from __future__ import annotations
