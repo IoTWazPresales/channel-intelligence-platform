@@ -21,13 +21,78 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.services.cpor.pivot import is_voided_line
 
 
-def layout_columns(column_map: dict[str, Any] | None) -> list[tuple[str, str]]:
-    """Canonical field and the first unused header alias, in profile order."""
+COLUMN_ORDER_KEY = "column_order"
+
+
+def sheet_role_for_channel(channel: str | None) -> str:
+    """Case channel selects the sheet role. A distributor case is never a reseller sheet."""
+    text = str(channel or "reseller").strip().lower()
+    if text in {"disti", "distributor"}:
+        return "disti"
+    return "reseller"
+
+
+def column_order_from_map(column_map: Any) -> list[str]:
+    """Workbook column order stored as a list.
+
+    PostgreSQL JSONB does not keep object key order. An array does.
+    """
+    if isinstance(column_map, list):
+        order: list[str] = []
+        for item in column_map:
+            if isinstance(item, str):
+                order.append(item)
+            elif isinstance(item, dict):
+                name = item.get("canonical") or item.get("field")
+                if name:
+                    order.append(str(name))
+            elif isinstance(item, (list, tuple)) and item:
+                order.append(str(item[0]))
+        return [name for name in order if name != COLUMN_ORDER_KEY]
+    if isinstance(column_map, dict):
+        raw = column_map.get(COLUMN_ORDER_KEY)
+        if isinstance(raw, list):
+            return [str(item) for item in raw if str(item) != COLUMN_ORDER_KEY]
+    return []
+
+
+def _alias_map(column_map: Any) -> dict[str, list[Any]]:
+    if isinstance(column_map, list):
+        out: dict[str, list[Any]] = {}
+        for item in column_map:
+            canonical = None
+            aliases: Any = []
+            if isinstance(item, dict):
+                canonical = item.get("canonical") or item.get("field")
+                aliases = item.get("aliases") or item.get("headers") or []
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                canonical, aliases = item[0], item[1]
+            if canonical and str(canonical) != COLUMN_ORDER_KEY:
+                out[str(canonical)] = list(aliases or [])
+        return out
+    if isinstance(column_map, dict):
+        return {
+            str(key): list(value or [])
+            for key, value in column_map.items()
+            if str(key) != COLUMN_ORDER_KEY and isinstance(value, list)
+        }
+    return {}
+
+
+def layout_columns(
+    column_map: Any,
+    column_order: list[Any] | None = None,
+) -> list[tuple[str, str]]:
+    """Canonical field and the first unused header alias, in the explicit list order."""
+    aliases = _alias_map(column_map)
+    order = [str(item) for item in (column_order or []) if str(item) != COLUMN_ORDER_KEY]
+    if not order:
+        order = column_order_from_map(column_map)
     columns: list[tuple[str, str]] = []
     used: set[str] = set()
-    for canonical, aliases in (column_map or {}).items():
+    for canonical in order:
         header = None
-        for alias in aliases or []:
+        for alias in aliases.get(canonical) or []:
             text = str(alias).replace("\xa0", " ").strip()
             if text and text not in used:
                 header = text
@@ -35,30 +100,27 @@ def layout_columns(column_map: dict[str, Any] | None) -> list[tuple[str, str]]:
         if header is None:
             continue
         used.add(header)
-        columns.append((str(canonical), header))
+        columns.append((canonical, header))
     return columns
 
 
-def export_sheet(sheet_roles: dict[str, Any] | None) -> tuple[str, str]:
-    """First reseller sheet, otherwise the first distributor sheet."""
-    roles = dict(sheet_roles or {})
-    for name, role in roles.items():
-        if role == "reseller":
-            return str(name), "reseller"
-    for name, role in roles.items():
-        if role == "disti":
-            return str(name), "disti"
+def export_sheet(sheet_roles: dict[str, Any] | None, channel: str | None = None) -> tuple[str, str]:
+    """The sheet whose role is this case's channel. No cross-channel fallback."""
+    wanted = sheet_role_for_channel(channel)
+    for name, role in dict(sheet_roles or {}).items():
+        if str(role).strip().lower() == wanted:
+            return str(name), wanted
     raise ValueError("no_export_sheet")
 
 
 def render_profile_workbook(profile: dict[str, Any], rows: list[dict[str, Any]]) -> tuple[bytes, dict[str, Any]]:
     """Return xlsx bytes and a small description. Raises ValueError on an unusable profile."""
-    columns = layout_columns(profile.get("column_map_json"))
+    columns = layout_columns(profile.get("column_map_json"), profile.get("column_order"))
     if not columns:
         raise ValueError("empty_column_map")
     if not any(canonical == "case_code" for canonical, _header in columns):
         raise ValueError("missing_case_code_column")
-    sheet_name, role = export_sheet(profile.get("sheet_roles_json"))
+    sheet_name, role = export_sheet(profile.get("sheet_roles_json"), profile.get("channel"))
     if len(sheet_name) > 31:
         raise ValueError("sheet_name_too_long")
     header_row_index = int(profile.get("header_row_index") or 0)
@@ -102,12 +164,14 @@ def _cell(value: Any) -> Any:
 
 
 def profile_as_dict(row: CporHistoricalMappingProfile) -> dict[str, Any]:
+    raw_map = row.column_map_json or {}
     return {
         "profile_code": row.profile_code,
         "display_name": row.display_name,
         "header_row_index": int(row.header_row_index or 0),
         "sheet_roles_json": dict(row.sheet_roles_json or {}),
-        "column_map_json": dict(row.column_map_json or {}),
+        "column_map_json": _alias_map(raw_map),
+        "column_order": column_order_from_map(raw_map),
     }
 
 
@@ -233,5 +297,10 @@ def build_case_profile_workbook(
     profile = load_mapping_profile(session, profile_code)
     if profile is None:
         raise ValueError("no_mapping_profile")
+    case = session.get(CporCase, int(case_id))
+    if case is None:
+        raise ValueError("case_not_found")
+    payload = profile_as_dict(profile)
+    payload["channel"] = case.channel
     rows = canonical_rows_for_case(session, case_id)
-    return render_profile_workbook(profile_as_dict(profile), rows)
+    return render_profile_workbook(payload, rows)

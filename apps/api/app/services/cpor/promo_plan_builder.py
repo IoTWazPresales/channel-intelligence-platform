@@ -1669,21 +1669,48 @@ def _quantity_public_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _quantity_lines(session: Session, case_id: int) -> list[CporCaseLine]:
+    """Lines that may receive a suggested quantity.
+
+    Voided lines and split-source lines stay retired. ``is_voided_line`` is the
+    same check the export uses, so a suggestion cannot put units back on them.
+    """
+    from app.services.cpor.pivot import is_voided_line
+
+    rows = list(
+        session.scalars(
+            select(CporCaseLine)
+            .where(CporCaseLine.case_id == int(case_id))
+            .order_by(CporCaseLine.id.asc())
+        ).all()
+    )
+    return [line for line in rows if line.product_id is not None and not is_voided_line(line)]
+
+
 def preview_cip_quantities(
     session: Session,
     *,
     case_id: int,
     tenant_id: str = "default",
 ) -> dict[str, Any]:
-    """Suggested quantities for the case's lines. Does not write."""
+    """Suggested quantities for the case's live lines. Does not write."""
     case = session.get(CporCase, int(case_id))
     if case is None:
         raise ValueError("case_not_found")
+    eligible = _quantity_lines(session, case.id)
+    if not eligible:
+        return {
+            "case_id": int(case.id),
+            "blocks": False,
+            "formula": QUANTITY_FORMULA,
+            "lines": [],
+        }
     draft = build_promo_plan_draft(
         session,
         seed_case_id=int(case.id),
         customer_id=int(case.customer_id),
         tenant_id=tenant_id,
+        line_specs=[_spec_from_seed_line(line) for line in eligible],
     )
     return {
         "case_id": int(case.id),
@@ -1699,9 +1726,11 @@ def apply_cip_quantities(
     *,
     tenant_id: str = "default",
 ) -> dict[str, Any]:
-    """Write each line's suggested quantity and recompute support. Does not block."""
+    """Write each live line's suggested quantity and recompute support. Does not block."""
+    from app.services.cpor.pivot import is_voided_line
     from app.services.cpor.recompute import recompute_case_line
 
+    eligible = _quantity_lines(session, case.id)
     preview = preview_cip_quantities(session, case_id=int(case.id), tenant_id=tenant_id)
     by_line = {
         int(row["line_id"]): row
@@ -1709,9 +1738,9 @@ def apply_cip_quantities(
         if row.get("line_id") is not None
     }
     written: list[dict[str, Any]] = []
-    for line in session.scalars(
-        select(CporCaseLine).where(CporCaseLine.case_id == case.id).order_by(CporCaseLine.id.asc())
-    ).all():
+    for line in eligible:
+        if is_voided_line(line):
+            continue
         row = by_line.get(int(line.id))
         if row is None:
             continue
