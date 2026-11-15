@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-11-15 (D-0143 decided, option B; BACKLOG-232 decision). Before that: 2026-11-12 (integration close-off: #88, #85, #86, #87 and #84 merged into `feat/integrate-20261103`).
+**Last updated:** 2026-11-15 (D-0143 decided, option B; BACKLOG-232 closed, guard `945f6f0b`). Before that: 2026-11-12 (integration close-off: #88, #85, #86, #87 and #84 merged into `feat/integrate-20261103`).
 
 **Branch:** `feat/integrate-20261103` @ `4fce3b40` (Merge #84) plus this docs commit. Nothing was pushed to `main`.
 
@@ -22,9 +22,9 @@
 
 **Review policy (Warren, 2026-11-12):** Codex (`codex exec -s read-only ... review --base origin/feat/integrate-20261103`) is the only independent reviewer. There is no second review, and no VERIFY debt is recorded for skipping one. Allow two fix-and-review rounds per PR; Warren may grant a narrowed third.
 
-**BACKLOG-232 (Cursor Project helpers on this PC, `IDENTITY_TOOL` on writes):** decision 2026-11-15: generation_id fallback, lean profile only, measured by helper probe. Cause seen in the guard log (ts 1794735005): helper tool-call payloads carry `conversation_id ""`, empty `session_id` and `transcript_path` null. Guard installed at `ced641a0` (EIF `9a2e3e3`, diagnostic only).
+**EIF guard (2026-11-15):** installed from EIF `fix/backlog-225-cross-host` @ `34c2dfc` as `945f6f0b` (lean). **BACKLOG-232 closed:** Cursor Project helpers on this PC can write. Cursor sends blank ids on tool hooks (a Cursor bug), so under lean an id-less call joins the shared `anon-lean` pool: all hard blocks apply (proven: push to main and a manifest edit denied), no operator grants, closure and retry debt advisory. Calls with real ids keep full per-session checks. Decisions and evidence: `docs/BACKLOG.md` BACKLOG-232.
 
-**NEXT, before anything else: repair the EIF guard (Warren).** Observed in the 2026-11-11/12 run:
+**EIF guard issues seen in the 2026-11-11/12 run (status of each not re-checked on 2026-11-15):**
 - `HOOK_TIMEOUT` (harness fault): the guard's session phase takes 6.1 to 7.6 s of the 8 s watchdog, so calls fail at random even on an idle machine. Lanes ran under a temporary rule: retry the byte-identical call once, at most 5 retries per run.
 - False `FOREIGN_PATH`: any `<rev>:<path>` text (`git show HEAD:apps/...`, `git push origin HEAD:<branch>`) is read as a drive path. Use `git push origin <local-branch>` instead.
 - `PROGRAMME_GIT_STAGE` denied `git add -- CONTEXT.md docs/memory/CURRENT.md` when the same command also held `.` / `:(exclude)` pathspecs, but allowed the same shape three times before.

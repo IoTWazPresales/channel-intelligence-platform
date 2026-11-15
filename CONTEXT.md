@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-15 - **EIF guard and D-0143:** BACKLOG-232 closed. Guard from EIF `34c2dfc` installed as `945f6f0b`; Cursor Project helpers on this PC write through the lean anonymous pool (hard blocks proven), and real ids keep full per-session checks. D-0143 DECIDED by Warren, option B (offline South African place list, exact match, steward confirms; ledger amendment pending, orchestrator). No `cip` write. No main.
+
 - 2026-11-12 - **Integration close-off:** #88 (lane A listings), #85 (lane D weeks of cover and My accounts), #86 (lane B CPOR aged stock), #87 (lane F ex-VAT SOH check) and #84 (serial queue and the `--expect-db` guard) merged into `feat/integrate-20261103` at their Codex-reviewed heads; tip `4fce3b40`. `cip` unchanged at `20261110_0061`. Codex is the only independent reviewer from now on. Follow-ups BACKLOG-226 to 231. EIF guard repair is next. No main.
 
 - 2026-11-10 - **Serial queue step 8 Compuspeed/Syntech:** identity split on `cip` after clone `cip_queue_s6`. Customers 1152 and 4145 are `unverified` and no longer merged into OPEN_CHANNEL. Distributors 12 and 51 were already separate. No fact rows moved (no stored before-image). Alembic stays `20261110_0061`. No main. Commit `29757c80`.
