@@ -153,8 +153,9 @@ def verifier_command(command):
 # both ids are empty, a non-empty ABSOLUTE transcript_path identifies the
 # session: 'tp-' + sha256(normalised path)[:32]. The raw path (it contains the
 # user's profile directory) is never a key, a log value or a message.
-# generation_id, tool_use_id, model, cwd, workspace_roots and user_email are
-# never identity. Anything else keeps 'unknown' (IDENTITY_TOOL for mutations).
+# tool_use_id, model, cwd, workspace_roots and user_email are never identity;
+# generation_id only through the lean fallback below. Anything else keeps
+# 'unknown' (IDENTITY_TOOL for mutations).
 _WINDOWS_ABSOLUTE = re.compile(r'^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)')
 
 
@@ -178,20 +179,70 @@ def transcript_session_key(data):
     return 'tp-' + hashlib.sha256(norm.encode('utf-8')).hexdigest()[:32]
 
 
+# BACKLOG-232 decision (Warren, 2026-11-15): Cursor Project helpers on this PC
+# send conversation_id "", empty session_id and transcript_path null on tool
+# hooks (ts 1794735005). Under the LEAN profile ONLY, when both ids are empty
+# and transcript_path is missing, empty or null, a non-empty generation_id
+# identifies the session: 'gen-' + sha256(generation_id)[:32]. The guard sets
+# GENERATION_FALLBACK per hook from the loaded, valid policy; it is False by
+# default, so strict and any unloaded policy keep IDENTITY_TOOL. A
+# generation_id session never holds an operator grant (see lean_db_grant and
+# tools/session_grant.py). The raw generation_id is never a log value.
+GENERATION_FALLBACK = False
+GENERATION_STATE_MARK = 'generation_id'
+
+
+def _blank(value):
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def generation_session_key(data):
+    """'gen-<32 hex>' under the lean fallback, else None."""
+    if not GENERATION_FALLBACK or not isinstance(data, dict):
+        return None
+    if not _blank(data.get('transcript_path')):
+        return None
+    raw = data.get('generation_id')
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text or '\x00' in text:
+        return None
+    return 'gen-' + hashlib.sha256(text.encode('utf-8')).hexdigest()[:32]
+
+
+def identity_source(data):
+    """Which payload field names the session: conversation_id, session_id,
+    transcript_path, generation_id, or None ('unknown')."""
+    if not isinstance(data, dict):
+        return None
+    if data.get('conversation_id'):
+        return 'conversation_id'
+    if data.get('session_id'):
+        return 'session_id'
+    if transcript_session_key(data):
+        return 'transcript_path'
+    if generation_session_key(data):
+        return 'generation_id'
+    return None
+
+
 def conversation(data):
     explicit = data.get('conversation_id') or data.get('session_id')
     if explicit:
         return str(explicit)
-    return transcript_session_key(data) or 'unknown'
+    return transcript_session_key(data) or generation_session_key(data) or 'unknown'
 
 
 def identity_log_fields(data):
-    """Log fields for a session identified by transcript_path, else {}.
-    The key prefix (12 hex) lets the operator read per-helper stability."""
-    if not isinstance(data, dict) or data.get('conversation_id') or data.get('session_id'):
-        return {}
-    key = transcript_session_key(data)
-    return {'identity_source': 'transcript_path', 'identity_key_prefix': key[3:15]} if key else {}
+    """Log fields for a session identified by transcript_path or generation_id,
+    else {}. The key prefix (12 hex) lets the operator read per-helper stability."""
+    source = identity_source(data)
+    if source == 'transcript_path':
+        return {'identity_source': source, 'identity_key_prefix': transcript_session_key(data)[3:15]}
+    if source == 'generation_id':
+        return {'identity_source': source, 'identity_key_prefix': generation_session_key(data)[4:16]}
+    return {}
 
 
 def state_path(root, data):
@@ -976,6 +1027,9 @@ def boundary(root, data, quarantined=False):
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
         before = json.dumps(state, sort_keys=True)
+        if identity_source(data) == 'generation_id':
+            # tools/session_grant.py refuses a grant for this session.
+            state['identity_source'] = GENERATION_STATE_MARK
         phase = 'close' if data.get('hook_event_name') in {'stop', 'sessionEnd'} else state.get('closure_phase', 'start')
         if data.get('hook_event_name') == 'sessionStart':
             phase = 'start'

@@ -3388,6 +3388,9 @@ def lean_db_grant(ctx):
     session = support('eif_session')
     if session.conversation(ctx['data']) == 'unknown':
         return None
+    # BACKLOG-232: a generation_id session never holds a grant; any existing one is ignored.
+    if session.identity_source(ctx['data']) == 'generation_id':
+        return None
     try:
         path = session.state_path(ctx['root'], ctx['data'])
         if not path.is_file():
@@ -3458,6 +3461,11 @@ def lean_shell_decision(cmd, policy, ctx):
     if database:
         grant = lean_db_grant(ctx)
         if grant is None:
+            if ctx and ctx.get('data') and support('eif_session').identity_source(ctx['data']) == 'generation_id':
+                return _shell_result(False, 'PROTECTED_DATABASE_WRITE', (
+                    f'{database}. Read-only SQL is allowed; name a non-protected target (DSN, -d, --expect-db) for '
+                    'disposable databases. This session is identified by generation_id (BACKLOG-232 lean fallback) '
+                    'and can never hold an operator grant; run protected writes from a session with a conversation id.'))
             key = _session_key(ctx)
             return _shell_result(False, 'PROTECTED_DATABASE_WRITE', (
                 f'{database}. Read-only SQL is allowed; name a non-protected target (DSN, -d, --expect-db) for '
@@ -4059,6 +4067,9 @@ def _main():
     _TIMINGS['integrity'] = round((time.perf_counter() - started) * 1000, 3)
     started = time.perf_counter()
     state,policy,pp,pmsg=load_policy(root)
+    # BACKLOG-232: the generation_id identity fallback exists only under a
+    # loaded, valid lean policy; strict and any other state keep IDENTITY_TOOL.
+    support('eif_session').GENERATION_FALLBACK = state == 'OK' and lean_profile(policy)
     _TIMINGS['policy'] = round((time.perf_counter() - started) * 1000, 3)
     # Retry admission only. Checked before identity/budget so a fault there
     # cannot turn a permanently foreign target into debt; untrusted policy
