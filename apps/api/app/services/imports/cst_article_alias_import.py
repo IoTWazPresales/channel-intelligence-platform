@@ -138,8 +138,9 @@ def _resolve_customer_id(
        any scope, used only when they agree on one customer after merge redirect (the
        ``build_unique_approved_customer_alias_id_by_token`` rule the lineup resolver uses).
 
-    Both follow customer merges. Anything else is unresolved (None) and reported by the caller.
-    ``tenant_id`` None means the request tenant, else the default tenant.
+    Both follow customer merges. A redirect is refused when any customer on the
+    chain is outside the import tenant. Anything else unresolved is reported by
+    the caller. ``tenant_id`` None means the request tenant, else the default tenant.
     """
     from app.core.tenant_scope import request_tenant_id
     from app.services.merge_redirect import follow_customer_merge_redirect_sync
@@ -155,7 +156,7 @@ def _resolve_customer_id(
         )
     )
     if row is not None:
-        return follow_customer_merge_redirect_sync(session, int(row.id))
+        return follow_customer_merge_redirect_sync(session, int(row.id), tenant_id=tid)
 
     nt = _norm_key(raw)[:512]
     if not nt:
@@ -178,11 +179,17 @@ def _resolve_customer_id(
         build_unique_approved_customer_alias_id_by_token,
     )
 
-    redirect = {
-        int(cid): int(follow_customer_merge_redirect_sync(session, int(cid)) or cid)
-        for _, cid in alias_rows
-    }
-    return build_unique_approved_customer_alias_id_by_token(alias_rows, redirect=redirect).get(nt)
+    redirect: dict[int, int] = {}
+    kept: list[tuple[str, int]] = []
+    for token, cid in alias_rows:
+        followed = follow_customer_merge_redirect_sync(session, int(cid), tenant_id=tid)
+        if followed is None:
+            continue
+        redirect[int(cid)] = int(followed)
+        kept.append((str(token), int(cid)))
+    if not kept:
+        return None
+    return build_unique_approved_customer_alias_id_by_token(kept, redirect=redirect).get(nt)
 
 
 def import_article_alias_rows(

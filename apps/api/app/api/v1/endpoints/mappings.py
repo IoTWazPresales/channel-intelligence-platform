@@ -1879,12 +1879,41 @@ class CustomerSourceTokenAliasCreate(BaseModel):
     import_entity_mapping_candidate_id: int | None = None
 
 
+async def _tenant_for_customer_alias_create(db: AsyncSession, import_job_id: int | None) -> str:
+    """Tenant for the alias: the import job's tenant, otherwise the request tenant."""
+    from app.core.tenant_scope import request_tenant_id
+    from app.services.imports.tenant_mapping_scope import effective_tenant_id
+
+    request_tid = effective_tenant_id(request_tenant_id.get())
+    if import_job_id is None:
+        return request_tid
+    job_tid = await db.scalar(select(ImportJob.tenant_id).where(ImportJob.id == int(import_job_id)))
+    if job_tid is None:
+        raise HTTPException(status_code=404, detail="Import job not found")
+    job_tid = effective_tenant_id(str(job_tid))
+    if job_tid != request_tid:
+        raise HTTPException(status_code=400, detail="Import is not in the request tenant")
+    return job_tid
+
+
 @router.post("/customer-source-token-aliases", status_code=201, dependencies=_STEWARD_WRITE)
 async def create_customer_source_token_alias(body: CustomerSourceTokenAliasCreate, db: AsyncSession = Depends(get_db)):
     nt = _norm_key(body.raw_token)
     if not nt:
         raise HTTPException(status_code=400, detail="raw_token is empty after normalization")
+    tid = await _tenant_for_customer_alias_create(db, body.created_from_import_job_id)
+
+    def _redirect_stays_in_tenant(sess: Session) -> bool:
+        from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+        return (
+            follow_customer_merge_redirect_sync(sess, int(body.customer_id), tenant_id=tid) is not None
+        )
+
+    if not await db.run_sync(_redirect_stays_in_tenant):
+        raise HTTPException(status_code=400, detail="Customer is not in the import tenant")
     row = CustomerSourceTokenAlias(
+        tenant_id=tid,
         customer_id=body.customer_id,
         raw_token=body.raw_token.strip()[:512],
         normalized_token=nt[:512],
