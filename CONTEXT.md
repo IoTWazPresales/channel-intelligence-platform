@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-15 - **Codex-clean merges:** `fix/w1d-no-hardcoded-customers-20261113` (`45d0722a`, merge `b684cc140bc56bf1503d277b7e892ad721601830`) and `fix/w1d-rls-budget-ledger-20261113` (`dc7da2ef`, merge `c163320393dadfcb76f6441f9e92c78eb379c714`) merged `--no-ff` into `feat/integrate-20261103` (already-created tip `4cacb5b8`). Alias tenant tests and the budget ceiling scope test passed on `cip_test` (`current_database()` = cip_test). Migration `20261113_0062` not applied to `cip`. No main.
+
 - 2026-11-15 - **EIF upgrade source and Wave 1 inventory:** EIF `feat/lean-enforcement-profile` (`56b41d0`) and `fix/backlog-225-cross-host` (`4b14e09`) are not on EIF `main` (`f03832d`). `C:\AI\engineering-intelligence-framework` is WIP `fix/session-local-retry-policy` and must never be an upgrade source. Upgrades come only from `C:\AI\eif-lean` at a Codex-reviewed SHA via `C:\AI\update-eif-guard.ps1`. Unmerged branches, worktrees and `stash@{0}`: `docs/audits/WAVE1_INVENTORY_20261114.md`. No `cip` write. No main.
 
 - 2026-11-15 - **EIF guard and D-0143:** BACKLOG-232 closed. Guard from EIF `34c2dfc` installed as `945f6f0b`; Cursor Project helpers on this PC write through the lean anonymous pool (hard blocks proven), and real ids keep full per-session checks. D-0143 DECIDED by Warren, option B (offline South African place list, exact match, steward confirms; ledger amendment pending, orchestrator). No `cip` write. No main.
