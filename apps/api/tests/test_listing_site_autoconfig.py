@@ -462,6 +462,93 @@ def test_live_fetch_off_does_not_call_http(db_session: Session, monkeypatch: pyt
     assert _site(db_session, tenant, "shop-a").adapter_key is None
 
 
+def test_probe_refused_with_403_is_recorded_warned_and_shown_in_health(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """W1-D: the probe outcome is kept per site, a site left without a reader is logged at
+    WARNING with its unpolled count, and capture health shows it (with the last poll run cut
+    to this tenant)."""
+    import logging
+
+    from app.services.listing_capture.site_pause import RUN_POLL, save_run_state
+
+    monkeypatch.setenv("CIP_LISTING_LIVE_FETCH", "1")
+    tenant = f"t-403-{uuid.uuid4().hex[:6]}"
+    product = _product(db_session, tenant)
+    customer = _customer(db_session, tenant, "refused")
+    _report(db_session, customer, {"marketplace": "shop-a", "seller_names": ["Refused Seller"]})
+    url = "https://shop-a.example.test/p/403"
+    listing = _listing(db_session, customer, site_key="shop-a", url=url, product=product)
+    calls: list[str] = []
+
+    def http_get(url, headers=None):
+        calls.append(url)
+        return 403, "<html>forbidden</html>"
+
+    store = MemorySitePauseStore()
+    with caplog.at_level(logging.WARNING):
+        report = autoconfigure_sites(
+            db_session, tenant_id=tenant, http_get=http_get, run_store=store
+        )
+
+    assert calls == [listing.url]
+    entry = next(row for row in report["needs_pattern"] if row["customer_id"] == customer.id)
+    assert entry["probe"] == {
+        "corroborated": False,
+        "reason": "http_status_not_200",
+        "status": 403,
+        "listing_id": listing.id,
+    }
+    site = next(row for row in report["run"]["sites"] if row["site_key"] == "shop-a")
+    assert site["tenant_id"] == tenant
+    assert site["configured"] is False
+    assert site["skipped_not_configured"] == 1
+    assert site["missing_fields"] == ["adapter_key"]
+    assert [(p["customer_id"], p["status"], p["reason"]) for p in site["probes"]] == [
+        (customer.id, 403, "http_status_not_200")
+    ]
+    assert _site(db_session, tenant, "shop-a").adapter_key is None
+    warned = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    loud = f"site shop-a (tenant {tenant}) still has no reader: 1 listings not polled"
+    assert any(loud in m and "HTTP 403" in m for m in warned)
+
+    # The poll's latest run covers every tenant; health shows only this tenant's sites.
+    mine = {"site_key": "shop-a", "tenant_id": tenant, "listings": 1, "missing": ["adapter_key"]}
+    theirs = {**mine, "tenant_id": "another-tenant", "listings": 9}
+    save_run_state(
+        RUN_POLL,
+        {
+            "finished_at": "2026-11-13T08:00:00+00:00",
+            "stopped_reason": None,
+            "not_configured_sites": [mine, theirs],
+        },
+        store=store,
+    )
+    health = capture_health(db_session, tenant_id=tenant, run_store=store)
+    assert health["not_polled"] == [
+        {
+            "site_key": "shop-a",
+            "site_id": site["site_id"],
+            "listings": 1,
+            "reason": "no_reader_configured",
+            "missing_fields": ["adapter_key"],
+            "last_probes": site["probes"],
+        }
+    ]
+    assert health["last_poll_run"] == {
+        "finished_at": "2026-11-13T08:00:00+00:00",
+        "stopped_reason": None,
+        "not_configured_sites": [mine],
+        "listings_not_polled": 1,
+    }
+    assert health["last_autoconfigure_run"]["tenant_id"] == tenant
+    assert health["last_autoconfigure_run"]["sites"][0]["probes"][0]["status"] == 403
+    # Another tenant sees neither this tenant's autoconfigure run nor its poll entries.
+    other = capture_health(db_session, tenant_id=f"t-none-{uuid.uuid4().hex[:6]}", run_store=store)
+    assert other["last_autoconfigure_run"] is None
+    assert other["last_poll_run"]["not_configured_sites"] == []
+
+
 def test_bad_seller_seed_shapes_leave_the_other_customers_configured(db_session: Session) -> None:
     tenant = f"t-seller-{uuid.uuid4().hex[:6]}"
     broken = _customer(db_session, tenant, "broken")

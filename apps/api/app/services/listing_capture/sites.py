@@ -124,9 +124,12 @@ class SiteResolver:
         sites = {(s.tenant_id, s.site_key): s for s in (site_config_from_row(r) for r in _site_rows(session, select(ListingSite)))}
         return cls(sites, tenants)
 
-    def site_for(self, listing: Any) -> SiteConfig | None:
+    def tenant_for(self, listing: Any) -> str | None:
         cid = getattr(listing, "customer_id", None)
-        tenant = self._tenants.get(int(cid)) if cid is not None else None
+        return self._tenants.get(int(cid)) if cid is not None else None
+
+    def site_for(self, listing: Any) -> SiteConfig | None:
+        tenant = self.tenant_for(listing)
         key = (getattr(listing, "marketplace", None) or "").strip().lower()
         if tenant is None or not key:
             return None

@@ -890,10 +890,15 @@ def listing_capture_autoconfigure_sites_task(
         )
         session.commit()
     log.info(
-        "listing capture autoconfigure: configured=%s excluded=%s needs_pattern=%s",
+        "listing capture autoconfigure: configured=%s excluded=%s needs_pattern=%s not_polled=%s",
         len(report["configured"]),
         len(report["excluded"]),
         len(report["needs_pattern"]),
+        {
+            f"{s['tenant_id']}/{s['site_key']}": s["skipped_not_configured"]
+            for s in (report.get("run") or {}).get("sites") or []
+            if int(s.get("skipped_not_configured") or 0) > 0
+        },
     )
     return {"skipped": False, **report}
 
@@ -914,8 +919,8 @@ def listing_capture_poll_listings_task(run: dict | None = None) -> dict:
     from app.services.listing_capture.observation import POLL_RUN_TIME_LIMIT_SECONDS, default_http_get
     from app.services.listing_capture.registry import (
         LISTING_POLL_BATCH_SIZE,
+        finish_listing_poll_run,
         fresh_listing_poll_run,
-        listing_poll_run_record,
         merge_listing_poll_batch,
         poll_active_listings,
         scheduler_should_run,
@@ -942,8 +947,7 @@ def listing_capture_poll_listings_task(run: dict | None = None) -> dict:
         remaining = POLL_RUN_TIME_LIMIT_SECONDS - spent
         if remaining <= 0:
             run = {**run, "stopped_reason": run.get("stopped_reason") or "time_limit"}
-            record = listing_poll_run_record(run)
-            log.info("listing capture poll: %s", record)
+            record = finish_listing_poll_run(run, log)
             return {"skipped": False, **record, **gate} if gate else {"skipped": False, **record}
 
         batch = poll_active_listings(
@@ -962,8 +966,7 @@ def listing_capture_poll_listings_task(run: dict | None = None) -> dict:
             listing_capture_poll_listings_task.apply_async(kwargs={"run": run})
             return {"continued": True, "polled": run["polled"], "duration_seconds": run["duration_seconds"]}
 
-        record = listing_poll_run_record(run)
-        log.info("listing capture poll: %s", record)
+        record = finish_listing_poll_run(run, log)
         if gate:
             return {"skipped": False, **record, **gate}
         return {"skipped": False, **record}

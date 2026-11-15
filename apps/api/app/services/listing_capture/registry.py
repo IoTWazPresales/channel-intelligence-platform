@@ -1000,19 +1000,36 @@ def poll_active_listings(
     if exclude_ids:
         stmt = stmt.where(CustomerListing.id.notin_([int(i) for i in exclude_ids]))
     due = list(session.scalars(stmt).all())
+    tenant_for = None
     if site_for is None:
         from app.services.listing_capture.sites import SiteResolver
 
-        site_for = SiteResolver.load(session, due).site_for
+        resolver = SiteResolver.load(session, due)
+        site_for, tenant_for = resolver.site_for, resolver.tenant_for
     # A site without a configured reader is not fetched; its listings never take a batch slot.
     sites: dict[int, SiteConfig] = {}
     skipped_not_configured: dict[str, int] = {}
+    not_configured: dict[tuple[str | None, str], dict[str, Any]] = {}
     configured: list[CustomerListing] = []
     for listing in due:
         site = site_for(listing)
         if configured_adapter(site) is None:
             key = (listing.marketplace or "").strip().lower()
             skipped_not_configured[key] = skipped_not_configured.get(key, 0) + 1
+            if site is not None:
+                tenant = site.tenant_id
+            else:
+                tenant = tenant_for(listing) if tenant_for else None
+            entry = not_configured.setdefault(
+                (tenant, key),
+                {
+                    "site_key": key,
+                    "tenant_id": tenant,
+                    "listings": 0,
+                    "missing": not_configured_reason(site),
+                },
+            )
+            entry["listings"] += 1
             continue
         sites[id(listing)] = site
         configured.append(listing)
@@ -1105,6 +1122,9 @@ def poll_active_listings(
         "skipped_backoff": skipped_backoff,
         "skipped_paused": skipped_paused,
         "skipped_not_configured": skipped_not_configured,
+        "not_configured_sites": sorted(
+            not_configured.values(), key=lambda e: (str(e["tenant_id"] or ""), e["site_key"])
+        ),
         "paused_sites": paused_sites,
         "stopped_reason": stopped_reason,
         "duration_seconds": round(clock() - started, 3),
@@ -1112,7 +1132,29 @@ def poll_active_listings(
     }
     if log_result:
         log.info("listing capture poll: %s", {k: v for k, v in result.items() if k != "considered_ids"})
+        warn_not_configured_sites(result, log)
     return result
+
+
+def not_configured_reason(site: SiteConfig | None) -> list[str]:
+    """Why a site has no reader: the empty required columns, ``is_active``, or ``site`` (no row)."""
+    if site is not None and not site.is_active:
+        return ["is_active"]
+    return missing_fields(site)
+
+
+def warn_not_configured_sites(record: dict[str, Any], log=None) -> None:
+    """One WARNING per site whose due listings were not polled because it has no reader."""
+    log = log or _log
+    for entry in record.get("not_configured_sites") or []:
+        log.warning(
+            "listing capture: site %s (tenant %s): %s listings not polled - "
+            "no reader configured (missing: %s)",
+            entry.get("site_key"),
+            entry.get("tenant_id") or "unknown",
+            entry.get("listings"),
+            ", ".join(entry.get("missing") or []) or "unknown",
+        )
 
 
 # One Celery task handles about this many listings, then yields so an import
@@ -1128,6 +1170,7 @@ def fresh_listing_poll_run() -> dict[str, Any]:
         "skipped_backoff": 0,
         "skipped_paused": {},
         "skipped_not_configured": {},
+        "not_configured_sites": [],
         "paused_sites": {},
         "stopped_reason": None,
         "duration_seconds": 0.0,
@@ -1142,6 +1185,9 @@ def merge_listing_poll_batch(run: dict[str, Any], batch: dict[str, Any]) -> dict
         skipped_paused[mkt] = int(skipped_paused.get(mkt, 0)) + int(count)
     # Every batch sees the same unconfigured listings (they are never visited): keep the latest count.
     skipped_not_configured = dict(batch.get("skipped_not_configured") or run.get("skipped_not_configured") or {})
+    not_configured_sites = list(
+        batch.get("not_configured_sites") or run.get("not_configured_sites") or []
+    )
     paused_sites = dict(run.get("paused_sites") or {})
     for mkt, record in (batch.get("paused_sites") or {}).items():
         paused_sites.setdefault(mkt, record)
@@ -1155,6 +1201,7 @@ def merge_listing_poll_batch(run: dict[str, Any], batch: dict[str, Any]) -> dict
         "skipped_backoff": int(run.get("skipped_backoff") or 0) + int(batch.get("skipped_backoff") or 0),
         "skipped_paused": skipped_paused,
         "skipped_not_configured": skipped_not_configured,
+        "not_configured_sites": not_configured_sites,
         "paused_sites": paused_sites,
         "stopped_reason": stopped,
         "duration_seconds": round(
@@ -1168,6 +1215,19 @@ def merge_listing_poll_batch(run: dict[str, Any], batch: dict[str, Any]) -> dict
 def listing_poll_run_record(run: dict[str, Any]) -> dict[str, Any]:
     """Backoff, pause, stopped_reason and duration for the whole run. No batch cursor."""
     return {k: v for k, v in run.items() if k != "visited_ids"}
+
+
+def finish_listing_poll_run(run: dict[str, Any], log=None, *, run_store=None) -> dict[str, Any]:
+    """Log the run record once, warn per site not polled for want of a reader, and keep it
+    as the latest poll run (read by capture health)."""
+    from app.services.listing_capture.site_pause import RUN_POLL, save_run_state
+
+    log = log or _log
+    record = listing_poll_run_record(run)
+    log.info("listing capture poll: %s", record)
+    warn_not_configured_sites(record, log)
+    save_run_state(RUN_POLL, {**record, "finished_at": _now().isoformat()}, store=run_store)
+    return record
 
 
 def more_due_listings(session: Session, visited_ids: list[int]) -> bool:

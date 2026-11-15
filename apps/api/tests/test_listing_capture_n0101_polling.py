@@ -282,6 +282,125 @@ def test_site_without_reader_is_not_fetched_and_takes_no_batch_slot() -> None:
     assert all(getattr(c.args[0], "listing_id", None) == 4 for c in session.add.call_args_list if c.args)
 
 
+def test_poll_task_run_record_names_the_unconfigured_site_warns_and_keeps_polling_the_other(
+    monkeypatch, caplog
+) -> None:
+    """W1-D: a site with no reader is loud. The run record counts its skipped listings per site,
+    one WARNING names the site, the latest run is kept for capture health, and the configured
+    site is still observed."""
+    import logging
+
+    from app.services.listing_capture import registry as registry_mod
+    from app.services.listing_capture.site_pause import RUN_POLL, load_run_state
+    from app.worker.tasks import listing_capture_poll_listings_task
+
+    ready = _listing(21, "shop-a")
+    waiting = [_listing(22, "shop-c"), _listing(23, "shop-c")]
+    session = _session([ready, *waiting])
+    added: list = []
+    session.add.side_effect = added.append
+
+    class _Same:
+        def __enter__(self):
+            return session
+
+        def __exit__(self, *_exc):
+            return False
+
+    run_store = MemorySitePauseStore()
+    real_poll = registry_mod.poll_active_listings
+    clock = FakeClock()
+    calls: list[str] = []
+
+    def _with_sites(sess, **kwargs):
+        kwargs.update(
+            site_for=lambda listing: SITES.get(listing.marketplace),
+            pause_store=MemorySitePauseStore(),
+            clock=clock,
+            sleep=clock.sleep,
+        )
+        return real_poll(sess, **kwargs)
+
+    def http_get(url, headers=None):
+        calls.append(url)
+        return 200, IN_STOCK
+
+    monkeypatch.setattr("app.db.session_sync.SessionLocal", lambda: _Same())
+    monkeypatch.setattr("app.worker.celery_queues.dev_beat_disabled", lambda: False)
+    gate = {"enabled": True, "listing_count": 3, "should_run": True}
+    monkeypatch.setattr(registry_mod, "scheduler_should_run", lambda _s: gate)
+    monkeypatch.setattr(registry_mod, "poll_active_listings", _with_sites)
+    monkeypatch.setattr("app.services.listing_capture.observation.default_http_get", http_get)
+    monkeypatch.setattr(
+        "app.services.listing_capture.site_pause.default_run_state_store", lambda: run_store
+    )
+    monkeypatch.setenv("CIP_LISTING_LIVE_FETCH", "1")
+
+    with caplog.at_level(logging.INFO):
+        out = listing_capture_poll_listings_task.run()
+
+    # Run record: per-site count of listings skipped as not configured, and why.
+    assert out["skipped"] is False
+    assert out["skipped_not_configured"] == {"shop-c": 2}
+    assert out["not_configured_sites"] == [
+        {"site_key": "shop-c", "tenant_id": "default", "listings": 2, "missing": ["adapter_key"]}
+    ]
+    # The configured site is still fetched and observed.
+    assert out["polled"] == 1 and calls == [ready.url]
+    from app.models.listing_capture import ListingObservation
+
+    assert [o.listing_id for o in added if isinstance(o, ListingObservation)] == [21]
+    # One WARNING names the site and the count; the configured site is not warned about.
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    loud = "2 listings not polled - no reader configured"
+    assert any("site shop-c" in m and loud in m for m in warnings)
+    assert not any("site shop-a" in m for m in warnings)
+    # The latest run is kept for capture health.
+    kept = load_run_state(RUN_POLL, store=run_store)
+    assert kept is not None and kept["not_configured_sites"][0]["site_key"] == "shop-c"
+    assert kept["finished_at"]
+    assert "visited_ids" not in kept
+
+
+def test_not_configured_reason_covers_missing_row_inactive_site_and_empty_columns() -> None:
+    from dataclasses import replace
+
+    from app.services.listing_capture.registry import (
+        fresh_listing_poll_run,
+        merge_listing_poll_batch,
+    )
+
+    no_row = _listing(31, "shop-x", customer_id=7)
+    inactive = _listing(32, "shop-d")
+    half = _listing(33, "market-c")
+    sites = {
+        "shop-d": replace(html_site("shop-d"), is_active=False),
+        "market-c": replace(rest_site("market-c"), details_url_pattern=None),
+    }
+    out = poll_active_listings(
+        _session([no_row, inactive, half]),
+        http_get=lambda _u: (_ for _ in ()).throw(AssertionError("no fetch")),
+        pause_store=MemorySitePauseStore(),
+        clock=FakeClock(),
+        sleep=lambda _s: None,
+        site_for=lambda listing: sites.get(listing.marketplace),
+        log_result=False,
+    )
+    by_key = {e["site_key"]: e for e in out["not_configured_sites"]}
+    assert by_key["shop-x"] == {
+        "site_key": "shop-x",
+        "tenant_id": None,
+        "listings": 1,
+        "missing": ["site"],
+    }
+    assert by_key["shop-d"]["missing"] == ["is_active"]
+    assert by_key["market-c"]["missing"] == ["details_url_pattern"]
+    # Batches of one run keep the latest per-site list (every batch sees the same skipped listings).
+    merged = merge_listing_poll_batch(fresh_listing_poll_run(), out)
+    merged = merge_listing_poll_batch(merged, out)
+    assert merged["not_configured_sites"] == out["not_configured_sites"]
+
+
 def test_record_observation_on_unconfigured_site_writes_a_skipped_row_without_a_request() -> None:
     listing = _listing(9, "shop-c")
     calls: list[str] = []

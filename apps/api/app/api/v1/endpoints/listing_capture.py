@@ -233,6 +233,9 @@ def get_capture_health(user: dict = Depends(get_current_user)):
                 "sites": [],
                 "listings_due": 0,
                 "skipped_not_configured": {},
+                "not_polled": [],
+                "last_poll_run": None,
+                "last_autoconfigure_run": None,
                 "exclusions": [],
                 "configured": [],
             }
