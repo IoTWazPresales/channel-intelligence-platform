@@ -1029,6 +1029,16 @@ def pre_check(root, data):
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
     if not state.get('started') or state.get('closure_protocol') != 2 or state['closure_required']:
+        if (pool_session(data) and state.get('started') and state.get('closure_protocol') == 2
+                and state.get('closure_request')):
+            # BACKLOG-236: the anonymous lean pool's closure gate is advisory, so
+            # re-inspecting Git (six git processes) on every pool call cannot
+            # change the decision; under parallel lanes it pushed hooks past the
+            # 10 s host timeout. Report the state recorded at the pool's last
+            # boundary; stop/sessionEnd still run the full boundary.
+            reason = state.get('closure_reason') or 'SESSION_CLOSURE_REQUIRED'
+            return False, reason, (f'{reason} recorded at the anonymous pool\'s last boundary; '
+                                   'not re-inspected per call (closure is advisory for the pool).')
         result = boundary(root, data, quarantined=True)
         if not result[0]:
             return result

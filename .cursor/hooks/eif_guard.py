@@ -1303,10 +1303,43 @@ def _repo_state(repo: Path):
                         break
         if not re.fullmatch(r'[0-9a-f]{40}(?:[0-9a-f]{24})?', sha):
             return None
-        config = (common / 'config').stat()
-        return [str(repo), sha, config.st_mtime_ns, config.st_size]
+        digest = _config_identity_digest(common / 'config')
+        if digest is None:
+            return None
+        return [str(repo), sha, digest]
     except (OSError, UnicodeError, ValueError):
         return None
+
+_CONFIG_HEADER = re.compile(r'\s*\[\s*([A-Za-z0-9][A-Za-z0-9.-]*)(?:\s+"(?:[^"\\\r\n]|\\.)*")?\s*\]')
+
+def _config_identity_digest(path: Path):
+    """sha256 of a repository's git config without its [branch ...] sections,
+    or None when this reader cannot classify every line (verify with git).
+
+    Branch tracking entries are written whenever a lane runs `git worktree
+    add -b x origin/y`, `git branch --track` or `git push -u`; they cannot
+    change the root commit, the remotes or the top level, but keying the
+    identity cache on the whole file's mtime made every such write send all
+    parallel hooks back to full git verification (BACKLOG-236). Every other
+    line, including remote, url and core settings, still keys the cache.
+    """
+    try:
+        text = path.read_bytes().decode('utf-8')
+    except UnicodeDecodeError:
+        return None
+    kept, in_branch = [], False
+    for line in text.splitlines(keepends=True):
+        body = line.rstrip('\r\n')
+        if body.endswith('\\'):
+            return None  # a continued value cannot be classified line by line
+        if body.lstrip().startswith('['):
+            header = _CONFIG_HEADER.match(body)
+            if not header:
+                return None
+            in_branch = header.group(1).split('.', 1)[0].lower() == 'branch'
+        if not in_branch:
+            kept.append(line)
+    return hashlib.sha256(''.join(kept).encode('utf-8')).hexdigest()
 
 def _identity_cache_key(root: Path, policy):
     """Key over everything but HEAD, plus each repository's HEAD commit id."""
@@ -1315,7 +1348,7 @@ def _identity_cache_key(root: Path, policy):
     states = [_repo_state(repo) for repo in repos]
     if any(state is None for state in states):
         return None, None, None
-    stable = [[state[0], state[2], state[3]] for state in states]
+    stable = [[state[0], state[2]] for state in states]
     key = hashlib.sha256(json.dumps([ident, stable], sort_keys=True, default=str).encode('utf-8')).hexdigest()
     return key, [state[1] for state in states], [state[0] for state in states]
 
