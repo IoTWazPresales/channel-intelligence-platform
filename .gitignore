@@ -63,6 +63,8 @@ queryex
 *.xlsx
 *.xls
 *.csv
+# Offline place list shipped with the store matcher. Not an import upload.
+!apps/api/app/services/store_dc/data/za_populated_places.csv
 
 # Local agent diagnostics (underscore-prefixed scripts and scratch JSON under apps/api)
 apps/api/scripts/_*

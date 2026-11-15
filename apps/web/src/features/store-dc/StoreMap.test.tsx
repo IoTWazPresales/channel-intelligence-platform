@@ -11,15 +11,17 @@ import type { StoreMapPayload } from './types';
 const hoisted = vi.hoisted(() => ({
   payload: null as StoreMapPayload | null,
   posted: [] as unknown[],
+  postError: null as Error | null,
 }));
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async () => hoisted.payload),
   apiPost: vi.fn(async (_url: string, body: unknown) => {
     hoisted.posted.push(body);
+    if (hoisted.postError) throw hoisted.postError;
     return {};
   }),
-  safeDisplayError: (error: unknown) => String(error),
+  safeDisplayError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 }));
 
 function wrap(ui: ReactElement) {
@@ -168,5 +170,107 @@ describe('StoreMap', () => {
     await waitFor(() => expect(hoisted.posted).toEqual([
       { customer_id: 1, site_label: 'SDC-SITE-B', latitude: 3, longitude: 4 },
     ]));
+  });
+
+  it('confirms a suggested place through the pin save and leaves a manual store on the pin form', async () => {
+    hoisted.payload = {
+      ...payload(),
+      stores: [
+        {
+          customer_id: 1,
+          customer_name: 'SDC-C1',
+          site_label: 'SDC-SITE-B',
+          place_name: null,
+          latitude: null,
+          longitude: null,
+          pinned: false,
+          location_suggestion: {
+            outcome: 'suggest',
+            reason: 'match',
+            place: 'Example Place',
+            latitude: -33.9,
+            longitude: 18.4,
+            licence: 'GeoNames CC BY 4.0',
+          },
+          last_week_units: 2,
+          stock_on_hand: 2,
+          weeks_of_cover: 1,
+          sell_through: 0.5,
+          lines: [],
+        },
+        {
+          customer_id: 1,
+          customer_name: 'SDC-C1',
+          site_label: 'SDC-SITE-C',
+          place_name: null,
+          latitude: null,
+          longitude: null,
+          pinned: false,
+          location_suggestion: {
+            outcome: 'manual',
+            reason: 'multiple',
+            place: null,
+            latitude: null,
+            longitude: null,
+            licence: 'GeoNames CC BY 4.0',
+          },
+          last_week_units: 1,
+          stock_on_hand: 1,
+          weeks_of_cover: 1,
+          sell_through: 0.5,
+          lines: [],
+        },
+      ],
+    };
+    hoisted.posted = [];
+    wrap(<StoreMap />);
+    expect(await screen.findByTestId('place-suggestion')).toHaveTextContent('Example Place');
+    expect(screen.getByTestId('place-suggestion')).toHaveTextContent('GeoNames CC BY 4.0');
+    expect(screen.getByTestId('place-manual')).toHaveTextContent('More than one place matches');
+    expect(screen.getAllByTestId('confirm-suggestion')).toHaveLength(1);
+    expect(hoisted.posted).toEqual([]);
+    fireEvent.click(screen.getByTestId('confirm-suggestion'));
+    await waitFor(() => expect(hoisted.posted).toEqual([
+      { customer_id: 1, site_label: 'SDC-SITE-B', latitude: -33.9, longitude: 18.4 },
+    ]));
+  });
+
+  it('shows a failed suggestion confirm beside the suggestion without opening the pin form', async () => {
+    hoisted.payload = {
+      ...payload(),
+      stores: [
+        {
+          customer_id: 1,
+          customer_name: 'SDC-C1',
+          site_label: 'SDC-SITE-B',
+          place_name: null,
+          latitude: null,
+          longitude: null,
+          pinned: false,
+          location_suggestion: {
+            outcome: 'suggest',
+            reason: 'match',
+            place: 'Example Place',
+            latitude: -33.9,
+            longitude: 18.4,
+            licence: 'GeoNames CC BY 4.0',
+          },
+          last_week_units: 2,
+          stock_on_hand: 2,
+          weeks_of_cover: 1,
+          sell_through: 0.5,
+          lines: [],
+        },
+      ],
+    };
+    hoisted.posted = [];
+    hoisted.postError = new Error('pin refused');
+    wrap(<StoreMap />);
+    fireEvent.click(await screen.findByTestId('confirm-suggestion'));
+    expect(await screen.findByTestId('pin-error')).toHaveTextContent('pin refused');
+    expect(screen.getByTestId('place-suggestion')).toBeInTheDocument();
+    expect(screen.queryByTestId('pin-latitude')).toBeNull();
+    expect(screen.getByTestId('confirm-suggestion')).toBeEnabled();
+    hoisted.postError = null;
   });
 });

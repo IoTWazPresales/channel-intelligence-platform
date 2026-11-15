@@ -1,5 +1,8 @@
 """Unit 8: one dot per store per customer. A pin is the only location this module creates."""
 
+import csv
+from pathlib import Path
+
 import pytest
 
 from sqlalchemy import func, select, text
@@ -8,7 +11,44 @@ from app.models.dimensions import CustomerLocation
 from app.models.store_dc import SiteCandidate
 from app.services.store_dc.candidates import decide_candidate, refresh_candidates
 from app.services.store_dc.map import build_store_map, drop_pin
-from app.services.store_dc.place_name import place_name_from_raw
+from app.services.store_dc.place_name import (
+    normalise_place,
+    place_name_from_raw,
+    suggest_store_location,
+)
+
+_PLACES = Path(__file__).resolve().parents[1] / "app" / "services" / "store_dc" / "data" / "za_populated_places.csv"
+_LICENCE = _PLACES.with_name("ZA_PLACES_LICENCE.txt")
+
+
+def _suggesting_place() -> dict[str, str]:
+    """A bundled place whose own name suggests that one place and nothing else."""
+    groups: dict[str, list[dict[str, str]]] = {}
+    with _PLACES.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            groups.setdefault(normalise_place(row["name"]), []).append(row)
+    for rows in groups.values():
+        name = rows[0]["name"]
+        if any(mark in name for mark in (",", ";", "/", "-")):
+            continue
+        hit = suggest_store_location(name)
+        if hit["outcome"] == "suggest" and hit["place"] == name:
+            return rows[0]
+    raise AssertionError("bundled place list has no unique place name")
+
+
+def _ambiguous_place_name() -> str:
+    groups: dict[str, set[str]] = {}
+    with _PLACES.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            groups.setdefault(normalise_place(row["name"]), set()).add(row["geonameid"])
+    for key, ids in groups.items():
+        if len(ids) < 2:
+            continue
+        hit = suggest_store_location(key)
+        if hit["outcome"] == "manual" and hit["reason"] == "multiple":
+            return key
+    raise AssertionError("bundled place list has no repeated place name")
 
 from tests.store_dc_fixture import World
 
@@ -148,3 +188,81 @@ def test_place_name_is_read_from_the_source_row_and_the_code_stays_the_key(world
         assert row["stock_on_hand"] == 6
         assert row["sell_through"] == round(3 / (3 + 6), 4)
         assert row["place_name"] != row["site_label"]
+        assert row["location_suggestion"]["outcome"] == "manual"
+        assert row["location_suggestion"]["reason"] == "none"
+        assert row["latitude"] is None
+
+
+def test_place_suggestion_is_exact_and_a_miss_or_a_clash_is_manual():
+    licence = _LICENCE.read_text(encoding="utf-8")
+    assert "GeoNames" in licence
+    assert "CC BY" in licence
+    source = Path(suggest_store_location.__code__.co_filename).read_text(encoding="utf-8")
+    assert "urlopen" not in source
+    assert "requests" not in source
+    place = _suggesting_place()
+    other = None
+    with _PLACES.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if row["geonameid"] == place["geonameid"]:
+                continue
+            hit = suggest_store_location(row["name"])
+            if hit["outcome"] == "suggest" and hit["place"] != place["name"] and "-" not in row["name"]:
+                other = row
+                break
+    assert other is not None
+    suggested = suggest_store_location(f"Branch - {place['name']}")
+    assert suggested["outcome"] == "suggest"
+    assert suggested["place"] == place["name"]
+    assert suggested["latitude"] == pytest.approx(float(place["latitude"]))
+    assert suggested["longitude"] == pytest.approx(float(place["longitude"]))
+    assert suggested["licence"] == "GeoNames CC BY 4.0"
+    folded = suggest_store_location(place["name"].upper())
+    assert folded["outcome"] == "suggest"
+    assert folded["place"] == place["name"]
+    squashed = place["name"].replace(" ", "")
+    if normalise_place(squashed) != normalise_place(place["name"]):
+        assert suggest_store_location(squashed)["outcome"] == "manual"
+    assert suggest_store_location("ZZ-NO-SUCH-PLACE")["reason"] == "none"
+    assert suggest_store_location(_ambiguous_place_name())["reason"] == "multiple"
+    clash = suggest_store_location(f"{place['name']} - {other['name']}")
+    assert clash["outcome"] == "manual"
+    assert clash["reason"] == "multiple"
+    assert suggest_store_location(None)["reason"] == "none"
+
+
+def test_a_suggestion_is_not_saved_until_the_steward_pins_it(world: World):
+    database = world.db.execute(text("select current_database()")).scalar_one()
+    print("current_database()", database)
+    assert database == "cip_test"
+    place = _suggesting_place()
+    customer = world.customer("SDC-C")
+    product = world.product()
+    label = f"{world.code('SDC-BRANCH')} - {place['name']}"
+    locations_before = world.db.execute(select(func.count()).select_from(CustomerLocation)).scalar_one()
+    world.weeks(customer, product, [2], soh=2, site=label)
+    world.db.flush()
+    payload = build_store_map(world.db, world.tenant, [customer.id])
+    assert world.db.execute(select(func.count()).select_from(CustomerLocation)).scalar_one() == locations_before
+    row = payload["stores"][0]
+    assert row["site_label"] == label
+    assert row["pinned"] is False
+    assert row["latitude"] is None
+    assert row["longitude"] is None
+    suggestion = row["location_suggestion"]
+    assert suggestion["outcome"] == "suggest"
+    assert suggestion["place"] == place["name"]
+    pinned = drop_pin(
+        world.db,
+        tenant_id=world.tenant,
+        customer_id=customer.id,
+        site_label=label,
+        latitude=suggestion["latitude"],
+        longitude=suggestion["longitude"],
+        actor="steward-test",
+    )
+    assert pinned["pinned"] is True
+    assert pinned["latitude"] == pytest.approx(suggestion["latitude"])
+    assert pinned["longitude"] == pytest.approx(suggestion["longitude"])
+    assert pinned["location_suggestion"] is None
+    assert world.db.execute(select(func.count()).select_from(CustomerLocation)).scalar_one() == locations_before + 1

@@ -1,4 +1,8 @@
-"""Store map. One dot per store per customer. No geocoding and no baked-in coordinates."""
+"""Store map. One dot per store per customer.
+
+A suggestion comes from the bundled place list. A coordinate is written only by
+``drop_pin``, after a steward confirms or types the pin. No online geocoding.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +19,7 @@ from app.models.dimensions import CustomerLocation, DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.store_dc import SiteCandidate
 from app.services.store_dc.candidates import served_customer_ids
-from app.services.store_dc.place_name import place_name_from_raw
+from app.services.store_dc.place_name import place_name_from_raw, suggest_store_location
 from app.services.store_dc.rules import (
     cover_weeks,
     is_weekly,
@@ -161,15 +165,19 @@ def build_store_map(db: Session, tenant_id: str, customer_ids: list[int] | None 
             )
         woc = weeks_of_cover(soh, rate)
         ratio = sell_through_ratio(units, soh)
+        place_name = places.get(key)
         stores.append(
             {
                 "customer_id": customer_id,
                 "customer_name": names.get(customer_id),
                 "site_label": display[key],
-                "place_name": places.get(key),
+                "place_name": place_name,
                 "latitude": float(loc.latitude) if pinned else None,
                 "longitude": float(loc.longitude) if pinned else None,
                 "pinned": pinned,
+                "location_suggestion": None
+                if pinned
+                else suggest_store_location(display[key], place_name=place_name),
                 "location_id": loc.id if loc is not None else None,
                 "last_week_start": last_period.isoformat() if last_period else None,
                 "last_week_units": round(units, 2),

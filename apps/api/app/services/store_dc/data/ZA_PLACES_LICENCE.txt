@@ -1,0 +1,15 @@
+South African populated places, bundled for offline store-location suggestions.
+
+Source: GeoNames geographical database
+https://www.geonames.org/
+Dump: https://download.geonames.org/export/dump/ZA.zip
+Retrieved: 2026-11-15
+Rows: feature class P (populated place) and country code ZA only.
+File: za_populated_places.csv
+
+Licence: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Attribution: GeoNames, www.geonames.org
+
+The application reads this file locally. It does not call GeoNames or any other geocoder.

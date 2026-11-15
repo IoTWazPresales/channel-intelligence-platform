@@ -36,6 +36,7 @@ export function StoreMap() {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
+  const [pinErrorKey, setPinErrorKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [unpinnedQuery, setUnpinnedQuery] = useState('');
 
@@ -78,15 +79,11 @@ export function StoreMap() {
   const selected = visible.find((store) => storeKey(store) === selectedKey) ?? null;
   const hover = visible.find((store) => storeKey(store) === hoverKey) ?? null;
 
-  async function savePin(store: StoreMapStore) {
-    const lat = Number(latitude);
-    const lon = Number(longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      setPinError('Enter both coordinates.');
-      return;
-    }
+  async function postPin(store: StoreMapStore, lat: number, lon: number) {
+    const key = storeKey(store);
     setSaving(true);
     setPinError(null);
+    setPinErrorKey(key);
     try {
       await apiPost('/api/v1/store-dc/pins', {
         customer_id: store.customer_id,
@@ -97,12 +94,33 @@ export function StoreMap() {
       setPinFor(null);
       setLatitude('');
       setLongitude('');
+      setPinErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['store-dc-map'] });
     } catch (error) {
       setPinError(safeDisplayError(error));
+      setPinErrorKey(key);
     } finally {
       setSaving(false);
     }
+  }
+
+  async function savePin(store: StoreMapStore) {
+    const lat = Number(latitude);
+    const lon = Number(longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      setPinError('Enter both coordinates.');
+      setPinErrorKey(storeKey(store));
+      return;
+    }
+    await postPin(store, lat, lon);
+  }
+
+  async function confirmSuggestion(store: StoreMapStore) {
+    const suggestion = store.location_suggestion;
+    if (suggestion?.outcome !== 'suggest' || suggestion.latitude == null || suggestion.longitude == null) {
+      return;
+    }
+    await postPin(store, suggestion.latitude, suggestion.longitude);
   }
 
   return (
@@ -274,7 +292,34 @@ export function StoreMap() {
                       · {store.customer_name}
                     </Box>
                   </Typography>
-                  <Button size="small" data-testid="drop-pin" onClick={() => { setPinFor(key); setPinError(null); }}>
+                  {store.location_suggestion?.outcome === 'suggest' ? (
+                    <Typography variant="caption" sx={{ display: 'block', color: tokens.text.secondary }} data-testid="place-suggestion">
+                      Suggested place: {store.location_suggestion.place}. {store.location_suggestion.licence}. Nothing is saved until you confirm.
+                    </Typography>
+                  ) : null}
+                  {store.location_suggestion?.outcome === 'manual' ? (
+                    <Typography variant="caption" sx={{ display: 'block', color: tokens.text.secondary }} data-testid="place-manual">
+                      {store.location_suggestion.reason === 'multiple'
+                        ? 'More than one place matches. Drop a pin.'
+                        : 'No place match. Drop a pin.'}
+                    </Typography>
+                  ) : null}
+                  {store.location_suggestion?.outcome === 'suggest' ? (
+                    <Button
+                      size="small"
+                      data-testid="confirm-suggestion"
+                      disabled={saving}
+                      onClick={() => void confirmSuggestion(store)}
+                    >
+                      Confirm suggestion
+                    </Button>
+                  ) : null}
+                  {pinError && pinErrorKey === key ? (
+                    <Typography variant="caption" color="error" data-testid="pin-error" sx={{ display: 'block' }}>
+                      {pinError}
+                    </Typography>
+                  ) : null}
+                  <Button size="small" data-testid="drop-pin" onClick={() => { setPinFor(key); setPinError(null); setPinErrorKey(null); }}>
                     Drop pin
                   </Button>
                   {pinFor === key ? (
@@ -293,11 +338,6 @@ export function StoreMap() {
                         onChange={(event) => setLongitude(event.target.value)}
                         inputProps={{ 'data-testid': 'pin-longitude' }}
                       />
-                      {pinError ? (
-                        <Typography variant="caption" color="error">
-                          {pinError}
-                        </Typography>
-                      ) : null}
                       <Button size="small" variant="contained" disabled={saving} onClick={() => void savePin(store)}>
                         Save pin
                       </Button>

@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2925
-  log_sha256: d698e89c48208e25974fe0590f7e54083df737f3b2054dd8347566665b94592c
+  snapshot_revision: 2928
+  log_sha256: 282639661359a9f5cd3b27b6552cc0ffa697f695bcab0bafa4a54ce2679005d6
   acceptance_policy:
     milestone: operator
     root: operator
@@ -15635,7 +15635,7 @@ decisions:
       Recommendation, not a decision: (1), then (3) if dots are wanted. Not (2) in this inception. Blocks the map unit. Marker
       TASK4-MAP.'
     origin: gov-001
-    status: accepted
+    status: superseded
     supersedes: null
   D-0144:
     id: D-0144
@@ -15705,7 +15705,7 @@ decisions:
       of cover. A store with no coordinates stays in the list beside the map until a steward drops a pin. No geocoding. No
       coordinate and no place name written into code. Marker TASK4-MAP.
     origin: operator
-    status: accepted
+    status: superseded
     supersedes: null
   D-0149:
     id: D-0149
@@ -15737,6 +15737,22 @@ decisions:
     origin: operator
     status: accepted
     supersedes: null
+  D-0152:
+    id: D-0152
+    scope: N-0117
+    statement: 'Warren, 15 Nov 2026, amended D-0143, option B. A bundled offline South African place list, with the licence
+      recorded (GeoNames CC BY is acceptable), suggests a store location by exact normalised match on the place part of the
+      store label; a steward confirms or corrects before anything is saved; no match or multiple matches go to manual pin;
+      no fuzzy matching; no online geocoding. This replaces the location method on D-0143 and on D-0148. The map presentation
+      accepted on D-0148 is unchanged: one map, every store, several customers at once, with a customer filter; colour from
+      best to worst using previous-week sales against stock on hand; hover shows the store''s own name, its customer, previous-week
+      sales, stock on hand, and weeks of cover. A store with no saved coordinates stays in the list beside the map until a
+      steward confirms a suggestion or drops a pin. No coordinate is written into code.'
+    origin: operator
+    status: accepted
+    supersedes:
+    - D-0143
+    - D-0148
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -19966,7 +19982,7 @@ deferred_findings:
   status: deferred
 ids:
   node: 5
-  decision: 151
+  decision: 152
   blocker: 22
   evidence: 213
   baseline: 18
