@@ -1414,6 +1414,10 @@ def _identity_check(root: Path, policy):
 
 def control_plane(rel, policy):
     pats=list(CONTROL_PLANE_DEFAULTS)+(policy.get('control_plane_paths') or [])
+    # Lean: the generated programme view is CLI-only like the ledger it renders
+    # (staged with it under the ledger integrity check, never hand-edited).
+    if rel and lean_profile(policy) and _normalize_shell_rel(rel) == lean_ledger_view_rel(policy):
+        return True
     return matches(rel,pats)
 
 def action_allowed(policy, name): return bool((policy.get('action_classes') or {}).get(name,False))
@@ -2294,6 +2298,17 @@ def programme_ledger_rels(policy):
     sr=str((policy or {}).get('state_root') or '.eif').replace('\\','/').strip('/') or '.eif'
     return {f'{sr}/program/{name}' for name in PROGRAMME_LEDGER_FILES}
 
+LEAN_LEDGER_VIEW = 'PROGRAM.md'
+
+def lean_ledger_view_rel(policy):
+    sr=str((policy or {}).get('state_root') or '.eif').replace('\\','/').strip('/') or '.eif'
+    return f'{sr}/{LEAN_LEDGER_VIEW}'
+
+def lean_ledger_stage_rels(policy):
+    """The files the lean profile lets an agent stage or commit: the programme
+    ledger and its generated view, all written by the programme CLI."""
+    return programme_ledger_rels(policy) | {lean_ledger_view_rel(policy)}
+
 def is_programme_ledger_rel(rel, policy):
     if not rel:
         return False
@@ -2786,13 +2801,143 @@ def _unquoted_expression(cmd):
     return any(not quoted and re.search(r'[(){}]', text) for text, quoted, _, _ in segs)
 
 
-def _lean_control_plane_mutation(cmd, policy):
+_LEDGER_ADD_FLAGS = frozenset({'-v', '--verbose'})
+_LEDGER_COMMIT_FLAGS = frozenset({'-m', '--message', '-q', '--quiet', '-s', '--signoff'})
+
+
+def _lean_ledger_git(cmd, policy):
+    """(subcommand, paths) when cmd is one plain `git add|stage|commit` whose
+    pathspecs are all programme ledger files (lean_ledger_stage_rels), else None.
+
+    Plain means: a single simple command, the bare program `git` first (no env
+    assignment, wrapper or git global option such as -C, -c or --git-dir), no
+    substitution, redirect or expression, and only the listed flags (commit:
+    a message and quiet/signoff; never -a, --amend, -F or a pathspec file).
+    """
+    if re.search(r'\$\(|`|[<>]', cmd) or _unquoted_expression(cmd):
+        return None
+    segs = _command_segments(cmd)
+    if len(segs) != 1:
+        return None
+    words = _segment_words(segs[0].strip())
+    if len(words) < 3 or words[0].lower() not in {'git', 'git.exe'}:
+        return None
+    sub, args = words[1], words[2:]
+    if sub in {'add', 'stage'}:
+        flags, paths = _split_git_args(args, frozenset())
+        allowed = _LEDGER_ADD_FLAGS
+    elif sub == 'commit':
+        flags, paths = _split_git_args(args, frozenset({'-m', '--message'}))
+        allowed = _LEDGER_COMMIT_FLAGS
+    else:
+        return None
+    if any(f not in allowed and not (sub == 'commit' and f.startswith('--message=')) for f in flags):
+        return None
+    rels = lean_ledger_stage_rels(policy)
+    paths = [_normalize_shell_rel(p) for p in paths]
+    if not paths or any(p not in rels for p in paths):
+        return None
+    return sub, paths
+
+
+_SNAPSHOT_FIELD = re.compile(r'^  (snapshot_revision|log_sha256): *(\S+) *$', re.M)
+_VIEW_REVISION = re.compile(r'^\*\*Snapshot revision:\*\* *(\d+) *$', re.M)
+
+
+def lean_ledger_integrity(root, policy):
+    """(ok, detail): the programme ledger files on disk (the content `git add`
+    stages) are one consistent programme CLI write.
+
+    A full `program.py verify` replays every event and takes far longer than a
+    hook may run, so this is the structural part of it: the log is UTF-8 JSON
+    objects with seq 1..N unbroken; PROGRAM.yaml's programme snapshot_revision
+    is N and its log_sha256 is the CLI's hash of the log text; PROGRAM.md carries
+    the generated banner and Snapshot revision N. A hand edit of the log breaks
+    the hash; a hand-written view or snapshot revision breaks the match.
+    """
+    if root is None:
+        return False, 'project root unknown'
+    sr = str((policy or {}).get('state_root') or '.eif').replace('\\', '/').strip('/') or '.eif'
+    texts = {}
+    try:
+        for key, rel in (('log', f'{sr}/program/PROGRAM_LOG.ndjson'), ('snap', f'{sr}/program/PROGRAM.yaml'),
+                         ('view', lean_ledger_view_rel(policy))):
+            # Text mode, as the CLI reads it (read_utf8): universal newlines.
+            raw = support('eif_state').contained(root, rel).read_bytes().decode('utf-8')
+            texts[key] = raw.replace('\r\n', '\n').replace('\r', '\n')
+    except (OSError, ValueError) as exc:
+        return False, f'cannot read the programme ledger files ({type(exc).__name__})'
+    seq = 0
+    for line in texts['log'].splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            return False, f'PROGRAM_LOG.ndjson event {seq + 1} is not valid JSON'
+        if not isinstance(event, dict) or type(event.get('seq')) is not int or event['seq'] != seq + 1:
+            return False, f'PROGRAM_LOG.ndjson seq is not unbroken at event {seq + 1}'
+        seq += 1
+    if seq == 0:
+        return False, 'PROGRAM_LOG.ndjson has no events'
+    snap = texts['snap']
+    block = re.search(r'^programme:\n((?:[ \t].*\n|\n)*)', snap if snap.endswith('\n') else snap + '\n', re.M)
+    if not snap.startswith('schema: eif.program/1\n') or not block:
+        return False, 'PROGRAM.yaml is not a programme snapshot'
+    fields = {}
+    for name, value in _SNAPSHOT_FIELD.findall(block.group(1)):
+        if name in fields:
+            return False, f'PROGRAM.yaml repeats programme {name}'
+        fields[name] = value
+    if fields.get('snapshot_revision') != str(seq):
+        return False, f'PROGRAM.yaml snapshot_revision {fields.get("snapshot_revision")} is not the log head {seq}'
+    if fields.get('log_sha256') != hashlib.sha256(texts['log'].encode('utf-8')).hexdigest():
+        return False, 'PROGRAM.yaml log_sha256 does not match PROGRAM_LOG.ndjson'
+    view = texts['view']
+    revisions = _VIEW_REVISION.findall(view)
+    if (not view.startswith('<!-- GENERATED by ')
+            or f'Authoritative history: {sr}/program/PROGRAM_LOG.ndjson -->' not in view.split('\n', 1)[0]):
+        return False, 'PROGRAM.md is not the generated programme view'
+    if revisions != [str(seq)]:
+        return False, f'PROGRAM.md snapshot revision {",".join(revisions) or "missing"} is not the log head {seq}'
+    return True, f'ledger head {seq}'
+
+
+def _lean_ledger_stage(cmd, policy, ctx):
+    """Lean B4 for programme ledger staging. None when cmd is not a plain git
+    add/commit of only the ledger files; else (deny result or None, exempt rels).
+
+    The exemption holds only when the shell runs at the project root (the
+    pathspecs are root-relative) and the ledger integrity check passes."""
+    if not _lean_ledger_git(cmd, policy):
+        return None
+    root = (ctx or {}).get('root')
+    base = (ctx or {}).get('base') or root
+    try:
+        at_root = root is not None and Path(base).resolve() == Path(root).resolve()
+    except (OSError, ValueError):
+        at_root = False
+    if not at_root:
+        return None
+    ok, detail = lean_ledger_integrity(root, policy)
+    if not ok:
+        return _shell_result(False, 'CONTROL_PLANE_PROTECTED', (
+            f'programme ledger integrity check failed: {detail}. Only the programme CLI may write the ledger and '
+            'its view; regenerate them with `python .eif/runtime/programme/program.py rebuild` (or `views` for '
+            'PROGRAM.md), then stage again (lean profile B4)')), set()
+    return None, lean_ledger_stage_rels(policy)
+
+
+def _lean_control_plane_mutation(cmd, policy, ctx=None):
     """B4 for shell: deny a shell command that could modify a governed path.
 
     Naming, reading or grepping a control-plane path is allowed. A command that
     names one is admitted only when every simple command in it is a known
     read-only program (or a copy whose destination is outside the control
     plane), with no substitution and no redirect onto the control plane.
+    A plain git add/commit of only the programme ledger files is admitted when
+    the ledger integrity check passes (_lean_ledger_stage).
     """
     deny = _shell_result(False, 'CONTROL_PLANE_PROTECTED',
                          'shell command could modify a governed control-plane path; reads are allowed, '
@@ -2802,8 +2947,12 @@ def _lean_control_plane_mutation(cmd, policy):
         exempt.add(PROGRAMME_ENTRY_REL)
     if support('eif_session').verifier_command(cmd):
         exempt.add('.cursor/hooks/eif_guard.py')
-    if _git_add_is_programme_ledger_only(cmd, policy):
-        exempt |= programme_ledger_rels(policy)
+    ledger = _lean_ledger_stage(cmd, policy, ctx)
+    if ledger:
+        refused, rels = ledger
+        if refused:
+            return refused
+        exempt |= rels
     for m in REDIRECT_TARGET.finditer(cmd):
         rel = _normalize_shell_rel(m.group(1).strip('\'"'))
         if rel not in exempt and _names_control_plane(rel, policy):
@@ -3427,11 +3576,11 @@ def lean_shell_decision(cmd, policy, ctx):
     prog_git = _git_programme_worktree_deny(cmd, policy)
     if prog_git:
         return prog_git
-    cp = _lean_control_plane_mutation(cmd, policy)
+    cp = _lean_control_plane_mutation(cmd, policy, ctx)
     if cp:
         return cp
     stage = _git_add_programme_consequence(cmd, policy)
-    if stage:
+    if stage and not _lean_ledger_git(cmd, policy):
         _advise(ctx, stage[1], stage[2])
     # B3: secrets and protected branches.
     rules = enforcement(policy)
