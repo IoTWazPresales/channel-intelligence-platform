@@ -1,10 +1,10 @@
 # CURRENT state
 
-**Last updated:** 2026-11-15 (two Codex-clean fixes merged into `feat/integrate-20261103`). Before that: 2026-11-15 (D-0143 decided, option B; BACKLOG-232 closed, guard `945f6f0b`).
+**Last updated:** 2026-11-15 (store-location matcher merged into `feat/integrate-20261103`). Before that: 2026-11-15 (two Codex-clean fixes; D-0143 decided, option B; BACKLOG-232 closed, guard `945f6f0b`).
 
-**Branch:** `feat/integrate-20261103`. Already-created tip `4cacb5b8`, then merge `b684cc140bc56bf1503d277b7e892ad721601830` (`fix/w1d-no-hardcoded-customers-20261113` at `45d0722a`) and merge `c163320393dadfcb76f6441f9e92c78eb379c714` (`fix/w1d-rls-budget-ledger-20261113` at `dc7da2ef`). Nothing was pushed to `main`. Migration `20261113_0062` was not applied to `cip`. `cip_test` stayed at alembic `20261110_0061` after the rolled-back ceiling test.
+**Branch:** `feat/integrate-20261103`. Merge `2f25e628e33911b1dbd04d4e2e25cdcd27e82d2b` (`cursor/w1a-store-dc-replenishment-b57c` at `61d1b33b`). Before that: tip `4cacb5b8`, then merge `b684cc140bc56bf1503d277b7e892ad721601830` (`fix/w1d-no-hardcoded-customers-20261113` at `45d0722a`) and merge `c163320393dadfcb76f6441f9e92c78eb379c714` (`fix/w1d-rls-budget-ledger-20261113` at `dc7da2ef`). Nothing was pushed to `main`. Migration `20261113_0062` was not applied to `cip`. `cip_test` stayed at alembic `20261110_0061` after the rolled-back ceiling test.
 
-**Checks:** `SELECT current_database()` = `cip_test`. Alias tenant tests in `apps/api/tests/test_cst_article_alias_import.py` and `test_scoped_planner_export_blocks_on_tenant_ceiling` passed (13 passed). No deploy. Wave 1 not started.
+**Checks:** `SELECT current_database()` = `cip_test`. `tests/test_store_dc_map.py` 6 passed and StoreMap vitest 4 passed on the merge. Earlier alias tenant tests and `test_scoped_planner_export_blocks_on_tenant_ceiling` passed (13 passed). No deploy. The rest of Wave 1 was not started.
 
 **Deployed:** `52cec5d7` at 2026-11-12 18:23 (api, worker+beat, web restarted via the supervisor; api `/health/ready` 200, Celery ping ok, web 3000 up past 2 min; alembic head = `cip` = `20261110_0061`). Web had been down since about 2026-11-05 (`next start` crash-looping, 50 launches) because `apps/web/node_modules` was broken (no `.bin`, no `next/dist/bin/next`); fixed with `pnpm install --frozen-lockfile --force` then a fresh build, BUILD_ID `bI3iphi3dHhUA9AYnbzEz`. Tunnel is held by the network blocking outbound 7844 (N-0107), not by this deploy.
 
