@@ -16,7 +16,9 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-14 - **Memory refresh:** trunk `feat/integrate-20261103` is `efe3643a` (guard from EIF `fix/backlog-225-cross-host` @ `fa2dbbb`). BACKLOG-225 closed (Windows 8/8, Linux LF clone, cloud probe allow read/shell/closure-without-push/write, push to `main` denied). BACKLOG-232 Project-helper `IDENTITY_TOOL`; BACKLOG-233 closure text says `python`. D-0143 stays open; store-location matcher held. Four `fix/w1d-*` branches stay unmerged for Codex. No `cip` write. No main.
+- 2026-11-15 - **EIF upgrade source and Wave 1 inventory:** EIF `feat/lean-enforcement-profile` (`56b41d0`) and `fix/backlog-225-cross-host` (`4b14e09`) are not on EIF `main` (`f03832d`). `C:\AI\engineering-intelligence-framework` is WIP `fix/session-local-retry-policy` and must never be an upgrade source. Upgrades come only from `C:\AI\eif-lean` at a Codex-reviewed SHA via `C:\AI\update-eif-guard.ps1`. Unmerged branches, worktrees and `stash@{0}`: `docs/audits/WAVE1_INVENTORY_20261114.md`. No `cip` write. No main.
+
+- 2026-11-15 - **EIF guard and D-0143:** BACKLOG-232 closed. Guard from EIF `34c2dfc` installed as `945f6f0b`; Cursor Project helpers on this PC write through the lean anonymous pool (hard blocks proven), and real ids keep full per-session checks. D-0143 DECIDED by Warren, option B (offline South African place list, exact match, steward confirms; ledger amendment pending, orchestrator). No `cip` write. No main.
 
 - 2026-11-12 - **Integration close-off:** #88 (lane A listings), #85 (lane D weeks of cover and My accounts), #86 (lane B CPOR aged stock), #87 (lane F ex-VAT SOH check) and #84 (serial queue and the `--expect-db` guard) merged into `feat/integrate-20261103` at their Codex-reviewed heads; tip `4fce3b40`. `cip` unchanged at `20261110_0061`. Codex is the only independent reviewer from now on. Follow-ups BACKLOG-226 to 231. EIF guard repair is next. No main.
 

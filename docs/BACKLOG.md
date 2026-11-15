@@ -3519,8 +3519,8 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Decision needed (Warren)** | (A) Keep EIF-governed coding on the PC, with Cursor on the main checkout editing `.worktrees/*`, which the change scopes already allow. Or (B) approve an EIF policy change: make the four files hash the same on every OS (commit their CRLF rule in `.gitattributes`, or re-hash on LF), and add a Linux identity anchor for the cloud checkout (`/workspace`, same remote and root commit). Then recompile through `python tools/install_project.py upgrade <project>` from the EIF framework checkout. (B) widens where the guard accepts the project, so it needs Warren's explicit go-ahead. |
 | **Out of scope** | Identity anchors, allowed roots, `.gitattributes` / `.git/info/attributes`, policy recompile, programme ledger, budgets, the EIF framework repo. |
 | **Upstream note** | An EIF `install_project.py upgrade` rewrites `eif_guard.cmd` and the manifest. The dispatch line should be upstreamed into EIF `runtime/cursor/.cursor/hooks/eif_guard.cmd`, or it has to be re-applied after an upgrade. |
-| **Closed 2026-11-14** | Trunk `feat/integrate-20261103` @ `efe3643a` carries the guard from EIF `fix/backlog-225-cross-host` @ `fa2dbbb` (lean, cross-host): `35d5c6f7` (LF-hashed files, `/workspace` anchor) and `efe3643a`. Evidence named for the close: Windows probes 8/8; a Linux LF clone check; a cloud probe in which read, shell, closure without a push, and write were allowed, and a push to `main` was denied `PROTECTED_BRANCH_PUSH`. `fix/backlog-225-eif-linux-identity` (`f4f4272b`) was not merged. |
-| **TRIGGER** | Fired 2026-11-14. Do not reopen for the same launcher, hash, or `/workspace` anchor. A Project-helper identity refusal is BACKLOG-232. A `python` versus `python3` closure message is BACKLOG-233. |
+| **Closed 2026-11-14** | Trunk `feat/integrate-20261103` carries the guard from EIF `fix/backlog-225-cross-host` @ `fa2dbbb` (lean, cross-host): `35d5c6f7` (LF-hashed files, `/workspace` anchor) and `efe3643a`. Evidence named for the close: Windows probes 8/8; a Linux LF clone check; a cloud probe in which read, shell, closure without a push, and write were allowed, and a push to `main` was denied `PROTECTED_BRANCH_PUSH`. `fix/backlog-225-eif-linux-identity` (`f4f4272b`) was not merged. |
+| **TRIGGER** | Fired 2026-11-14. Do not reopen for the same launcher, hash, or `/workspace` anchor. A Project-helper identity refusal is BACKLOG-232 (closed 2026-11-15). A `python` versus `python3` closure message is BACKLOG-233. |
 
 ---
 
@@ -3607,19 +3607,21 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ---
 
-## BACKLOG-232 — Cursor Project helper identity (`IDENTITY_TOOL`)
+## BACKLOG-232 — Cursor Project helpers on this PC denied `IDENTITY_TOOL` on every write
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-14. Cloud agents are allowed (BACKLOG-225 closed). Project helpers on Warren's PC stay refused. Do not use a helper to get past this. |
-| **Source** | `IDENTITY_TOOL` denials on Warren's PC, 2026-11-13/14. Payload keys seen: `conversation_id`, `cursor_version`, `generation_id`, `hook_event_name`, `model`, `session_id`, `tool_input`, `tool_name`, `tool_use_id`, `transcript_path`, `user_email`, `workspace_roots`. `conversation_id` and `session_id` were empty. |
-| **Idea** | Give a Cursor Project helper a stable identity the lean guard can accept, without treating an empty session id as the proof. |
-| **Why it matters / deferrable** | Helpers on the PC cannot run governed tools. Cloud agents already can. Deferrable while work stays on cloud agents or on a session the guard already accepts. |
-| **What the work is** | On the next denials, hash `transcript_path` and check that the hash is stable for one helper before any identity rule is widened to accept it. |
-| **Regression traps** | Do not accept a helper because `conversation_id` or `session_id` is empty. Do not copy the rejected branch `fix/backlog-225-eif-linux-identity`. Do not weaken `PROTECTED_BRANCH_PUSH` or the `cip` write refusal. |
-| **Behavior to retain** | Cloud read, shell, closure-without-push, and write stay allowed. A push to `main` stays denied. |
-| **Out of scope** | Recompiling policy before the transcript-path hash is shown to be stable. Using a Windows Project helper as the orchestrator. |
-| **TRIGGER** | Warren asks to let Project helpers run, and a denial log shows `transcript_path` hashes that stay the same for one helper. |
+| **Status / parked** | **Closed** — 2026-11-15. Guard from EIF `fix/backlog-225-cross-host` @ `34c2dfc` installed as `945f6f0b`; two-helper proof passed. |
+| **Cause** | Cursor's tool-execution hooks reach the guard with `conversation_id ""`, empty `session_id`, `transcript_path` null and an empty `generation_id` (guard log ts 1794735005, 1794737900–924; value-free diagnostic `ebce330`). The same helpers' `stop` events carry real ids (`bc-…`). Cursor's forum reports the same blank-id hooks, and Cursor staff confirmed it is a Cursor bug (thread cited by Warren 2026-11-15; URL not recorded here). With no stable id the guard denied every mutation. |
+| **Decisions (Warren, 2026-11-15)** | (1) Lean only: `generation_id` fallback (`gen-` key) when both ids are empty and `transcript_path` is missing, empty or null. The probe showed `generation_id` empty too. (2) Lean only: when `conversation_id`, `session_id`, `transcript_path` and `generation_id` are all empty, null or non-string, the call joins one shared session `anon-lean` (`identity_source: anonymous_pool`, logged). In the pool, B1–B5, repository identity, policy/runtime integrity, secret rules, scopes and `PROTECTED_BRANCH_PUSH` are unchanged; `session_grant` `db_write` grants are refused and ignored; the closure gate and retry debt are advisory (logged, never blocking). Strict unchanged. |
+| **Fix** | EIF `b90ef41` (`gen-`), `56a3152` (anonymous pool); tests `d0ab91d`, `fbb4895`; docs `329586d`, `34c2dfc` (Volume 22, `reviews/backlog-225/REPORT.md` sections 8–9). Earlier steps: `25820ae` (`tp-` from an absolute `transcript_path`), `ebce330` + `9a2e3e3` (diagnostic). Suites at `34c2dfc`: cross-host 48/48, lean 195/195, `run_evals` same as base (only the Windows `fcntl` import fails), 10 other tests rc=0. |
+| **Codex** | `ebce330`: one P2 (`rg --hostname-bin`), fixed in `9a2e3e3`. `9a2e3e3`: one P2, non-blocking (256-branch cap can only ask for an unneeded push; CIP has 182 remote tips). `329586d`: no findings. `34c2dfc`: two P2s, non-blocking, fail closed (detached HEAD cannot reach the no-upstream closure path; `--resolve-equivalent` does not enable the lean fallback for `gen-` sessions). |
+| **Installs** | `5b8bd031` (`25820ae`), `ced641a0` (`9a2e3e3`, diagnostic), `d799f2e9` (`329586d`, `gen-`), `945f6f0b` (`34c2dfc`, pool). Each: probe failures 0; Linux check `(True, '')`, `(True, '')`, `OK`. |
+| **Proof** | Two helpers, two writes each (2026-11-15, ts 1794742964–997): all four Writes allowed, every record `identity_source: anonymous_pool`, the closure gate logged as `enforcement: advisory`. Helper 1: `git push origin HEAD:main` denied `PROTECTED_BRANCH_PUSH` (ts 1794743008) and a Write to `.eif/PROJECT_MANIFEST.md` denied `CONTROL_PLANE_PROTECTED` (ts 1794743077), both in the pool; the manifest is unchanged. Both helpers' closure verifiers returned `SESSION_CLOSURE_OK`. Probe files were untracked and deleted. |
+| **When Cursor sends real ids** | Nothing to change: any call with a real `conversation_id`/`session_id` (or an absolute `transcript_path`, or a `generation_id`) leaves the pool automatically and gets full per-session checks (own closure gate, retry debt, budget, grants). |
+| **Trade-offs (accepted)** | Id-less helpers share one closure state, retry-debt list and browser origin; closure is not enforced for them, so a pool helper can stop without pushing. Executed failures are still recorded for the operator. |
+| **Follow-ups (EIF)** | The two `34c2dfc` P2s and the `9a2e3e3` P2 above. Lean B4 read-only list gaps (`sort -o`, `uniq IN OUT`, `tree -o`, `xxd -r` can write). Cursor bug: Project helper hooks should carry `conversation_id` on all events. |
+| **TRIGGER** | A Cursor release that fills ids on tool hooks (check `identity_source` in `.eif/hook-guard.log`), or any of the EIF follow-ups. |
 
 ---
 

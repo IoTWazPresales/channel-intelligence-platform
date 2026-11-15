@@ -148,8 +148,134 @@ def verifier_command(command):
     return isinstance(command, str) and re.fullmatch(VERIFY_COMMAND, command) is not None
 
 
+# BACKLOG-232. Cursor Project helpers on Windows send empty conversation_id and
+# session_id but a transcript_path (IDENTITY_TOOL denial, ts 1794688772). When
+# both ids are empty, a non-empty ABSOLUTE transcript_path identifies the
+# session: 'tp-' + sha256(normalised path)[:32]. The raw path (it contains the
+# user's profile directory) is never a key, a log value or a message.
+# tool_use_id, model, cwd, workspace_roots and user_email are never identity;
+# generation_id only through the lean fallback below. Anything else keeps
+# 'unknown' (IDENTITY_TOOL for mutations).
+_WINDOWS_ABSOLUTE = re.compile(r'^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)')
+
+
+def transcript_session_key(data):
+    """'tp-<32 hex>' from an absolute transcript_path, else None. Host independent:
+    a Windows path is normalised the Windows way (case and separators folded)."""
+    raw = data.get('transcript_path') if isinstance(data, dict) else None
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text or '\x00' in text:
+        return None
+    if _WINDOWS_ABSOLUTE.match(text):
+        import ntpath
+        norm = ntpath.normcase(ntpath.normpath(text))
+    elif text.startswith('/'):
+        import posixpath
+        norm = posixpath.normpath(text)
+    else:
+        return None
+    return 'tp-' + hashlib.sha256(norm.encode('utf-8')).hexdigest()[:32]
+
+
+# BACKLOG-232 decision (Warren, 2026-11-15): Cursor Project helpers on this PC
+# send conversation_id "", empty session_id and transcript_path null on tool
+# hooks (ts 1794735005). Under the LEAN profile ONLY, when both ids are empty
+# and transcript_path is missing, empty or null, a non-empty generation_id
+# identifies the session: 'gen-' + sha256(generation_id)[:32]. The guard sets
+# LEAN_IDENTITY_FALLBACK per hook from the loaded, valid policy; it is False by
+# default, so strict and any unloaded policy keep IDENTITY_TOOL. A
+# generation_id session never holds an operator grant (see lean_db_grant and
+# tools/session_grant.py). The raw generation_id is never a log value.
+#
+# Second decision (Warren, 2026-11-15): the probe showed generation_id empty
+# too (Cursor bug: tool-execution hooks can arrive with every id blank). Under
+# the LEAN profile ONLY, when conversation_id, session_id, transcript_path and
+# generation_id are all empty, null or non-string, the call joins one shared
+# session ANON_POOL_KEY (identity_source anonymous_pool). Every hard block
+# still applies; the guard makes closure and retry debt advisory for the pool
+# and the pool never holds an operator grant. A real id always wins.
+LEAN_IDENTITY_FALLBACK = False
+ANON_POOL_KEY = 'anon-lean'
+NO_GRANT_SOURCES = frozenset({'generation_id', 'anonymous_pool'})
+POOL_ID_FIELDS = ('conversation_id', 'session_id', 'transcript_path', 'generation_id')
+
+
+def _blank(value):
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def generation_session_key(data):
+    """'gen-<32 hex>' under the lean fallback, else None."""
+    if not LEAN_IDENTITY_FALLBACK or not isinstance(data, dict):
+        return None
+    if not _blank(data.get('transcript_path')):
+        return None
+    raw = data.get('generation_id')
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text or '\x00' in text:
+        return None
+    return 'gen-' + hashlib.sha256(text.encode('utf-8')).hexdigest()[:32]
+
+
+def anonymous_pool_session(data):
+    """True under the lean fallback when every id field is empty, null or non-string."""
+    if not LEAN_IDENTITY_FALLBACK or not isinstance(data, dict):
+        return False
+    if data.get('conversation_id') or data.get('session_id'):
+        return False
+    return all(not isinstance(data.get(name), str) or not data.get(name).strip() for name in POOL_ID_FIELDS)
+
+
+def identity_source(data):
+    """Which payload field names the session: conversation_id, session_id,
+    transcript_path, generation_id, anonymous_pool, or None ('unknown')."""
+    if not isinstance(data, dict):
+        return None
+    if data.get('conversation_id'):
+        return 'conversation_id'
+    if data.get('session_id'):
+        return 'session_id'
+    if transcript_session_key(data):
+        return 'transcript_path'
+    if generation_session_key(data):
+        return 'generation_id'
+    if anonymous_pool_session(data):
+        return 'anonymous_pool'
+    return None
+
+
+def no_grant_session(data):
+    """A generation_id or anonymous-pool session never holds an operator grant."""
+    return identity_source(data) in NO_GRANT_SOURCES
+
+
+def pool_session(data):
+    return identity_source(data) == 'anonymous_pool'
+
+
 def conversation(data):
-    return str(data.get('conversation_id') or data.get('session_id') or 'unknown')
+    explicit = data.get('conversation_id') or data.get('session_id')
+    if explicit:
+        return str(explicit)
+    return (transcript_session_key(data) or generation_session_key(data)
+            or (ANON_POOL_KEY if anonymous_pool_session(data) else 'unknown'))
+
+
+def identity_log_fields(data):
+    """Log fields for a session identified by transcript_path or generation_id,
+    else {}. The key prefix (12 hex) lets the operator read per-helper stability."""
+    source = identity_source(data)
+    if source == 'transcript_path':
+        return {'identity_source': source, 'identity_key_prefix': transcript_session_key(data)[3:15]}
+    if source == 'generation_id':
+        return {'identity_source': source, 'identity_key_prefix': generation_session_key(data)[4:16]}
+    if source == 'anonymous_pool':
+        return {'identity_source': source}
+    return {}
 
 
 def state_path(root, data):
@@ -325,6 +451,7 @@ pwd ls dir cat head tail wc grep egrep fgrep rg echo stat du df uname whoami id
 basename dirname realpath readlink true which
 get-location gl get-content gc get-childitem gci test-path resolve-path get-item gi select-string sls
 '''.split())
+READ_ONLY_RG_EXEC = frozenset({'--pre', '--hostname-bin'})
 READ_ONLY_FIND_WRITERS = frozenset({'-delete', '-exec', '-execdir', '-ok', '-okdir',
                                     '-fprint', '-fprint0', '-fprintf', '-fls'})
 READ_ONLY_GIT = frozenset('''status diff log show rev-parse ls-files ls-tree cat-file blame
@@ -395,8 +522,10 @@ def read_only_shell(command):
             if any(w.casefold() in READ_ONLY_FIND_WRITERS for w in words[1:]):
                 return False
         elif program == 'rg':
-            if any(w == '--pre' or w.startswith('--pre=') for w in words[1:]):
-                return False  # --pre runs a program on every file.
+            # --pre runs a program on every file; --hostname-bin runs one to
+            # get the hostname for hyperlinks.
+            if any(w.split('=', 1)[0] in READ_ONLY_RG_EXEC for w in words[1:]):
+                return False
         elif program not in READ_ONLY_PROGRAMS:
             return False
     return True
@@ -931,6 +1060,9 @@ def boundary(root, data, quarantined=False):
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
         before = json.dumps(state, sort_keys=True)
+        if no_grant_session(data):
+            # tools/session_grant.py refuses a grant for this session.
+            state['identity_source'] = identity_source(data)
         phase = 'close' if data.get('hook_event_name') in {'stop', 'sessionEnd'} else state.get('closure_phase', 'start')
         if data.get('hook_event_name') == 'sessionStart':
             phase = 'start'

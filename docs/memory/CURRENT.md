@@ -1,39 +1,8 @@
 # CURRENT state
 
-**Last updated:** 2026-11-14 (docs only). Tip, guard, and what is merged versus still pending. This session did not query `cip` and did not start a lane.
+**Last updated:** 2026-11-15 (D-0143 decided, option B; BACKLOG-232 closed, guard `945f6f0b`). Before that: 2026-11-12 (integration close-off: #88, #85, #86, #87 and #84 merged into `feat/integrate-20261103`).
 
-**Branch:** `feat/integrate-20261103` @ `efe3643a` (`EIF: guard update from fix/backlog-225-cross-host @ fa2dbbb`). Nothing was pushed to `main`.
-
-**EIF guard:** Installed from EIF `fix/backlog-225-cross-host` @ `fa2dbbb` (lean, cross-host). Trunk commits: `35d5c6f7` (LF-hashed files, `/workspace` anchor) and `efe3643a`. BACKLOG-225 is closed on 2026-11-14 evidence: Windows probes 8/8, a Linux LF clone check, and a cloud probe that allowed read, shell, closure without a push, and write, and denied a push to `main` with `PROTECTED_BRANCH_PUSH`. Cursor cloud agents may take code-only lanes. Cursor Project helpers on Warren's PC are refused `IDENTITY_TOOL` (BACKLOG-232). Do not use them. The closure verifier prints `python`; cloud VMs have `python3` only (BACKLOG-233). Never merge `fix/backlog-225-eif-linux-identity` (`f4f4272b`, rejected) or `docs/stage1-memory-refresh` (`acdd96a2`, cut from old `main`).
-
-**`cip`:** read-only. Last recorded Alembic revision on `cip` is `20261110_0061` (2026-11-12 truth audit). This session did not re-query it. No migration from this note.
-
-**Review policy (Warren, 2026-11-12):** Codex is the only independent reviewer. Two fix-and-review rounds per PR; a narrowed third needs Warren.
-
-**Merged into this trunk (verified 2026-11-14 against `origin/feat/integrate-20261103`):**
-- #84–#88 are in `4fce3b40` and its parents (listings, weeks of cover and My accounts, aged-stock, ex-VAT SOH, serial-queue guard). Follow-ups BACKLOG-226–231 stay parked.
-- `52cec5d7` / `f42e0243` record that close-off and the 2026-11-12 deploy.
-- `708d051d`, `584858a0`, `70338bd4` — EIF lean install and programme runtime (pin `56b41d0`).
-- `4d2ff66a` — truth audit 2026-11-12.
-- `d9a3a686`, merged by `2d855181` — listing-capture check (W1-D0). `origin/docs/w1d-listing-capture-check-20261113` is that commit and is an ancestor of the tip.
-- `267ee883` — N-0102 re-chartered as generic listings and competition. N-0104, N-0105 and N-0106 are folded into it.
-- `35d5c6f7`, `efe3643a` — cross-host guard. Store/DC (`apps/api/app/services/store_dc/`) and aged-stock code are already on the trunk. Later units extend them.
-
-**Pushed, not merged. Codex review before any rebuild. Do not reimplement:**
-- `fix/w1d-listing-poll-20261113` @ `3b64c6df` (cut from `4d2ff66a`). Loud skip when a site has no reader, plus a dry-run reader restore script.
-- `fix/w1d-gap-scan-sql-20261113` @ `3f11c469` (cut from `4d2ff66a`). Product-master catalogue gap: SQL `DISTINCT` for the scan, then one-pass preview counts. `apply_gap_resolve` is unchanged. This is not the older channel-ops gap-scan branch.
-- `fix/w1d-rls-budget-ledger-20261113` @ `37e4db5c` (cut from `4d2ff66a`). Migration `20261113_0062` for `budget_ledger_entry` row security. Not applied.
-- `fix/w1d-no-hardcoded-customers-20261113` @ `4c6764d5` (cut from `267ee883`). CST bootstrap and article-alias import take customer ids or resolved names. No fixed customer ids.
-
-**Held:** D-0143 is an open decision for Warren. The 2026-11-06 note below says a steward pin and no geocoding. The 2026-11-13 brief says a bundled offline matcher. Do not decide. Do not build the store-location matcher. `place_name.py` only reads a label from the source row.
-
-**Next:** Codex review of those four unmerged branches. One pilot only after Warren's go-ahead. No lane from this note.
-
-**History below this line** is the 2026-11-12 close-off and older checkpoints. "Not merged" in the lane blocks is out of date for #84–#88. "NEXT: repair the EIF guard" in that close-off is done. The 2026-11-06 sentence that D-0143 is accepted is not the current decision.
-
-**Last updated:** 2026-11-12 (integration close-off: #88, #85, #86, #87 and #84 merged into `feat/integrate-20261103`).
-
-**Branch:** `feat/integrate-20261103` @ `4fce3b40` (Merge #84) plus the docs commit of that day. Nothing was pushed to `main`.
+**Branch:** `feat/integrate-20261103` @ `4fce3b40` (Merge #84) plus this docs commit. Nothing was pushed to `main`.
 
 **Deployed:** `52cec5d7` at 2026-11-12 18:23 (api, worker+beat, web restarted via the supervisor; api `/health/ready` 200, Celery ping ok, web 3000 up past 2 min; alembic head = `cip` = `20261110_0061`). Web had been down since about 2026-11-05 (`next start` crash-looping, 50 launches) because `apps/web/node_modules` was broken (no `.bin`, no `next/dist/bin/next`); fixed with `pnpm install --frozen-lockfile --force` then a fresh build, BUILD_ID `bI3iphi3dHhUA9AYnbzEz`. Tunnel is held by the network blocking outbound 7844 (N-0107), not by this deploy.
 
@@ -45,15 +14,19 @@
 - #84 serial queue (`604b6c2b`, merge `4fce3b40`): queue docs plus the `--expect-db` guard in `apps/api/scripts/ops/split_compuspeed_syntech_identity.py`. Follow-up: BACKLOG-230. Note: GitHub's `refs/pull/84/head` pointed at `docs/queue-step5-backlog214` (`24c7bcaf`), which is an ancestor of the merged head.
 - Docs-only conflicts (CONTEXT.md, this file) were resolved by keeping every lane's lines. No product file conflicted; `cpor_cases.py` (B and F) auto-merged.
 
-**`cip`:** unchanged by the 2026-11-12 merges. Alembic on `cip` was `20261110_0061` (read-only check 2026-11-12). No migration in those PRs.
+**`cip`:** unchanged by this work. Alembic on `cip` is `20261110_0061` (read-only check 2026-11-12). No migration in these PRs.
 
 **Deploy:** the API and the worker must be restarted on this code (both import the changed CPOR, listing-capture and query-model modules).
 
-**Checks:** baseline on `a3d0a9cd` before the merges: API 3,809 passed / 0 failed on `cip_test`; web tsc 0 errors; vitest 1,272 passed / 1 failed (a 16.8 s timeout in `DashboardWorkspace.integration.test.tsx` under CPU load). Each merge ran its area on `cip_test` plus tsc and the area's vitest (all green). Final tip that day: #84 guard test 3 passed, app import OK, tsc 0 errors. Web `eslint .` cannot run on this branch family (BACKLOG-231).
+**Checks:** baseline on `a3d0a9cd` before the merges: API 3,809 passed / 0 failed on `cip_test`; web tsc 0 errors; vitest 1,272 passed / 1 failed (a 16.8 s timeout in `DashboardWorkspace.integration.test.tsx` under CPU load). Each merge ran its area on `cip_test` plus tsc and the area's vitest (all green). Final tip: #84 guard test 3 passed, app import OK, tsc 0 errors. Web `eslint .` cannot run on this branch family (BACKLOG-231).
 
 **Review policy (Warren, 2026-11-12):** Codex (`codex exec -s read-only ... review --base origin/feat/integrate-20261103`) is the only independent reviewer. There is no second review, and no VERIFY debt is recorded for skipping one. Allow two fix-and-review rounds per PR; Warren may grant a narrowed third.
 
-**EIF guard repair (closed 2026-11-14, BACKLOG-225).** Observed in the 2026-11-11/12 run, kept as the record of what was broken:
+**EIF guard (2026-11-15):** installed from EIF `fix/backlog-225-cross-host` @ `34c2dfc` as `945f6f0b` (lean). **BACKLOG-232 closed:** Cursor Project helpers on this PC can write. Cursor sends blank ids on tool hooks (a Cursor bug), so under lean an id-less call joins the shared `anon-lean` pool: all hard blocks apply (proven: push to main and a manifest edit denied), no operator grants, closure and retry debt advisory. Calls with real ids keep full per-session checks. Decisions and evidence: `docs/BACKLOG.md` BACKLOG-232.
+
+**EIF upgrade source (verified on this PC 2026-11-15):** EIF branches `feat/lean-enforcement-profile` (`56b41d0`) and `fix/backlog-225-cross-host` (`4b14e09`) are not merged to EIF `main` (`f03832d`; local `main` and `origin/main` match in both checkouts). `C:\AI\engineering-intelligence-framework` is on WIP branch `fix/session-local-retry-policy` (`1061934`, dirty working tree, behind its origin by 3) and must never be an upgrade source. Upgrades come only from `C:\AI\eif-lean` at a Codex-reviewed SHA via `C:\AI\update-eif-guard.ps1` (that script's EIF checkout is `C:\AI\eif-lean`, and it requires `-ReviewedSha`).
+
+**EIF guard issues seen in the 2026-11-11/12 run (status of each not re-checked on 2026-11-15):**
 - `HOOK_TIMEOUT` (harness fault): the guard's session phase takes 6.1 to 7.6 s of the 8 s watchdog, so calls fail at random even on an idle machine. Lanes ran under a temporary rule: retry the byte-identical call once, at most 5 retries per run.
 - False `FOREIGN_PATH`: any `<rev>:<path>` text (`git show HEAD:apps/...`, `git push origin HEAD:<branch>`) is read as a drive path. Use `git push origin <local-branch>` instead.
 - `PROGRAMME_GIT_STAGE` denied `git add -- CONTEXT.md docs/memory/CURRENT.md` when the same command also held `.` / `:(exclude)` pathspecs, but allowed the same shape three times before.
@@ -61,7 +34,7 @@
 - The Claude Code adapter has no mapping for `SendMessage` or the subagent hand-back (`SHIM_TOOL_UNMAPPED`), so subagents cannot return results.
 - Open retry obligation from the retired Cursor Lane F chat: `SESSION_RETRY_REQUIRED` fingerprint `e6b12823…` (original `BUDGET_EXHAUSTED`); retire it with `tools/session_retry.py` from the EIF checkout.
 
-**Notes below predate the 2026-11-12 merges. Each lane block is kept as written; "Not merged" in them is now out of date for those five PRs.**
+**Notes below predate the 2026-11-12 merges. Each lane block is kept as written; "Not merged" in them is now out of date.**
 
 **Last updated:** 2026-11-10 16:43 SAST (serial DB queue step 8: Compuspeed and Syntech customer identity split on `cip`; distributors were already separate; alembic stays `20261110_0061`; no programme ledger edit)
 
@@ -137,7 +110,7 @@
 
 - **D-0142 — ACCEPTED, option 1.** Question: what number may a store or DC need, or a slow-stock label, use? Options: (1) reuse the customer's existing cover settings, including the account-level fallback of 4 and 6 weeks when empty; slow and unsold stay unconfigured until the tenant stores a threshold; lead time is shown as a distribution and is not subtracted inside a need; (2) the same cover reuse, and Warren names the slow threshold, the unsold threshold, and the lead-time statistic before those labels ship; (3) no fallback: cover, slow, unsold, and any lead-time statistic stay empty until the tenant sets them, and needs say not configured. Answer: option 1. Reuse the customer cover settings, including the account-level 4/6-week fallback, for stores and DCs. Slow and unsold stay unconfigured until the tenant stores a threshold. Lead time is shown as a distribution and is not subtracted inside a need. The ledger on this commit marks D-0142 superseded by D-0146 (cover plus two delivery legs, neither folded into the 4 and 6) and records D-0150 (slow at or above twice target cover; unsold is stock on hand with zero sales for the minimum-cover weeks).
 
-- **D-0143 — ACCEPTED, option 1 now, then option 3. No geocoding.** Question: what does the store map show when a site has no coordinates? The 30 Oct census filled site name and site code only. Options: (1) a site list in the shipment map's selection pattern, and no dots until a steward stores a coordinate; no geocoding; (2) geocode the site label through an external service and store the result; (3) the steward drops a pin, no external call. Answer: option 1 now (site list, no dots), then option 3 (the steward drops pins). No geocoding. The ledger on this commit already has D-0143 accepted and D-0148 (3 Nov 2026) recording the steward pin.
+- **D-0143:** D-0143 DECIDED by Warren 2026-11-15, option B: bundled offline South African place list (licence recorded) suggests a store location by exact normalised match on the place part of the store label; steward confirms or corrects before anything is saved; no match or multiple matches go to manual pin; no fuzzy matching; no online geocoding. Programme ledger amendment pending (orchestrator).
 
 - **D-0144 — ACCEPTED, option 1.** Question: how should header mappings, remembered sheets, cleared tokens, and approved aliases be scoped to a tenant? Options: (1) tenant_id on source_definition and on customer_source_token_alias, distributor_source_token_alias, channel_source_token_alias, region_source_token_alias, product_alias, and customer_article_alias, backfill from the related master's tenant or default, and filter every read and write; (2) namespace column_mapping_memory JSON by tenant and keep un-namespaced keys for default, which does not cover alias tables; (3) do nothing until a second tenant exists. Answer: option 1. `tenant_id` on `source_definition` and all six alias tables, backfill, and filter every read and write. The six tables are `customer_source_token_alias`, `distributor_source_token_alias`, `channel_source_token_alias`, `region_source_token_alias`, `product_alias`, and `customer_article_alias`. The ledger on this commit already has D-0144 accepted and D-0149 (3 Nov 2026) recording option 1. **In the repo:** Alembic migration **`20261103_0055`** is at `apps/api/alembic/versions/20261103_0055_tenant_mapping_memory_aliases.py`, and tenant-scoped mapping helpers are in `apps/api/app/services/imports/tenant_mapping_scope.py` (both already exist in the tree; a given environment may not yet be upgraded to that revision).
 

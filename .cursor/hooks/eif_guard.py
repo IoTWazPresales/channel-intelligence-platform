@@ -402,7 +402,40 @@ def identity_payload_key_fields(data):
     omitted = len(data) - len(fields['payload_keys'])
     if omitted:
         fields['payload_keys_omitted'] = omitted
+    fields.update(transcript_path_shape_fields(data))
     return fields
+
+
+# BACKLOG-232 diagnostic. The shape of transcript_path on an IDENTITY_TOOL
+# denial, never its value: missing | empty | windows_abs | posix_abs | relative
+# | other (a non-string, a URI such as file:///..., or a NUL), its length when
+# it is a string, and its JSON type when it is not.
+_URI_SCHEME = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:')
+
+
+def transcript_path_shape_fields(data):
+    if 'transcript_path' not in data:
+        return {'transcript_path_shape': 'missing'}
+    value = data['transcript_path']
+    if not isinstance(value, str):
+        kind = ('null' if value is None else 'bool' if isinstance(value, bool)
+                else 'number' if isinstance(value, (int, float)) else 'array' if isinstance(value, list)
+                else 'object' if isinstance(value, dict) else 'other')
+        return {'transcript_path_shape': 'other', 'transcript_path_type': kind}
+    text = value.strip()
+    if not text:
+        shape = 'empty'
+    elif '\x00' in text:
+        shape = 'other'
+    elif re.match(r'^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)', text):
+        shape = 'windows_abs'
+    elif text.startswith('/'):
+        shape = 'posix_abs'
+    elif _URI_SCHEME.match(text):
+        shape = 'other'
+    else:
+        shape = 'relative'
+    return {'transcript_path_shape': shape, 'transcript_path_length': len(value)}
 
 
 def _append_operator_log(code, message, extra=None):
@@ -411,6 +444,9 @@ def _append_operator_log(code, message, extra=None):
         p = _operator_log_path()
         p.parent.mkdir(parents=True, exist_ok=True)
         rec = {'ts': int(time.time()), 'reason_code': code, 'message': message}
+        if _SUPPORT_READY and isinstance(_ACTIVE_DATA, dict):
+            # BACKLOG-232: which records ran under a transcript_path identity.
+            rec.update(support('eif_session').identity_log_fields(_ACTIVE_DATA))
         if extra:
             for k, v in extra.items():
                 if k not in rec:
@@ -1518,6 +1554,10 @@ def budget_ok(root: Path, data, policy):
     try:
         # Never use the shared anonymous pool; identity fallback must match sessions.
         conv = support('eif_session').conversation(data)
+        if support('eif_session').pool_session(data):
+            # BACKLOG-232: the shared anonymous lean pool has no burst budget,
+            # so one id-less helper cannot exhaust or lock another's.
+            return True, '', None
         if conv == 'unknown':
             # Reads and the closure verifier only: closure-gate git recovery
             # (add/commit/push) is a mutation and needs a stable identity.
@@ -2680,6 +2720,8 @@ FIND_WRITERS = frozenset({'-delete', '-exec', '-execdir', '-ok', '-okdir', '-fpr
 
 def _segment_read_only(words):
     prog = _prog(words)
+    if prog == 'rg' and any(w.split('=', 1)[0] in {'--pre', '--hostname-bin'} for w in words[1:]):
+        return False  # ripgrep runs the named helper program.
     if prog in LEAN_READ_ONLY_PROGRAMS:
         return True
     if prog == 'find':
@@ -3350,6 +3392,10 @@ def lean_db_grant(ctx):
     session = support('eif_session')
     if session.conversation(ctx['data']) == 'unknown':
         return None
+    # BACKLOG-232: a generation_id or anonymous-pool session never holds a
+    # grant; any existing one is ignored.
+    if session.no_grant_session(ctx['data']):
+        return None
     try:
         path = session.state_path(ctx['root'], ctx['data'])
         if not path.is_file():
@@ -3420,6 +3466,12 @@ def lean_shell_decision(cmd, policy, ctx):
     if database:
         grant = lean_db_grant(ctx)
         if grant is None:
+            if ctx and ctx.get('data') and support('eif_session').no_grant_session(ctx['data']):
+                return _shell_result(False, 'PROTECTED_DATABASE_WRITE', (
+                    f'{database}. Read-only SQL is allowed; name a non-protected target (DSN, -d, --expect-db) for '
+                    'disposable databases. This session has no conversation id (BACKLOG-232 lean fallback: '
+                    f'{support("eif_session").identity_source(ctx["data"])}) and can never hold an operator grant; '
+                    'run protected writes from a session with a conversation id.'))
             key = _session_key(ctx)
             return _shell_result(False, 'PROTECTED_DATABASE_WRITE', (
                 f'{database}. Read-only SQL is allowed; name a non-protected target (DSN, -d, --expect-db) for '
@@ -3725,7 +3777,7 @@ def browser_action_kind(name):
     return 'observe'
 
 def _browser_state_path(root: Path, data):
-    conv=re.sub(r'[^A-Za-z0-9_.-]','_',str(data.get('conversation_id') or 'unknown'))[:120]
+    conv=re.sub(r'[^A-Za-z0-9_.-]','_',support('eif_session').conversation(data))[:120]
     d=root/'.eif'/'runtime-budget'; d.mkdir(parents=True, exist_ok=True)
     return d/f'browser-{conv}.json'
 
@@ -4021,6 +4073,9 @@ def _main():
     _TIMINGS['integrity'] = round((time.perf_counter() - started) * 1000, 3)
     started = time.perf_counter()
     state,policy,pp,pmsg=load_policy(root)
+    # BACKLOG-232: the generation_id identity fallback exists only under a
+    # loaded, valid lean policy; strict and any other state keep IDENTITY_TOOL.
+    support('eif_session').LEAN_IDENTITY_FALLBACK = state == 'OK' and lean_profile(policy)
     _TIMINGS['policy'] = round((time.perf_counter() - started) * 1000, 3)
     # Retry admission only. Checked before identity/budget so a fault there
     # cannot turn a permanently foreign target into debt; untrusted policy
@@ -4099,7 +4154,10 @@ def _main():
                 f'; {len(failed)} executed mutation failure(s) remain unresolved for this session only. '
                 'No success/closure may be inferred. '
                 'Use the explicit operator report/resolver rather than automatic retry loops.')
-        if event == 'stop' and (not closed or failed):
+        if support('eif_session').pool_session(data):
+            # BACKLOG-232: advisory for the anonymous lean pool; never a follow-up.
+            extra['additional_context'] += ' (anonymous lean pool: closure and retry debt are advisory)'
+        elif event == 'stop' and (not closed or failed):
             # Commit/push/closure-proof requirements need a follow-up even
             # when nothing failed; an executed failure takes precedence.
             # sessionEnd has no agent turn left to prompt.
@@ -4142,6 +4200,13 @@ def _main():
         _TIMINGS['session_detail'] = _session_metrics()
         if not ready and _LEAN_TIMEOUT_CLEAR and code in BOOKKEEPING_TIMEOUT_CODES and _deadline_exhausted():
             return lean_timeout_allow(code, message)
+        if not ready and lean and support('eif_session').pool_session(data):
+            # BACKLOG-232: closure gate and retry debt are advisory for the shared
+            # anonymous lean pool (logged, never blocking), so one id-less helper
+            # cannot block another. Every check below still applies.
+            _ADVISORIES.append({'reason_code': code, 'enforcement': 'advisory',
+                                'message': f'{message} (anonymous lean pool: advisory)'})
+            ready = True
         if not ready:
             if code == 'SESSION_STATE_FAILURE' and _READ_ONLY:
                 _READ_WARNING = {'reason_code': code, 'additional_context': message + '; session bookkeeping needs repair. Read permission checks still apply.'}
