@@ -184,12 +184,22 @@ def transcript_session_key(data):
 # hooks (ts 1794735005). Under the LEAN profile ONLY, when both ids are empty
 # and transcript_path is missing, empty or null, a non-empty generation_id
 # identifies the session: 'gen-' + sha256(generation_id)[:32]. The guard sets
-# GENERATION_FALLBACK per hook from the loaded, valid policy; it is False by
+# LEAN_IDENTITY_FALLBACK per hook from the loaded, valid policy; it is False by
 # default, so strict and any unloaded policy keep IDENTITY_TOOL. A
 # generation_id session never holds an operator grant (see lean_db_grant and
 # tools/session_grant.py). The raw generation_id is never a log value.
-GENERATION_FALLBACK = False
-GENERATION_STATE_MARK = 'generation_id'
+#
+# Second decision (Warren, 2026-11-15): the probe showed generation_id empty
+# too (Cursor bug: tool-execution hooks can arrive with every id blank). Under
+# the LEAN profile ONLY, when conversation_id, session_id, transcript_path and
+# generation_id are all empty, null or non-string, the call joins one shared
+# session ANON_POOL_KEY (identity_source anonymous_pool). Every hard block
+# still applies; the guard makes closure and retry debt advisory for the pool
+# and the pool never holds an operator grant. A real id always wins.
+LEAN_IDENTITY_FALLBACK = False
+ANON_POOL_KEY = 'anon-lean'
+NO_GRANT_SOURCES = frozenset({'generation_id', 'anonymous_pool'})
+POOL_ID_FIELDS = ('conversation_id', 'session_id', 'transcript_path', 'generation_id')
 
 
 def _blank(value):
@@ -198,7 +208,7 @@ def _blank(value):
 
 def generation_session_key(data):
     """'gen-<32 hex>' under the lean fallback, else None."""
-    if not GENERATION_FALLBACK or not isinstance(data, dict):
+    if not LEAN_IDENTITY_FALLBACK or not isinstance(data, dict):
         return None
     if not _blank(data.get('transcript_path')):
         return None
@@ -211,9 +221,18 @@ def generation_session_key(data):
     return 'gen-' + hashlib.sha256(text.encode('utf-8')).hexdigest()[:32]
 
 
+def anonymous_pool_session(data):
+    """True under the lean fallback when every id field is empty, null or non-string."""
+    if not LEAN_IDENTITY_FALLBACK or not isinstance(data, dict):
+        return False
+    if data.get('conversation_id') or data.get('session_id'):
+        return False
+    return all(not isinstance(data.get(name), str) or not data.get(name).strip() for name in POOL_ID_FIELDS)
+
+
 def identity_source(data):
     """Which payload field names the session: conversation_id, session_id,
-    transcript_path, generation_id, or None ('unknown')."""
+    transcript_path, generation_id, anonymous_pool, or None ('unknown')."""
     if not isinstance(data, dict):
         return None
     if data.get('conversation_id'):
@@ -224,14 +243,26 @@ def identity_source(data):
         return 'transcript_path'
     if generation_session_key(data):
         return 'generation_id'
+    if anonymous_pool_session(data):
+        return 'anonymous_pool'
     return None
+
+
+def no_grant_session(data):
+    """A generation_id or anonymous-pool session never holds an operator grant."""
+    return identity_source(data) in NO_GRANT_SOURCES
+
+
+def pool_session(data):
+    return identity_source(data) == 'anonymous_pool'
 
 
 def conversation(data):
     explicit = data.get('conversation_id') or data.get('session_id')
     if explicit:
         return str(explicit)
-    return transcript_session_key(data) or generation_session_key(data) or 'unknown'
+    return (transcript_session_key(data) or generation_session_key(data)
+            or (ANON_POOL_KEY if anonymous_pool_session(data) else 'unknown'))
 
 
 def identity_log_fields(data):
@@ -242,6 +273,8 @@ def identity_log_fields(data):
         return {'identity_source': source, 'identity_key_prefix': transcript_session_key(data)[3:15]}
     if source == 'generation_id':
         return {'identity_source': source, 'identity_key_prefix': generation_session_key(data)[4:16]}
+    if source == 'anonymous_pool':
+        return {'identity_source': source}
     return {}
 
 
@@ -1027,9 +1060,9 @@ def boundary(root, data, quarantined=False):
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
         before = json.dumps(state, sort_keys=True)
-        if identity_source(data) == 'generation_id':
+        if no_grant_session(data):
             # tools/session_grant.py refuses a grant for this session.
-            state['identity_source'] = GENERATION_STATE_MARK
+            state['identity_source'] = identity_source(data)
         phase = 'close' if data.get('hook_event_name') in {'stop', 'sessionEnd'} else state.get('closure_phase', 'start')
         if data.get('hook_event_name') == 'sessionStart':
             phase = 'start'

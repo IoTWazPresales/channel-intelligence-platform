@@ -1554,6 +1554,10 @@ def budget_ok(root: Path, data, policy):
     try:
         # Never use the shared anonymous pool; identity fallback must match sessions.
         conv = support('eif_session').conversation(data)
+        if support('eif_session').pool_session(data):
+            # BACKLOG-232: the shared anonymous lean pool has no burst budget,
+            # so one id-less helper cannot exhaust or lock another's.
+            return True, '', None
         if conv == 'unknown':
             # Reads and the closure verifier only: closure-gate git recovery
             # (add/commit/push) is a mutation and needs a stable identity.
@@ -3388,8 +3392,9 @@ def lean_db_grant(ctx):
     session = support('eif_session')
     if session.conversation(ctx['data']) == 'unknown':
         return None
-    # BACKLOG-232: a generation_id session never holds a grant; any existing one is ignored.
-    if session.identity_source(ctx['data']) == 'generation_id':
+    # BACKLOG-232: a generation_id or anonymous-pool session never holds a
+    # grant; any existing one is ignored.
+    if session.no_grant_session(ctx['data']):
         return None
     try:
         path = session.state_path(ctx['root'], ctx['data'])
@@ -3461,11 +3466,12 @@ def lean_shell_decision(cmd, policy, ctx):
     if database:
         grant = lean_db_grant(ctx)
         if grant is None:
-            if ctx and ctx.get('data') and support('eif_session').identity_source(ctx['data']) == 'generation_id':
+            if ctx and ctx.get('data') and support('eif_session').no_grant_session(ctx['data']):
                 return _shell_result(False, 'PROTECTED_DATABASE_WRITE', (
                     f'{database}. Read-only SQL is allowed; name a non-protected target (DSN, -d, --expect-db) for '
-                    'disposable databases. This session is identified by generation_id (BACKLOG-232 lean fallback) '
-                    'and can never hold an operator grant; run protected writes from a session with a conversation id.'))
+                    'disposable databases. This session has no conversation id (BACKLOG-232 lean fallback: '
+                    f'{support("eif_session").identity_source(ctx["data"])}) and can never hold an operator grant; '
+                    'run protected writes from a session with a conversation id.'))
             key = _session_key(ctx)
             return _shell_result(False, 'PROTECTED_DATABASE_WRITE', (
                 f'{database}. Read-only SQL is allowed; name a non-protected target (DSN, -d, --expect-db) for '
@@ -4069,7 +4075,7 @@ def _main():
     state,policy,pp,pmsg=load_policy(root)
     # BACKLOG-232: the generation_id identity fallback exists only under a
     # loaded, valid lean policy; strict and any other state keep IDENTITY_TOOL.
-    support('eif_session').GENERATION_FALLBACK = state == 'OK' and lean_profile(policy)
+    support('eif_session').LEAN_IDENTITY_FALLBACK = state == 'OK' and lean_profile(policy)
     _TIMINGS['policy'] = round((time.perf_counter() - started) * 1000, 3)
     # Retry admission only. Checked before identity/budget so a fault there
     # cannot turn a permanently foreign target into debt; untrusted policy
@@ -4148,7 +4154,10 @@ def _main():
                 f'; {len(failed)} executed mutation failure(s) remain unresolved for this session only. '
                 'No success/closure may be inferred. '
                 'Use the explicit operator report/resolver rather than automatic retry loops.')
-        if event == 'stop' and (not closed or failed):
+        if support('eif_session').pool_session(data):
+            # BACKLOG-232: advisory for the anonymous lean pool; never a follow-up.
+            extra['additional_context'] += ' (anonymous lean pool: closure and retry debt are advisory)'
+        elif event == 'stop' and (not closed or failed):
             # Commit/push/closure-proof requirements need a follow-up even
             # when nothing failed; an executed failure takes precedence.
             # sessionEnd has no agent turn left to prompt.
@@ -4191,6 +4200,13 @@ def _main():
         _TIMINGS['session_detail'] = _session_metrics()
         if not ready and _LEAN_TIMEOUT_CLEAR and code in BOOKKEEPING_TIMEOUT_CODES and _deadline_exhausted():
             return lean_timeout_allow(code, message)
+        if not ready and lean and support('eif_session').pool_session(data):
+            # BACKLOG-232: closure gate and retry debt are advisory for the shared
+            # anonymous lean pool (logged, never blocking), so one id-less helper
+            # cannot block another. Every check below still applies.
+            _ADVISORIES.append({'reason_code': code, 'enforcement': 'advisory',
+                                'message': f'{message} (anonymous lean pool: advisory)'})
+            ready = True
         if not ready:
             if code == 'SESSION_STATE_FAILURE' and _READ_ONLY:
                 _READ_WARNING = {'reason_code': code, 'additional_context': message + '; session bookkeeping needs repair. Read permission checks still apply.'}
