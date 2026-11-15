@@ -141,25 +141,62 @@ async def load_distributor_redirect_map_async(db: AsyncSession) -> dict[int, int
     return build_redirect_map((int(r[0]), r[1]) for r in rows)
 
 
+def _customer_tenant_matches(raw_tenant: object, expected: str) -> bool:
+    """True when a stored customer tenant equals the already-normalized import tenant."""
+    if raw_tenant is None:
+        return False
+    from app.services.imports.tenant_mapping_scope import effective_tenant_id
+
+    return effective_tenant_id(str(raw_tenant)) == expected
+
+
 def follow_customer_merge_redirect_sync(
     db: Session,
     customer_id: int | None,
     *,
     max_hops: int = MAX_MERGE_HOPS,
+    tenant_id: str | None = None,
 ) -> int | None:
-    """DB walk of ``dim_customer.merged_into_customer_id``. Cycle-safe."""
+    """DB walk of ``dim_customer.merged_into_customer_id``. Cycle-safe.
+
+    When ``tenant_id`` is set, every customer on the chain must belong to that
+    import tenant. A cross-tenant hop, or a missing customer, returns None.
+    Omitting ``tenant_id`` keeps the previous walk with no tenant check.
+    """
     if customer_id is None:
         return None
+    expected: str | None = None
+    if tenant_id is not None:
+        from app.services.imports.tenant_mapping_scope import effective_tenant_id
+
+        expected = effective_tenant_id(tenant_id)
     seen: set[int] = set()
     cur = int(customer_id)
     for _ in range(max(1, int(max_hops))):
         if cur in seen:
             return cur
+        if expected is None:
+            seen.add(cur)
+            nxt = db.scalar(select(DimCustomer.merged_into_customer_id).where(DimCustomer.id == cur))
+            if nxt is None:
+                return cur
+            cur = int(nxt)
+            continue
+        row = db.execute(
+            select(DimCustomer.tenant_id, DimCustomer.merged_into_customer_id).where(DimCustomer.id == cur)
+        ).one_or_none()
+        if row is None or not _customer_tenant_matches(row[0], expected):
+            return None
         seen.add(cur)
-        nxt = db.scalar(select(DimCustomer.merged_into_customer_id).where(DimCustomer.id == cur))
-        if nxt is None:
+        if row[1] is None:
             return cur
-        cur = int(nxt)
+        cur = int(row[1])
+    if expected is not None:
+        row = db.execute(
+            select(DimCustomer.tenant_id, DimCustomer.merged_into_customer_id).where(DimCustomer.id == cur)
+        ).one_or_none()
+        if row is None or not _customer_tenant_matches(row[0], expected):
+            return None
     return cur
 
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field, field_validator
@@ -358,17 +358,27 @@ def advance_report_slots(
         return result
 
 
+class PlaceholderConfigBootstrapBody(BaseModel):
+    customer_ids: list[int] = Field(min_length=1, max_length=500)
+
+
 @router.post("/p4-bootstrap-configs")
 def p4_bootstrap_configs(
+    body: PlaceholderConfigBootstrapBody,
     _admin: dict = Depends(require_roles(Role.ADMIN)),
 ):
-    """P4 — upsert placeholder customer_report_config rows for the remaining pilot roster.
+    """Upsert placeholder customer_report_config rows for the customers in the request body.
 
-    Admin-only. Idempotent; never touches customer_id=20 or any row that
-    already has a richer config (see cst_p4_customer_bootstrap._has_richer_config).
+    Admin-only. Idempotent. Ids that are not a customer of the caller's tenant come back in
+    ``missing_customer`` and are not written; a customer whose config already has richer
+    structure is skipped (see cst_p4_customer_bootstrap._has_richer_config).
     """
     with SessionLocal() as session:
-        result = bootstrap_p4_customer_configs(session)
+        result = bootstrap_p4_customer_configs(
+            session,
+            body.customer_ids,
+            tenant_id=tenant_id_from_user(_admin),
+        )
         session.commit()
         return result
 
@@ -411,6 +421,7 @@ def list_article_aliases(
 
 @router.post("/article-aliases/import", dependencies=_STEWARD_WRITE)
 async def import_article_aliases(
+    user: Annotated[dict, Depends(get_current_user)],
     file: UploadFile = File(...),
     confirm_unique: bool = Query(
         default=False,
@@ -444,6 +455,7 @@ async def import_article_aliases(
             rows,
             source="scm_upload",
             actor=actor,
+            tenant_id=tenant_id_from_user(user),
         )
         confirm_result = None
         if confirm_unique and summary.proposed_alias_ids:

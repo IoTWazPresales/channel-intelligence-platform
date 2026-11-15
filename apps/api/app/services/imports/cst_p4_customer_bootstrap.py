@@ -1,20 +1,17 @@
-"""P4 remaining customer report configs — placeholder cadence for pilots awaiting a sample file.
+"""Placeholder customer report configs for customers awaiting a sample file.
 
-Canonical customer_ids fixed by Warren (Q-004): Evetech, Computer Mania, Incredible
-Connection, Amazon, Hifi, Makro, Game. Verified against `cip` on 2026-08-08 —
-`dim_customer.name` for each id matches this roster exactly (see task discovery).
+The steward chooses the customers (``customer_ids`` is an input: request body or script
+argument). Nothing here is keyed to a named or fixed customer.
 
-Never touches customer_id=20 — that customer already has a
-hand-verified, richer config (`report_structure_type='flat'`,
-`feed_profile_json.vat_basis` set — see the historical config apply script)
-and must not be clobbered by this bulk placeholder bootstrap. The same guard also
-protects any *other* customer that already carries a real structure/vat_basis —
-this bootstrap only ever creates or refreshes placeholder "awaiting sample file"
-rows, never overwrites a config that has graduated past that stage.
+The bootstrap only ever creates or refreshes placeholder "awaiting sample file" rows.
+A customer whose config has graduated past that stage (a real ``report_structure_type``
+or ``feed_profile_json.vat_basis``; see ``_has_richer_config``) is reported as skipped
+and never overwritten, whoever is in the list.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import select
@@ -22,18 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
-
-EXCLUDED_PILOT_CUSTOMER_ID = 20
-
-P4_CUSTOMER_IDS: dict[int, str] = {
-    52: "Evetech",
-    18: "Computer Mania",
-    12: "Incredible Connection",
-    26: "Amazon",
-    11: "Hifi",
-    15: "Makro",
-    57: "Game",
-}
+from app.services.imports.tenant_mapping_scope import effective_tenant_id
 
 P4_EXPECTED_CADENCE = "weekly"
 P4_NOTES = "P4 awaiting sample WEEK file (Q-004)"
@@ -50,26 +36,38 @@ def _has_richer_config(cfg: CustomerReportConfig) -> bool:
     return False
 
 
-def bootstrap_p4_customer_configs(session: Session) -> dict[str, Any]:
-    """Upsert placeholder `customer_report_config` rows for the P4 pilot roster.
+def _unique_ids(customer_ids: Iterable[int]) -> list[int]:
+    seen: set[int] = set()
+    out: list[int] = []
+    for raw in customer_ids:
+        cid = int(raw)
+        if cid not in seen:
+            seen.add(cid)
+            out.append(cid)
+    return out
 
-    Idempotent — safe to re-run. Unknown customer_ids and rows guarded by
-    `_has_richer_config` are reported in the result, never raised (FLAG != BLOCK).
+
+def bootstrap_p4_customer_configs(
+    session: Session,
+    customer_ids: Iterable[int],
+    *,
+    tenant_id: str | None = None,
+) -> dict[str, Any]:
+    """Upsert placeholder `customer_report_config` rows for the steward-selected customers.
+
+    Idempotent — safe to re-run. Ids that are not a dim_customer of ``tenant_id`` (default
+    tenant when None) are reported in ``missing_customer`` and never written. Rows guarded by
+    `_has_richer_config` are reported in ``skipped``, never overwritten (FLAG != BLOCK).
     """
+    tid = effective_tenant_id(tenant_id)
     created: list[dict[str, Any]] = []
     updated: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     missing_customer: list[int] = []
 
-    for customer_id, expected_name in P4_CUSTOMER_IDS.items():
-        if customer_id == EXCLUDED_PILOT_CUSTOMER_ID:
-            # Defensive — customer_id=20 is never in P4_CUSTOMER_IDS, but this guard stays
-            # even if the roster changes later.
-            skipped.append({"customer_id": customer_id, "reason": "excluded_customer_never_touched"})
-            continue
-
+    for customer_id in _unique_ids(customer_ids):
         customer = session.get(DimCustomer, customer_id)
-        if customer is None:
+        if customer is None or effective_tenant_id(getattr(customer, "tenant_id", None)) != tid:
             missing_customer.append(customer_id)
             continue
 
@@ -98,7 +96,7 @@ def bootstrap_p4_customer_configs(session: Session) -> dict[str, Any]:
         cfg.feed_profile_json = dict(P4_FEED_PROFILE)
         session.add(cfg)
 
-        record = {"customer_id": customer_id, "name": customer.name, "expected_name": expected_name}
+        record = {"customer_id": customer_id, "name": customer.name}
         (created if is_new else updated).append(record)
 
     session.flush()
