@@ -327,8 +327,6 @@ def _build_rederivation_proposal(
             "po_link_count": int(po_count or 0),
             "customer_planned_before": customer_planned_before,
             "customer_planned_after_q1": customer_planned_after_q1,
-            "makro_planned_before": makro_planned_before,
-            "makro_planned_after_q1": makro_planned_after_q1,
             "already_allocated": all(_line_already_allocated(ln) for ln in lines),
         },
         "q2_twin_proposal": {

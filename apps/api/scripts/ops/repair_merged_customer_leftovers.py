@@ -82,11 +82,10 @@ def _print_preview(preview: dict) -> None:
     print(f"total_leftover_rows {preview['total_leftover_rows']}")
     print("--- per loser ---")
     for item in preview["losers"]:
-        flag = "  [COMPUSPEED unexplained pre-absorb rows]" if item["compuspeed_unexplained"] else ""
         print(
             f"loser {item['loser_id']} {item['loser_code']!r} {item['loser_name']!r} "
             f"-> winner {item['winner_id']} {item['winner_code']!r} {item['winner_name']!r} "
-            f"rows={item['row_count']}{flag}"
+            f"rows={item['row_count']}"
         )
         for key, n in sorted(item["fk_counts"].items(), key=lambda kv: -int(kv[1])):
             print(f"  {key}: {n}")
@@ -149,8 +148,7 @@ def _run_repair(url: str, *, require_audit_match: bool) -> None:
         leftover_after = leftover_row_total_across_merged_losers(db)
         print("repaired_count", out["repaired_count"])
         for row in out["repaired"]:
-            flag = " COMPUSPEED" if row["compuspeed_unexplained"] else ""
-            print(f"  repaired loser {row['loser_id']} -> {row['winner_id']}{flag}")
+            print(f"  repaired loser {row['loser_id']} -> {row['winner_id']}")
         print("leftover_rows_after", leftover_after)
         print("--- winner snapshots after ---")
         for label, snap in out["winner_snapshots_after"].items():

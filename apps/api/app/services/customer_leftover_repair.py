@@ -97,7 +97,6 @@ def preview_leftover_repair(db: Session) -> dict[str, Any]:
             "winner_name": str(w[2]) if w is not None else None,
             "row_count": nsum,
             "fk_counts": counts,
-            "compuspeed_unexplained": lid == COMPUSPEED_LOSER_ID,
         }
         dirty.append(item)
         total_rows += nsum
@@ -108,10 +107,14 @@ def preview_leftover_repair(db: Session) -> dict[str, Any]:
         "dirty_loser_count": len(dirty),
         "total_leftover_rows": total_rows,
         "losers": dirty,
-        "winner_snapshots": {
-            label: winner_snapshot(db, cid) for cid, label in WINNER_SNAPSHOT_IDS
-        },
+        "winner_snapshots": winner_snapshots_for(db, dirty),
     }
+
+
+def winner_snapshots_for(db: Session, items: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    """Snapshot each distinct merge survivor already named by the preview."""
+    ids = sorted({int(item["winner_id"]) for item in items if item.get("winner_id") is not None})
+    return {str(cid): winner_snapshot(db, cid) for cid in ids}
 
 
 def winner_snapshot(db: Session, customer_id: int) -> dict[str, int]:
@@ -186,7 +189,6 @@ def repair_dirty_losers(
             {
                 "loser_id": lid,
                 "winner_id": int(kid),
-                "compuspeed_unexplained": bool(item["compuspeed_unexplained"]),
                 "stats": stats,
             }
         )
@@ -198,7 +200,5 @@ def repair_dirty_losers(
             int(item["loser_id"]): count_customer_fk_refs(db, int(item["loser_id"]))
             for item in prev["losers"]
         },
-        "winner_snapshots_after": {
-            label: winner_snapshot(db, cid) for cid, label in WINNER_SNAPSHOT_IDS
-        },
+        "winner_snapshots_after": winner_snapshots_for(db, prev["losers"]),
     }
