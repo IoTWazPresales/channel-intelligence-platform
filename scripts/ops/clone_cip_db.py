@@ -8,8 +8,8 @@ Dump source may be ``cip`` (read). Restore target must never be ``cip``.
 
 Examples:
 
-  python scripts/ops/clone_cip_db.py --clone-db cip_gate_smoke --dry-run
-  python scripts/ops/clone_cip_db.py --clone-db cip_gate_smoke --drop-after
+  python scripts/ops/clone_cip_db.py --clone-db cip_gate_smoke --source-db cip --dry-run
+  python scripts/ops/clone_cip_db.py --clone-db cip_gate_smoke --source-db cip --drop-after
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_WIN_PG_BIN = Path(r"C:\Program Files\PostgreSQL\18\bin")
-DEFAULT_SOURCE_DB = "cip"
+LIVE_CIP_DB = "cip"
 
 
 class CloneCipError(SystemExit):
@@ -62,7 +62,7 @@ def assert_clone_db_name(name: str) -> str:
     cleaned = (name or "").strip()
     if not cleaned:
         raise CloneCipError("--clone-db is required")
-    if cleaned.lower() == DEFAULT_SOURCE_DB:
+    if cleaned.lower() == LIVE_CIP_DB:
         raise CloneCipError("refusing clone target database name 'cip' (writes to live cip are forbidden)")
     if not cleaned.replace("_", "").isalnum():
         raise CloneCipError(f"unsafe clone database name: {cleaned!r}")
@@ -81,7 +81,7 @@ def _run(cmd: list[str], *, env: dict[str, str], label: str) -> None:
 def clone_cip_database(
     *,
     clone_db: str,
-    source_db: str = DEFAULT_SOURCE_DB,
+    source_db: str,
     host: str = "127.0.0.1",
     port: str = "5432",
     cip_user: str = "cip",
@@ -91,8 +91,8 @@ def clone_cip_database(
 ) -> Path:
     """Dump ``source_db`` and restore into ``clone_db``. Never restores into ``cip``."""
     target = assert_clone_db_name(clone_db)
-    if source_db.strip().lower() != DEFAULT_SOURCE_DB:
-        raise CloneCipError(f"source database must be {DEFAULT_SOURCE_DB!r} (got {source_db!r})")
+    if source_db.strip().lower() != LIVE_CIP_DB:
+        raise CloneCipError(f"source database must be {LIVE_CIP_DB!r} (got {source_db!r})")
     pg_bin = resolve_pg_bin()
     dump_path = REPO_ROOT / ".tmp" / f"{target}.dump"
     print(f"PG_BIN={pg_bin}")
@@ -203,6 +203,7 @@ def clone_cip_database(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--clone-db", required=True, help="Target database name (must not be cip)")
+    parser.add_argument("--source-db", required=True, help="Source database to dump (must be cip)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--drop-after", action="store_true", help="Drop the clone after restore (proof only)")
     parser.add_argument("--host", default="127.0.0.1")
@@ -210,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     clone_cip_database(
         clone_db=args.clone_db,
+        source_db=args.source_db,
         host=args.host,
         port=args.port,
         dry_run=args.dry_run,

@@ -18,8 +18,8 @@ class Settings(BaseSettings):
 
     app_name: str = "Channel Intelligence API"
     api_v1_prefix: str = "/api/v1"
-    database_url: str = "postgresql+asyncpg://cip:cip@localhost:5432/cip"
-    database_url_sync: str = "postgresql://cip:cip@localhost:5432/cip"
+    database_url: str = Field(..., description="Async app DB URL (env DATABASE_URL). Required; no default.")
+    database_url_sync: str = Field(..., description="Sync DB URL (env DATABASE_URL_SYNC). Required; no default.")
     # Optional: direct writable primary for Celery/batch sync engine (BACKLOG-028). When unset,
     # Supabase pooler :5432 session URLs auto-rewrite to db.<project_ref>.supabase.co unless
     # CIP_SUPABASE_SYNC_DIRECT_PRIMARY=false.
