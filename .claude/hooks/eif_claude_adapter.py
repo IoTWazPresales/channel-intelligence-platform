@@ -450,6 +450,9 @@ def invoke_guard(root: Path, guard_path: Path, translated: dict):
     payload_bytes = json.dumps(request).encode('utf-8')
     env = dict(os.environ)
     env['CLAUDE_PROJECT_DIR'] = str(root)
+    # The 25 s Cursor watchdog is for the Cursor launchers only; under this
+    # adapter (9.5 s) the guard keeps its 8-second ceiling (BACKLOG-236).
+    env.pop('EIF_HOOK_HOST', None)
     return subprocess.run(
         [sys.executable, '-u', '-X', 'utf8', str(guard_path)],
         input=payload_bytes,

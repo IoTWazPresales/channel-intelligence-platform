@@ -3,7 +3,7 @@
   "files": {
     ".cursor/hooks.json": "a38c5d7aafaa86ce062beffc1860ce498c395c6b1fd6b8c9e2a8d184557a9195",
     ".cursor/hooks/eif_guard.cmd": "f1e718490457cbef91b15249da055b144888a92a0aefe61084ea0668640b5309",
-    ".cursor/hooks/eif_guard.py": "3ea98e4401e91083db1a8c8f5b891175d3775fa277cea0b4566b039ac3c3040e",
+    ".cursor/hooks/eif_guard.py": "899f4a5abb3d9230e60d345901ab42727d6a82c080e78ee3d7cccc6f910a8481",
     ".cursor/hooks/eif_guard.sh": "d26d224049ee37e9eecdcc8602089755d3f9d61dd7526d2636c1025ca0ed0390",
     ".cursor/hooks/eif_guard_crash.json": "00d7f2cdaee97215a9d7a6ccd3a12cf352cc34bd7418be4f2a1410e6e1099a4f",
     ".cursor/hooks/eif_guard_failclosed.json": "b8a84d7b95a7da709f8f26449c96ef636d7796ff82bc7416af70d9b8bfe522f4",

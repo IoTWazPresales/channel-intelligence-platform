@@ -1439,6 +1439,21 @@ def _store_identity(state, path, key, heads):
     except (OSError, ValueError):
         pass  # Reuse is an optimisation; verification already completed.
 
+def _linked_worktree(top: Path) -> bool:
+    """A linked worktree's .git is a file 'gitdir: <common>/worktrees/<name>'.
+    Read only; no git process. A submodule's .git file points at modules/."""
+    try:
+        marker = (Path(top) / '.git')
+        if not marker.is_file():
+            return False
+        line = marker.read_text(encoding='utf-8', errors='replace').splitlines()[0].strip()
+    except (OSError, IndexError):
+        return False
+    if not line.startswith('gitdir:'):
+        return False
+    parts = [p.casefold() for p in line[len('gitdir:'):].strip().replace('\\', '/').split('/') if p]
+    return len(parts) >= 2 and parts[-2] == 'worktrees'
+
 def _identity_check(root: Path, policy):
     ident=policy.get('identity') or {}
     exp_root=ident.get('root_commit') or ''
@@ -1455,6 +1470,14 @@ def _identity_check(root: Path, policy):
     if exp_vcs:
         actual=Path(git(root,'rev-parse','--show-toplevel')).resolve()
         if str(actual)!=str(Path(exp_vcs).resolve()):
+            if _linked_worktree(actual):
+                # BACKLOG-237 option (b): same denial, an instruction instead of
+                # a mismatch. The worktree's tracked policy copy made the guard
+                # stop there; identity rules are unchanged.
+                return False,(f'WORKTREE_ROOT_UNSUPPORTED: {actual} is a linked git worktree with its own copy of '
+                              f'the EIF policy, and EIF does not run agents from a worktree root. Open the agent at '
+                              f'the repository root {exp_vcs}; the worktree stays reachable from there '
+                              f'(for example git -C <worktree path> ...).')
             return False,f'IDENTITY_MISMATCH: vcs root expected {exp_vcs}, observed {actual}'
     for anchor in ident.get('repository_anchors') or []:
         ar=Path(anchor.get('allowed_root') or '').resolve()
@@ -1474,7 +1497,9 @@ def control_plane(rel, policy):
     pats=list(CONTROL_PLANE_DEFAULTS)+(policy.get('control_plane_paths') or [])
     # Lean: the generated programme view is CLI-only like the ledger it renders
     # (staged with it under the ledger integrity check, never hand-edited).
-    if rel and lean_profile(policy) and _normalize_shell_rel(rel) == lean_ledger_view_rel(policy):
+    # Host-aware like every other control-plane path: on Windows `.eif/program.md`
+    # names the same file as `.eif/PROGRAM.md` (Codex P2 on 0709257).
+    if rel and lean_profile(policy) and matches(_normalize_shell_rel(rel), [lean_ledger_view_rel(policy)]):
         return True
     return matches(rel,pats)
 

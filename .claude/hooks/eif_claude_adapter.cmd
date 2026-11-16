@@ -12,31 +12,34 @@ REM on this path (unlike the Cursor launcher, which mirrors Cursor's
 REM different exit-0-plus-JSON contract).
 set "SCRIPT=%~dp0eif_claude_adapter.py"
 
-"%SystemRoot%\System32\where.exe" python <nul >nul 2>&1
-if not errorlevel 1 goto :select_python
-"%SystemRoot%\System32\where.exe" py <nul >nul 2>&1
-if not errorlevel 1 goto :select_py
-"%SystemRoot%\System32\where.exe" python3 <nul >nul 2>&1
-if not errorlevel 1 goto :select_python3
-if exist "%SystemRoot%\py.exe" goto :select_py_root
+REM Interpreter lookup as in the Cursor launcher (BACKLOG-236 security fix):
+REM with NoDefaultCurrentDirectoryInExePath set, cmd (and every process the
+REM adapter and guard start) never runs a python.cmd, python.bat or git.exe
+REM placed in the project root ahead of PATH. One built-in line checks that a
+REM name exists on PATH; cmd then runs it by name in its own PATH and PATHEXT
+REM order. No where.exe process, and nothing here reads the input pipe.
+set "NoDefaultCurrentDirectoryInExePath=1"
+REM With that setting cmd finds nothing when PATH starts with an empty entry,
+REM so a leading empty entry becomes System32.
+set "EIF_PATH_LEAD="
+setlocal EnableDelayedExpansion
+if "!PATH:~0,1!"==";" (endlocal & set "EIF_PATH_LEAD=1") else endlocal
+if defined EIF_PATH_LEAD set "PATH=%SystemRoot%\System32%PATH%"
+set "EIF_PYTHON="
+set "EIF_PYTHON_ARGS="
+set "EIF_EXTS=%PATHEXT%"
+if not defined EIF_EXTS set "EIF_EXTS=.COM;.EXE;.BAT;.CMD"
+for %%N in (python py python3) do if not defined EIF_PYTHON for %%E in ("%EIF_EXTS:;=" "%") do if not defined EIF_PYTHON for %%F in ("%%N%%~E") do if not "%%~$PATH:F"=="" set "EIF_PYTHON=%%N"
+if "%EIF_PYTHON%"=="py" set "EIF_PYTHON_ARGS=-3"
+if defined EIF_PYTHON goto :run
+if not exist "%SystemRoot%\py.exe" goto :no_python
+set "EIF_PYTHON="%SystemRoot%\py.exe""
+set "EIF_PYTHON_ARGS=-3"
+goto :run
+
+:no_python
 >&2 echo EIF claude-code adapter fault SHIM_NO_INTERPRETER: no Python interpreter found on PATH (tried python, py -3, python3)
 exit /b 2
-
-:select_python
-set "EIF_PYTHON=python"
-set "EIF_PYTHON_ARGS="
-goto :run
-:select_py
-set "EIF_PYTHON=py"
-set "EIF_PYTHON_ARGS=-3"
-goto :run
-:select_python3
-set "EIF_PYTHON=python3"
-set "EIF_PYTHON_ARGS="
-goto :run
-:select_py_root
-set "EIF_PYTHON=%SystemRoot%\py.exe"
-set "EIF_PYTHON_ARGS=-3"
 
 :run
 call %EIF_PYTHON% %EIF_PYTHON_ARGS% -u -X utf8 "%SCRIPT%"
