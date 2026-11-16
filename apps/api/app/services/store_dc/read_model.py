@@ -110,6 +110,7 @@ def _open_stock_actions(
     has no list and still covers every site.
     """
     from app.models.cpor import CporCase, CporCaseLine
+    from app.services.store_dc.stock_actions import _retired_stock_action_clauses
 
     rows = db.execute(
         select(CporCaseLine.product_id, CporCase.notes, CporCaseLine.cost_evidence_json)
@@ -118,6 +119,7 @@ def _open_stock_actions(
             CporCase.tenant_id == tenant_id,
             CporCase.customer_id == int(customer_id),
             CporCase.status.in_(("draft", "proposed", "approved", "active")),
+            *_retired_stock_action_clauses(),
         )
     ).all()
     found: dict[int, list[tuple[str, dict | None]]] = defaultdict(list)

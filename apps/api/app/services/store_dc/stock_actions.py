@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
@@ -273,6 +273,20 @@ def _row_evidence(row: Any) -> dict | None:
     return evidence if isinstance(evidence, dict) else None
 
 
+def _retired_stock_action_clauses():
+    """A superseded case or a voided line is not an open stock action."""
+    return (
+        CporCase.superseded_by_case_id.is_(None),
+        or_(
+            CporCaseLine.remark.is_(None),
+            and_(
+                CporCaseLine.remark.notlike("%[voided]%"),
+                CporCaseLine.remark.notlike("%[split into layers]%"),
+            ),
+        ),
+    )
+
+
 def _open_case_id(
     session: Session,
     *,
@@ -290,6 +304,7 @@ def _open_case_id(
             CporCase.customer_id == int(customer_id),
             CporCaseLine.product_id == int(product_id),
             CporCase.status.in_(OPEN_CASE_STATUSES),
+            *_retired_stock_action_clauses(),
         )
     ).all()
     wanted = _blank_site(site_label)
