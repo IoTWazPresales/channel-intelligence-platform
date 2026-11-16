@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+from app.services.commercial_planner.lineup_period_canonical import active_lineup_line_filters
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
@@ -256,6 +257,7 @@ def _srp_for_line(session: Session, *, customer_id: int, product_id: int, tenant
             CommercialLineupLine.msrp_local.is_not(None),
             CommercialLineupCase.superseded_by_case_id.is_(None),
             CommercialLineupCase.commercial_status.notin_(("cancelled", "superseded")),
+            *active_lineup_line_filters(),
         )
         .order_by(CommercialLineupLine.id.desc())
         .limit(1)
