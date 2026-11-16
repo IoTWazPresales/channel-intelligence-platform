@@ -4,7 +4,8 @@ A reporting customer is ``customer_report_config.reports_expected``. The site co
 that customer's ``feed_profile_json.listing_seed`` (a marketplace key, site patterns, or
 a domain / origin URL). Nothing here names a retailer.
 
-For each product with ``reported_soh`` > 0 in the customer's latest reported period,
+For each product with ``reported_soh`` > 0 in the customer's latest reported period
+(the newest period that has a stock figure, including zero),
 and with no listing on that site and no queue row, discovery searches in order:
 barcode, then model, using the site's search URL, then a search form on the site
 origin, then the origin sitemap. A page is kept only when its barcode or model matches
@@ -65,7 +66,9 @@ _SELLER_NAME = re.compile(
     re.IGNORECASE,
 )
 _LOC = re.compile(r"<loc>\s*([^<]+)\s*</loc>", re.IGNORECASE)
-_FORM_ACTION = re.compile(r"<form\b[^>]*\baction\s*=\s*[\"']([^\"']+)[\"'][^>]*>", re.IGNORECASE)
+_FORM_OPEN = re.compile(r"<form\b([^>]*)>", re.IGNORECASE)
+_FORM_CLOSE = re.compile(r"</form\s*>", re.IGNORECASE)
+_FORM_ACTION = re.compile(r"""\baction\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 _SEARCH_INPUT = re.compile(
     r"<input\b[^>]*\bname\s*=\s*[\"'](q|query|search)[\"'][^>]*>",
     re.IGNORECASE,
@@ -285,9 +288,22 @@ def _find_and_propose(
     config = site_config_from_row(row).for_customer(int(customer.id))
     remembered = confirmed_link(session, int(row.id), int(product.id))
     if remembered is not None:
-        captured = _capture_url(config, remembered.url, http_get, product)
-        if captured is None:
+        captured = _capture_url(config, remembered.url, http_get, product) or {}
+        if not captured.get("corroboration"):
             return {"created": False, "proposed": False, "reason": REASON_NOT_FOUND}
+        if not _complete_capture(captured):
+            if apply:
+                queue_case(
+                    session,
+                    site=config,
+                    product_id=int(product.id),
+                    customer_id=int(customer.id),
+                    listing_id=None,
+                    reason="capture_incomplete",
+                    candidates=[{"url": str(captured.get("url") or remembered.url)}],
+                    evidence={k: captured.get(k) for k in ("price", "availability", "seller")},
+                )
+            return {"created": False, "proposed": False, "reason": "capture_incomplete"}
         created = _store_proposal(
             session,
             customer=customer,
@@ -368,7 +384,7 @@ def _store_proposal(
     captured: dict[str, Any],
     apply: bool,
 ) -> bool:
-    if not apply:
+    if not apply or not _complete_capture(captured):
         return False
     external_id = str(captured.get("token") or captured.get("url") or "")[:128]
     if not external_id:
@@ -401,11 +417,11 @@ def _store_proposal(
             status="proposed",
             raw_json={
                 "source": ACTOR,
-                "url": captured["url"],
-                "price": captured["price"],
-                "availability": captured["availability"],
-                "seller": captured["seller"],
-                "buy_box": captured["buy_box"],
+                "url": captured.get("url"),
+                "price": captured.get("price"),
+                "availability": captured.get("availability"),
+                "seller": captured.get("seller"),
+                "buy_box": captured.get("buy_box"),
                 "marketplace_sellers": captured.get("marketplace_sellers") or [],
                 "corroboration": captured.get("corroboration"),
             },
@@ -422,13 +438,7 @@ def _search_candidates(
     seed: dict[str, Any],
     http_get: _HttpGet,
 ) -> list[dict[str, Any]]:
-    queries: list[tuple[str, str]] = []
-    for barcode in product_barcodes(product):
-        key = barcode_key(barcode)
-        if key:
-            queries.append(("barcode", key))
-    for model in product_models(product):
-        queries.append(("model", model))
+    queries = _identity_queries(product)
     found: list[dict[str, Any]] = []
     seen: set[str] = set()
     if search_pattern and "{query}" in search_pattern:
@@ -447,12 +457,13 @@ def _search_candidates(
                 return found
     if not any(item.get("corroboration") for item in found):
         origin = _origin_text(_seed_origin(seed) or search_pattern or config.product_url_pattern or "")
-        token = queries[0][1] if queries else ""
-        for url in _sitemap_urls(origin, token, http_get) if origin and token else []:
+        tokens = [query for _kind, query in queries if query]
+        for url in _sitemap_urls(origin, tokens, http_get) if origin and tokens else []:
             if url in seen:
                 continue
             seen.add(url)
-            captured = _capture_url(config, url, http_get, product, token=token)
+            token = next((item for item in tokens if item in url), "")
+            captured = _capture_url(config, url, http_get, product, token=token or None)
             if captured is not None:
                 found.append(captured)
     return found
@@ -531,21 +542,52 @@ def _discover_search_pattern(config: Any, seed: dict[str, Any], http_get: _HttpG
     if not origin:
         return None
     status, body = _http(http_get, origin + "/")
-    if status != 200 or not body or not _SEARCH_INPUT.search(body):
+    found = _search_form(body) if status == 200 and body else None
+    if found is None:
         return None
-    action = _FORM_ACTION.search(body)
-    target = urljoin(origin + "/", action.group(1).strip()) if action else origin + "/search"
+    action, input_name = found
+    target = urljoin(origin + "/", action) if action else origin + "/"
     parts = urlsplit(target)
     if not parts.scheme or not parts.netloc:
         return None
-    query = "q={query}" if "q=" not in (parts.query or "") else re.sub(r"(?:^|&)q=[^&]*", "q={query}", parts.query)
+    piece = f"{input_name}={{query}}"
+    named = re.compile(rf"(^|&){re.escape(input_name)}=[^&]*")
+    current = parts.query or ""
+    if named.search(current):
+        query = named.sub(lambda match: f"{match.group(1)}{input_name}={{query}}", current, count=1)
+    else:
+        query = f"{current}&{piece}" if current else piece
     pattern = parts._replace(query=query).geturl()
     if "{query}" not in pattern:
         return None
     return pattern
 
 
-def _sitemap_urls(origin: str, token: str, http_get: _HttpGet) -> list[str]:
+def _search_form(body: str) -> tuple[str, str] | None:
+    """The action and input name of the form that contains ``q``, ``query``, or ``search``."""
+    match = _SEARCH_INPUT.search(body or "")
+    if not match:
+        return None
+    name = match.group(1).lower()
+    before = body[: match.start()]
+    events: list[tuple[int, str, re.Match[str] | None]] = [
+        (form.start(), "open", form) for form in _FORM_OPEN.finditer(before)
+    ]
+    events.extend((form.start(), "close", None) for form in _FORM_CLOSE.finditer(before))
+    events.sort(key=lambda item: item[0])
+    stack: list[re.Match[str]] = []
+    for _pos, kind, form in events:
+        if kind == "open" and form is not None:
+            stack.append(form)
+        elif stack:
+            stack.pop()
+    if not stack:
+        return None
+    action = _FORM_ACTION.search(stack[-1].group(1) or "")
+    return (action.group(1).strip() if action else ""), name
+
+
+def _sitemap_urls(origin: str, tokens: list[str], http_get: _HttpGet) -> list[str]:
     status, body = _http(http_get, origin.rstrip("/") + "/sitemap.xml")
     if status != 200 or not body:
         return []
@@ -558,12 +600,16 @@ def _sitemap_urls(origin: str, token: str, http_get: _HttpGet) -> list[str]:
                 children.extend(item.strip() for item in _LOC.findall(child))
         locs = children
     host = urlsplit(origin).netloc.lower()
-    matched = [
-        loc
-        for loc in locs
-        if urlsplit(loc).netloc.lower() == host and token and token in loc
-    ]
-    return matched[:3]
+    wanted = [token for token in tokens if token]
+    matched: list[str] = []
+    for token in wanted:
+        hits = [
+            loc
+            for loc in locs
+            if urlsplit(loc).netloc.lower() == host and token in loc and loc not in matched
+        ]
+        matched.extend(hits[:3])
+    return matched
 
 
 def _patterns_for(url: str, token: str) -> dict[str, str]:
@@ -598,13 +644,39 @@ def _derived_patterns(urls: list[str]) -> dict[str, str]:
     return out
 
 
+def _identity_queries(product: DimProduct) -> list[tuple[str, str]]:
+    queries: list[tuple[str, str]] = []
+    for barcode in product_barcodes(product):
+        key = barcode_key(barcode)
+        if key:
+            queries.append(("barcode", key))
+    for model in product_models(product):
+        queries.append(("model", model))
+    return queries
+
+
+def _complete_capture(captured: dict[str, Any]) -> bool:
+    """A proposal needs a corroborated page with price, stock, seller, and buy box."""
+    if not captured.get("corroboration") or not captured.get("url"):
+        return False
+    availability = captured.get("availability")
+    seller = captured.get("seller")
+    buy_box = captured.get("buy_box")
+    if captured.get("price") is None or not availability or not seller or not isinstance(buy_box, dict):
+        return False
+    return (
+        buy_box.get("price") is not None
+        and bool(buy_box.get("availability"))
+        and bool(buy_box.get("seller"))
+    )
+
+
 def _catalogue_product_ids(session: Session, *, tenant_id: str, customer_id: int) -> list[int]:
     latest = session.scalar(
         select(func.max(FactCustomerSellthrough.period_start_date)).where(
             FactCustomerSellthrough.tenant_id == tenant_id,
             FactCustomerSellthrough.customer_id == int(customer_id),
             FactCustomerSellthrough.reported_soh.is_not(None),
-            FactCustomerSellthrough.reported_soh > 0,
         )
     )
     if latest is None:

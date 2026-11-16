@@ -202,3 +202,216 @@ def test_discovery_proposes_a_listing_and_records_a_customer_with_no_site(db_ses
         )
         == 1
     )
+
+
+def _product(session: Session, tenant: str, *, ean: str, model: str | None = None) -> DimProduct:
+    row = DimProduct(
+        tenant_id=tenant,
+        sku=f"sku-{uuid.uuid4().hex[:8]}",
+        name="Catalogue item",
+        ean=ean,
+        model_name=model,
+        is_active=True,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def _expect(session: Session, customer: DimCustomer, seed: dict | None) -> None:
+    session.add(
+        CustomerReportConfig(
+            customer_id=int(customer.id),
+            reports_expected=True,
+            feed_profile_json={"listing_seed": seed} if seed is not None else {},
+        )
+    )
+
+
+def _stock(
+    session: Session,
+    *,
+    tenant: str,
+    customer: DimCustomer,
+    product: DimProduct,
+    when: date,
+    soh: int,
+) -> None:
+    session.add(
+        FactCustomerSellthrough(
+            source_key=f"w1b-{uuid.uuid4().hex}",
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            product_id=int(product.id),
+            period_start_date=when,
+            period_type="week",
+            units_sold=1,
+            reported_soh=soh,
+        )
+    )
+
+
+def _seed_count(session: Session, customer_id: int) -> int:
+    return int(
+        session.scalar(
+            select(func.count()).select_from(CstListingSeed).where(CstListingSeed.customer_id == int(customer_id))
+        )
+        or 0
+    )
+
+
+def test_latest_period_of_zero_stock_does_not_reuse_an_older_period(db_session: Session) -> None:
+    db = db_session.execute(text("select current_database()")).scalar_one()
+    assert db == "cip_test"
+    tenant = f"t-w1b-{uuid.uuid4().hex[:8]}"
+    customer = _customer(db_session, tenant, "zero")
+    product = _product(db_session, tenant, ean="7770001112226")
+    _expect(
+        db_session,
+        customer,
+        {"marketplace": "period-example", "site": {"search_url_pattern": f"{_HOST}/search?q={{query}}"}},
+    )
+    _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 10, 5), soh=8)
+    _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 9), soh=0)
+    db_session.flush()
+
+    def http_get(url: str):
+        raise AssertionError(url)
+
+    report = discover_reporting_customers(db_session, tenant_id=tenant, http_get=http_get)
+    row = {int(item["customer_id"]): item for item in report["customers"]}[int(customer.id)]
+    assert row["reason"] == "no_catalogue_products"
+    assert row["proposed_listings"] == 0
+    assert _seed_count(db_session, int(customer.id)) == 0
+
+
+def test_confirmed_link_must_still_corroborate_and_be_complete(db_session: Session) -> None:
+    db = db_session.execute(text("select current_database()")).scalar_one()
+    assert db == "cip_test"
+    tenant = f"t-w1b-{uuid.uuid4().hex[:8]}"
+    stale = _customer(db_session, tenant, "stale")
+    incomplete = _customer(db_session, tenant, "partial")
+    stale_product = _product(db_session, tenant, ean=_EAN)
+    partial_product = _product(db_session, tenant, ean="6660001112225")
+    _expect(db_session, stale, {"marketplace": "stale-example"})
+    _expect(db_session, incomplete, {"marketplace": "partial-example"})
+    _stock(db_session, tenant=tenant, customer=stale, product=stale_product, when=date(2026, 11, 2), soh=2)
+    _stock(db_session, tenant=tenant, customer=incomplete, product=partial_product, when=date(2026, 11, 2), soh=2)
+    stale_site = ListingSite(tenant_id=tenant, site_key="stale-example", display_name="Stale Example")
+    partial_site = ListingSite(tenant_id=tenant, site_key="partial-example", display_name="Partial Example")
+    db_session.add_all([stale_site, partial_site])
+    db_session.flush()
+    db_session.add_all(
+        [
+            ListingLink(
+                tenant_id=tenant,
+                site_id=int(stale_site.id),
+                product_id=int(stale_product.id),
+                url=f"{_HOST}/p/remembered-stale",
+                status=LINK_CONFIRMED,
+                evidence={},
+                decided_by="steward",
+            ),
+            ListingLink(
+                tenant_id=tenant,
+                site_id=int(partial_site.id),
+                product_id=int(partial_product.id),
+                url=f"{_HOST}/p/remembered-partial",
+                status=LINK_CONFIRMED,
+                evidence={},
+                decided_by="steward",
+            ),
+        ]
+    )
+    db_session.flush()
+
+    def http_get(url: str):
+        if url.endswith("remembered-stale"):
+            return 200, "<html><p>a different product</p></html>"
+        if url.endswith("remembered-partial"):
+            return 200, '<html><script>{"gtin13":"6660001112225"}</script></html>'
+        return 404, ""
+
+    report = discover_reporting_customers(db_session, tenant_id=tenant, http_get=http_get)
+    by_id = {int(item["customer_id"]): item for item in report["customers"]}
+    assert by_id[int(stale.id)]["reason"] == "not_found_on_site"
+    assert by_id[int(incomplete.id)]["reason"] == "capture_incomplete"
+    assert _seed_count(db_session, int(stale.id)) == 0
+    assert _seed_count(db_session, int(incomplete.id)) == 0
+
+
+def test_search_form_uses_its_own_input_name_and_action(db_session: Session) -> None:
+    db = db_session.execute(text("select current_database()")).scalar_one()
+    assert db == "cip_test"
+    tenant = f"t-w1b-{uuid.uuid4().hex[:8]}"
+    host = "https://forms.example.test"
+    customer = _customer(db_session, tenant, "forms")
+    product = _product(db_session, tenant, ean=_EAN)
+    _expect(db_session, customer, {"domain": host})
+    _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 2), soh=2)
+    db_session.flush()
+    seen: list[str] = []
+
+    def http_get(url: str):
+        seen.append(url)
+        if url.rstrip("/") == host:
+            return 200, (
+                '<form action="/decoy"><input name="email"></form>'
+                '<form action="/find"><input type="text" name="search"></form>'
+            )
+        if "/find?" in url and "search=" in url:
+            return 200, f'<a href="{host}/p/item-{_EAN}">view</a>'
+        if url.rstrip("/").endswith(_EAN):
+            return 200, _PAGE
+        return 404, ""
+
+    report = discover_reporting_customers(db_session, tenant_id=tenant, http_get=http_get)
+    row = {int(item["customer_id"]): item for item in report["customers"]}[int(customer.id)]
+    assert row["proposed_created"] == 1
+    assert not any("/decoy" in url for url in seen)
+    assert any("/find?" in url and "search=" in url and "q=" not in url.split("?", 1)[-1] for url in seen)
+    site = db_session.scalar(select(ListingSite).where(ListingSite.tenant_id == tenant))
+    assert site is not None
+    assert site.search_url_pattern == f"{host}/find?search={{query}}"
+
+
+def test_sitemap_fallback_tries_the_model_as_well_as_the_barcode(db_session: Session) -> None:
+    db = db_session.execute(text("select current_database()")).scalar_one()
+    assert db == "cip_test"
+    tenant = f"t-w1b-{uuid.uuid4().hex[:8]}"
+    host = "https://maps.example.test"
+    customer = _customer(db_session, tenant, "maps")
+    product = _product(db_session, tenant, ean="8880001112227", model="GLIDE14")
+    _expect(db_session, customer, {"domain": host})
+    _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 2), soh=2)
+    db_session.flush()
+    page = (
+        '<html><script type="application/ld+json">'
+        '{"model":"GLIDE14","offers":[{"priceCurrency":"ZAR","price":188.00,'
+        '"availability":"https://schema.org/InStock","seller":{"name":"Map Counter"}}]}'
+        "</script></html>"
+    )
+
+    def http_get(url: str):
+        if url.rstrip("/") == host:
+            return 200, "<html>home</html>"
+        if url.endswith("/sitemap.xml"):
+            return 200, (
+                "<urlset>"
+                f"<url><loc>{host}/p/other-page</loc></url>"
+                f"<url><loc>{host}/p/GLIDE14</loc></url>"
+                "</urlset>"
+            )
+        if url.rstrip("/").endswith("GLIDE14"):
+            return 200, page
+        return 404, ""
+
+    report = discover_reporting_customers(db_session, tenant_id=tenant, http_get=http_get)
+    row = {int(item["customer_id"]): item for item in report["customers"]}[int(customer.id)]
+    assert row["reason"] is None
+    assert row["proposed_created"] == 1
+    seed = db_session.scalar(select(CstListingSeed).where(CstListingSeed.customer_id == int(customer.id)))
+    assert seed is not None
+    assert (seed.raw_json or {})["corroboration"] == "model"
+    assert (seed.raw_json or {})["price"] == 188.0
+    assert "8880001112227" not in str((seed.raw_json or {}).get("url"))
