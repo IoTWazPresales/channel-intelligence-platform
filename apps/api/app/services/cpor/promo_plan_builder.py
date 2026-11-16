@@ -1268,7 +1268,8 @@ def create_case_from_promo_draft(
             raise ValueError("customer_not_found")
 
     budget = draft["budget_check"]
-    if budget.get("create_blocked") and not confirm_over_budget:
+    # Move and return are logistics, not a support claim. Promote still uses this gate.
+    if case_origin != "stock_action" and budget.get("create_blocked") and not confirm_over_budget:
         raise ValueError(
             "over_budget_requires_confirm — pass confirm_over_budget=true "
             f"(action={budget.get('over_budget_action')})"
