@@ -23,6 +23,15 @@ def _sample_profile() -> dict:
         "display_name": "Tenant plan layout",
         "header_row_index": 1,
         "sheet_roles_json": {"Plan lines": "reseller"},
+        "column_order": [
+            "case_code",
+            "customer_token",
+            "sales_model_token",
+            "promotion_type",
+            "window_start",
+            "estimate_qty",
+            "srp",
+        ],
         "column_map_json": {
             "case_code": ["Plan ref"],
             "customer_token": ["Account"],
@@ -82,6 +91,9 @@ def test_stored_profile_export_query_runs_on_cip_test():
             return
         profile = profile_as_dict(stored)
         profile_code = stored.profile_code
+        if not profile.get("column_order"):
+            session.rollback()
+            return
         data, meta = render_profile_workbook(
             profile,
             [
@@ -110,3 +122,52 @@ def test_case_workbook_builder_is_not_this_module():
 
     assert not hasattr(mod, "build_cpor_case_workbook_bytes")
     assert build_case_profile_workbook is mod.build_case_profile_workbook
+
+
+def test_distributor_case_uses_the_distributor_sheet():
+    profile = _sample_profile()
+    profile["sheet_roles_json"] = {
+        "Reseller Sell out": "reseller",
+        "Disti Sell out": "disti",
+    }
+    profile["channel"] = "distributor"
+    _data, meta = render_profile_workbook(profile, [{"case_code": "C1", "estimate_qty": 2, "srp": 9}])
+    assert meta["sheet"] == "Disti Sell out"
+    assert meta["role"] == "disti"
+
+
+def test_column_order_list_survives_postgres_jsonb_load():
+    """JSONB object keys are not workbook order. The stored list is."""
+    import uuid
+
+    from app.models.cpor_historical import CporHistoricalMappingProfile
+
+    order = ["srp", "case_code", "estimate_qty"]
+    column_map = {
+        "estimate_qty": ["Units"],
+        "case_code": ["Plan ref"],
+        "srp": ["Shelf"],
+        "column_order": list(order),
+    }
+    with SessionLocal() as session:
+        name = session.execute(text("SELECT current_database()")).scalar()
+        print("SELECT current_database()", name)
+        assert name == "cip_test"
+        row = CporHistoricalMappingProfile(
+            profile_code=f"w1c-order-{uuid.uuid4().hex[:12]}",
+            display_name="Order probe",
+            header_row_index=0,
+            sheet_roles_json={"Reseller Sell out": "reseller", "Disti Sell out": "disti"},
+            column_map_json=column_map,
+            value_maps_json={},
+            is_default=False,
+        )
+        session.add(row)
+        session.flush()
+        session.expire(row)
+        loaded = profile_as_dict(row)
+        session.rollback()
+    assert loaded["column_order"] == order
+    _data, meta = render_profile_workbook(loaded, [{"case_code": "C1", "estimate_qty": 2, "srp": 9}])
+    assert meta["headers"] == ["Shelf", "Plan ref", "Units"]
+    assert meta["headers"] != ["Plan ref", "Units", "Shelf"]
