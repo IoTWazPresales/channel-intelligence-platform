@@ -4665,6 +4665,9 @@ def verify_closure_cli(arguments):
         if state != 'OK':
             result = False, 'POLICY_INTEGRITY', 'An accepted, valid project policy is required.'
         else:
+            # BACKLOG-232: as in hook mode, only a valid lean policy has the
+            # anonymous pool, whose retry debt the verifier reports, not refuses.
+            support('eif_session').LEAN_IDENTITY_FALLBACK = lean_profile(policy)
             ok, message = identity_ok(root, policy)
             result = (support('eif_session').verify_request(root, *arguments) if ok else
                       (False, 'IDENTITY_MISMATCH', message))

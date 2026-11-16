@@ -257,6 +257,17 @@ def pool_session(data):
     return identity_source(data) == 'anonymous_pool'
 
 
+POOL_STATE_KEY = hashlib.sha256(ANON_POOL_KEY.encode('utf-8')).hexdigest()
+
+
+def pool_state(key, state):
+    """The verifier's view of the anonymous lean pool: its state file, under a
+    valid lean policy, recorded by a pool boundary. Its retry debt is advisory
+    (BACKLOG-232); every other session keeps the strict check."""
+    return (LEAN_IDENTITY_FALLBACK and key == POOL_STATE_KEY
+            and state.get('identity_source') == 'anonymous_pool')
+
+
 def conversation(data):
     explicit = data.get('conversation_id') or data.get('session_id')
     if explicit:
@@ -1121,29 +1132,42 @@ def verify_request(root, key, request_id):
             with file_lock(path.with_suffix('.lock')):
                 state = read_state(path)
                 request = state.get('closure_request') or {}
-                if any(not x.get('retired') for x in state.get('unresolved', [])):
+                open_debt = sum(1 for x in state.get('unresolved', []) if not x.get('retired'))
+                if open_debt and not pool_state(key, state):
                     return False, 'SESSION_RETRY_REQUIRED', 'Executed mutation failure is unresolved; closure verification refused.'
-            if request.get('id') != request_id or not request.get('context'):
-                return False, 'SESSION_CLOSURE_REQUIRED', 'Closure request is absent or superseded; retry the initiating hook.'
-            current, failure = closure_context(root)
-            if failure or current != request['context']:
-                return False, 'SESSION_CLOSURE_REQUIRED', 'Closure context changed; retry the initiating hook.'
-            receipt = state.get('closure_receipt') or {}
-            if receipt.get('request') == request_id and receipt.get('context') == current:
-                return True, 'SESSION_CLOSURE_OK', receipt['message']
-            result = closure_check(root, current)
-            with file_lock(path.with_suffix('.lock')):
-                state = read_state(path)
-                if (state.get('closure_request') or {}).get('id') != request_id:
-                    return False, 'SESSION_CLOSURE_REQUIRED', 'Closure request superseded during verification.'
-                state['closure_verification'] = dict(code=result[1], at=time.time())
-                if result[0]:
-                    state['closure_receipt'] = dict(request=request_id, context=current,
-                                                   verified_at=time.time(), message=result[2])
-                # Only the hook consuming a matching receipt clears the gate.
-                atomic_json(path, state)
-            return result
+            result = _verify_held(root, path, state, request, request_id)
     except TimeoutError:
         return False, 'SESSION_CLOSURE_REQUIRED', 'Closure verifier or state is busy; retry later. Reads remain available.'
+    if open_debt:
+        # Only the pool reaches here with debt (BACKLOG-232): reported, never refused.
+        result = (result[0], result[1], result[2] + (
+            f' Advisory: {open_debt} executed-mutation failure(s) unresolved in the shared '
+            'anonymous lean pool are reported, not enforced (BACKLOG-232); this proves Git '
+            'closure only, not that those commands left no partial change.'))
+    return result
+
+
+def _verify_held(root, path, state, request, request_id):
+    """The rest of verify_request, after the debt check; the caller holds the verifier lock."""
+    if request.get('id') != request_id or not request.get('context'):
+        return False, 'SESSION_CLOSURE_REQUIRED', 'Closure request is absent or superseded; retry the initiating hook.'
+    current, failure = closure_context(root)
+    if failure or current != request['context']:
+        return False, 'SESSION_CLOSURE_REQUIRED', 'Closure context changed; retry the initiating hook.'
+    receipt = state.get('closure_receipt') or {}
+    if receipt.get('request') == request_id and receipt.get('context') == current:
+        return True, 'SESSION_CLOSURE_OK', receipt['message']
+    result = closure_check(root, current)
+    with file_lock(path.with_suffix('.lock')):
+        state = read_state(path)
+        if (state.get('closure_request') or {}).get('id') != request_id:
+            return False, 'SESSION_CLOSURE_REQUIRED', 'Closure request superseded during verification.'
+        state['closure_verification'] = dict(code=result[1], at=time.time())
+        if result[0]:
+            state['closure_receipt'] = dict(request=request_id, context=current,
+                                           verified_at=time.time(), message=result[2])
+        # Only the hook consuming a matching receipt clears the gate.
+        atomic_json(path, state)
+    return result
 
 
