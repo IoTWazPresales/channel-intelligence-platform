@@ -491,6 +491,50 @@ def test_onboard_copies_a_retained_seed_pattern_when_the_domain_matches(db_sessi
     assert config.feed_profile_json["listing_seed"]["site"]["domain"] == "shop-a.example.test"
 
 
+_OPTIONAL_SCHEME_PAGE = r"^https?://shop-a\.example\.test/p/([^/]+)$"
+
+
+def test_onboard_refuses_a_page_pattern_host_when_the_scheme_is_optional(db_session: Session) -> None:
+    """A retained ``https?://`` host is the same check as a full URL."""
+    tenant = f"t-opt-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, {"site": {"page_id_pattern": _OPTIONAL_SCHEME_PAGE}})
+    db_session.add(ListingSite(tenant_id=tenant, site_key="shop-a", display_name="blank"))
+    db_session.flush()
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-b.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "seed_host_mismatch"
+    site = _site(db_session, tenant, "shop-a")
+    assert site.page_id_pattern is None
+
+
+def test_onboard_accepts_a_page_pattern_host_when_the_scheme_is_optional(db_session: Session) -> None:
+    tenant = f"t-optok-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, {"site": {"page_id_pattern": _OPTIONAL_SCHEME_PAGE}})
+    db_session.add(ListingSite(tenant_id=tenant, site_key="shop-a", display_name="blank"))
+    db_session.flush()
+    result = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(customer.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    assert result["domain"] == "shop-a.example.test"
+    assert result["pattern_status"] == "kept"
+
+
 def test_second_conflicting_attach_to_a_blank_site_fails() -> None:
     """Two transactions attach different domains to one blank site. The second loses."""
     url = _sync_url()

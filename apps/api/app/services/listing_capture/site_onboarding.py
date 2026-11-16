@@ -236,14 +236,20 @@ _SEED_LINK_FIELDS = ("product_url_pattern", "search_url_pattern", "details_url_p
 
 
 def _page_pattern_hosts(pattern: Any) -> set[str]:
-    """Hosts written into a retained page-id expression, which is a regular expression."""
+    """Hosts written into a retained page-id expression, which is a regular expression.
+
+    ``https?://`` is an optional scheme in the expression, so the host is not a
+    URL yet. Spell that scheme as ``https://`` and check the host the same way
+    as a stored link.
+    """
     if not isinstance(pattern, str) or not pattern.strip():
         return set()
     text = pattern.replace("\\.", ".")
+    text = re.sub(r"https?\?://", "https://", text, flags=re.IGNORECASE)
     found: set[str] = set()
     for match in re.finditer(r"https?://([^/\s]+)", text, flags=re.IGNORECASE):
-        host = match.group(1).lower().rstrip(".").split("\\", 1)[0]
-        if _HOST.fullmatch(host):
+        host = _host_in_pattern("https://" + match.group(1).split("\\", 1)[0])
+        if host:
             found.add(host)
     return found
 
