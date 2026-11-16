@@ -52,13 +52,13 @@ def stock_action_covers_site(evidence: dict | None, site_label: str | None) -> b
 
     Lines written before a site was stored cover every site. A recorded list
     covers only the sites in that list. An empty label is the account grain.
+    Labels use the same grouping as the board, so case and spacing do not reopen it.
     """
     if not isinstance(evidence, dict) or "site_labels" not in evidence:
         return True
-    wanted = (site_label or "").strip() or None
+    wanted = norm_label(site_label)
     for raw in evidence.get("site_labels") or []:
-        recorded = None if raw is None or str(raw).strip() == "" else str(raw).strip()
-        if recorded == wanted:
+        if norm_label(None if raw is None else str(raw)) == wanted:
             return True
     return False
 
