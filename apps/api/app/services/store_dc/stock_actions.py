@@ -352,6 +352,8 @@ def _lock_stock_action_create(
     The lock lasts until the transaction commits, which is after the draft
     insert. The next request then sees that draft as already open.
     """
+    if not isinstance(session, Session):
+        return
     key = "\x1f".join(
         (
             str(tenant_id),
