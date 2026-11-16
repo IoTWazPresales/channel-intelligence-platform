@@ -24,12 +24,6 @@ _LEFTOVER_SKIP = {("dim_customer", "merged_into_customer_id")}
 
 EXPECTED_DIRTY_LOSERS = 9
 EXPECTED_LEFTOVER_ROWS = 3266
-COMPUSPEED_LOSER_ID = 1152
-
-WINNER_SNAPSHOT_IDS: tuple[tuple[int, str], ...] = (
-    (788, "Esquire"),
-    (299, "Amazon"),
-)
 
 
 class LeftoverRepairDriftError(RuntimeError):

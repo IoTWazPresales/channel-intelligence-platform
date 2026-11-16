@@ -26,7 +26,6 @@ sys.path.insert(0, str(ROOT))
 from app.core.config import get_settings  # noqa: E402
 from app.db.sync_url import resolve_sync_engine_url, sqlalchemy_sync_engine_url  # noqa: E402
 from app.services.customer_leftover_repair import (  # noqa: E402
-    COMPUSPEED_LOSER_ID,
     LeftoverRepairDriftError,
     leftover_row_total_across_merged_losers,
     preview_leftover_repair,
@@ -218,5 +217,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    _ = COMPUSPEED_LOSER_ID
     main()
