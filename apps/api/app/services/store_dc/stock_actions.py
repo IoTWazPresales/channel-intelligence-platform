@@ -25,7 +25,7 @@ from app.services.cpor.promo_plan_builder import (
 )
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
 from app.services.store_dc.read_model import build_customer_view, build_lead_index
-from app.services.store_dc.rules import SUGGESTIONS, stock_action_covers_site, stock_action_in_notes
+from app.services.store_dc.rules import SUGGESTIONS, stock_action_covers_site, stock_action_identity
 
 OPEN_CASE_STATUSES = ("draft", "proposed", "approved", "active")
 PROMOTE_TYPE = "Stock PP (In-Direct)"
@@ -309,7 +309,7 @@ def _open_case_id(
     ).all()
     wanted = _blank_site(site_label)
     for row in rows:
-        if stock_action_in_notes(row[1]) != action:
+        if stock_action_identity(_row_evidence(row), row[1]) != action:
             continue
         if stock_action_covers_site(_row_evidence(row), wanted):
             return int(row[0])

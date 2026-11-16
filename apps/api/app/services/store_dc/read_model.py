@@ -31,7 +31,7 @@ from app.services.store_dc.rules import (
     onward_leg,
     slow_multiple,
     stock_action_covers_site,
-    stock_action_in_notes,
+    stock_action_identity,
     suggestion_labels,
     unsold_window_weeks,
     weekly_rate,
@@ -124,7 +124,7 @@ def _open_stock_actions(
     ).all()
     found: dict[int, list[tuple[str, dict | None]]] = defaultdict(list)
     for product_id, notes, evidence in rows:
-        action = stock_action_in_notes(notes)
+        action = stock_action_identity(evidence if isinstance(evidence, dict) else None, notes)
         if action and product_id is not None:
             found[int(product_id)].append((action, evidence if isinstance(evidence, dict) else None))
     return found
