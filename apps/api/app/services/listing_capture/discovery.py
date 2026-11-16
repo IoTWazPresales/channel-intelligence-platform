@@ -1,0 +1,892 @@
+"""Find catalogue product pages for reporting customers and propose listings.
+
+A reporting customer is ``customer_report_config.reports_expected``. The site comes from
+that customer's ``feed_profile_json.listing_seed`` (a marketplace key, site patterns, or
+a domain / origin URL). Nothing here names a retailer.
+
+For each product with ``reported_soh`` > 0 in the customer's latest reported period,
+and with no listing on that site and no queue row, discovery searches in order:
+barcode, then model, using the site's search URL, then a search form on the site
+origin, then the origin sitemap. A page is kept only when its barcode or model matches
+the product. One match proposes a ``cst_listing_seed`` row (status ``proposed``) and
+remembers the URL. It does not create a ``customer_listing``.
+
+An empty adapter is set to the general HTML reader after a corroborated page. Price,
+stock, the page seller, and the buy box are stored on the proposal for the steward.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Callable
+from urllib.parse import quote, urljoin, urlsplit
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from app.models.cst_listing_seed import CstListingSeed
+from app.models.customer_report_config import CustomerReportConfig
+from app.models.dimensions import DimCustomer, DimProduct
+from app.models.fact_customer_sellthrough import FactCustomerSellthrough
+from app.models.listing_capture import CustomerListing
+from app.models.listing_link import LINK_CONFIRMED, LINK_REJECTED, ListingLink, ListingLinkQueue
+from app.models.listing_site import ListingSite
+from app.services.listing_capture.adapters import configured_adapter
+from app.services.listing_capture.adapters.html_page import ADAPTER_KEY as HTML_PAGE_ADAPTER
+from app.services.listing_capture.adapters.html_page import parse as parse_html
+from app.services.listing_capture.adapters.html_page import seller_from_page
+from app.services.listing_capture.identity import (
+    barcode_key,
+    corroboration,
+    model_key,
+    page_facts_from_html,
+    page_facts_from_json,
+    product_barcodes,
+    product_models,
+)
+from app.services.listing_capture.links import confirmed_link, queue_case, remember_link
+from app.services.listing_capture.sites import SITE_KEY_RE, create_site, site_config_from_row, update_site
+
+ACTOR = "listing-discovery"
+REASON_NO_SITE_KEY = "no_site_key"
+REASON_NO_CATALOGUE = "no_catalogue_products"
+REASON_NO_FETCH = "no_live_fetch"
+REASON_NO_SEARCH = "no_search_url"
+REASON_NOT_FOUND = "not_found_on_site"
+REASON_AMBIGUOUS = "ambiguous"
+REASON_READER = "reader_not_configured"
+REASON_NO_IDENTITY = "no_barcode_or_model"
+
+_HttpGet = Callable[[str], tuple[int, str]]
+_HREF = re.compile(r"""href\s*=\s*["']([^"'#]+)["']""", re.IGNORECASE)
+_SELLER_NAME = re.compile(
+    r'"seller"\s*:\s*\{[^{}]*?"(?:name|display_name)"\s*:\s*"((?:\\.|[^"\\])*)"',
+    re.IGNORECASE,
+)
+_LOC = re.compile(r"<loc>\s*([^<]+)\s*</loc>", re.IGNORECASE)
+_FORM_ACTION = re.compile(r"<form\b[^>]*\baction\s*=\s*[\"']([^\"']+)[\"'][^>]*>", re.IGNORECASE)
+_SEARCH_INPUT = re.compile(
+    r"<input\b[^>]*\bname\s*=\s*[\"'](q|query|search)[\"'][^>]*>",
+    re.IGNORECASE,
+)
+_SEED_URL_KEYS = ("origin", "domain", "website", "homepage")
+_COPY_FIELDS = (
+    "display_name",
+    "adapter_key",
+    "product_url_pattern",
+    "page_id_pattern",
+    "search_url_pattern",
+    "details_url_pattern",
+    "first_party_seller",
+    "rate_limit_seconds",
+)
+
+
+def discover_reporting_customers(
+    session: Session,
+    *,
+    tenant_id: str | None = None,
+    http_get: _HttpGet | None = None,
+    apply: bool = True,
+    product_limit: int = 25,
+) -> dict[str, Any]:
+    """Propose listings for reporting customers. ``apply=False`` does not write."""
+    entries: list[dict[str, Any]] = []
+    for tid in _tenant_ids(session, tenant_id):
+        for config, customer in _reporting_customers(session, tid):
+            if str(customer.tenant_id) != tid:
+                continue
+            try:
+                with session.begin_nested():
+                    entry = _discover_customer(
+                        session,
+                        customer=customer,
+                        seed=_seed(config),
+                        http_get=http_get,
+                        apply=apply,
+                        product_limit=product_limit,
+                    )
+            except Exception as exc:
+                entry = _entry(
+                    customer_id=int(customer.id),
+                    tenant_id=tid,
+                    site_key=None,
+                    reason="discovery_failed",
+                    detail=type(exc).__name__,
+                )
+            entries.append(entry)
+    return {"customers": entries}
+
+
+def _discover_customer(
+    session: Session,
+    *,
+    customer: DimCustomer,
+    seed: dict[str, Any],
+    http_get: _HttpGet | None,
+    apply: bool,
+    product_limit: int,
+) -> dict[str, Any]:
+    tenant_id = str(customer.tenant_id)
+    keys = _site_keys(session, tenant_id=tenant_id, customer_id=int(customer.id), seed=seed)
+    own_site = False
+    if not keys:
+        origin = _origin_text(_seed_origin(seed))
+        key = _site_key_from_origin(origin) if origin else None
+        if key:
+            keys = [key]
+            own_site = not (isinstance(seed.get("marketplace"), str) and seed.get("marketplace").strip())
+    if not keys:
+        return _entry(
+            customer_id=int(customer.id),
+            tenant_id=tenant_id,
+            site_key=None,
+            reason=REASON_NO_SITE_KEY,
+        )
+    site_rows: list[dict[str, Any]] = []
+    for key in keys:
+        site_rows.append(
+            _discover_site(
+                session,
+                customer=customer,
+                site_key=key,
+                seed=seed,
+                own_site=own_site,
+                http_get=http_get,
+                apply=apply,
+                product_limit=product_limit,
+            )
+        )
+    ready = [row for row in site_rows if row["reader_ready"] and row["proposed_listings"] + row["watched_listings"] > 0]
+    reason = None if ready else _first_reason(site_rows)
+    return _entry(
+        customer_id=int(customer.id),
+        tenant_id=tenant_id,
+        site_key=site_rows[0]["site_key"],
+        reason=reason,
+        reader=site_rows[0]["reader"],
+        reader_ready=any(row["reader_ready"] for row in site_rows),
+        proposed_listings=sum(int(row["proposed_listings"]) for row in site_rows),
+        proposed_created=sum(int(row["proposed_created"]) for row in site_rows),
+        watched_listings=sum(int(row["watched_listings"]) for row in site_rows),
+        sites=site_rows,
+    )
+
+
+def _discover_site(
+    session: Session,
+    *,
+    customer: DimCustomer,
+    site_key: str,
+    seed: dict[str, Any],
+    own_site: bool,
+    http_get: _HttpGet | None,
+    apply: bool,
+    product_limit: int,
+) -> dict[str, Any]:
+    tenant_id = str(customer.tenant_id)
+    row = _load_site(session, tenant_id, site_key)
+    if row is None and apply:
+        display = _display_name(seed, site_key)
+        row = create_site(
+            session,
+            tenant_id=tenant_id,
+            site_key=site_key,
+            fields={"display_name": display},
+            actor=ACTOR,
+        )
+    if row is not None and apply:
+        _copy_seed_fields(session, row, seed)
+        if own_site and _blank(row.first_party_seller):
+            _safe_update(session, row, {"first_party_seller": str(customer.name or "").strip()})
+        row = _load_site(session, tenant_id, site_key) or row
+    if row is None:
+        return _site_entry(site_key, reason=REASON_NO_SITE_KEY)
+    product_ids = _catalogue_product_ids(session, tenant_id=tenant_id, customer_id=int(customer.id))
+    if not product_ids:
+        return _site_entry(site_key, reason=REASON_NO_CATALOGUE, reader=_reader_name(row), reader_ready=_reader_ready(row))
+    if http_get is None:
+        return _site_entry(
+            site_key,
+            reason=REASON_NO_FETCH,
+            reader=_reader_name(row),
+            reader_ready=_reader_ready(row),
+        )
+
+    proposed = 0
+    created = 0
+    watched = 0
+    reasons: list[str] = []
+    searched = 0
+    for product_id in product_ids:
+        if searched >= product_limit:
+            break
+        if _has_listing(session, customer_id=int(customer.id), site_key=site_key, product_id=product_id):
+            watched += 1
+            continue
+        if _queue_exists(session, site_id=int(row.id), product_id=product_id):
+            reasons.append(REASON_AMBIGUOUS)
+            continue
+        if _proposed_seed(session, customer_id=int(customer.id), site_key=site_key, product_id=product_id) is not None:
+            proposed += 1
+            continue
+        product = session.get(DimProduct, product_id)
+        if not isinstance(product, DimProduct) or str(product.tenant_id) != tenant_id:
+            continue
+        if not product_barcodes(product) and not product_models(product):
+            reasons.append(REASON_NO_IDENTITY)
+            continue
+        searched += 1
+        outcome = _find_and_propose(
+            session,
+            customer=customer,
+            product=product,
+            row=row,
+            seed=seed,
+            http_get=http_get,
+            apply=apply,
+        )
+        row = _load_site(session, tenant_id, site_key) or row
+        if outcome["created"]:
+            created += 1
+            proposed += 1
+        elif outcome["proposed"]:
+            proposed += 1
+        elif outcome["reason"]:
+            reasons.append(str(outcome["reason"]))
+    ready = _reader_ready(row)
+    reason = None
+    if proposed + watched == 0:
+        reason = reasons[0] if reasons else REASON_NOT_FOUND
+    elif not ready:
+        reason = REASON_READER
+    return _site_entry(
+        site_key,
+        reason=reason,
+        reader=_reader_name(row),
+        reader_ready=ready,
+        proposed_listings=proposed,
+        proposed_created=created,
+        watched_listings=watched,
+    )
+
+
+def _find_and_propose(
+    session: Session,
+    *,
+    customer: DimCustomer,
+    product: DimProduct,
+    row: ListingSite,
+    seed: dict[str, Any],
+    http_get: _HttpGet,
+    apply: bool,
+) -> dict[str, Any]:
+    config = site_config_from_row(row).for_customer(int(customer.id))
+    remembered = confirmed_link(session, int(row.id), int(product.id))
+    if remembered is not None:
+        captured = _capture_url(config, remembered.url, http_get, product)
+        if captured is None:
+            return {"created": False, "proposed": False, "reason": REASON_NOT_FOUND}
+        created = _store_proposal(
+            session,
+            customer=customer,
+            product=product,
+            row=row,
+            captured=captured,
+            apply=apply,
+        )
+        return {"created": created, "proposed": True, "reason": None}
+
+    search_pattern = (row.search_url_pattern or "").strip() or _discover_search_pattern(config, seed, http_get)
+    if search_pattern and apply and _blank(row.search_url_pattern):
+        _safe_update(session, row, {"search_url_pattern": search_pattern})
+        row = _load_site(session, str(row.tenant_id), str(row.site_key)) or row
+        config = site_config_from_row(row).for_customer(int(customer.id))
+    candidates = _search_candidates(config, product, search_pattern, seed, http_get)
+    if not candidates and not search_pattern:
+        return {"created": False, "proposed": False, "reason": REASON_NO_SEARCH}
+    corroborated = [item for item in candidates if item.get("corroboration")]
+    rejected = _rejected_urls(session, int(row.id), int(product.id))
+    corroborated = [item for item in corroborated if item["url"] not in rejected]
+    if len(corroborated) > 1:
+        if apply:
+            queue_case(
+                session,
+                site=config,
+                product_id=int(product.id),
+                customer_id=int(customer.id),
+                listing_id=None,
+                reason=REASON_AMBIGUOUS,
+                candidates=[{"url": item["url"]} for item in corroborated[:8]],
+                evidence={"stock_code": None},
+            )
+        return {"created": False, "proposed": False, "reason": REASON_AMBIGUOUS}
+    if len(corroborated) != 1:
+        open_candidates = [item for item in candidates if item["url"] not in rejected]
+        if apply and open_candidates:
+            queue_case(
+                session,
+                site=config,
+                product_id=int(product.id),
+                customer_id=int(customer.id),
+                listing_id=None,
+                reason=REASON_NOT_FOUND,
+                candidates=[{"url": item["url"]} for item in open_candidates[:8]],
+                evidence={},
+            )
+        return {"created": False, "proposed": False, "reason": REASON_NOT_FOUND}
+    found = corroborated[0]
+    if not found.get("price") or not found.get("availability") or not found.get("seller"):
+        if apply:
+            queue_case(
+                session,
+                site=config,
+                product_id=int(product.id),
+                customer_id=int(customer.id),
+                listing_id=None,
+                reason="capture_incomplete",
+                candidates=[{"url": found["url"]}],
+                evidence={k: found.get(k) for k in ("price", "availability", "seller")},
+            )
+        return {"created": False, "proposed": False, "reason": "capture_incomplete"}
+    if apply and _blank(row.adapter_key):
+        fields: dict[str, Any] = {"adapter_key": HTML_PAGE_ADAPTER}
+        fields.update(_patterns_for(found["url"], str(found.get("token") or "")))
+        _safe_update(session, row, fields)
+        row = _load_site(session, str(row.tenant_id), str(row.site_key)) or row
+    created = _store_proposal(session, customer=customer, product=product, row=row, captured=found, apply=apply)
+    return {"created": created, "proposed": True, "reason": None}
+
+
+def _store_proposal(
+    session: Session,
+    *,
+    customer: DimCustomer,
+    product: DimProduct,
+    row: ListingSite,
+    captured: dict[str, Any],
+    apply: bool,
+) -> bool:
+    if not apply:
+        return False
+    external_id = str(captured.get("token") or captured.get("url") or "")[:128]
+    if not external_id:
+        return False
+    existing = session.scalar(
+        select(CstListingSeed.id).where(
+            CstListingSeed.customer_id == int(customer.id),
+            CstListingSeed.marketplace == str(row.site_key),
+            CstListingSeed.external_id == external_id,
+        )
+    )
+    config = site_config_from_row(row).for_customer(int(customer.id))
+    remember_link(
+        session,
+        site=config,
+        product_id=int(product.id),
+        url=str(captured["url"]),
+        status=LINK_CONFIRMED,
+        evidence={"corroboration": captured.get("corroboration"), "source": ACTOR},
+        actor=ACTOR,
+    )
+    if existing is not None:
+        return False
+    session.add(
+        CstListingSeed(
+            customer_id=int(customer.id),
+            marketplace=str(row.site_key),
+            external_id=external_id,
+            product_id=int(product.id),
+            status="proposed",
+            raw_json={
+                "source": ACTOR,
+                "url": captured["url"],
+                "price": captured["price"],
+                "availability": captured["availability"],
+                "seller": captured["seller"],
+                "buy_box": captured["buy_box"],
+                "marketplace_sellers": captured.get("marketplace_sellers") or [],
+                "corroboration": captured.get("corroboration"),
+            },
+        )
+    )
+    session.flush()
+    return True
+
+
+def _search_candidates(
+    config: Any,
+    product: DimProduct,
+    search_pattern: str,
+    seed: dict[str, Any],
+    http_get: _HttpGet,
+) -> list[dict[str, Any]]:
+    queries: list[tuple[str, str]] = []
+    for barcode in product_barcodes(product):
+        key = barcode_key(barcode)
+        if key:
+            queries.append(("barcode", key))
+    for model in product_models(product):
+        queries.append(("model", model))
+    found: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    if search_pattern and "{query}" in search_pattern:
+        for _kind, query in queries:
+            status, body = _http(http_get, search_pattern.replace("{query}", quote(query, safe="")))
+            if status != 200 or not body:
+                continue
+            for url in _urls_from_document(config, body, search_pattern, query):
+                if url in seen:
+                    continue
+                seen.add(url)
+                captured = _capture_url(config, url, http_get, product, token=query)
+                if captured is not None:
+                    found.append(captured)
+            if any(item.get("corroboration") for item in found):
+                return found
+    if not any(item.get("corroboration") for item in found):
+        origin = _origin_text(_seed_origin(seed) or search_pattern or config.product_url_pattern or "")
+        token = queries[0][1] if queries else ""
+        for url in _sitemap_urls(origin, token, http_get) if origin and token else []:
+            if url in seen:
+                continue
+            seen.add(url)
+            captured = _capture_url(config, url, http_get, product, token=token)
+            if captured is not None:
+                found.append(captured)
+    return found
+
+
+def _capture_url(
+    config: Any,
+    url: str,
+    http_get: _HttpGet,
+    product: DimProduct,
+    token: str | None = None,
+) -> dict[str, Any] | None:
+    status, body = _http(http_get, url)
+    if status != 200 or not body:
+        return None
+    data = _json_object(body)
+    facts = page_facts_from_html(body)
+    if data is not None:
+        json_facts = page_facts_from_json(data)
+        if corroboration(json_facts, product):
+            facts = json_facts
+    how = corroboration(facts, product)
+    if how is None:
+        return {"url": url, "corroboration": None, "token": token}
+    parsed = parse_html(body, site=config, parser_version="discovery")
+    seller = seller_from_page(body) or (config.first_party_seller or "").strip() or None
+    sellers = _seller_names(body)
+    if seller and seller not in sellers:
+        sellers.insert(0, seller)
+    availability = parsed.availability if parsed.availability in {"in_stock", "out_of_stock"} else None
+    price = parsed.price if parsed.parse_status == "ok" else None
+    used = token or (product_barcodes(product)[0] if product_barcodes(product) else "")
+    return {
+        "url": url,
+        "corroboration": how,
+        "token": barcode_key(used) or model_key(used) or used,
+        "price": price,
+        "availability": availability,
+        "seller": seller,
+        "marketplace_sellers": sellers,
+        "buy_box": {"price": price, "availability": availability, "seller": seller},
+    }
+
+
+def _urls_from_document(config: Any, body: str, base: str, token: str) -> list[str]:
+    data = _json_object(body)
+    urls: list[str] = []
+    if data is not None:
+        from app.services.listing_capture.adapters.rest_buybox import product_url, search_hits
+
+        for hit in search_hits(data):
+            built = product_url(config, str(hit.get("page_id") or ""), slug=hit.get("slug"))
+            if built:
+                urls.append(built)
+        if urls:
+            return urls[:3]
+    host = urlsplit(base).netloc.lower()
+    ranked: list[str] = []
+    other: list[str] = []
+    for href in _HREF.findall(body):
+        absolute = urljoin(base, href.strip())
+        if urlsplit(absolute).netloc.lower() != host:
+            continue
+        if token and token in absolute:
+            ranked.append(absolute.split("#")[0])
+        else:
+            other.append(absolute.split("#")[0])
+    return list(dict.fromkeys(ranked + other))[:3]
+
+
+def _discover_search_pattern(config: Any, seed: dict[str, Any], http_get: _HttpGet) -> str | None:
+    existing = (config.search_url_pattern or "").strip()
+    if existing:
+        return existing
+    origin = _origin_text(_seed_origin(seed) or config.product_url_pattern or "")
+    if not origin:
+        return None
+    status, body = _http(http_get, origin + "/")
+    if status != 200 or not body or not _SEARCH_INPUT.search(body):
+        return None
+    action = _FORM_ACTION.search(body)
+    target = urljoin(origin + "/", action.group(1).strip()) if action else origin + "/search"
+    parts = urlsplit(target)
+    if not parts.scheme or not parts.netloc:
+        return None
+    query = "q={query}" if "q=" not in (parts.query or "") else re.sub(r"(?:^|&)q=[^&]*", "q={query}", parts.query)
+    pattern = parts._replace(query=query).geturl()
+    if "{query}" not in pattern:
+        return None
+    return pattern
+
+
+def _sitemap_urls(origin: str, token: str, http_get: _HttpGet) -> list[str]:
+    status, body = _http(http_get, origin.rstrip("/") + "/sitemap.xml")
+    if status != 200 or not body:
+        return []
+    locs = [item.strip() for item in _LOC.findall(body)]
+    if re.search(r"<sitemapindex\b", body, flags=re.IGNORECASE):
+        children: list[str] = []
+        for loc in locs[:2]:
+            child_status, child = _http(http_get, loc)
+            if child_status == 200 and child:
+                children.extend(item.strip() for item in _LOC.findall(child))
+        locs = children
+    host = urlsplit(origin).netloc.lower()
+    matched = [
+        loc
+        for loc in locs
+        if urlsplit(loc).netloc.lower() == host and token and token in loc
+    ]
+    return matched[:3]
+
+
+def _patterns_for(url: str, token: str) -> dict[str, str]:
+    derived = _derived_patterns([url])
+    if derived:
+        return derived
+    if not token or token not in url:
+        return {}
+    product = url.replace(token, "{page_id}", 1)
+    page = re.escape(url).replace(re.escape(token), r"([^/?#]+)", 1)
+    if "{page_id}" not in product:
+        return {}
+    return {"product_url_pattern": product, "page_id_pattern": page}
+
+
+def _derived_patterns(urls: list[str]) -> dict[str, str]:
+    from app.services.listing_capture.url_pattern import derive_listing_url_pattern
+
+    try:
+        derived = derive_listing_url_pattern([item for item in urls if item])
+    except (TypeError, ValueError):
+        return {}
+    if derived is None:
+        return {}
+    out: dict[str, str] = {}
+    product = getattr(derived, "product_url_pattern", None)
+    page = getattr(derived, "page_id_pattern", None)
+    if isinstance(product, str) and "{page_id}" in product:
+        out["product_url_pattern"] = product
+    if isinstance(page, str) and page:
+        out["page_id_pattern"] = page
+    return out
+
+
+def _catalogue_product_ids(session: Session, *, tenant_id: str, customer_id: int) -> list[int]:
+    latest = session.scalar(
+        select(func.max(FactCustomerSellthrough.period_start_date)).where(
+            FactCustomerSellthrough.tenant_id == tenant_id,
+            FactCustomerSellthrough.customer_id == int(customer_id),
+            FactCustomerSellthrough.reported_soh.is_not(None),
+            FactCustomerSellthrough.reported_soh > 0,
+        )
+    )
+    if latest is None:
+        return []
+    rows = session.scalars(
+        select(FactCustomerSellthrough.product_id)
+        .where(
+            FactCustomerSellthrough.tenant_id == tenant_id,
+            FactCustomerSellthrough.customer_id == int(customer_id),
+            FactCustomerSellthrough.period_start_date == latest,
+            FactCustomerSellthrough.reported_soh > 0,
+        )
+        .distinct()
+    ).all()
+    return [int(row) for row in rows if row is not None]
+
+
+def _copy_seed_fields(session: Session, row: ListingSite, seed: dict[str, Any]) -> None:
+    site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
+    fields: dict[str, Any] = {}
+    for name in _COPY_FIELDS:
+        if name not in site or not _blank(getattr(row, name, None)):
+            continue
+        fields[name] = site.get(name)
+    if fields:
+        _safe_update(session, row, fields)
+
+
+def _safe_update(session: Session, row: ListingSite, fields: dict[str, Any]) -> None:
+    cleaned = {key: value for key, value in fields.items() if value is not None and str(value).strip() != ""}
+    if not cleaned:
+        return
+    try:
+        update_site(session, row, fields=cleaned, actor=ACTOR)
+    except ValueError:
+        for key, value in cleaned.items():
+            try:
+                update_site(session, row, fields={key: value}, actor=ACTOR)
+            except ValueError:
+                continue
+
+
+def _reporting_customers(session: Session, tenant_id: str) -> list[tuple[CustomerReportConfig, DimCustomer]]:
+    rows = session.execute(
+        select(CustomerReportConfig, DimCustomer)
+        .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
+        .where(CustomerReportConfig.reports_expected.is_(True), DimCustomer.tenant_id == tenant_id)
+        .order_by(DimCustomer.id)
+    ).all()
+    return [(cfg, cust) for cfg, cust in rows if isinstance(cust, DimCustomer)]
+
+
+def _tenant_ids(session: Session, tenant_id: str | None) -> list[str]:
+    if tenant_id is not None:
+        return [str(tenant_id)]
+    rows = session.scalars(
+        select(DimCustomer.tenant_id)
+        .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
+        .where(CustomerReportConfig.reports_expected.is_(True))
+        .distinct()
+    ).all()
+    return sorted({str(row) for row in rows if row})
+
+
+def _site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]) -> list[str]:
+    named = seed.get("marketplace")
+    if isinstance(named, str) and named.strip():
+        key = named.strip().lower()
+        return [key] if SITE_KEY_RE.match(key) else []
+    found = session.scalars(
+        select(func.lower(func.trim(CustomerListing.marketplace)))
+        .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
+        .where(DimCustomer.tenant_id == tenant_id, CustomerListing.customer_id == int(customer_id))
+        .distinct()
+    ).all()
+    return sorted({str(value) for value in found if isinstance(value, str) and SITE_KEY_RE.match(value)})
+
+
+def _load_site(session: Session, tenant_id: str, site_key: str) -> ListingSite | None:
+    row = session.scalar(
+        select(ListingSite)
+        .where(ListingSite.tenant_id == tenant_id, ListingSite.site_key == site_key)
+        .options(selectinload(ListingSite.sellers))
+    )
+    return row if isinstance(row, ListingSite) else None
+
+
+def _has_listing(session: Session, *, customer_id: int, site_key: str, product_id: int) -> bool:
+    found = session.scalar(
+        select(CustomerListing.id)
+        .where(
+            CustomerListing.customer_id == int(customer_id),
+            CustomerListing.product_id == int(product_id),
+            func.lower(func.trim(CustomerListing.marketplace)) == site_key,
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+def _queue_exists(session: Session, *, site_id: int, product_id: int) -> bool:
+    found = session.scalar(
+        select(ListingLinkQueue.id)
+        .where(ListingLinkQueue.site_id == int(site_id), ListingLinkQueue.product_id == int(product_id))
+        .limit(1)
+    )
+    return found is not None
+
+
+def _proposed_seed(session: Session, *, customer_id: int, site_key: str, product_id: int) -> CstListingSeed | None:
+    row = session.scalar(
+        select(CstListingSeed).where(
+            CstListingSeed.customer_id == int(customer_id),
+            CstListingSeed.marketplace == site_key,
+            CstListingSeed.product_id == int(product_id),
+            CstListingSeed.status == "proposed",
+        )
+    )
+    return row if isinstance(row, CstListingSeed) else None
+
+
+def _rejected_urls(session: Session, site_id: int, product_id: int) -> set[str]:
+    rows = session.scalars(
+        select(ListingLink.url).where(
+            ListingLink.site_id == int(site_id),
+            ListingLink.product_id == int(product_id),
+            ListingLink.status == LINK_REJECTED,
+        )
+    ).all()
+    return {str(url) for url in rows if isinstance(url, str)}
+
+
+def _seed(config: CustomerReportConfig) -> dict[str, Any]:
+    profile = config.feed_profile_json if isinstance(config.feed_profile_json, dict) else {}
+    seed = profile.get("listing_seed") if isinstance(profile, dict) else None
+    return seed if isinstance(seed, dict) else {}
+
+
+def _seed_origin(seed: dict[str, Any]) -> str | None:
+    site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
+    for source in (site, seed):
+        if not isinstance(source, dict):
+            continue
+        for key in _SEED_URL_KEYS:
+            value = source.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        for key in ("search_url_pattern", "product_url_pattern", "details_url_pattern"):
+            value = source.get(key)
+            if isinstance(value, str) and "://" in value:
+                return value.strip()
+    return None
+
+
+def _origin_text(value: str | None) -> str | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    if "://" not in text:
+        text = "https://" + text
+    parts = urlsplit(text)
+    if not parts.scheme or not parts.netloc:
+        return None
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _site_key_from_origin(origin: str) -> str | None:
+    host = urlsplit(origin).hostname or ""
+    if host.lower().startswith("www."):
+        host = host[4:]
+    key = re.sub(r"[^a-z0-9]+", "-", host.lower()).strip("-")[:32].strip("-")
+    return key if key and SITE_KEY_RE.match(key) else None
+
+
+def _display_name(seed: dict[str, Any], site_key: str) -> str:
+    site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
+    name = site.get("display_name") if isinstance(site, dict) else None
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return site_key
+
+
+def _reader_ready(row: ListingSite | None) -> bool:
+    if row is None or not row.is_active:
+        return False
+    return configured_adapter(site_config_from_row(row)) is not None
+
+
+def _reader_name(row: ListingSite | None) -> str | None:
+    if row is None:
+        return None
+    text = str(row.adapter_key or "").strip()
+    return text or None
+
+
+def _blank(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _json_object(body: str) -> dict[str, Any] | None:
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _seller_names(body: str) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for raw in _SELLER_NAME.findall(body or ""):
+        try:
+            name = json.loads(f'"{raw}"')
+        except json.JSONDecodeError:
+            name = raw
+        if not isinstance(name, str):
+            continue
+        cleaned = name.strip()
+        if cleaned and cleaned.casefold() not in seen:
+            seen.add(cleaned.casefold())
+            names.append(cleaned)
+    return names
+
+
+def _http(http_get: _HttpGet, url: str) -> tuple[int, str]:
+    try:
+        result = http_get(url)
+    except (OSError, ValueError, RuntimeError, TypeError):
+        return 0, ""
+    if not isinstance(result, tuple) or len(result) < 2:
+        return 0, ""
+    status, body = result[0], result[1]
+    if isinstance(body, bytes):
+        body = body.decode("utf-8", errors="replace")
+    try:
+        code = int(status or 0)
+    except (TypeError, ValueError):
+        code = 0
+    return code, body if isinstance(body, str) else ""
+
+
+def _first_reason(rows: list[dict[str, Any]]) -> str:
+    for row in rows:
+        if row.get("reason"):
+            return str(row["reason"])
+    return REASON_NOT_FOUND
+
+
+def _entry(**kwargs: Any) -> dict[str, Any]:
+    base = {
+        "customer_id": None,
+        "tenant_id": None,
+        "site_key": None,
+        "reader": None,
+        "reader_ready": False,
+        "proposed_listings": 0,
+        "proposed_created": 0,
+        "watched_listings": 0,
+        "reason": None,
+        "detail": None,
+        "sites": [],
+    }
+    base.update(kwargs)
+    return base
+
+
+def _site_entry(
+    site_key: str,
+    *,
+    reason: str | None,
+    reader: str | None = None,
+    reader_ready: bool = False,
+    proposed_listings: int = 0,
+    proposed_created: int = 0,
+    watched_listings: int = 0,
+) -> dict[str, Any]:
+    return {
+        "site_key": site_key,
+        "reason": reason,
+        "reader": reader,
+        "reader_ready": reader_ready,
+        "proposed_listings": proposed_listings,
+        "proposed_created": proposed_created,
+        "watched_listings": watched_listings,
+    }
