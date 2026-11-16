@@ -1,7 +1,8 @@
 """Leftover-repair constants and audit-match gate (no DB)."""
 
+import app.services.customer_leftover_repair as leftover
+
 from app.services.customer_leftover_repair import (
-    COMPUSPEED_LOSER_ID,
     EXPECTED_DIRTY_LOSERS,
     EXPECTED_LEFTOVER_ROWS,
     LeftoverRepairDriftError,
@@ -12,7 +13,8 @@ from app.services.customer_leftover_repair import (
 def test_audit_lock_matches_unit_spec() -> None:
     assert EXPECTED_DIRTY_LOSERS == 9
     assert EXPECTED_LEFTOVER_ROWS == 3266
-    assert COMPUSPEED_LOSER_ID == 1152
+    assert not hasattr(leftover, "COMPUSPEED_LOSER_ID")
+    assert not hasattr(leftover, "WINNER_SNAPSHOT_IDS")
 
 
 def test_assert_preview_matches_audit_rejects_drift() -> None:

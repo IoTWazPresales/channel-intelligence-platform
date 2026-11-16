@@ -20,14 +20,11 @@ from app.services.imports.shipment_evidence_resolution_plan import (
     build_unique_approved_customer_alias_id_by_token,
 )
 
-# Tokens with approved aliases identified on cip before lineup alias wiring (IC gap audit).
-KNOWN_FIXABLE_LINEUP_CUSTOMER_TOKENS: tuple[str, ...] = (
-    "ic",
-    "lewis",
-    "sadc - tbh",
-    "sample",
-    "syntech",
-)
+def tokens_in_scope(alias_map: dict[str, int], tokens: tuple[str, ...] | None) -> set[str]:
+    """Approved-alias keys, or the caller's token list when one is passed."""
+    if tokens is None:
+        return {token for token in alias_map if token}
+    return {norm for token in tokens if (norm := _norm_key(token))}
 
 
 def load_approved_customer_alias_id_by_token_sync(db: Session) -> dict[str, int]:
@@ -97,8 +94,7 @@ def backfill_lineup_customer_aliases_sync(
 ) -> dict[str, Any]:
     """Set ``commercial_lineup_line.customer_id`` from approved aliases where still null."""
     alias_map = load_approved_customer_alias_id_by_token_sync(db)
-    norm_tokens = {_norm_key(t) for t in (tokens or KNOWN_FIXABLE_LINEUP_CUSTOMER_TOKENS)}
-    norm_tokens.discard("")
+    norm_tokens = tokens_in_scope(alias_map, tokens)
 
     lines = list(
         db.scalars(
