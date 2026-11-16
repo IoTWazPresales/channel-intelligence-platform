@@ -5,6 +5,8 @@ One rolled-back transaction. No live HTTP. No named retailer.
 
 from __future__ import annotations
 
+import threading
+import time
 import uuid
 
 import pytest
@@ -408,3 +410,220 @@ def test_onboard_refuses_a_different_domain_on_the_second_call(db_session: Sessi
             actor="steward@example.test",
         )
     assert caught.value.code == "domain_already_recorded"
+
+
+_RETAINED_PAGE = r"^https://shop-a\.example\.test/p/([^/]+)$"
+_RETAINED_PRODUCT = "https://shop-a.example.test/p/{page_id}"
+
+
+def _retained_seed() -> dict:
+    return {
+        "site": {
+            "product_url_pattern": _RETAINED_PRODUCT,
+            "page_id_pattern": _RETAINED_PAGE,
+            "example_urls": ["https://shop-a.example.test/p/111"],
+        }
+    }
+
+
+def test_onboard_refuses_a_retained_seed_whose_links_use_another_domain(db_session: Session) -> None:
+    tenant = f"t-seed-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, _retained_seed())
+    db_session.add(
+        ListingSite(
+            tenant_id=tenant,
+            site_key="shop-a",
+            display_name="blank",
+        )
+    )
+    db_session.flush()
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-b.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "seed_host_mismatch"
+    site = _site(db_session, tenant, "shop-a")
+    assert site.product_url_pattern is None
+    assert site.page_id_pattern is None
+    config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer.id))
+    assert isinstance(config, CustomerReportConfig)
+    seed = config.feed_profile_json["listing_seed"]
+    assert "marketplace" not in seed
+    assert seed["site"].get("domain") in (None, "")
+    assert seed["site"]["product_url_pattern"] == _RETAINED_PRODUCT
+
+
+def test_onboard_copies_a_retained_seed_pattern_when_the_domain_matches(db_session: Session) -> None:
+    tenant = f"t-same-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, _retained_seed())
+    db_session.add(
+        ListingSite(
+            tenant_id=tenant,
+            site_key="shop-a",
+            display_name="blank",
+        )
+    )
+    db_session.flush()
+    result = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(customer.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    assert result["created_site"] is False
+    assert result["pattern_status"] == "kept"
+    assert result["domain"] == "shop-a.example.test"
+    site = _site(db_session, tenant, "shop-a")
+    assert site.product_url_pattern == _RETAINED_PRODUCT
+    assert site.page_id_pattern == _RETAINED_PAGE
+    config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer.id))
+    assert config.feed_profile_json["listing_seed"]["site"]["domain"] == "shop-a.example.test"
+
+
+def test_second_conflicting_attach_to_a_blank_site_fails() -> None:
+    """Two transactions attach different domains to one blank site. The second loses."""
+    url = _sync_url()
+    engine = create_engine(url)
+    tenant = f"t-race-{uuid.uuid4().hex[:8]}"
+    outcome: dict[str, str] = {}
+    entered = threading.Event()
+    finished = threading.Event()
+    waiter: dict[str, int] = {}
+    first_id = 0
+    second_id = 0
+    worker: threading.Thread | None = None
+    try:
+        with engine.connect() as conn:
+            db = conn.execute(text("SELECT current_database()")).scalar_one()
+            print("current_database()", db)
+            if db != "cip_test":
+                pytest.fail(f"stop: site onboarding runs on cip_test only (current_database()={db})")
+        setup = Session(engine)
+        try:
+            setup.begin()
+            first = _customer(setup, tenant)
+            second = _customer(setup, tenant)
+            _report(setup, first, None)
+            _report(setup, second, None)
+            setup.add(ListingSite(tenant_id=tenant, site_key="shop-a", display_name="blank"))
+            setup.commit()
+            first_id = int(first.id)
+            second_id = int(second.id)
+        finally:
+            setup.close()
+
+        holder = Session(engine)
+        holder.begin()
+        try:
+            record_customer_site(
+                holder,
+                tenant_id=tenant,
+                customer_id=first_id,
+                site_key="shop-a",
+                domain="shop-a.example.test",
+                example_urls=None,
+                actor="steward@example.test",
+            )
+
+            def _second() -> None:
+                session = Session(engine)
+                try:
+                    session.begin()
+                    session.execute(text("SET lock_timeout = '8s'"))
+                    waiter["pid"] = int(session.execute(text("SELECT pg_backend_pid()")).scalar_one())
+                    entered.set()
+                    record_customer_site(
+                        session,
+                        tenant_id=tenant,
+                        customer_id=second_id,
+                        site_key="shop-a",
+                        domain="shop-b.example.test",
+                        example_urls=None,
+                        actor="steward@example.test",
+                    )
+                    session.commit()
+                    outcome["status"] = "committed"
+                except SiteOnboardError as exc:
+                    session.rollback()
+                    outcome["code"] = exc.code
+                except Exception as exc:  # pragma: no cover - lock or connection failure
+                    session.rollback()
+                    outcome["error"] = type(exc).__name__
+                finally:
+                    finished.set()
+                    session.close()
+
+            worker = threading.Thread(target=_second)
+            worker.start()
+            assert entered.wait(5)
+            seen_wait = False
+            deadline = time.monotonic() + 3
+            probe = Session(engine)
+            try:
+                while time.monotonic() < deadline and not finished.is_set():
+                    pid = waiter.get("pid")
+                    if pid is None:
+                        time.sleep(0.05)
+                        continue
+                    kind = probe.execute(
+                        text("SELECT wait_event_type FROM pg_stat_activity WHERE pid = :pid"),
+                        {"pid": pid},
+                    ).scalar()
+                    if kind == "Lock":
+                        seen_wait = True
+                        break
+                    time.sleep(0.05)
+            finally:
+                probe.close()
+            assert seen_wait, outcome
+            holder.commit()
+        except Exception:
+            holder.rollback()
+            raise
+        finally:
+            if holder.in_transaction():
+                holder.rollback()
+            holder.close()
+        worker.join(10)
+        assert finished.is_set()
+        assert outcome.get("code") == "domain_conflict", outcome
+        check = Session(engine)
+        try:
+            site = check.scalar(select(ListingSite).where(ListingSite.tenant_id == tenant, ListingSite.site_key == "shop-a"))
+            assert isinstance(site, ListingSite)
+            assert site.product_url_pattern is None
+            second_config = check.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == second_id))
+            second_seed = (second_config.feed_profile_json or {}).get("listing_seed") if isinstance(second_config.feed_profile_json, dict) else None
+            assert not isinstance(second_seed, dict) or second_seed.get("marketplace") in (None, "")
+            first_config = check.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == first_id))
+            assert first_config.feed_profile_json["listing_seed"]["site"]["domain"] == "shop-a.example.test"
+        finally:
+            check.close()
+    finally:
+        cleanup = Session(engine)
+        try:
+            cleanup.begin()
+            cleanup.execute(
+                text(
+                    "DELETE FROM customer_report_config WHERE customer_id IN "
+                    "(SELECT id FROM dim_customer WHERE tenant_id = :tenant)"
+                ),
+                {"tenant": tenant},
+            )
+            cleanup.execute(text("DELETE FROM listing_site WHERE tenant_id = :tenant"), {"tenant": tenant})
+            cleanup.execute(text("DELETE FROM dim_customer WHERE tenant_id = :tenant"), {"tenant": tenant})
+            cleanup.commit()
+        finally:
+            cleanup.close()
+            engine.dispose()

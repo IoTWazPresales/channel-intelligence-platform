@@ -4,9 +4,13 @@ This is the path out of ``no_site_key``. It writes that customer's listing seed 
 when the site row is missing, creates the row. It does not fetch a page, does not
 name a customer or a retailer, and does not invent a seller. A page pattern is
 derived only from product URLs the steward pastes, and only into columns that are
-still empty. A customer that already has a site key is left unchanged. An existing
-site is attached only when every stored link host and every other customer's
-recorded domain for that key is this domain, or none is recorded yet.
+still empty. A customer that already has a site key is left unchanged. Saved link hosts
+already on that customer's seed must be this domain; a mismatch is refused
+before any pattern is copied or the domain is saved. An existing site is
+attached only when every stored link host and every other customer's
+recorded domain for that key is this domain, or none is recorded yet. That
+check locks the site row, so two different domains cannot both attach to one
+blank site.
 """
 
 from __future__ import annotations
@@ -109,10 +113,13 @@ def record_customer_site(
                 "domain_already_recorded",
                 "A different domain is already recorded for this customer.",
             )
+    _reject_retained_seed_hosts(site_block, host)
 
     derived = derive_listing_url_pattern(urls) if urls else None
     row = session.scalar(
-        select(ListingSite).where(ListingSite.tenant_id == tenant_id, ListingSite.site_key == key)
+        select(ListingSite)
+        .where(ListingSite.tenant_id == tenant_id, ListingSite.site_key == key)
+        .with_for_update()
     )
     if isinstance(row, ListingSite):
         _reject_conflicting_domain(
@@ -223,6 +230,48 @@ def _host_in_pattern(pattern: Any) -> str | None:
     if not _HOST.fullmatch(host):
         return None
     return host
+
+
+_SEED_LINK_FIELDS = ("product_url_pattern", "search_url_pattern", "details_url_pattern")
+
+
+def _page_pattern_hosts(pattern: Any) -> set[str]:
+    """Hosts written into a retained page-id expression, which is a regular expression."""
+    if not isinstance(pattern, str) or not pattern.strip():
+        return set()
+    text = pattern.replace("\\.", ".")
+    found: set[str] = set()
+    for match in re.finditer(r"https?://([^/\s]+)", text, flags=re.IGNORECASE):
+        host = match.group(1).lower().rstrip(".").split("\\", 1)[0]
+        if _HOST.fullmatch(host):
+            found.add(host)
+    return found
+
+
+def _retained_seed_hosts(site_block: dict[str, Any]) -> set[str]:
+    """Hosts already stored on this customer's seed links."""
+    hosts: set[str] = set()
+    for name in _SEED_LINK_FIELDS:
+        found = _host_in_pattern(site_block.get(name))
+        if found:
+            hosts.add(found)
+    hosts.update(_page_pattern_hosts(site_block.get("page_id_pattern")))
+    examples = site_block.get("example_urls")
+    if isinstance(examples, list):
+        for item in examples:
+            found = _host_in_pattern(item)
+            if found:
+                hosts.add(found)
+    return hosts
+
+
+def _reject_retained_seed_hosts(site_block: dict[str, Any], host: str) -> None:
+    """Refuse to record a domain that disagrees with links this customer already kept."""
+    if any(item != host for item in _retained_seed_hosts(site_block)):
+        raise SiteOnboardError(
+            "seed_host_mismatch",
+            "This customer's saved links use a different domain.",
+        )
 
 
 def _other_recorded_domains(
