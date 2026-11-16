@@ -4,91 +4,94 @@
     "preToolUse": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
-        "failClosed": true
+        "timeout": 30,
+        "failClosed": true,
+        "matcher": "^(?!Read$)"
       }
     ],
     "postToolUse": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
-        "failClosed": false
+        "timeout": 30,
+        "failClosed": false,
+        "matcher": "^(?!(?:Read|Grep|Glob)$)"
       }
     ],
     "postToolUseFailure": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
-        "failClosed": false
+        "timeout": 30,
+        "failClosed": false,
+        "matcher": "^(?!(?:Read|Grep|Glob)$)"
       }
     ],
     "beforeShellExecution": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": true
       }
     ],
     "beforeMCPExecution": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": true
       }
     ],
     "afterMCPExecution": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": false
       }
     ],
     "beforeReadFile": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": true
       }
     ],
     "afterFileEdit": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": false
       }
     ],
     "subagentStart": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": true
       }
     ],
     "subagentStop": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": false
       }
     ],
     "stop": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": false
       }
     ],
     "sessionStart": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": false
       }
     ],
     "sessionEnd": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "timeout": 30,
         "failClosed": false
       }
     ]

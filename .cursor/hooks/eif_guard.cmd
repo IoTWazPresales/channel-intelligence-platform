@@ -4,6 +4,8 @@ setlocal EnableExtensions DisableDelayedExpansion
 set "SCRIPT=%~dp0eif_guard.py"
 set "EIF_CAPTURE_DIR="
 set "EIF_RC=0"
+REM BACKLOG-236: tells the guard its host timeout is 30 s (watchdog 25 s).
+set "EIF_HOOK_HOST=cursor"
 if defined CURSOR_PROJECT_DIR goto :project_root
 set "EIF_ROOT=%CD%"
 goto :find_python

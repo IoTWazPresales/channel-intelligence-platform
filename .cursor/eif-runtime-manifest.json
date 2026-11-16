@@ -1,10 +1,10 @@
 {
   "eif": "hook-runtime-manifest",
   "files": {
-    ".cursor/hooks.json": "d7d7c183e44342e4674a83e969a1d79400b3af2763fa1a352239afc2f7a58167",
-    ".cursor/hooks/eif_guard.cmd": "61bcc7ef48d24b5f272f87911299915bf5822e1933760eccd641773189ed3e5c",
-    ".cursor/hooks/eif_guard.py": "e54d3f57d7c9d4df37b5038e6061630ea4e1494ecea2bcb1d04cb39ec9952fdf",
-    ".cursor/hooks/eif_guard.sh": "228ed8d88af7362332b562f5a7f1c96d851d545b8ffc69195d83d99799f5df60",
+    ".cursor/hooks.json": "a38c5d7aafaa86ce062beffc1860ce498c395c6b1fd6b8c9e2a8d184557a9195",
+    ".cursor/hooks/eif_guard.cmd": "f1e718490457cbef91b15249da055b144888a92a0aefe61084ea0668640b5309",
+    ".cursor/hooks/eif_guard.py": "3ea98e4401e91083db1a8c8f5b891175d3775fa277cea0b4566b039ac3c3040e",
+    ".cursor/hooks/eif_guard.sh": "d26d224049ee37e9eecdcc8602089755d3f9d61dd7526d2636c1025ca0ed0390",
     ".cursor/hooks/eif_guard_crash.json": "00d7f2cdaee97215a9d7a6ccd3a12cf352cc34bd7418be4f2a1410e6e1099a4f",
     ".cursor/hooks/eif_guard_failclosed.json": "b8a84d7b95a7da709f8f26449c96ef636d7796ff82bc7416af70d9b8bfe522f4",
     ".cursor/hooks/eif_integrity.py": "1ba6629252eeef5df5d5fb89ab94fd588bed29a1f0e5ece0413bdb4b1ec9d877",
