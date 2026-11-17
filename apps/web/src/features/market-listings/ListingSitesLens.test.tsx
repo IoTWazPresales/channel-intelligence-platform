@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
+import { apiPost } from '@/lib/api';
 
 import { ListingSitesLens } from './ListingSitesLens';
 
@@ -12,7 +13,7 @@ vi.mock('@/features/shell/useCurrentUser', () => ({
 }));
 
 vi.mock('@/lib/api', () => ({
-  apiGet: async (url: string) => {
+  apiGet: vi.fn(async (url: string) => {
     if (url.includes('/listing-capture/sites')) {
       return {
         adapter_keys: ['html_page', 'rest_buybox_json'],
@@ -44,10 +45,13 @@ vi.mock('@/lib/api', () => ({
         ],
       };
     }
+    if (url.includes('/customers')) {
+      return { items: [{ id: 9, customer_code: 'nc', customer_name: 'North Counter' }] };
+    }
     return {};
-  },
+  }),
   apiPatch: vi.fn(),
-  apiPost: vi.fn(),
+  apiPost: vi.fn(async () => ({ pattern_status: 'derived' })),
   apiDelete: vi.fn(),
 }));
 
@@ -68,5 +72,31 @@ describe('ListingSitesLens', () => {
     expect(screen.queryByLabelText(/seller/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /remove/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /save seller/i })).toBeNull();
+  });
+
+  it('records a site key and domain for a customer that has neither', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <ListingSitesLens />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(await screen.findByLabelText('Customer'), { target: { value: 'North' } });
+    fireEvent.click(await screen.findByRole('option', { name: 'North Counter' }));
+    fireEvent.change(screen.getByLabelText('Site key'), { target: { value: 'shop-z' } });
+    fireEvent.change(screen.getByLabelText('Domain'), { target: { value: 'shop-z.example.test' } });
+    fireEvent.change(screen.getByLabelText('Product links'), {
+      target: { value: 'https://shop-z.example.test/p/111' },
+    });
+    fireEvent.click(screen.getByTestId('listing-site-onboard-save'));
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith('/api/v1/listing-capture/sites/onboard', {
+        customer_id: 9,
+        site_key: 'shop-z',
+        domain: 'shop-z.example.test',
+        example_urls: ['https://shop-z.example.test/p/111'],
+      }),
+    );
+    expect(await screen.findByText(/The page pattern was taken from the product links/)).toBeInTheDocument();
   });
 });
