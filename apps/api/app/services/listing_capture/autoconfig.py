@@ -68,7 +68,6 @@ from app.services.listing_capture.site_pause import (
 )
 from app.services.listing_capture.sites import (
     INFERRED_SELLER_ACTOR,
-    SITE_KEY_RE,
     create_site,
     set_site_seller,
     site_config_from_row,
@@ -109,7 +108,7 @@ def autoconfigure_sites(
     http_get: _HttpGet | None = None,
     run_store=None,
 ) -> dict[str, Any]:
-    """Create or fill listing sites for reporting customers. Idempotent under an advisory lock.
+    """Discover product pages and fill listing sites under one advisory lock.
 
     ``tenant_id`` limits the run to one tenant. The beat task passes none and walks every
     tenant that has a reporting customer, filtering every read and write by that tenant.
@@ -118,16 +117,25 @@ def autoconfigure_sites(
     as not configured, the empty columns, each probe's outcome). A site that still has no
     reader and has due listings is logged at WARNING, and the summary is kept as the
     tenant's latest autoconfigure run for capture health.
+    Both the scheduled job and the steward POST use this service. Discovery only
+    proposes listings; registration still requires a steward's confirmation.
     """
     from app.services.listing_capture.observation import listing_live_fetch_enabled
+    from app.services.listing_capture.discovery import discover_reporting_customers
 
     live = listing_live_fetch_enabled()
     _advisory_lock(session)
     entries: list[dict[str, Any]] = []
     tenants = _tenant_ids(session, tenant_id)
+    discovery: list[dict[str, Any]] = []
     for tid in tenants:
+        found = discover_reporting_customers(
+            session, tenant_id=tid, http_get=http_get if live else None, run_store=run_store
+        )
+        discovery.extend(found["customers"])
         entries.extend(_configure_tenant(session, tid, http_get=http_get if live else None))
     report = _bucket(entries)
+    report["discovery"] = {"customers": discovery}
     report["live_fetch_disabled"] = not live
     # A dict, not a top-level list: the top-level lists are the customer buckets.
     report["run"] = {"sites": []}
@@ -462,21 +470,9 @@ def _configure_site(
 
 
 def _site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]) -> list[str]:
-    named = seed.get("marketplace")
-    if isinstance(named, str) and named.strip():
-        key = named.strip().lower()
-        return [key] if SITE_KEY_RE.match(key) else []
-    found = session.scalars(
-        select(func.lower(func.trim(CustomerListing.marketplace)))
-        .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
-        .where(
-            DimCustomer.tenant_id == tenant_id,
-            CustomerListing.customer_id == int(customer_id),
-        )
-        .distinct()
-    ).all()
-    keys = sorted({str(value) for value in found if isinstance(value, str) and SITE_KEY_RE.match(value)})
-    return keys
+    from app.services.listing_capture.discovery import _site_keys as discovery_site_keys
+
+    return discovery_site_keys(session, tenant_id=tenant_id, customer_id=customer_id, seed=seed)
 
 
 def _listings(session: Session, *, tenant_id: str, customer_id: int, site_key: str) -> list[CustomerListing]:

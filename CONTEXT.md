@@ -16,6 +16,9 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-17 - **PR #95 Round 2:** discovery validates seller seeds before writing sites, preserving bad-customer exclusion and stored seller identities. The existing DB-backed regression is unchanged. All 192 literal-scan hits came from Round 1 fixture keys `market`/`catalogue`; distinctive fixture keys yield zero app/alembic hits using fixture/config-derived keys. Database-free tests: 35 review + 55 existing passed (90), connections forbidden. No DB connection, service restart, commit or push; memory state updated, changes remain in this detached worktree at `a0c7dcc5`.
+
+- 2026-11-17 - **PR #95 review fixes:** detached review worktree at `a0c7dcc5`; shared autoconfigure now runs discovery from the schedule and steward POST, domain seeds stay on their domain, URL-less feed proposals are enriched, external ids use full-URL hashes, product links outrank navigation, and per-customer/site cursors continue past 25. Database-free tests: 27 new + 39 existing passed with connections forbidden. No database access, service restart, commit or push; changes remain in the working tree.
 - 2026-11-17 - **PR #92 review fixes (uncommitted, detached at `2ff65298`):** generic fallback column order for existing mapping profiles, shared literal-text workbook guard, and one stable live quantity target per SKU. Added database-free regression tests; 19 unit tests passed with database connections forbidden. No database access, planner/line-up feature changes, commit, push or deploy.
 
 - 2026-11-15 - **Store location matcher:** `cursor/w1a-store-dc-replenishment-b57c` (`61d1b33b`) merged `--no-ff` into `feat/integrate-20261103` at `2f25e628e33911b1dbd04d4e2e25cdcd27e82d2b`. Store map pytest 6 passed and StoreMap vitest 4 passed on `cip_test` (`current_database()` = cip_test). Migration `20261113_0062` not applied to `cip`. No main.

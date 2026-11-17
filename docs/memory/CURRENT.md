@@ -1,5 +1,11 @@
 # CURRENT state
 
+**PR #95 review worktree (2026-11-17):** detached at `a0c7dcc5`; no branch created. Changes remain uncommitted and unpushed.
+**Wired + unit-tested:** shared autoconfigure invokes reporting-customer discovery for both the scheduled task and steward POST. Domain seeds target matching domains; URL-less feed proposals are enriched; generated external ids use product id + full-URL SHA-256; product links outrank navigation; a tenant/customer/site cursor resumes after 25 searches and wraps after the catalogue.
+**Round 2 fix:** discovery reuses autoconfiguration's seller-seed validator before writing a site, so a malformed seed cannot leave a discovery-created site behind after configuration rejects the customer. A stored customer seller identity still bypasses seed parsing. The existing DB-backed test is unchanged. The 192 `test_no_site_literals` hits reproduce without DB rows: Round 1 fixtures declared ordinary words `market` (64 hits) and `catalogue` (128 hits) as forbidden keys; distinctive fixture keys remove those matches without changing app wording or weakening the test.
+**Checks:** 35 review regressions plus 55 existing database-free listing tests passed (90 total), with `CIP_UNIT_TESTS_FORBID_DB=1` vetoing connections before collection. Fixture/config-derived site-key scan of app + alembic: zero hits; DB-derived keys were not inspected. `git diff --check` passed. No database connected (including `cip_test`), service restarted, commit, push, or live/UI verification performed. Next: review the working-tree diff; DB-backed test was not rerun under Warren's database-free constraint.
+
+**Prior integration snapshot (below; not this review checkout):**
 **Last updated:** 2026-11-17 (PR #92 quantity/export review fixes, working tree only).
 
 **Branch and delivery:** detached checkout at `2ff652983fd6889b96171ae72edbbb44a2c17ad2`, worktree `rev-pr92-20261117`, PR #92. No commit or push. No migration changes.
