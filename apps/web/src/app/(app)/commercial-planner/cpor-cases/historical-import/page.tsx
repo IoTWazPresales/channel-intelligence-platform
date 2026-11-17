@@ -200,7 +200,7 @@ function CporHistoricalImportWizard({ mode }: { mode: 'upload' | 'learn' }) {
       <Alert severity="info" sx={{ mt: 2, mb: 2 }} data-testid="cpor-historical-intent">
         {mode === 'upload'
           ? 'Upload a historical CPOR or funding workbook. The file is validated, unmatched names are resolved, then the cases are applied. Settled results are kept as a snapshot. Unmatched names block that case only. Products, customers, and distributors are never created from the file.'
-          : 'Learn a column map from an example workbook. You can validate and apply that same file as historical cases once the names match. Writing a plan back into that layout is not built.'}
+          : 'Learn a column map from an example workbook. You can validate and apply that same file as historical cases once the names match. Export writes a plan back into that stored layout.'}
       </Alert>
       <Button
         size="small"

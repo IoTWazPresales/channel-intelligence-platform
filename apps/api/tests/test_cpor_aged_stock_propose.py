@@ -230,7 +230,7 @@ def test_competitor_prices_without_an_approved_map_stay_off_the_product():
     assert evidence["observed_cover"]["writes_target_cover"] is False
 
 
-def test_high_observed_cover_flags_and_does_not_set_quantity(monkeypatch):
+def test_high_observed_cover_adds_surplus_units_and_does_not_block(monkeypatch):
     import app.services.cpor.promo_plan_builder as mod
 
     monkeypatch.setattr(
@@ -244,6 +244,8 @@ def test_high_observed_cover_flags_and_does_not_set_quantity(monkeypatch):
                 "flag": "high_cover",
                 "grain": "customer_sku",
                 "writes_target_cover": False,
+                "soh_units": 40.0,
+                "weekly_rate": 1.0,
             },
             "read_failed": False,
         },
@@ -304,7 +306,12 @@ def test_high_observed_cover_flags_and_does_not_set_quantity(monkeypatch):
         line_specs=[{"product_id": 81, "srp": 10, "estimate_qty": 1, "pod_quarter": "2026Q4"}],
     )
     line = out["lines"][0]
-    assert line["suggested_estimate_qty"] == 12
+    # Forecast 12 alone was the old suggestion. Cover surplus is 40 - 6*1 = 34.
+    # The suggestion is the mean of those two. History is empty on this session.
+    assert line["suggested_estimate_qty"] == 23
+    assert line["quantity_evidence"]["blocks"] is False
+    assert "cip_qty_forecast" in line["flags"]
+    assert "cip_qty_cover" in line["flags"]
     assert "observed_cover_high" in line["flags"]
     assert line["cover"]["weeks"] == 6
     assert line["cover"]["source"] == "tenant_default"

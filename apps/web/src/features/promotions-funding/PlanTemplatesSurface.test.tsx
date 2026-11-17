@@ -59,7 +59,7 @@ describe('PlanTemplatesSurface', () => {
     });
   });
 
-  it('lists stored profiles and keeps export as Planned honesty', async () => {
+  it('lists stored profiles and says export uses the stored layout', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderWithProviders(
       <QueryClientProvider client={qc}>
@@ -72,8 +72,8 @@ describe('PlanTemplatesSurface', () => {
     });
     expect(screen.getByTestId('historical-cases-upload')).toHaveTextContent('Upload historical cases');
     expect(screen.getByTestId('template-learn')).toHaveTextContent('Learn a new template from a workbook');
-    expect(screen.getAllByText(/writing a plan back into that layout is not built/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByTestId('capability-status-planned')).toBeInTheDocument();
+    expect(screen.getAllByText(/export writes a plan back into the stored layout/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByTestId('capability-status-planned')).toBeNull();
     expect(screen.getByTestId('capability-status-partial')).toBeInTheDocument();
   });
 });

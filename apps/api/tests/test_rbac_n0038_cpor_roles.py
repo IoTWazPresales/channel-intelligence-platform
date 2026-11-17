@@ -42,6 +42,7 @@ _CPOR_WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     ("POST", f"{_P}/cases/{{case_id}}/lines/{{line_id}}/void"): _PLANNER,
     ("POST", f"{_P}/cases/{{case_id}}/lines/{{line_id}}/split-layers"): _PLANNER,
     ("POST", f"{_P}/cases/{{case_id}}/recompute"): _PLANNER,
+    ("POST", f"{_P}/cases/{{case_id}}/cip-quantities"): _PLANNER,
     ("POST", f"{_P}/cases/{{case_id}}/transition"): _PLANNER,
     ("POST", f"{_P}/intelligence/promo-plan-draft/recompute"): _PLANNER,
     ("POST", f"{_P}/intelligence/promo-plan-draft/create-case"): _PLANNER,
@@ -54,6 +55,7 @@ _CPOR_WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     ("POST", f"{_P}/cases/{{case_id}}/approval-link/revoke"): _PLANNER,
     # cpor_exports.py
     ("POST", f"{_P}/cases/{{case_id}}/export"): _PLANNER,
+    ("POST", f"{_P}/cases/{{case_id}}/export-profile"): _PLANNER,
     # cpor_fx.py
     ("POST", f"{_P}/fx/rates/fetch"): _PLANNER,
     ("POST", f"{_P}/fx/backfill-confirm"): _PLANNER,
