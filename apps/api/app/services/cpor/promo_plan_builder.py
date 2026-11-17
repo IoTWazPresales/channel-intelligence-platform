@@ -1670,10 +1670,12 @@ def _quantity_public_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _quantity_lines(session: Session, case_id: int) -> list[CporCaseLine]:
-    """Lines that may receive a suggested quantity.
+    """One live target per SKU for the customer/SKU quantity suggestion.
 
     Voided lines and split-source lines stay retired. ``is_voided_line`` is the
     same check the export uses, so a suggestion cannot put units back on them.
+    The first live line by ID receives the suggestion; other layers keep their
+    quantities. Forecast, history and cover are not independent layer volumes.
     """
     from app.services.cpor.pivot import is_voided_line
 
@@ -1684,7 +1686,11 @@ def _quantity_lines(session: Session, case_id: int) -> list[CporCaseLine]:
             .order_by(CporCaseLine.id.asc())
         ).all()
     )
-    return [line for line in rows if line.product_id is not None and not is_voided_line(line)]
+    targets: dict[int, CporCaseLine] = {}
+    for line in rows:
+        if line.product_id is not None and not is_voided_line(line):
+            targets.setdefault(int(line.product_id), line)
+    return list(targets.values())
 
 
 def preview_cip_quantities(
@@ -1726,7 +1732,7 @@ def apply_cip_quantities(
     *,
     tenant_id: str = "default",
 ) -> dict[str, Any]:
-    """Write each live line's suggested quantity and recompute support. Does not block."""
+    """Write each SKU target's suggested quantity and recompute support. Does not block."""
     from app.services.cpor.pivot import is_voided_line
     from app.services.cpor.recompute import recompute_case_line
 

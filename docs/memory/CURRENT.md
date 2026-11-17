@@ -1,5 +1,17 @@
 # CURRENT state
 
+**Last updated:** 2026-11-17 (PR #92 quantity/export review fixes, working tree only).
+
+**Branch and delivery:** detached checkout at `2ff652983fd6889b96171ae72edbbb44a2c17ad2`, worktree `rev-pr92-20261117`, PR #92. No commit or push. No migration changes.
+
+**Wired + unit-tested:** mapping-profile exports without a stored column order use a deterministic generic order; workbook headers and values pass through `force_text_cells`; CIP quantities target the first live line by ID per SKU, leaving other layers' quantities intact. No planner or line-up feature changes.
+
+**Checks and environment:** local Windows; 19 database-free tests passed (`test_cpor_quantity_export_review.py` and `test_promo_plan_builder.py`) with every SQLAlchemy connection forbidden. No database connections, database-backed tests, service commands or live UI smoke. `cip` and the concurrent `cip_test` run were untouched. Applied Alembic state was not queried.
+
+**Next:** review the uncommitted diff. Live workflow verification remains unproven; no deploy was performed.
+
+## Previous integration checkpoint (2026-11-15)
+
 **Last updated:** 2026-11-15 (store-location matcher merged into `feat/integrate-20261103`). Before that: 2026-11-15 (two Codex-clean fixes; D-0143 decided, option B; BACKLOG-232 closed, guard `945f6f0b`).
 
 **Branch:** `feat/integrate-20261103`. Merge `2f25e628e33911b1dbd04d4e2e25cdcd27e82d2b` (`cursor/w1a-store-dc-replenishment-b57c` at `61d1b33b`). Before that: tip `4cacb5b8`, then merge `b684cc140bc56bf1503d277b7e892ad721601830` (`fix/w1d-no-hardcoded-customers-20261113` at `45d0722a`) and merge `c163320393dadfcb76f6441f9e92c78eb379c714` (`fix/w1d-rls-budget-ledger-20261113` at `dc7da2ef`). Nothing was pushed to `main`. Migration `20261113_0062` was not applied to `cip`. `cip_test` stayed at alembic `20261110_0061` after the rolled-back ceiling test.

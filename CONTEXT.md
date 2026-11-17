@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-17 - **PR #92 review fixes (uncommitted, detached at `2ff65298`):** generic fallback column order for existing mapping profiles, shared literal-text workbook guard, and one stable live quantity target per SKU. Added database-free regression tests; 19 unit tests passed with database connections forbidden. No database access, planner/line-up feature changes, commit, push or deploy.
+
 - 2026-11-15 - **Store location matcher:** `cursor/w1a-store-dc-replenishment-b57c` (`61d1b33b`) merged `--no-ff` into `feat/integrate-20261103` at `2f25e628e33911b1dbd04d4e2e25cdcd27e82d2b`. Store map pytest 6 passed and StoreMap vitest 4 passed on `cip_test` (`current_database()` = cip_test). Migration `20261113_0062` not applied to `cip`. No main.
 
 - 2026-11-15 - **Codex-clean merges:** `fix/w1d-no-hardcoded-customers-20261113` (`45d0722a`, merge `b684cc140bc56bf1503d277b7e892ad721601830`) and `fix/w1d-rls-budget-ledger-20261113` (`dc7da2ef`, merge `c163320393dadfcb76f6441f9e92c78eb379c714`) merged `--no-ff` into `feat/integrate-20261103` (already-created tip `4cacb5b8`). Alias tenant tests and the budget ceiling scope test passed on `cip_test` (`current_database()` = cip_test). Migration `20261113_0062` not applied to `cip`. No main.

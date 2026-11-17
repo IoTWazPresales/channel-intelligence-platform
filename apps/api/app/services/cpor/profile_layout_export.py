@@ -19,9 +19,21 @@ from app.models.cpor import CporCase, CporCaseLine
 from app.models.cpor_historical import CporHistoricalMappingProfile
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.services.cpor.pivot import is_voided_line
+from app.services.export_literal_guard import force_text_cells
 
 
 COLUMN_ORDER_KEY = "column_order"
+# Older stored profiles have aliases but no explicit order. Use a generic,
+# stable layout rather than JSONB object order (which PostgreSQL may change).
+GENERIC_COLUMN_ORDER = (
+    "case_code", "case_name", "customer_token", "promotion_type",
+    "window_start", "window_end", "status", "sales_model_token",
+    "distributor_token", "pod_quarter", "product_line", "soh_snapshot",
+    "estimate_qty", "result_qty", "srp", "vat_rate", "dealer_margin_pct",
+    "dealer_price", "cost_basis", "support_unit", "ttl_support",
+    "roe_snapshot", "support_usd", "ttl_support_usd", "ttl_result",
+    "ttl_result_usd", "remark",
+)
 
 
 def sheet_role_for_channel(channel: str | None) -> str:
@@ -83,11 +95,14 @@ def layout_columns(
     column_map: Any,
     column_order: list[Any] | None = None,
 ) -> list[tuple[str, str]]:
-    """Canonical field and the first unused header alias, in the explicit list order."""
+    """First unused header alias in explicit order, or generic order for older maps."""
     aliases = _alias_map(column_map)
     order = [str(item) for item in (column_order or []) if str(item) != COLUMN_ORDER_KEY]
     if not order:
         order = column_order_from_map(column_map)
+    if not order:
+        order = [name for name in GENERIC_COLUMN_ORDER if name in aliases]
+        order.extend(sorted(set(aliases) - set(order)))
     columns: list[tuple[str, str]] = []
     used: set[str] = set()
     for canonical in order:
@@ -136,6 +151,7 @@ def render_profile_workbook(profile: dict[str, Any], rows: list[dict[str, Any]])
     for row in rows:
         ws.append([_cell(row.get(canonical)) for canonical, _header in columns])
 
+    force_text_cells(wb)
     buf = BytesIO()
     wb.save(buf)
     data = buf.getvalue()
