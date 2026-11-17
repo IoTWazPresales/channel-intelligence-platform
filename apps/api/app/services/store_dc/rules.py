@@ -38,18 +38,27 @@ def stock_action_in_notes(notes: str | None) -> str | None:
     return None
 
 
+def stock_action_identity(evidence: dict | None, notes: str | None) -> str | None:
+    """Stored cost evidence wins. The editable notes marker is only a fallback."""
+    if isinstance(evidence, dict):
+        stored = evidence.get("stock_action")
+        if stored is not None and str(stored).strip():
+            return str(stored).strip()
+    return stock_action_in_notes(notes)
+
+
 def stock_action_covers_site(evidence: dict | None, site_label: str | None) -> bool:
     """Whether a recorded action includes this site.
 
     Lines written before a site was stored cover every site. A recorded list
     covers only the sites in that list. An empty label is the account grain.
+    Labels use the same grouping as the board, so case and spacing do not reopen it.
     """
     if not isinstance(evidence, dict) or "site_labels" not in evidence:
         return True
-    wanted = (site_label or "").strip() or None
+    wanted = norm_label(site_label)
     for raw in evidence.get("site_labels") or []:
-        recorded = None if raw is None or str(raw).strip() == "" else str(raw).strip()
-        if recorded == wanted:
+        if norm_label(None if raw is None else str(raw)) == wanted:
             return True
     return False
 
