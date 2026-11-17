@@ -176,6 +176,7 @@ def main() -> int:
             # The superuser dump is still a read of cip. Restore and grants stay on the clone.
             dump = clone.clone_cip_database(
                 clone_db=CLONE_DB,
+                source_db="cip",
                 host=host,
                 port=port,
                 cip_user=os.environ.get("SMOKE_ADMIN_USER", "postgres"),
