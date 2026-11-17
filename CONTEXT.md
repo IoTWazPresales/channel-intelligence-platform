@@ -16,6 +16,10 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-17 - **PR #95 Round 2:** discovery validates seller seeds before writing sites, preserving bad-customer exclusion and stored seller identities. The existing DB-backed regression is unchanged. All 192 literal-scan hits came from Round 1 fixture keys `market`/`catalogue`; distinctive fixture keys yield zero app/alembic hits using fixture/config-derived keys. Database-free tests: 35 review + 55 existing passed (90), connections forbidden. No DB connection, service restart, commit or push; memory state updated, changes remain in this detached worktree at `a0c7dcc5`.
+
+- 2026-11-17 - **PR #95 review fixes:** detached review worktree at `a0c7dcc5`; shared autoconfigure now runs discovery from the schedule and steward POST, domain seeds stay on their domain, URL-less feed proposals are enriched, external ids use full-URL hashes, product links outrank navigation, and per-customer/site cursors continue past 25. Database-free tests: 27 new + 39 existing passed with connections forbidden. No database access, service restart, commit or push; changes remain in the working tree.
+
 - 2026-11-15 - **Store location matcher:** `cursor/w1a-store-dc-replenishment-b57c` (`61d1b33b`) merged `--no-ff` into `feat/integrate-20261103` at `2f25e628e33911b1dbd04d4e2e25cdcd27e82d2b`. Store map pytest 6 passed and StoreMap vitest 4 passed on `cip_test` (`current_database()` = cip_test). Migration `20261113_0062` not applied to `cip`. No main.
 
 - 2026-11-15 - **Codex-clean merges:** `fix/w1d-no-hardcoded-customers-20261113` (`45d0722a`, merge `b684cc140bc56bf1503d277b7e892ad721601830`) and `fix/w1d-rls-budget-ledger-20261113` (`dc7da2ef`, merge `c163320393dadfcb76f6441f9e92c78eb379c714`) merged `--no-ff` into `feat/integrate-20261103` (already-created tip `4cacb5b8`). Alias tenant tests and the budget ceiling scope test passed on `cip_test` (`current_database()` = cip_test). Migration `20261113_0062` not applied to `cip`. No main.

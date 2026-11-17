@@ -11,6 +11,9 @@ barcode, then model, using the site's search URL, then a search form on the site
 origin, then the origin sitemap. A page is kept only when its barcode or model matches
 the product. One match proposes a ``cst_listing_seed`` row (status ``proposed``) and
 remembers the URL. It does not create a ``customer_listing``.
+URL-less feed proposals are enriched in place. Each run searches at most 25 products
+per customer/site and keeps its last product id in the shared run-state store; the
+next run resumes there, wrapping after the catalogue has been visited.
 
 An empty adapter is set to the general HTML reader after a corroborated page. Price,
 stock, the page seller, and the buy box are stored on the proposal for the steward.
@@ -20,6 +23,8 @@ from __future__ import annotations
 
 import json
 import re
+from hashlib import sha256
+from html.parser import HTMLParser
 from typing import Any, Callable
 from urllib.parse import quote, urljoin, urlsplit
 
@@ -47,6 +52,7 @@ from app.services.listing_capture.identity import (
     product_models,
 )
 from app.services.listing_capture.links import confirmed_link, queue_case, remember_link
+from app.services.listing_capture.site_pause import load_run_state, save_run_state
 from app.services.listing_capture.sites import SITE_KEY_RE, create_site, site_config_from_row, update_site
 
 ACTOR = "listing-discovery"
@@ -60,7 +66,6 @@ REASON_READER = "reader_not_configured"
 REASON_NO_IDENTITY = "no_barcode_or_model"
 
 _HttpGet = Callable[[str], tuple[int, str]]
-_HREF = re.compile(r"""href\s*=\s*["']([^"'#]+)["']""", re.IGNORECASE)
 _SELLER_NAME = re.compile(
     r'"seller"\s*:\s*\{[^{}]*?"(?:name|display_name)"\s*:\s*"((?:\\.|[^"\\])*)"',
     re.IGNORECASE,
@@ -93,8 +98,11 @@ def discover_reporting_customers(
     http_get: _HttpGet | None = None,
     apply: bool = True,
     product_limit: int = 25,
+    run_store=None,
 ) -> dict[str, Any]:
     """Propose listings for reporting customers. ``apply=False`` does not write."""
+    if product_limit < 1:
+        raise ValueError("product_limit must be positive")
     entries: list[dict[str, Any]] = []
     for tid in _tenant_ids(session, tenant_id):
         for config, customer in _reporting_customers(session, tid):
@@ -109,6 +117,7 @@ def discover_reporting_customers(
                         http_get=http_get,
                         apply=apply,
                         product_limit=product_limit,
+                        run_store=run_store,
                     )
             except Exception as exc:
                 entry = _entry(
@@ -130,16 +139,11 @@ def _discover_customer(
     http_get: _HttpGet | None,
     apply: bool,
     product_limit: int,
+    run_store=None,
 ) -> dict[str, Any]:
     tenant_id = str(customer.tenant_id)
     keys = _site_keys(session, tenant_id=tenant_id, customer_id=int(customer.id), seed=seed)
-    own_site = False
-    if not keys:
-        origin = _origin_text(_seed_origin(seed))
-        key = _site_key_from_origin(origin) if origin else None
-        if key:
-            keys = [key]
-            own_site = not (isinstance(seed.get("marketplace"), str) and seed.get("marketplace").strip())
+    own_site = bool(_seed_origin(seed)) and not bool(str(seed.get("marketplace") or "").strip())
     if not keys:
         return _entry(
             customer_id=int(customer.id),
@@ -159,6 +163,7 @@ def _discover_customer(
                 http_get=http_get,
                 apply=apply,
                 product_limit=product_limit,
+                run_store=run_store,
             )
         )
     ready = [row for row in site_rows if row["reader_ready"] and row["proposed_listings"] + row["watched_listings"] > 0]
@@ -187,9 +192,16 @@ def _discover_site(
     http_get: _HttpGet | None,
     apply: bool,
     product_limit: int,
+    run_store=None,
 ) -> dict[str, Any]:
+    from app.services.listing_capture.autoconfig import _seed_seller, _seller_present
+
     tenant_id = str(customer.tenant_id)
     row = _load_site(session, tenant_id, site_key)
+    # Reject malformed seller data before discovery writes in its own savepoint.
+    # Autoconfiguration keeps an existing customer seller without re-reading the seed.
+    if not _seller_present(row, int(customer.id)):
+        _seed_seller(seed)
     if row is None and apply:
         display = _display_name(seed, site_key)
         row = create_site(
@@ -222,16 +234,24 @@ def _discover_site(
     watched = 0
     reasons: list[str] = []
     searched = 0
-    for product_id in product_ids:
+    cursor_key = f"discovery:{tenant_id}:{int(customer.id)}:{int(row.id)}"
+    previous = load_run_state(cursor_key, store=run_store) or {}
+    after = int(previous.get("after_product_id") or 0)
+    ordered = sorted(set(product_ids))
+    remaining = [pid for pid in ordered if pid > after] or ordered
+    last_product_id = 0
+    for product_id in remaining:
         if searched >= product_limit:
             break
+        last_product_id = product_id
         if _has_listing(session, customer_id=int(customer.id), site_key=site_key, product_id=product_id):
             watched += 1
             continue
         if _queue_exists(session, site_id=int(row.id), product_id=product_id):
             reasons.append(REASON_AMBIGUOUS)
             continue
-        if _proposed_seed(session, customer_id=int(customer.id), site_key=site_key, product_id=product_id) is not None:
+        proposal = _proposed_seed(session, customer_id=int(customer.id), site_key=site_key, product_id=product_id)
+        if proposal is not None and str((proposal.raw_json or {}).get("url") or "").strip():
             proposed += 1
             continue
         product = session.get(DimProduct, product_id)
@@ -258,6 +278,9 @@ def _discover_site(
             proposed += 1
         elif outcome["reason"]:
             reasons.append(str(outcome["reason"]))
+    next_after = last_product_id if last_product_id < remaining[-1] else 0
+    if apply:
+        save_run_state(cursor_key, {"after_product_id": next_after}, store=run_store)
     ready = _reader_ready(row)
     reason = None
     if proposed + watched == 0:
@@ -272,6 +295,7 @@ def _discover_site(
         proposed_listings=proposed,
         proposed_created=created,
         watched_listings=watched,
+        next_after_product_id=next_after or None,
     )
 
 
@@ -386,9 +410,9 @@ def _store_proposal(
 ) -> bool:
     if not apply or not _complete_capture(captured):
         return False
-    external_id = str(captured.get("token") or captured.get("url") or "")[:128]
-    if not external_id:
-        return False
+    # Search tokens (especially digit-stripped models) are not page identities.
+    # Hash the full URL, not a truncated prefix; keep different catalogue products distinct.
+    external_id = f"discovery:{int(product.id)}:{sha256(str(captured['url']).encode('utf-8')).hexdigest()}"
     existing = session.scalar(
         select(CstListingSeed.id).where(
             CstListingSeed.customer_id == int(customer.id),
@@ -408,27 +432,35 @@ def _store_proposal(
     )
     if existing is not None:
         return False
-    session.add(
-        CstListingSeed(
+    proposal = _proposed_seed(
+        session, customer_id=int(customer.id), site_key=str(row.site_key), product_id=int(product.id)
+    )
+    created = proposal is None
+    evidence = {
+        "source": ACTOR,
+        "url": captured.get("url"),
+        "price": captured.get("price"),
+        "availability": captured.get("availability"),
+        "seller": captured.get("seller"),
+        "buy_box": captured.get("buy_box"),
+        "marketplace_sellers": captured.get("marketplace_sellers") or [],
+        "corroboration": captured.get("corroboration"),
+    }
+    if proposal is not None:
+        # Enrich the feed proposal in place, preserving its external id and import evidence.
+        proposal.raw_json = {**(proposal.raw_json or {}), **evidence}
+    else:
+        proposal = CstListingSeed(
             customer_id=int(customer.id),
             marketplace=str(row.site_key),
             external_id=external_id,
             product_id=int(product.id),
             status="proposed",
-            raw_json={
-                "source": ACTOR,
-                "url": captured.get("url"),
-                "price": captured.get("price"),
-                "availability": captured.get("availability"),
-                "seller": captured.get("seller"),
-                "buy_box": captured.get("buy_box"),
-                "marketplace_sellers": captured.get("marketplace_sellers") or [],
-                "corroboration": captured.get("corroboration"),
-            },
+            raw_json=evidence,
         )
-    )
+    session.add(proposal)
     session.flush()
-    return True
+    return created
 
 
 def _search_candidates(
@@ -508,6 +540,27 @@ def _capture_url(
     }
 
 
+class _DocumentLinks(HTMLParser):
+    """Keep navigation context so header/footer links do not consume the page budget."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[tuple[str, bool]] = []
+        self._navigation_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"nav", "header", "footer"}:
+            self._navigation_depth += 1
+        if tag == "a":
+            href = dict(attrs).get("href")
+            if href and not href.startswith("#"):
+                self.links.append((href, self._navigation_depth > 0))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"nav", "header", "footer"}:
+            self._navigation_depth = max(0, self._navigation_depth - 1)
+
+
 def _urls_from_document(config: Any, body: str, base: str, token: str) -> list[str]:
     data = _json_object(body)
     urls: list[str] = []
@@ -521,17 +574,27 @@ def _urls_from_document(config: Any, body: str, base: str, token: str) -> list[s
         if urls:
             return urls[:3]
     host = urlsplit(base).netloc.lower()
-    ranked: list[str] = []
-    other: list[str] = []
-    for href in _HREF.findall(body):
+    ranked: list[tuple[int, str]] = []
+    document = _DocumentLinks()
+    document.feed(body)
+    for href, navigation in document.links:
         absolute = urljoin(base, href.strip())
         if urlsplit(absolute).netloc.lower() != host:
             continue
-        if token and token in absolute:
-            ranked.append(absolute.split("#")[0])
-        else:
-            other.append(absolute.split("#")[0])
-    return list(dict.fromkeys(ranked + other))[:3]
+        path = urlsplit(absolute).path
+        product_link = bool(re.search(r"/(?:p|products?|dp|items?)/", path, re.IGNORECASE))
+        if config.page_id_pattern:
+            try:
+                product_link = product_link or bool(re.search(config.page_id_pattern, absolute))
+            except re.error:
+                pass
+        navigation = navigation or path.rstrip("/").lower() in {
+            "", "/login", "/cart", "/account", "/contact", "/about", "/wishlist", "/checkout",
+        }
+        rank = (0 if product_link else 4 if navigation else 2) + (0 if token and token in absolute else 1)
+        ranked.append((rank, absolute.split("#")[0]))
+    ranked.sort(key=lambda item: item[0])
+    return list(dict.fromkeys(url for _rank, url in ranked))[:3]
 
 
 def _discover_search_pattern(config: Any, seed: dict[str, Any], http_get: _HttpGet) -> str | None:
@@ -746,6 +809,29 @@ def _site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict
     if isinstance(named, str) and named.strip():
         key = named.strip().lower()
         return [key] if SITE_KEY_RE.match(key) else []
+    origin = _origin_text(_seed_origin(seed))
+    if origin:
+        # A domain seed describes only that domain, even if this customer already
+        # has listings on other marketplaces. Reuse a matching site's existing key.
+        host = _domain(origin)
+        listings = session.execute(
+            select(CustomerListing.marketplace, CustomerListing.url)
+            .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
+            .where(DimCustomer.tenant_id == tenant_id, CustomerListing.customer_id == int(customer_id))
+        ).all()
+        matches = {
+            str(key).strip().lower() for key, url in listings
+            if _domain(url) == host and SITE_KEY_RE.match(str(key).strip().lower())
+        }
+        sites = session.scalars(select(ListingSite).where(ListingSite.tenant_id == tenant_id)).all()
+        matches.update(
+            str(site.site_key) for site in sites
+            if any(_domain(getattr(site, field)) == host for field in (
+                "product_url_pattern", "search_url_pattern", "details_url_pattern"
+            ))
+        )
+        key = _site_key_from_origin(origin)
+        return sorted(matches) if matches else ([key] if key else [])
     found = session.scalars(
         select(func.lower(func.trim(CustomerListing.marketplace)))
         .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
@@ -841,6 +927,11 @@ def _origin_text(value: str | None) -> str | None:
     if not parts.scheme or not parts.netloc:
         return None
     return f"{parts.scheme}://{parts.netloc}"
+
+
+def _domain(value: str | None) -> str:
+    host = urlsplit(_origin_text(value) or "").hostname or ""
+    return host.lower().removeprefix("www.")
 
 
 def _site_key_from_origin(origin: str) -> str | None:
@@ -952,6 +1043,7 @@ def _site_entry(
     proposed_listings: int = 0,
     proposed_created: int = 0,
     watched_listings: int = 0,
+    next_after_product_id: int | None = None,
 ) -> dict[str, Any]:
     return {
         "site_key": site_key,
@@ -961,4 +1053,5 @@ def _site_entry(
         "proposed_listings": proposed_listings,
         "proposed_created": proposed_created,
         "watched_listings": watched_listings,
+        "next_after_product_id": next_after_product_id,
     }
