@@ -14,6 +14,9 @@ from app.core.security import Role
 from app.models.cst_listing_seed import CstListingSeed
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
+from app.models.listing_link import (
+    QUEUE_CONFIRMED, QUEUE_NOT_ON_SITE, QUEUE_OPEN, QUEUE_REJECTED, ListingLink, ListingLinkQueue,
+)
 from app.models.listing_site import ListingSite, ListingSiteSeller
 from app.services.listing_capture import autoconfig, discovery, observation, site_pause, sites
 from app.services.listing_capture.site_pause import MemorySitePauseStore
@@ -423,3 +426,98 @@ def test_application_has_no_declared_site_literals():
                 hits.extend(f"{path.relative_to(api_root)}:{line_no}: {key}"
                             for key, pattern in patterns if pattern.search(line))
     assert hits == []
+
+
+@pytest.mark.parametrize("status", [QUEUE_OPEN, QUEUE_CONFIRMED, QUEUE_REJECTED, QUEUE_NOT_ON_SITE])
+def test_discovery_queue_only_blocks_open_items(monkeypatch, status):
+    """Evaluate the real queue predicate in memory, then follow the remembered URL."""
+    from sqlalchemy.orm.evaluator import _EvaluatorCompiler
+
+    queue_exists = discovery._queue_exists
+    session = _mock_catalogue(monkeypatch, {1: _product()})
+    monkeypatch.setattr(discovery, "_queue_exists", queue_exists)
+    queue = ListingLinkQueue(id=41, site_id=7, product_id=1, listing_id=None, status=status)
+    # Open cases for other products/sites must not block this product.
+    queues = [queue, ListingLinkQueue(id=42, site_id=8, product_id=1, status=QUEUE_OPEN),
+              ListingLinkQueue(id=43, site_id=7, product_id=2, status=QUEUE_OPEN)]
+
+    def scalar(stmt):
+        if stmt.column_descriptions[0]["entity"] is ListingLinkQueue:
+            matches = _EvaluatorCompiler(ListingLinkQueue).process(stmt.whereclause)
+            return next((item.id for item in queues if matches(item)), None)
+        return None
+
+    session.scalar.side_effect = scalar
+    remembered = MagicMock(return_value=ListingLink(url=f"{HOST}/p/steward-chosen"))
+    monkeypatch.setattr(discovery, "confirmed_link", remembered)
+    http = MagicMock(return_value=(200, _page()))
+
+    report = discovery.discover_reporting_customers(
+        session, tenant_id=TENANT, http_get=http, run_store=MemorySitePauseStore(),
+    )["customers"][0]
+
+    if status == QUEUE_OPEN:
+        assert report["reason"] == discovery.REASON_AMBIGUOUS
+        assert report["proposed_created"] == 0
+        remembered.assert_not_called()
+        http.assert_not_called()
+        session.add.assert_not_called()
+    else:
+        remembered.assert_called_once_with(session, 7, 1)
+        http.assert_called_once_with(f"{HOST}/p/steward-chosen")
+        assert report["proposed_created"] == 1
+        proposal = session.add.call_args.args[0]
+        assert isinstance(proposal, CstListingSeed)
+        assert proposal.status == "proposed"
+        assert proposal.raw_json["url"] == f"{HOST}/p/steward-chosen"
+
+
+@pytest.mark.parametrize("names,ids", [(["Saved Counter"], []), ([], ["saved-42"])])
+@pytest.mark.parametrize("named_offer", [True, False])
+def test_domain_discovery_preserves_stored_seller(monkeypatch, names, ids, named_offer):
+    seller = ListingSiteSeller(customer_id=11, seller_names=names, seller_ids=ids)
+    row = _site(first_party_seller=None, sellers=[seller])
+    session = _mock_catalogue(monkeypatch, {1: _product()}, row=row)
+    config, _customer = discovery._reporting_customers(session, TENANT)[0]
+    config.feed_profile_json = {"listing_seed": {"domain": HOST}}
+    session.scalars.return_value.all.return_value = [row]
+    body = _page().replace('"Counter"', '"Saved Counter"')
+    if not named_offer:
+        body = body.replace(',"seller":{"name":"Saved Counter"}', '')
+    http = MagicMock(side_effect=lambda url: (200, '<a href="/p/glide">view</a>')
+                     if "/search?" in url else (200, body))
+    queued = MagicMock()
+    monkeypatch.setattr(discovery, "queue_case", queued)
+
+    report = discovery.discover_reporting_customers(
+        session, tenant_id=TENANT, http_get=http, run_store=MemorySitePauseStore(),
+    )["customers"][0]
+
+    assert row.first_party_seller is None
+    assert row.sellers == [seller]
+    assert seller.seller_names == names
+    assert seller.seller_ids == ids
+    proposals = [call.args[0] for call in session.add.call_args_list
+                 if isinstance(call.args[0], CstListingSeed)]
+    if named_offer:
+        assert report["proposed_created"] == 1
+        assert proposals[0].raw_json["seller"] == "Saved Counter"
+        queued.assert_not_called()
+    else:
+        assert report["reason"] == "capture_incomplete"
+        assert proposals == []
+        queued.assert_called_once()
+        assert queued.call_args.kwargs["evidence"]["seller"] is None
+
+
+def test_domain_discovery_still_infers_seller_without_stored_identity(monkeypatch):
+    row = _site(first_party_seller=None)
+    session = _mock_catalogue(monkeypatch, {}, row=row)
+    config, _customer = discovery._reporting_customers(session, TENANT)[0]
+    config.feed_profile_json = {"listing_seed": {"domain": HOST}}
+    session.scalars.return_value.all.return_value = [row]
+
+    report = discovery.discover_reporting_customers(session, tenant_id=TENANT)
+
+    assert report["customers"][0]["reason"] == discovery.REASON_NO_CATALOGUE
+    assert row.first_party_seller == "Counter"

@@ -6,7 +6,7 @@ a domain / origin URL). Nothing here names a retailer.
 
 For each product with ``reported_soh`` > 0 in the customer's latest reported period
 (the newest period that has a stock figure, including zero),
-and with no listing on that site and no queue row, discovery searches in order:
+and with no listing on that site and no open queue row, discovery searches in order:
 barcode, then model, using the site's search URL, then a search form on the site
 origin, then the origin sitemap. A page is kept only when its barcode or model matches
 the product. One match proposes a ``cst_listing_seed`` row (status ``proposed``) and
@@ -36,7 +36,7 @@ from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing
-from app.models.listing_link import LINK_CONFIRMED, LINK_REJECTED, ListingLink, ListingLinkQueue
+from app.models.listing_link import LINK_CONFIRMED, LINK_REJECTED, QUEUE_OPEN, ListingLink, ListingLinkQueue
 from app.models.listing_site import ListingSite
 from app.services.listing_capture.adapters import configured_adapter
 from app.services.listing_capture.adapters.html_page import ADAPTER_KEY as HTML_PAGE_ADAPTER
@@ -213,7 +213,7 @@ def _discover_site(
         )
     if row is not None and apply:
         _copy_seed_fields(session, row, seed)
-        if own_site and _blank(row.first_party_seller):
+        if own_site and _blank(row.first_party_seller) and not _seller_present(row, int(customer.id)):
             _safe_update(session, row, {"first_party_seller": str(customer.name or "").strip()})
         row = _load_site(session, tenant_id, site_key) or row
     if row is None:
@@ -866,7 +866,11 @@ def _has_listing(session: Session, *, customer_id: int, site_key: str, product_i
 def _queue_exists(session: Session, *, site_id: int, product_id: int) -> bool:
     found = session.scalar(
         select(ListingLinkQueue.id)
-        .where(ListingLinkQueue.site_id == int(site_id), ListingLinkQueue.product_id == int(product_id))
+        .where(
+            ListingLinkQueue.site_id == int(site_id),
+            ListingLinkQueue.product_id == int(product_id),
+            ListingLinkQueue.status == QUEUE_OPEN,
+        )
         .limit(1)
     )
     return found is not None
