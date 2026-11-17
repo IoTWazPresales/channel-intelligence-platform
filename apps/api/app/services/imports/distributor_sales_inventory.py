@@ -149,20 +149,9 @@ def _customer_candidate_identity_norm(customer_dealer_raw: str | None, dealer_gr
     return "__blank__"
 
 
-# Channel / marketplace hints for steward review (generic; not region-specific).
-# Stored listing_site.site_key values are added at runtime so a site key never has
-# to be spelled in this module.
+# Channel words for steward review. A retailer, distributor, or marketplace
+# name is not spelled here. listing_site.site_key values are added at runtime.
 STRATEGIC_CHANNEL_HINT_SUBSTRINGS = (
-    "amazon",
-    "makro",
-    "massmart",
-    "game ",
-    " game",
-    "incredible connection",
-    "walmart",
-    "ebay",
-    "alibaba",
-    "shopify",
     "marketplace",
     "etail",
     "e-tail",

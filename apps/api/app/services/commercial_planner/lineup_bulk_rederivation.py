@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
-from app.models.dimensions import DimCustomer
 from app.models.facts import FactInboundShipment
 from app.services.shipment_live_line import live_line
 from app.services.shipment_strict_pair import twin_remainder
@@ -299,12 +298,6 @@ def _build_rederivation_proposal(
     if customer_planned_before is not None and source_total:
         customer_planned_after_q1 = float(alloc["q1_allocated_units"]) * (customer_planned_before / before_total) if before_total else None
 
-    makro_id = db.scalar(select(DimCustomer.id).where(func.lower(DimCustomer.name).like("%makro%")).limit(1))
-    makro_planned_before = _planned_for_customer(lines, int(makro_id)) if makro_id else None
-    makro_planned_after_q1 = None
-    if makro_planned_before is not None and before_total:
-        makro_planned_after_q1 = float(alloc["q1_allocated_units"]) * (makro_planned_before / before_total)
-
     disagreement_count = sum(1 for p in line_previews if p.get("qty_month_disagreement"))
 
     return {
@@ -327,8 +320,6 @@ def _build_rederivation_proposal(
             "po_link_count": int(po_count or 0),
             "customer_planned_before": customer_planned_before,
             "customer_planned_after_q1": customer_planned_after_q1,
-            "makro_planned_before": makro_planned_before,
-            "makro_planned_after_q1": makro_planned_after_q1,
             "already_allocated": all(_line_already_allocated(ln) for ln in lines),
         },
         "q2_twin_proposal": {

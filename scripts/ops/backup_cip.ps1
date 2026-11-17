@@ -1,11 +1,12 @@
 # Backup local cip database (custom format).
 param(
-  [string]$DatabaseUrl = "postgresql://cip:cip@127.0.0.1:5432/cip",
+  [string]$DatabaseUrl,
   [string]$OutDir = "",
   [string]$PgBin = "C:\Program Files\PostgreSQL\18\bin"
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($DatabaseUrl)) { throw "Pass -DatabaseUrl explicitly; there is no default database." }
 $root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 if (-not $OutDir) {
   $OutDir = Join-Path $root ".tmp\backups"

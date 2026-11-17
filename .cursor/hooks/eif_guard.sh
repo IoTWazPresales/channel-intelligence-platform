@@ -47,6 +47,9 @@ else
   exit 0
 fi
 
+# BACKLOG-236: tells the guard its host timeout is 30 s (watchdog 25 s).
+EIF_HOOK_HOST=cursor
+export EIF_HOOK_HOST
 mkdir -p "$eif_root/.eif/runtime/hook-launcher" 2>/dev/null || exit 0
 capture_dir=$(mktemp -d "$eif_root/.eif/runtime/hook-launcher/invoke.XXXXXXXX") || exit 0
 capture="$capture_dir/response.json"

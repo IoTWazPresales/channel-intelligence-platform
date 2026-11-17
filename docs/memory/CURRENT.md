@@ -6,6 +6,17 @@
 **Checks:** 35 review regressions plus 55 existing database-free listing tests passed (90 total), with `CIP_UNIT_TESTS_FORBID_DB=1` vetoing connections before collection. Fixture/config-derived site-key scan of app + alembic: zero hits; DB-derived keys were not inspected. `git diff --check` passed. No database connected (including `cip_test`), service restarted, commit, push, or live/UI verification performed. Next: review the working-tree diff; DB-backed test was not rerun under Warren's database-free constraint.
 
 **Prior integration snapshot (below; not this review checkout):**
+**Last updated:** 2026-11-17 (PR #92 quantity/export review fixes, working tree only).
+
+**Branch and delivery:** detached checkout at `2ff652983fd6889b96171ae72edbbb44a2c17ad2`, worktree `rev-pr92-20261117`, PR #92. No commit or push. No migration changes.
+
+**Wired + unit-tested:** mapping-profile exports without a stored column order use a deterministic generic order; workbook headers and values pass through `force_text_cells`; CIP quantities target the first live line by ID per SKU, leaving other layers' quantities intact. No planner or line-up feature changes.
+
+**Checks and environment:** local Windows; 19 database-free tests passed (`test_cpor_quantity_export_review.py` and `test_promo_plan_builder.py`) with every SQLAlchemy connection forbidden. No database connections, database-backed tests, service commands or live UI smoke. `cip` and the concurrent `cip_test` run were untouched. Applied Alembic state was not queried.
+
+**Next:** review the uncommitted diff. Live workflow verification remains unproven; no deploy was performed.
+
+## Previous integration checkpoint (2026-11-15)
 
 **Last updated:** 2026-11-15 (store-location matcher merged into `feat/integrate-20261103`). Before that: 2026-11-15 (two Codex-clean fixes; D-0143 decided, option B; BACKLOG-232 closed, guard `945f6f0b`).
 

@@ -212,6 +212,11 @@ CRASH_REASON_CODES = frozenset({
     'SESSION_GIT_FAILURE', 'IDENTITY_GIT_FAILURE', 'RUNTIME_INTEGRITY', 'RUNTIME_LOCK_FAILURE',
 })
 WATCHDOG_DEFAULT_SEC = 8.0
+# BACKLOG-236: under the Cursor launchers (eif_guard.cmd / eif_guard.sh export
+# EIF_HOOK_HOST=cursor) the hooks.json timeout is 30 s, so the watchdog may run
+# to 25 s. Any other caller (the Claude Code adapter, whose own limit is 9.5 s,
+# or a direct run) keeps the 8-second ceiling.
+CURSOR_WATCHDOG_SEC = 25.0
 _EMITTED = False
 _EMIT_RC = 1
 _EMIT_LOCK = threading.Lock()
@@ -358,18 +363,25 @@ def _operator_log_path() -> Path:
     return (_ACTIVE_ROOT or _project_root()) / '.eif' / 'hook-guard.log'
 
 
+def watchdog_ceiling_sec() -> float:
+    """25 s under a Cursor launcher (EIF_HOOK_HOST=cursor), else 8 s."""
+    return CURSOR_WATCHDOG_SEC if os.environ.get('EIF_HOOK_HOST') == 'cursor' else WATCHDOG_DEFAULT_SEC
+
+
 def watchdog_sec() -> float:
-    """Seconds before the guard self-denies HOOK_TIMEOUT. Default 8.
+    """Seconds before the guard self-denies HOOK_TIMEOUT: the host ceiling
+    (25 s under the Cursor launchers, 8 s otherwise) unless lowered.
 
     Host config (no EIF release): `.eif/hook-guard.json` `watchdog_sec`.
     Session/test override: environment variable `EIF_HOOK_WATCHDOG_SEC`.
-    Invalid, nonpositive and over-budget values use the safe 8-second default.
+    Invalid, nonpositive and over-ceiling values use the ceiling.
     """
+    ceiling = watchdog_ceiling_sec()
     raw = os.environ.get('EIF_HOOK_WATCHDOG_SEC')
     if raw not in (None, ''):
         try:
             value = float(raw)
-            return value if math.isfinite(value) and 0 < value <= WATCHDOG_DEFAULT_SEC else WATCHDOG_DEFAULT_SEC
+            return value if math.isfinite(value) and 0 < value <= ceiling else ceiling
         except ValueError:
             pass
     cfg = _project_root() / '.eif' / 'hook-guard.json'
@@ -378,10 +390,10 @@ def watchdog_sec() -> float:
             data = json.loads(cfg.read_text(encoding='utf-8'))
             if isinstance(data, dict) and 'watchdog_sec' in data:
                 value = float(data['watchdog_sec'])
-                return value if math.isfinite(value) and 0 < value <= WATCHDOG_DEFAULT_SEC else WATCHDOG_DEFAULT_SEC
+                return value if math.isfinite(value) and 0 < value <= ceiling else ceiling
     except Exception:
         pass
-    return WATCHDOG_DEFAULT_SEC
+    return ceiling
 
 
 # IDENTITY_TOOL diagnostic (BACKLOG-225, approved 2026-11-14). An IDENTITY_TOOL
@@ -1427,6 +1439,21 @@ def _store_identity(state, path, key, heads):
     except (OSError, ValueError):
         pass  # Reuse is an optimisation; verification already completed.
 
+def _linked_worktree(top: Path) -> bool:
+    """A linked worktree's .git is a file 'gitdir: <common>/worktrees/<name>'.
+    Read only; no git process. A submodule's .git file points at modules/."""
+    try:
+        marker = (Path(top) / '.git')
+        if not marker.is_file():
+            return False
+        line = marker.read_text(encoding='utf-8', errors='replace').splitlines()[0].strip()
+    except (OSError, IndexError):
+        return False
+    if not line.startswith('gitdir:'):
+        return False
+    parts = [p.casefold() for p in line[len('gitdir:'):].strip().replace('\\', '/').split('/') if p]
+    return len(parts) >= 2 and parts[-2] == 'worktrees'
+
 def _identity_check(root: Path, policy):
     ident=policy.get('identity') or {}
     exp_root=ident.get('root_commit') or ''
@@ -1443,6 +1470,14 @@ def _identity_check(root: Path, policy):
     if exp_vcs:
         actual=Path(git(root,'rev-parse','--show-toplevel')).resolve()
         if str(actual)!=str(Path(exp_vcs).resolve()):
+            if _linked_worktree(actual):
+                # BACKLOG-237 option (b): same denial, an instruction instead of
+                # a mismatch. The worktree's tracked policy copy made the guard
+                # stop there; identity rules are unchanged.
+                return False,(f'WORKTREE_ROOT_UNSUPPORTED: {actual} is a linked git worktree with its own copy of '
+                              f'the EIF policy, and EIF does not run agents from a worktree root. Open the agent at '
+                              f'the repository root {exp_vcs}; the worktree stays reachable from there '
+                              f'(for example git -C <worktree path> ...).')
             return False,f'IDENTITY_MISMATCH: vcs root expected {exp_vcs}, observed {actual}'
     for anchor in ident.get('repository_anchors') or []:
         ar=Path(anchor.get('allowed_root') or '').resolve()
@@ -1462,7 +1497,9 @@ def control_plane(rel, policy):
     pats=list(CONTROL_PLANE_DEFAULTS)+(policy.get('control_plane_paths') or [])
     # Lean: the generated programme view is CLI-only like the ledger it renders
     # (staged with it under the ledger integrity check, never hand-edited).
-    if rel and lean_profile(policy) and _normalize_shell_rel(rel) == lean_ledger_view_rel(policy):
+    # Host-aware like every other control-plane path: on Windows `.eif/program.md`
+    # names the same file as `.eif/PROGRAM.md` (Codex P2 on 0709257).
+    if rel and lean_profile(policy) and matches(_normalize_shell_rel(rel), [lean_ledger_view_rel(policy)]):
         return True
     return matches(rel,pats)
 
@@ -1598,8 +1635,21 @@ def _persist_budget(path: Path, state):
     except Exception:
         return False,'BUDGET_STATE_FAILURE: cannot persist runtime budget state'
 
+def read_budget_extra(root: Path, data, policy):
+    """BACKLOG-236: hooks.json no longer runs preToolUse for Read, so the
+    beforeReadFile hook counts the read toward the execution burst instead.
+    As before, a budget outcome never denies a policy-checked read (reads are
+    recovery actions); it only travels as context."""
+    if not isinstance(policy, dict):
+        return None
+    ok, msg, extra = budget_ok(root, data, policy)
+    if ok:
+        return extra
+    return {'additional_context': f'{msg}; read policy checks completed; reads stay available.'}
+
+
 def budget_ok(root: Path, data, policy):
-    if data.get('hook_event_name') not in {'preToolUse', 'beforeShellExecution', 'beforeMCPExecution'}:
+    if data.get('hook_event_name') not in {'preToolUse', 'beforeShellExecution', 'beforeMCPExecution', 'beforeReadFile'}:
         return True, '', None
     try:
         # Never use the shared anonymous pool; identity fallback must match sessions.
@@ -1922,7 +1972,8 @@ def record_executed_failure(root, data):
 
 def _budget_ok_locked(root: Path, data, policy, p):
     """Burst tool-call cap is fail-closed. Session wall-clock is wrap-up, not a permanent deny."""
-    if data.get('hook_event_name')!='preToolUse': return True,'',None
+    # beforeReadFile counts a Read: preToolUse no longer fires for Read (BACKLOG-236).
+    if data.get('hook_event_name') not in ('preToolUse', 'beforeReadFile'): return True,'',None
     b=policy.get('budgets') or {}
     max_calls=b.get('tool_calls')
     max_minutes=b.get('wall_clock_minutes')
@@ -4427,7 +4478,8 @@ def _main():
             if has_secret(str(data.get('content') or '')):
                 audit(root,data,'deny','SECRET_IN_READ'); return deny('SECRET_IN_READ','high-confidence secret-like content detected; use a scoped secure mechanism')
             _ADVISORIES.append({'reason_code':'FOREIGN_READ','enforcement':'advisory','message':'read target resolves outside all declared project roots'})
-            audit(root,data,'allow','READ_OK'); return out()
+            rextra=read_budget_extra(root,data,policy)
+            audit(root,data,'allow','READ_OK'); return out(extra=rextra)
         if not rr:
             audit(root,data,'deny','FOREIGN_READ')
             return deny('FOREIGN_READ','read target resolves outside all declared project roots')
@@ -4444,7 +4496,8 @@ def _main():
         # High-confidence content scan before it enters model context.
         if has_secret(str(data.get('content') or '')):
             audit(root,data,'deny','SECRET_IN_READ',rel); return deny('SECRET_IN_READ',f'high-confidence secret-like content detected in {rel}; use a scoped secure mechanism')
-        audit(root,data,'allow','READ_OK',rel); return out()
+        rextra=read_budget_extra(root,data,policy)
+        audit(root,data,'allow','READ_OK',rel); return out(extra=rextra)
 
     if event=='afterFileEdit':
         # Detection/audit only. It occurs after the edit; do not present it as the primary pre-write boundary.
@@ -4665,6 +4718,9 @@ def verify_closure_cli(arguments):
         if state != 'OK':
             result = False, 'POLICY_INTEGRITY', 'An accepted, valid project policy is required.'
         else:
+            # BACKLOG-232: as in hook mode, only a valid lean policy has the
+            # anonymous pool, whose retry debt the verifier reports, not refuses.
+            support('eif_session').LEAN_IDENTITY_FALLBACK = lean_profile(policy)
             ok, message = identity_ok(root, policy)
             result = (support('eif_session').verify_request(root, *arguments) if ok else
                       (False, 'IDENTITY_MISMATCH', message))

@@ -119,7 +119,7 @@ export function PlanTemplatesSurface() {
       apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500', { signal }),
   });
 
-  const profiles = profilePage?.profiles ?? [];
+  const profiles = useMemo(() => profilePage?.profiles ?? [], [profilePage]);
   const selected =
     profiles.find((p) => p.profile_code === code) ?? profiles.find((p) => p.is_default) ?? profiles[0];
   const historicalN = (casesPage?.items ?? []).filter((r) => r.origin === 'historical_import').length;
@@ -163,8 +163,7 @@ export function PlanTemplatesSurface() {
       <Alert severity="info" variant="outlined" icon={<SwapHorizOutlinedIcon />}>
         <b>Upload historical cases here.</b> A customer promotion or funding workbook is validated,
         the names are matched, and the cases are applied. Learn a template only when that
-        customer’s column layout is new. Writing a plan back into that layout is not built — export
-        stays the fixed workbook.
+        column layout is new. Export writes a plan back into the stored layout.
       </Alert>
 
       <HeadlineStrip columns={4}>
@@ -188,9 +187,9 @@ export function PlanTemplatesSurface() {
         />
         <HeadlineFigure
           label="Export side"
-          value="—"
+          value="Stored layout"
           compact
-          caption="The import map is saved. Writing a plan back into the customer layout is not built."
+          caption="Export writes a plan back into the stored column layout."
         />
       </HeadlineStrip>
 
@@ -311,7 +310,7 @@ export function PlanTemplatesSurface() {
                     disabled={!dirty || missingRequired.length > 0}
                     onClick={() =>
                       setToast(
-                        'Profile edits are not a writer on this surface — the stored map is cpor_historical_mapping_profile, applied on the next historical import. Template-driven export is Planned.',
+                        'Profile edits are not a writer on this surface — the stored map is cpor_historical_mapping_profile, applied on the next historical import. Export already reads that stored map.',
                       )
                     }
                     data-testid="template-save"
@@ -349,7 +348,7 @@ export function PlanTemplatesSurface() {
                   {
                     code: 'export_planned',
                     message:
-                      '“Use for import & export” is partly built: import uses this profile today; writing a plan back into that layout is not built. Export stays the fixed workbook.',
+                      'Import and export both use this stored profile. Export writes the plan’s columns in this layout.',
                   },
                 ]}
                 dirty={dirty}

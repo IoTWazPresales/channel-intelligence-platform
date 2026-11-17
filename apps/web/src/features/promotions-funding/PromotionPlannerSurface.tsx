@@ -450,7 +450,7 @@ function PlannerList({
                   <PanelRow
                     severity="neutral"
                     primary="Live listing vs promo price is not a row on this list"
-                    secondary="Create a promotion plan. The Evidence column shows listing, competitor price, and observed cover, and it does not set the quantity."
+                    secondary="Create a promotion plan. Suggested quantity uses cover, forecast and this customer's history. Flags do not block, and cover policy is not written."
                     figure="Evidence"
                     onClick={() => setProposeOpen(true)}
                   />
@@ -589,7 +589,8 @@ function PlanGrid({ rows, onOpen }: { rows: CporCaseListRow[]; onOpen: (id: numb
         flex: 1,
         valueGetter: () => null,
         valueFormatter: () => '—',
-        tooltipValueGetter: () => 'Writing a plan back into the customer layout is not built — export stays the fixed workbook',
+        tooltipValueGetter: () =>
+          'Export writes the plan in the stored column layout. The fixed workbook route is unchanged.',
       },
       {
         field: 'flags',

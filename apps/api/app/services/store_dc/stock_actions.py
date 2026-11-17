@@ -9,10 +9,11 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+from app.services.commercial_planner.lineup_period_canonical import active_lineup_line_filters
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
@@ -24,7 +25,12 @@ from app.services.cpor.promo_plan_builder import (
 )
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
 from app.services.store_dc.read_model import build_customer_view, build_lead_index
-from app.services.store_dc.rules import SUGGESTIONS, stock_action_covers_site, stock_action_in_notes
+from app.services.store_dc.rules import (
+    SUGGESTIONS,
+    norm_label,
+    stock_action_covers_site,
+    stock_action_identity,
+)
 
 OPEN_CASE_STATUSES = ("draft", "proposed", "approved", "active")
 PROMOTE_TYPE = "Stock PP (In-Direct)"
@@ -256,6 +262,7 @@ def _srp_for_line(session: Session, *, customer_id: int, product_id: int, tenant
             CommercialLineupLine.msrp_local.is_not(None),
             CommercialLineupCase.superseded_by_case_id.is_(None),
             CommercialLineupCase.commercial_status.notin_(("cancelled", "superseded")),
+            *active_lineup_line_filters(),
         )
         .order_by(CommercialLineupLine.id.desc())
         .limit(1)
@@ -269,6 +276,20 @@ def _row_evidence(row: Any) -> dict | None:
         return None
     evidence = row[2]
     return evidence if isinstance(evidence, dict) else None
+
+
+def _retired_stock_action_clauses():
+    """A superseded case or a voided line is not an open stock action."""
+    return (
+        CporCase.superseded_by_case_id.is_(None),
+        or_(
+            CporCaseLine.remark.is_(None),
+            and_(
+                CporCaseLine.remark.notlike("%[voided]%"),
+                CporCaseLine.remark.notlike("%[split into layers]%"),
+            ),
+        ),
+    )
 
 
 def _open_case_id(
@@ -288,11 +309,12 @@ def _open_case_id(
             CporCase.customer_id == int(customer_id),
             CporCaseLine.product_id == int(product_id),
             CporCase.status.in_(OPEN_CASE_STATUSES),
+            *_retired_stock_action_clauses(),
         )
     ).all()
     wanted = _blank_site(site_label)
     for row in rows:
-        if stock_action_in_notes(row[1]) != action:
+        if stock_action_identity(_row_evidence(row), row[1]) != action:
             continue
         if stock_action_covers_site(_row_evidence(row), wanted):
             return int(row[0])
@@ -314,6 +336,37 @@ def _matching_line(
     if unlabeled:
         return unlabeled[0]
     return matches[0] if matches else None
+
+
+def _lock_stock_action_create(
+    session: Session,
+    *,
+    tenant_id: str,
+    customer_id: int,
+    product_id: int,
+    action: str,
+    site_label: str | None,
+) -> None:
+    """One transaction may create this customer, product, site, and action.
+
+    The lock lasts until the transaction commits, which is after the draft
+    insert. The next request then sees that draft as already open.
+    """
+    if not isinstance(session, Session):
+        return
+    key = "\x1f".join(
+        (
+            str(tenant_id),
+            str(int(customer_id)),
+            str(int(product_id)),
+            str(action),
+            norm_label(site_label),
+        )
+    )
+    session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:key), hashtext('cip.stock_action.create'))"),
+        {"key": key},
+    )
 
 
 def execute_aged_stock_action(
@@ -344,6 +397,14 @@ def execute_aged_stock_action(
     if soh is None or float(soh) <= 0:
         raise ValueError("no_stock_to_act_on")
     acted_site = _blank_site(line.get("site_label"))
+    _lock_stock_action_create(
+        session,
+        tenant_id=tenant_id,
+        customer_id=int(customer_id),
+        product_id=int(product_id),
+        action=action,
+        site_label=acted_site,
+    )
     existing = _open_case_id(
         session,
         tenant_id=tenant_id,
@@ -415,6 +476,7 @@ def _merged_promote_lines(
     skipped: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     by_product: dict[int, dict[str, Any]] = {}
+    eligible: list[tuple[int, str | None, float]] = []
     for row in rows:
         product_id = int(row["product_id"])
         site = _blank_site(row.get("site_label"))
@@ -422,6 +484,17 @@ def _merged_promote_lines(
         if soh is None or float(soh) <= 0:
             skipped.append({"customer_id": customer_id, "product_id": product_id, "reason": "no_stock_to_act_on"})
             continue
+        eligible.append((product_id, site, float(soh)))
+    for product_id, site, _soh in sorted(eligible, key=lambda item: (item[0], norm_label(item[1]))):
+        _lock_stock_action_create(
+            session,
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            product_id=product_id,
+            action="promote",
+            site_label=site,
+        )
+    for product_id, site, soh in eligible:
         if _open_case_id(
             session,
             tenant_id=tenant_id,

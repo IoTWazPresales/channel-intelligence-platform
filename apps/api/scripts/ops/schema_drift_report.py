@@ -77,8 +77,9 @@ def _flatten(diffs):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--db", default="cip", help="database name on the settings host (default: cip)")
-    ap.add_argument("--url", help="full sync SQLAlchemy URL; overrides --db")
+    db_choice = ap.add_mutually_exclusive_group(required=True)
+    db_choice.add_argument("--db", help="database name on the settings host (required unless --url)")
+    db_choice.add_argument("--url", help="full sync SQLAlchemy URL; overrides --db")
     ap.add_argument("--tables", help="comma-separated table names to report on (default: all)")
     ap.add_argument("--out", help="write the report here as well as printing it")
     args = ap.parse_args()

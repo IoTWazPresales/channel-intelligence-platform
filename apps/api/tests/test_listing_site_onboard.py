@@ -1,0 +1,673 @@
+"""Steward site onboarding for a reporting customer with no site key. cip_test only.
+
+One rolled-back transaction. No live HTTP. No named retailer.
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+import uuid
+
+import pytest
+from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.orm import Session, selectinload
+
+from app.models.customer_report_config import CustomerReportConfig
+from app.models.dimensions import DimCustomer
+from app.models.listing_capture import CustomerListing
+from app.models.listing_site import ListingSite
+from app.services.listing_capture.autoconfig import autoconfigure_sites
+from app.services.listing_capture.site_onboarding import SiteOnboardError, normalize_domain, record_customer_site
+
+_URLS = [
+    "https://shop-a.example.test/p/111",
+    "https://shop-a.example.test/p/222",
+]
+
+
+def _sync_url() -> str:
+    """Point the sync URL at cip_test when settings still name cip. Never print the URL."""
+    from sqlalchemy.engine import make_url
+
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    url = get_settings().database_url_sync
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    parsed = make_url(url)
+    if (parsed.database or "").casefold() == "cip":
+        parsed = parsed.set(database="cip_test")
+    return parsed.render_as_string(hide_password=False)
+
+
+@pytest.fixture()
+def db_session():
+    url = _sync_url()
+    eng = create_engine(url)
+    try:
+        conn = eng.connect()
+    except Exception as exc:  # pragma: no cover - environment
+        pytest.skip(f"no database: {type(exc).__name__}")
+    db = conn.execute(text("SELECT current_database()")).scalar_one()
+    print("current_database()", db)
+    if db != "cip_test":
+        conn.close()
+        eng.dispose()
+        pytest.skip(f"stop: site onboarding runs on cip_test only (current_database()={db})")
+    conn.rollback()
+    tx = conn.begin()
+    session = Session(bind=conn)
+    try:
+        yield session
+    finally:
+        session.close()
+        tx.rollback()
+        conn.close()
+        eng.dispose()
+
+
+def _customer(session: Session, tenant: str) -> DimCustomer:
+    tag = uuid.uuid4().hex[:8]
+    row = DimCustomer(
+        code=f"cust-{tag}",
+        name=f"Counter {tag}",
+        customer_status="active",
+        is_key_account=False,
+        tenant_id=tenant,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def _report(session: Session, customer: DimCustomer, seed: dict | None = None, *, expected: bool = True) -> None:
+    session.add(
+        CustomerReportConfig(
+            customer_id=int(customer.id),
+            reports_expected=expected,
+            feed_profile_json={"listing_seed": seed} if seed is not None else None,
+        )
+    )
+    session.flush()
+
+
+def _listing(session: Session, customer: DimCustomer, site_key: str) -> None:
+    session.add(
+        CustomerListing(
+            customer_id=int(customer.id),
+            url=f"https://{site_key}.example.test/p/1",
+            marketplace=site_key,
+            status="active",
+            source="manual",
+        )
+    )
+    session.flush()
+
+
+def _site(session: Session, tenant: str, site_key: str) -> ListingSite:
+    row = session.scalar(
+        select(ListingSite)
+        .where(ListingSite.tenant_id == tenant, ListingSite.site_key == site_key)
+        .options(selectinload(ListingSite.sellers))
+    )
+    assert isinstance(row, ListingSite)
+    return row
+
+
+def test_domain_rejects_a_url() -> None:
+    with pytest.raises(SiteOnboardError) as caught:
+        normalize_domain("https://shop-a.example.test/p/1")
+    assert caught.value.code == "domain_invalid"
+
+
+def test_onboard_records_domain_and_derives_pattern_without_a_seller(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CIP_LISTING_LIVE_FETCH", raising=False)
+    tenant = f"t-on-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, None)
+    before = autoconfigure_sites(db_session, tenant_id=tenant, http_get=lambda url, headers=None: (_ for _ in ()).throw(AssertionError(url)))
+    assert any(row["reason"] == "no_site_key" and row["customer_id"] == customer.id for row in before["excluded"])
+
+    result = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(customer.id),
+        site_key="Shop-A",
+        domain="Shop-A.Example.Test",
+        example_urls=_URLS,
+        actor="steward@example.test",
+    )
+    assert result["site_key"] == "shop-a"
+    assert result["domain"] == "shop-a.example.test"
+    assert result["created_site"] is True
+    assert result["pattern_status"] == "derived"
+    assert result["product_url_pattern"] == "https://shop-a.example.test/p/{page_id}"
+
+    site = _site(db_session, tenant, "shop-a")
+    assert site.first_party_seller is None
+    assert site.sellers == []
+    assert site.display_name == "shop-a.example.test"
+    db_session.refresh(customer)
+    config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer.id))
+    assert isinstance(config, CustomerReportConfig)
+    seed = config.feed_profile_json["listing_seed"]
+    assert seed["marketplace"] == "shop-a"
+    assert seed["site"]["domain"] == "shop-a.example.test"
+    assert seed["site"]["example_urls"] == _URLS
+    assert "seller_names" not in seed
+
+    again = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(customer.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=_URLS,
+        actor="steward@example.test",
+    )
+    assert again["created_site"] is False
+    assert again["pattern_status"] == "kept"
+    assert db_session.scalar(
+        select(func.count()).select_from(ListingSite).where(ListingSite.tenant_id == tenant, ListingSite.site_key == "shop-a")
+    ) == 1
+
+    after = autoconfigure_sites(db_session, tenant_id=tenant, http_get=lambda url, headers=None: (_ for _ in ()).throw(AssertionError(url)))
+    assert all(row["reason"] != "no_site_key" or row["customer_id"] != customer.id for row in after["excluded"])
+
+
+def test_onboard_keeps_a_pattern_already_on_the_site(db_session: Session) -> None:
+    tenant = f"t-keep-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, None)
+    kept = "https://shop-a.example.test/kept/{page_id}"
+    page_id = r"^https://shop-a\.example\.test/kept/([^/]+)$"
+    db_session.add(
+        ListingSite(
+            tenant_id=tenant,
+            site_key="shop-a",
+            display_name="kept label",
+            product_url_pattern=kept,
+            page_id_pattern=page_id,
+        )
+    )
+    db_session.flush()
+    result = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(customer.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=_URLS,
+        actor="steward@example.test",
+    )
+    assert result["pattern_status"] == "kept"
+    assert result["created_site"] is False
+    site = _site(db_session, tenant, "shop-a")
+    assert site.product_url_pattern == kept
+    assert site.page_id_pattern == page_id
+    assert site.display_name == "kept label"
+
+
+def test_onboard_refuses_a_domain_that_conflicts_with_the_existing_site(db_session: Session) -> None:
+    tenant = f"t-clash-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, None)
+    kept = "https://shop-a.example.test/p/{page_id}"
+    db_session.add(
+        ListingSite(
+            tenant_id=tenant,
+            site_key="shop-a",
+            display_name="kept label",
+            product_url_pattern=kept,
+            search_url_pattern="https://shop-a.example.test/s?q={query}",
+        )
+    )
+    db_session.flush()
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-b.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "domain_conflict"
+    site = _site(db_session, tenant, "shop-a")
+    assert site.product_url_pattern == kept
+    assert site.search_url_pattern == "https://shop-a.example.test/s?q={query}"
+    config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer.id))
+    seed = (config.feed_profile_json or {}).get("listing_seed") if isinstance(config.feed_profile_json, dict) else None
+    assert not isinstance(seed, dict) or seed.get("marketplace") in (None, "")
+
+
+def test_onboard_allows_another_customer_on_the_same_domain(db_session: Session) -> None:
+    tenant = f"t-share-{uuid.uuid4().hex[:6]}"
+    first = _customer(db_session, tenant)
+    second = _customer(db_session, tenant)
+    _report(db_session, first, None)
+    _report(db_session, second, None)
+    record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(first.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    shared = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(second.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    assert shared["created_site"] is False
+    assert shared["domain"] == "shop-a.example.test"
+    second_config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == second.id))
+    assert second_config.feed_profile_json["listing_seed"]["marketplace"] == "shop-a"
+    assert second_config.feed_profile_json["listing_seed"]["site"]["domain"] == "shop-a.example.test"
+    assert db_session.scalar(
+        select(func.count()).select_from(ListingSite).where(ListingSite.tenant_id == tenant, ListingSite.site_key == "shop-a")
+    ) == 1
+
+    third = _customer(db_session, tenant)
+    _report(db_session, third, None)
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(third.id),
+            site_key="shop-a",
+            domain="shop-b.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "domain_conflict"
+    third_config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == third.id))
+    third_seed = (third_config.feed_profile_json or {}).get("listing_seed") if isinstance(third_config.feed_profile_json, dict) else None
+    assert not isinstance(third_seed, dict) or third_seed.get("marketplace") in (None, "")
+
+
+def test_onboard_refuses_a_customer_that_already_has_a_site_key(db_session: Session) -> None:
+    tenant = f"t-has-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, {"marketplace": "shop-b"})
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-a.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "site_already_recorded"
+    config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer.id))
+    assert config.feed_profile_json["listing_seed"]["marketplace"] == "shop-b"
+
+
+def test_onboard_refuses_two_listing_marketplaces(db_session: Session) -> None:
+    tenant = f"t-two-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, None)
+    _listing(db_session, customer, "shop-a")
+    _listing(db_session, customer, "shop-b")
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-a.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "site_already_recorded"
+
+
+def test_onboard_refuses_a_link_on_another_host(db_session: Session) -> None:
+    tenant = f"t-host-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, None)
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-a.example.test",
+            example_urls=["https://other.example.test/p/1"],
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "url_host_mismatch"
+    assert db_session.scalar(select(func.count()).select_from(ListingSite).where(ListingSite.tenant_id == tenant)) == 0
+
+
+def test_onboard_refuses_a_customer_that_is_not_reporting(db_session: Session) -> None:
+    tenant = f"t-nr-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, None, expected=False)
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-a.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "not_reporting"
+
+
+def test_onboard_refuses_another_tenants_customer(db_session: Session) -> None:
+    customer = _customer(db_session, f"t-other-{uuid.uuid4().hex[:6]}")
+    _report(db_session, customer, None)
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=f"t-caller-{uuid.uuid4().hex[:6]}",
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-a.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "customer_not_found"
+
+
+def test_onboard_refuses_a_different_domain_on_the_second_call(db_session: Session) -> None:
+    tenant = f"t-dom-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, None)
+    record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(customer.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="other.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "domain_already_recorded"
+
+
+_RETAINED_PAGE = r"^https://shop-a\.example\.test/p/([^/]+)$"
+_RETAINED_PRODUCT = "https://shop-a.example.test/p/{page_id}"
+
+
+def _retained_seed() -> dict:
+    return {
+        "site": {
+            "product_url_pattern": _RETAINED_PRODUCT,
+            "page_id_pattern": _RETAINED_PAGE,
+            "example_urls": ["https://shop-a.example.test/p/111"],
+        }
+    }
+
+
+def test_onboard_refuses_a_retained_seed_whose_links_use_another_domain(db_session: Session) -> None:
+    tenant = f"t-seed-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, _retained_seed())
+    db_session.add(
+        ListingSite(
+            tenant_id=tenant,
+            site_key="shop-a",
+            display_name="blank",
+        )
+    )
+    db_session.flush()
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-b.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "seed_host_mismatch"
+    site = _site(db_session, tenant, "shop-a")
+    assert site.product_url_pattern is None
+    assert site.page_id_pattern is None
+    config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer.id))
+    assert isinstance(config, CustomerReportConfig)
+    seed = config.feed_profile_json["listing_seed"]
+    assert "marketplace" not in seed
+    assert seed["site"].get("domain") in (None, "")
+    assert seed["site"]["product_url_pattern"] == _RETAINED_PRODUCT
+
+
+def test_onboard_copies_a_retained_seed_pattern_when_the_domain_matches(db_session: Session) -> None:
+    tenant = f"t-same-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, _retained_seed())
+    db_session.add(
+        ListingSite(
+            tenant_id=tenant,
+            site_key="shop-a",
+            display_name="blank",
+        )
+    )
+    db_session.flush()
+    result = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(customer.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    assert result["created_site"] is False
+    assert result["pattern_status"] == "kept"
+    assert result["domain"] == "shop-a.example.test"
+    site = _site(db_session, tenant, "shop-a")
+    assert site.product_url_pattern == _RETAINED_PRODUCT
+    assert site.page_id_pattern == _RETAINED_PAGE
+    config = db_session.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer.id))
+    assert config.feed_profile_json["listing_seed"]["site"]["domain"] == "shop-a.example.test"
+
+
+_OPTIONAL_SCHEME_PAGE = r"^https?://shop-a\.example\.test/p/([^/]+)$"
+
+
+def test_onboard_refuses_a_page_pattern_host_when_the_scheme_is_optional(db_session: Session) -> None:
+    """A retained ``https?://`` host is the same check as a full URL."""
+    tenant = f"t-opt-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, {"site": {"page_id_pattern": _OPTIONAL_SCHEME_PAGE}})
+    db_session.add(ListingSite(tenant_id=tenant, site_key="shop-a", display_name="blank"))
+    db_session.flush()
+    with pytest.raises(SiteOnboardError) as caught:
+        record_customer_site(
+            db_session,
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            site_key="shop-a",
+            domain="shop-b.example.test",
+            example_urls=None,
+            actor="steward@example.test",
+        )
+    assert caught.value.code == "seed_host_mismatch"
+    site = _site(db_session, tenant, "shop-a")
+    assert site.page_id_pattern is None
+
+
+def test_onboard_accepts_a_page_pattern_host_when_the_scheme_is_optional(db_session: Session) -> None:
+    tenant = f"t-optok-{uuid.uuid4().hex[:6]}"
+    customer = _customer(db_session, tenant)
+    _report(db_session, customer, {"site": {"page_id_pattern": _OPTIONAL_SCHEME_PAGE}})
+    db_session.add(ListingSite(tenant_id=tenant, site_key="shop-a", display_name="blank"))
+    db_session.flush()
+    result = record_customer_site(
+        db_session,
+        tenant_id=tenant,
+        customer_id=int(customer.id),
+        site_key="shop-a",
+        domain="shop-a.example.test",
+        example_urls=None,
+        actor="steward@example.test",
+    )
+    assert result["domain"] == "shop-a.example.test"
+    assert result["pattern_status"] == "kept"
+
+
+def test_second_conflicting_attach_to_a_blank_site_fails() -> None:
+    """Two transactions attach different domains to one blank site. The second loses."""
+    url = _sync_url()
+    engine = create_engine(url)
+    tenant = f"t-race-{uuid.uuid4().hex[:8]}"
+    outcome: dict[str, str] = {}
+    entered = threading.Event()
+    finished = threading.Event()
+    waiter: dict[str, int] = {}
+    first_id = 0
+    second_id = 0
+    worker: threading.Thread | None = None
+    try:
+        with engine.connect() as conn:
+            db = conn.execute(text("SELECT current_database()")).scalar_one()
+            print("current_database()", db)
+            if db != "cip_test":
+                pytest.fail(f"stop: site onboarding runs on cip_test only (current_database()={db})")
+        setup = Session(engine)
+        try:
+            setup.begin()
+            first = _customer(setup, tenant)
+            second = _customer(setup, tenant)
+            _report(setup, first, None)
+            _report(setup, second, None)
+            setup.add(ListingSite(tenant_id=tenant, site_key="shop-a", display_name="blank"))
+            setup.commit()
+            first_id = int(first.id)
+            second_id = int(second.id)
+        finally:
+            setup.close()
+
+        holder = Session(engine)
+        holder.begin()
+        try:
+            record_customer_site(
+                holder,
+                tenant_id=tenant,
+                customer_id=first_id,
+                site_key="shop-a",
+                domain="shop-a.example.test",
+                example_urls=None,
+                actor="steward@example.test",
+            )
+
+            def _second() -> None:
+                session = Session(engine)
+                try:
+                    session.begin()
+                    session.execute(text("SET lock_timeout = '8s'"))
+                    waiter["pid"] = int(session.execute(text("SELECT pg_backend_pid()")).scalar_one())
+                    entered.set()
+                    record_customer_site(
+                        session,
+                        tenant_id=tenant,
+                        customer_id=second_id,
+                        site_key="shop-a",
+                        domain="shop-b.example.test",
+                        example_urls=None,
+                        actor="steward@example.test",
+                    )
+                    session.commit()
+                    outcome["status"] = "committed"
+                except SiteOnboardError as exc:
+                    session.rollback()
+                    outcome["code"] = exc.code
+                except Exception as exc:  # pragma: no cover - lock or connection failure
+                    session.rollback()
+                    outcome["error"] = type(exc).__name__
+                finally:
+                    finished.set()
+                    session.close()
+
+            worker = threading.Thread(target=_second)
+            worker.start()
+            assert entered.wait(5)
+            seen_wait = False
+            deadline = time.monotonic() + 3
+            probe = Session(engine)
+            try:
+                while time.monotonic() < deadline and not finished.is_set():
+                    pid = waiter.get("pid")
+                    if pid is None:
+                        time.sleep(0.05)
+                        continue
+                    kind = probe.execute(
+                        text("SELECT wait_event_type FROM pg_stat_activity WHERE pid = :pid"),
+                        {"pid": pid},
+                    ).scalar()
+                    if kind == "Lock":
+                        seen_wait = True
+                        break
+                    time.sleep(0.05)
+            finally:
+                probe.close()
+            assert seen_wait, outcome
+            holder.commit()
+        except Exception:
+            holder.rollback()
+            raise
+        finally:
+            if holder.in_transaction():
+                holder.rollback()
+            holder.close()
+        worker.join(10)
+        assert finished.is_set()
+        assert outcome.get("code") == "domain_conflict", outcome
+        check = Session(engine)
+        try:
+            site = check.scalar(select(ListingSite).where(ListingSite.tenant_id == tenant, ListingSite.site_key == "shop-a"))
+            assert isinstance(site, ListingSite)
+            assert site.product_url_pattern is None
+            second_config = check.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == second_id))
+            second_seed = (second_config.feed_profile_json or {}).get("listing_seed") if isinstance(second_config.feed_profile_json, dict) else None
+            assert not isinstance(second_seed, dict) or second_seed.get("marketplace") in (None, "")
+            first_config = check.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == first_id))
+            assert first_config.feed_profile_json["listing_seed"]["site"]["domain"] == "shop-a.example.test"
+        finally:
+            check.close()
+    finally:
+        cleanup = Session(engine)
+        try:
+            cleanup.begin()
+            cleanup.execute(
+                text(
+                    "DELETE FROM customer_report_config WHERE customer_id IN "
+                    "(SELECT id FROM dim_customer WHERE tenant_id = :tenant)"
+                ),
+                {"tenant": tenant},
+            )
+            cleanup.execute(text("DELETE FROM listing_site WHERE tenant_id = :tenant"), {"tenant": tenant})
+            cleanup.execute(text("DELETE FROM dim_customer WHERE tenant_id = :tenant"), {"tenant": tenant})
+            cleanup.commit()
+        finally:
+            cleanup.close()
+            engine.dispose()

@@ -55,6 +55,25 @@ import { StatusChip } from '@/features/workbench-ui/controls';
 
 type ProductPick = { id: number; sku: string; name: string };
 
+type CipQtyLine = {
+  line_id: number | null;
+  suggested_estimate_qty?: number;
+  quantity_evidence?: {
+    formula?: string;
+    blocks?: boolean;
+    signals?: { source: string; units: number }[];
+    fallback?: string | null;
+    forecast_units?: number;
+    history_units?: number | null;
+    history_line_count?: number;
+    cover_surplus_units?: number | null;
+  };
+  flags?: string[];
+  blocks?: boolean;
+};
+
+type MappingProfile = { profile_code: string; display_name: string; is_default: boolean };
+
 const EDITABLE = new Set(['draft', 'rejected']);
 
 const ACTION_TARGET: Record<string, string> = {
@@ -187,19 +206,63 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
     onError: (e) => setToast(e instanceof Error ? e.message : String(e)),
   });
 
+  const qtyPreview = useQuery({
+    queryKey: ['cpor', 'cip-quantities', caseId],
+    queryFn: ({ signal }) =>
+      apiGet<{ lines?: CipQtyLine[]; blocks?: boolean; formula?: string }>(
+        `/api/v1/cpor/cases/${caseId}/cip-quantities`,
+        { signal },
+      ),
+    enabled: caseId > 0,
+  });
+  const qtyById = new Map(
+    (qtyPreview.data?.lines ?? [])
+      .filter((row): row is CipQtyLine & { line_id: number } => row.line_id != null)
+      .map((row) => [row.line_id, row]),
+  );
+
+  const applyQty = useMutation({
+    mutationFn: () =>
+      apiPost<{ lines?: CipQtyLine[]; blocks?: boolean }>(`/api/v1/cpor/cases/${caseId}/cip-quantities`, {}),
+    onSuccess: async (res) => {
+      const n = res?.lines?.length ?? 0;
+      setToast(`Filled ${n} line${n === 1 ? '' : 's'} from cover, forecast and this customer's history. Flags do not block.`);
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'cip-quantities', caseId] });
+      await refetch();
+    },
+    onError: (e) => setToast(e instanceof Error ? e.message : String(e)),
+  });
+
+  const profilesQuery = useQuery({
+    queryKey: ['cpor', 'historical', 'profiles'],
+    queryFn: ({ signal }) =>
+      apiGet<{ profiles?: MappingProfile[] }>('/api/v1/cpor/historical-import/profiles', { signal }),
+    enabled: exportOpen,
+  });
+  const exportProfile =
+    (profilesQuery.data?.profiles ?? []).find((profile) => profile.is_default) ??
+    (profilesQuery.data?.profiles ?? [])[0];
+
   const exportCase = useMutation({
     mutationFn: async () => {
-      const created = await apiPost<{ export_version?: number }>(`/api/v1/cpor/cases/${caseId}/export`, {});
+      const query = exportProfile
+        ? `?profile_code=${encodeURIComponent(exportProfile.profile_code)}`
+        : '';
+      const created = await apiPost<{ export_version?: number; file_name?: string }>(
+        `/api/v1/cpor/cases/${caseId}/export-profile${query}`,
+        {},
+      );
       const version = created?.export_version;
       if (version != null) {
         await apiDownloadBlob(
           `/api/v1/cpor/cases/${caseId}/exports/${version}/file`,
-          `${data?.case_code ?? 'cpor'}-v${version}.xlsx`,
+          created.file_name ?? `${data?.case_code ?? 'cpor'}-v${version}.xlsx`,
         );
       }
       return created;
     },
-    onSuccess: () => setToast(`${data?.case_code ?? caseId} export recorded on the case.`),
+    onSuccess: () => setToast(`${data?.case_code ?? caseId} exported in the stored column layout.`),
     onError: (e) => setToast(e instanceof Error ? e.message : String(e)),
   });
 
@@ -433,9 +496,9 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
           <TextField
             size="small"
             label="Export template"
-            value="Frozen 32-column XLSX"
+            value="Stored mapping profile"
             disabled
-            helperText="Template-driven customer layout is not built"
+            helperText="Export writes this plan in the stored column layout."
           />
         </Box>
         <Stack
@@ -564,9 +627,22 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
         }
         actions={
           <Stack direction="row" spacing={1}>
-            <Tooltip title="Suggested quantity is not calculated yet — cover and forecast are not on the line" arrow>
+            <Tooltip
+              title={
+                editable
+                  ? "Fills each line from cover, forecast and this customer's history. Flags do not block."
+                  : 'Line quantities can be filled in draft or rejected only.'
+              }
+              arrow
+            >
               <span>
-                <Button size="small" variant="text" disabled data-testid="plan-use-cip-qty">
+                <Button
+                  size="small"
+                  variant="text"
+                  disabled={!editable || applyQty.isPending}
+                  onClick={() => applyQty.mutate()}
+                  data-testid="plan-use-cip-qty"
+                >
                   Use CIP quantities
                 </Button>
               </span>
@@ -701,18 +777,25 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
         <Panel title="Export target" subtitle="The plan leaves CIP as a versioned workbook recorded on the case">
           <Stack spacing={1} sx={{ px: 1.5, pb: 1.5 }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Frozen 32-column XLSX
+              Stored column layout
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Template-driven export is not built. Export downloads the one layout compiled in code —
-              not the customer&apos;s promotion-plan format, even when an import profile exists.
+              Export writes the plan in the mapping profile learned from an example workbook.
+              The older fixed workbook is a separate route and is not this download.
             </Typography>
           </Stack>
         </Panel>
       </Box>
       <CapabilityLedger items={PLANNER_CAPABILITIES.slice(0, 5)} title="What works on this screen" />
 
-      <LineEvidencePanel line={line} caseCode={data.case_code} currency={ccy} caseId={caseId} onClose={() => setSelectedLine(null)} />
+      <LineEvidencePanel
+        line={line}
+        suggestion={line ? qtyById.get(line.id) : undefined}
+        caseCode={data.case_code}
+        currency={ccy}
+        caseId={caseId}
+        onClose={() => setSelectedLine(null)}
+      />
 
       <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Reject {data.case_code}</DialogTitle>
@@ -816,20 +899,25 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
           <Stack spacing={2} sx={{ mt: 0.5 }}>
             <Typography variant="body2" color="text.secondary">
               This saves a workbook on the case so later approvals refer to an exact file.
-              The layout is fixed.
+              Columns come from the stored mapping profile
+              {exportProfile ? ` (${exportProfile.display_name})` : ''}.
             </Typography>
-            <Alert severity="warning" variant="outlined">
-              Template-driven export is not built. This is not the customer&apos;s promotion-plan
-              workbook layout. The import side of a mapping profile already exists; export does not
-              consume it.
-            </Alert>
+            {!profilesQuery.isLoading && !exportProfile ? (
+              <Alert severity="warning" variant="outlined">
+                No mapping profile is stored. Learn a template from an example workbook before exporting.
+              </Alert>
+            ) : (
+              <Alert severity="info" variant="outlined">
+                The file uses that profile&apos;s headers. Flags on the quantities do not block this export.
+              </Alert>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setExportOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
-            disabled={exportCase.isPending}
+            disabled={exportCase.isPending || !exportProfile}
             onClick={() => {
               setExportOpen(false);
               exportCase.mutate();
@@ -878,12 +966,14 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
 
 function LineEvidencePanel({
   line,
+  suggestion,
   caseCode,
   currency,
   caseId,
   onClose,
 }: {
   line: CporCaseLine | null;
+  suggestion?: CipQtyLine;
   caseCode: string;
   currency: string;
   caseId: number;
@@ -966,6 +1056,33 @@ function LineEvidencePanel({
                 { k: 'Source', v: suggest?.cost_source ?? '—' },
               ]}
             />
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              CIP quantity
+            </Typography>
+            <KeyValueList
+              items={[
+                { k: 'Suggested units', v: suggestion?.suggested_estimate_qty ?? '—' },
+                { k: 'Forecast', v: suggestion?.quantity_evidence?.forecast_units ?? '—' },
+                { k: 'This customer’s history', v: suggestion?.quantity_evidence?.history_units ?? '—' },
+                { k: 'Cover surplus', v: suggestion?.quantity_evidence?.cover_surplus_units ?? '—' },
+                {
+                  k: 'Blocks a save',
+                  v: suggestion?.quantity_evidence?.blocks === false || suggestion?.blocks === false ? 'No' : '—',
+                },
+              ]}
+            />
+            {suggestion?.quantity_evidence?.formula ? (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                {suggestion.quantity_evidence.formula}
+              </Typography>
+            ) : null}
+            {(suggestion?.flags ?? []).includes('observed_cover_high') ? (
+              <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.75 }}>
+                High cover is a flag. It does not block a save and it does not change the cover target.
+              </Typography>
+            ) : null}
           </Box>
           {(line.flags ?? []).length ? (
             <Alert severity="warning" variant="outlined">

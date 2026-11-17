@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 from sqlalchemy import select
@@ -13,6 +13,7 @@ from app.core.security import Role, require_roles
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent
 from app.services.cpor.export_xlsx import RESELLER_HEADERS, build_cpor_case_workbook_bytes
+from app.services.cpor.profile_layout_export import build_case_profile_workbook
 from app.storage.local import LocalStorageBackend
 
 router = APIRouter()
@@ -115,6 +116,90 @@ def generate_export(case_id: int, user: dict = Depends(_require_cpor_planner)):
             "checksum_sha256": digest,
             "line_count": meta["line_count"],
             "flags": meta["flags_present"],
+        }
+
+
+def _profile_storage_key(case_id: int, version: int, case_code: str, profile_code: str) -> str:
+    safe_code = "".join(c if c.isalnum() or c in "-_" else "_" for c in case_code)
+    safe_profile = "".join(c if c.isalnum() or c in "-_" else "_" for c in profile_code) or "profile"
+    return (
+        f"exports/cpor/{case_id}/v{version}/profile/{safe_profile}/"
+        f"CPOR_{safe_code}_{safe_profile}_v{version}.xlsx"
+    )
+
+
+@router.post("/cases/{case_id}/export-profile")
+def generate_profile_export(
+    case_id: int,
+    profile_code: str | None = Query(default=None),
+    user: dict = Depends(_require_cpor_planner),
+):
+    """Write the case in the stored mapping profile's headers. The fixed workbook is unchanged."""
+    actor = _actor(user)
+    storage = LocalStorageBackend()
+    with SessionLocal() as session:
+        case = _load_case(session, case_id)
+        from app.services import commercial_tenant_profile as tenant_profile
+        from app.services.cpor.budget_reapproval import (
+            evaluate_money_position,
+            gate_detail,
+            should_require_reapproval,
+        )
+
+        pos = evaluate_money_position(session, case_id=case.id, include_this_case=True)
+        if bool(tenant_profile.HARD_ENFORCE_BUDGET) and should_require_reapproval(pos):
+            raise HTTPException(status_code=409, detail=gate_detail(pos, action="export"))
+        try:
+            data, meta = build_case_profile_workbook(session, case_id, profile_code=profile_code)
+        except ValueError as exc:
+            code = str(exc)
+            if code == "no_exportable_lines":
+                raise HTTPException(status_code=400, detail="Case has no exportable (non-void) lines")
+            if code == "case_not_found":
+                raise HTTPException(status_code=404, detail="CPOR case not found")
+            if code == "no_mapping_profile":
+                raise HTTPException(
+                    status_code=409,
+                    detail="No mapping profile is stored. Learn a template from an example workbook before exporting.",
+                )
+            raise HTTPException(status_code=400, detail=code)
+
+        version = int(case.export_version or 1)
+        stored_code = str(meta.get("profile_code") or "profile")
+        file_name = f"CPOR_{''.join(c if c.isalnum() or c in '-_' else '_' for c in case.case_code)}_{stored_code}_v{version}.xlsx"
+        key = _profile_storage_key(case_id, version, case.case_code, stored_code)
+        storage.save(key, data)
+        payload_json: dict[str, Any] = {
+            "export_version": version,
+            "storage_key": key,
+            "file_name": file_name,
+            "checksum_sha256": meta["checksum_sha256"],
+            "line_count": meta["line_count"],
+            "flags_present": [],
+            "layout": "mapping_profile",
+            "profile_code": stored_code,
+            "headers": meta["headers"],
+        }
+        payload_json.update(_actor_trail(user))
+        session.add(
+            CporCaseEvent(
+                case_id=case.id,
+                event_type="export_generated",
+                actor=actor,
+                payload_json=payload_json,
+            )
+        )
+        session.commit()
+        return {
+            "case_id": case.id,
+            "export_version": version,
+            "file_name": file_name,
+            "storage_key": key,
+            "checksum_sha256": meta["checksum_sha256"],
+            "line_count": meta["line_count"],
+            "layout": "mapping_profile",
+            "profile_code": stored_code,
+            "headers": meta["headers"],
         }
 
 
