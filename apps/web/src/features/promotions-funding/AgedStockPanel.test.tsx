@@ -7,25 +7,28 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { AgedStockPanel } from './AgedStockPanel';
 
-const apiGet = vi.fn(async (_url: string, _init?: unknown) => ({
-  lines: [
-    {
-      customer_id: 3,
-      customer_name: 'Northwind Stores',
-      product_id: 9,
-      product_name: 'Monitor',
-      site_label: 'North',
-      stock_on_hand: 12,
-      suggestions: ['promote', 'move', 'return'],
-      suggestion_executed: false,
-      executed_actions: [],
-    },
-  ],
-  truncated: false,
-}));
+const apiGet = vi.fn(
+  async (_url: string, _init?: unknown): Promise<unknown> => ({
+    lines: [
+      {
+        customer_id: 3,
+        customer_name: 'Northwind Stores',
+        product_id: 9,
+        product_name: 'Monitor',
+        site_label: 'North',
+        stock_on_hand: 12,
+        suggestions: ['promote', 'move', 'return'],
+        suggestion_executed: false,
+        executed_actions: [],
+      },
+    ],
+    truncated: false,
+  })
+);
 
 const apiPost = vi.fn(async (url: string, _body?: unknown) => {
-  if (url.endsWith('/auto-propose')) return { created: [{ case_id: 11 }], skipped: [{ product_id: 10 }] };
+  if (url.endsWith('/auto-propose'))
+    return { created: [{ case_id: 11 }], skipped: [{ product_id: 10 }] };
   return { created: true, case_id: 5 };
 });
 
@@ -41,7 +44,7 @@ describe('AgedStockPanel', () => {
     renderWithProviders(
       <QueryClientProvider client={qc}>
         <AgedStockPanel onOpen={onOpen} />
-      </QueryClientProvider>,
+      </QueryClientProvider>
     );
 
     expect(await screen.findByText(/Monitor · North · 12 on hand/)).toBeInTheDocument();
@@ -49,12 +52,15 @@ describe('AgedStockPanel', () => {
 
     fireEvent.click(screen.getByTestId('aged-stock-promote-9'));
     await waitFor(() => {
-      expect(apiPost).toHaveBeenCalledWith('/api/v1/cpor/intelligence/promo-plan-draft/aged-stock-action', {
-        customer_id: 3,
-        product_id: 9,
-        action: 'promote',
-        site_label: 'North',
-      });
+      expect(apiPost).toHaveBeenCalledWith(
+        '/api/v1/cpor/intelligence/promo-plan-draft/aged-stock-action',
+        {
+          customer_id: 3,
+          product_id: 9,
+          action: 'promote',
+          site_label: 'North',
+        }
+      );
     });
     await waitFor(() => expect(onOpen).toHaveBeenCalledWith(5));
   });
@@ -91,11 +97,13 @@ describe('AgedStockPanel', () => {
     renderWithProviders(
       <QueryClientProvider client={qc}>
         <AgedStockPanel />
-      </QueryClientProvider>,
+      </QueryClientProvider>
     );
     // Same product, same site label, same stock: only the customer name tells the rows apart.
-    expect(await screen.findByTestId('aged-stock-customer-3-9-Main')).toHaveTextContent('Northwind Stores');
-    expect(screen.getByTestId('aged-stock-customer-4-9-Main')).toHaveTextContent('Southgate Retail');
+    expect(await screen.findByTestId('aged-stock-customer-3-9')).toHaveTextContent(
+      'Northwind Stores'
+    );
+    expect(screen.getByTestId('aged-stock-customer-4-9')).toHaveTextContent('Southgate Retail');
   });
 
   it('raises drafts from the list', async () => {
@@ -103,13 +111,107 @@ describe('AgedStockPanel', () => {
     renderWithProviders(
       <QueryClientProvider client={qc}>
         <AgedStockPanel />
-      </QueryClientProvider>,
+      </QueryClientProvider>
     );
     await screen.findByText(/Monitor/);
     fireEvent.click(screen.getByTestId('aged-stock-raise'));
     await waitFor(() => {
-      expect(apiPost).toHaveBeenCalledWith('/api/v1/cpor/intelligence/promo-plan-draft/auto-propose', {});
+      expect(apiPost).toHaveBeenCalledWith(
+        '/api/v1/cpor/intelligence/promo-plan-draft/auto-propose',
+        {}
+      );
     });
-    expect(await screen.findByTestId('aged-stock-raise-result')).toHaveTextContent('1 draft opened · 1 skipped');
+    expect(await screen.findByTestId('aged-stock-raise-result')).toHaveTextContent(
+      '1 draft opened · 1 skipped'
+    );
+  });
+
+  it('Final wave (c): shows one line per product with reason badges and its sites folded underneath', async () => {
+    apiGet.mockResolvedValueOnce({
+      lines: [
+        {
+          customer_id: 3,
+          customer_name: 'Customer A',
+          product_id: 9,
+          product_name: 'Monitor',
+          site_label: 'North',
+          stock_on_hand: 5,
+          slow: true,
+          unsold: false,
+          suggestions: ['promote', 'move', 'return'],
+          executed_actions: [],
+        },
+        {
+          customer_id: 3,
+          customer_name: 'Customer A',
+          product_id: 9,
+          product_name: 'Monitor',
+          site_label: 'South',
+          stock_on_hand: 3,
+          slow: false,
+          unsold: true,
+          suggestions: ['promote', 'move', 'return'],
+          executed_actions: ['move'],
+          suggestion_executed: true,
+        },
+      ],
+      truncated: false,
+    });
+    apiPost.mockClear();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <AgedStockPanel />
+      </QueryClientProvider>
+    );
+    expect(
+      await screen.findByText(/Monitor · 2 sites · 8 on hand · action open/)
+    ).toBeInTheDocument();
+    expect(screen.getAllByTestId('aged-stock-line-9')).toHaveLength(1);
+    expect(screen.getByTestId('aged-stock-reasons-3-9')).toHaveTextContent('SlowUnsold');
+    expect(screen.queryByTestId('aged-stock-site-3-9-0')).toBeNull();
+    fireEvent.click(screen.getByTestId('aged-stock-sites-toggle-3-9'));
+    expect(screen.getByTestId('aged-stock-site-3-9-0')).toHaveTextContent('North · 5 on hand');
+    expect(screen.getByTestId('aged-stock-site-3-9-1')).toHaveTextContent(
+      'South · 3 on hand · action open'
+    );
+    expect(screen.getByTestId('aged-stock-move-9-1')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('aged-stock-promote-9-1'));
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith(
+        '/api/v1/cpor/intelligence/promo-plan-draft/aged-stock-action',
+        {
+          customer_id: 3,
+          product_id: 9,
+          action: 'promote',
+          site_label: 'South',
+        }
+      );
+    });
+  });
+});
+describe('AgedStockPanel truncated list (Codex review of PR #114, B1)', () => {
+  it('warns and labels the cut customer\'s totals as lower bounds', async () => {
+    const site = (label: string) => ({
+      customer_id: 4,
+      customer_name: 'Test Customer',
+      product_id: 21,
+      product_name: 'Speaker',
+      site_label: label,
+      stock_on_hand: 1,
+      slow: true,
+      suggestions: ['promote'],
+      suggestion_executed: false,
+      executed_actions: [],
+    });
+    apiGet.mockResolvedValueOnce({ lines: [site('East'), site('West')], truncated: true });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <AgedStockPanel onOpen={vi.fn()} />
+      </QueryClientProvider>
+    );
+    expect(await screen.findByTestId('aged-stock-truncated')).toBeInTheDocument();
+    expect(screen.getByText(/Speaker · at least 2 sites · at least 2 on hand/)).toBeInTheDocument();
   });
 });

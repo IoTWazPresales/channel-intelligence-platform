@@ -17,6 +17,7 @@
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
 - 2026-11-19 - **PR #112 BACKLOG-046 Fix Round 1:** an empty shipment-sheet scope yields no mapping or samples and every skipped sheet is reported; the broader detector guard and optional BOM planning scope stay PARTIAL-DEFERRED in BACKLOG-046.
+- 2026-11-18 - **Listing coverage (BACKLOG-226):** `fix/listing-coverage-226-20261118`. HTTP failures, seller-only changes, seed/listing reconciliation, bounded latest reads, delisted and product-less listings, and honest loading/error UI. Review points: BACKLOG-243.
 - 2026-11-18 - **W1-A supplier selection (alignment D4):** distinct-delivery lead-time samples; per-SKU DC supplier by SKU stock then learned lead time; BACKLOG-241 holds the delivery-identity decision and remaining gaps. `cip_test` only.
 - 2026-11-18 - **Aged-stock consistency:** `fix/aged-stock-consistency-20261118`. Planner observed cover uses the customer's slow multiple; Move/Return cases cannot have their intelligence exclusion cleared. BACKLOG-227 status updated; what is left (migration for price-free Move/Return, two decisions) is BACKLOG-242.
 - 2026-11-18 - **Discovery pacing (alignment D5):** discovery shares the poll's site spacing, 403/429 pause and time budget via `site_fetch.py`; interrupted searches roll back and resume; the budget rotates round (customer, site) pairs and, for scheduled runs, tenants, so none is starved. BACKLOG-239 records the reader-profile migration. `cip_test` only.
