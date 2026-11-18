@@ -52,3 +52,28 @@ describe('groupAgedLines (Final wave c)', () => {
     expect(groups[0].stock_on_hand).toBeNull();
   });
 });
+
+describe('truncated lists (Codex review of PR #114, B1)', () => {
+  const line = (customer_id: number, product_id: number, site: string, soh: number): AgedLine => ({
+    customer_id,
+    product_id,
+    site_label: site,
+    stock_on_hand: soh,
+    slow: true,
+  });
+
+  it('marks only the last customer\'s groups incomplete when the API cut the list', () => {
+    const lines = [line(1, 10, 'Site A', 5), line(2, 20, 'Site A', 1), line(2, 20, 'Site B', 1)];
+    const groups = groupAgedLines(lines, true);
+    expect(groups.find((g) => g.customer_id === 1)?.incomplete).toBe(false);
+    const cut = groups.find((g) => g.customer_id === 2);
+    expect(cut?.incomplete).toBe(true);
+    expect(cut?.sites).toHaveLength(2);
+    expect(cut?.stock_on_hand).toBe(2);
+  });
+
+  it('marks nothing incomplete when the list is whole', () => {
+    const groups = groupAgedLines([line(1, 10, 'Site A', 5), line(2, 20, 'Site A', 1)]);
+    expect(groups.every((g) => !g.incomplete)).toBe(true);
+  });
+});

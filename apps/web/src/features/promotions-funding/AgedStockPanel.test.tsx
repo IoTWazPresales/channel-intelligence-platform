@@ -190,3 +190,28 @@ describe('AgedStockPanel', () => {
     });
   });
 });
+describe('AgedStockPanel truncated list (Codex review of PR #114, B1)', () => {
+  it('warns and labels the cut customer\'s totals as lower bounds', async () => {
+    const site = (label: string) => ({
+      customer_id: 4,
+      customer_name: 'Test Customer',
+      product_id: 21,
+      product_name: 'Speaker',
+      site_label: label,
+      stock_on_hand: 1,
+      slow: true,
+      suggestions: ['promote'],
+      suggestion_executed: false,
+      executed_actions: [],
+    });
+    apiGet.mockResolvedValueOnce({ lines: [site('East'), site('West')], truncated: true });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <AgedStockPanel onOpen={vi.fn()} />
+      </QueryClientProvider>
+    );
+    expect(await screen.findByTestId('aged-stock-truncated')).toBeInTheDocument();
+    expect(screen.getByText(/Speaker · at least 2 sites · at least 2 on hand/)).toBeInTheDocument();
+  });
+});

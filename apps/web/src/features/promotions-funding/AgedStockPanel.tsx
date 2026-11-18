@@ -73,7 +73,8 @@ export function AgedStockPanel({ onOpen }: { onOpen?: (caseId: number) => void }
     },
   });
   const lines = list.data?.lines ?? [];
-  const groups = groupAgedLines(lines);
+  const truncated = Boolean(list.data?.truncated);
+  const groups = groupAgedLines(lines, truncated);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const actionButtons = (line: AgedLine, idSuffix: string) => {
     const taken = new Set(line.executed_actions ?? []);
@@ -136,6 +137,12 @@ export function AgedStockPanel({ onOpen }: { onOpen?: (caseId: number) => void }
           {(propose.data.skipped?.length ?? 0) ? ` · ${propose.data.skipped?.length} skipped` : ''}
         </Alert>
       ) : null}
+      {truncated ? (
+        <Alert severity="warning" data-testid="aged-stock-truncated">
+          Showing the first {lines.length} site lines only. Lines marked &quot;at least&quot; may
+          be missing sites, so their site count and stock on hand are lower bounds.
+        </Alert>
+      ) : null}
       {!list.isLoading && lines.length === 0 ? (
         <Typography variant="body2" color="text.secondary" data-testid="aged-stock-empty">
           No slow or unsold lines.
@@ -169,8 +176,11 @@ export function AgedStockPanel({ onOpen }: { onOpen?: (caseId: number) => void }
                   ? single.site_label
                     ? ` · ${single.site_label}`
                     : ''
-                  : ` · ${group.sites.length} sites`}
-                {group.stock_on_hand != null ? ` · ${group.stock_on_hand} on hand` : ''}
+                  : ` · ${group.incomplete ? 'at least ' : ''}${group.sites.length} sites`}
+                {single && group.incomplete ? ' · may be missing sites' : ''}
+                {group.stock_on_hand != null
+                  ? ` · ${group.incomplete ? 'at least ' : ''}${group.stock_on_hand} on hand`
+                  : ''}
                 {anyOpen ? ' · action open' : ''}
               </Typography>
               <ReasonBadges reasons={group.reasons} testId={`aged-stock-reasons-${group.key}`} />
