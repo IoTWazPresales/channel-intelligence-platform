@@ -47,6 +47,30 @@ Optional alternate (needs a role with `CREATEDB`, via env `CIP_PG_ADMIN_URL`): c
 
 **Do not** point `-TargetUrl` at live `cip`.
 
+## Nightly schedule, retention and restore tests (Wave 3 Phase C)
+
+`scripts/ops/nightly_backup_cip.ps1` runs `backup_cip.ps1`, checks the dump with `pg_restore --list`, prunes old dumps, and every 7 days restores the new dump into a disposable database with `restore_cip_smoke.ps1`.
+
+- **Where:** dumps go to `%LOCALAPPDATA%\CIP\backups\cip_YYYYMMDD_HHMMSS.dump`. The log is `nightly_backup.log` in the same folder.
+- **Retention:** the newest 14 daily dumps, plus the newest dump of each of the newest 8 ISO weeks. Only files with that exact name are ever deleted, and the newest dump is always kept. Change this with `-KeepDaily` and `-KeepWeekly`.
+- **Failure visibility:**
+  - `last_backup.json` and `last_restore.json` in that folder;
+  - the exit code, which shows in Task Scheduler's "Last Run Result" (0 means all ok);
+  - `/admin/ops`, which shows a Backups card (`GET /admin/ops/overview` `health.backups`). A backup older than 26 hours, or a restore test older than 8 days, shows as stale. A recorded failure shows as failed.
+- **Secrets:** the database URLs are read from the user environment variables `CIP_BACKUP_DATABASE_URL` (the database to back up) and `CIP_RESTORE_SMOKE_URL` (a disposable database, never `cip`), so no password is written into the task.
+- **Plan without changes:** `.\scripts\ops\nightly_backup_cip.ps1 -PlanOnly` prints what it would back up, prune and restore.
+
+One-time operator setup (Warren; not done by agents):
+
+```powershell
+[Environment]::SetEnvironmentVariable('CIP_BACKUP_DATABASE_URL', 'postgresql://<user>:<password>@127.0.0.1:5432/cip', 'User')
+[Environment]::SetEnvironmentVariable('CIP_RESTORE_SMOKE_URL', 'postgresql://<user>:<password>@127.0.0.1:5432/<disposable db>', 'User')
+.\scripts\ops\install_backup_task.ps1            # prints the task
+.\scripts\ops\install_backup_task.ps1 -Register  # creates "CIP nightly backup", daily 02:30
+```
+
+If the API does not run as the same Windows user, set `CIP_OPS_STATE_DIR` to the folder holding `always-on\` and `backups\`, so `/admin/ops` can read the status files.
+
 ## Full restore (destructive — explicit only)
 
 1. Stop API / worker / web writers.
@@ -59,7 +83,7 @@ Optional alternate (needs a role with `CREATEDB`, via env `CIP_PG_ADMIN_URL`): c
 
 - Liveness: `GET http://127.0.0.1:8001/health`
 - Readiness: `GET http://127.0.0.1:8001/health/ready` (DB ping)
-- Operator UI: `/admin/ops` — failed import jobs + readiness chip
+- Operator UI: `/admin/ops` shows failed import jobs, the readiness chip, and operations health: services from the supervisor's `status.json` (flapping means more than 5 launches in 30 min; a heartbeat older than 180 s is stale), nightly backups and restore tests, and expected weekly reports against the Monday-due rule (late or missing, plus the newest report).
 
 ## Proof log
 

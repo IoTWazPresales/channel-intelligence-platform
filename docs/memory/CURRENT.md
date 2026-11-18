@@ -1,5 +1,10 @@
 # CURRENT state
 
+**Wave 3 Phase C ops health and backups (2026-11-18):** branch `feat/ops-backup-schedule-20261118`.
+- **Health:** `GET /admin/ops/overview` adds `health` (`app/services/ops_health.py`): services from the supervisor `status.json` (flapping, stale heartbeat, degraded), backups and restore tests from the nightly status files, and expected weekly reports for the caller's tenant (late and missing against the Monday-due rule, plus the newest report). `/admin/ops` shows the three cards.
+- **Scripts:** `scripts/ops/nightly_backup_cip.ps1` (verify, retention 14 daily + 8 weekly, a disposable restore every 7 days, status JSON) and `scripts/ops/install_backup_task.ps1`, which only prints unless `-Register` is given.
+- **Not done (operator):** registering the task, setting `CIP_BACKUP_DATABASE_URL` and `CIP_RESTORE_SMOKE_URL`, and the first real nightly and restore run (BACKLOG-247).
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
 **Branch:** `feat/integrate-20261103` at `b9f29a09` (Merge #95). Nothing pushed to `main`. Merged into it on 2026-11-17/18 (first-parent merges, SAST):
