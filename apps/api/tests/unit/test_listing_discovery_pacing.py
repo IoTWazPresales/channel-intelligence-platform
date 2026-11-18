@@ -303,8 +303,9 @@ def _rotation_setup(monkeypatch, n_products=2):
     """Two customers on two different sites; the first site is slow enough to use the budget."""
     site_a = _site(id=7, site_key="rotate-a", search_url_pattern="https://a.example.test/search?q={query}")
     site_b = _site(id=8, site_key="rotate-b", search_url_pattern="https://b.example.test/search?q={query}")
+    site_c = _site(id=9, site_key="rotate-c", search_url_pattern="https://c.example.test/search?q={query}")
     session, _queue = _mock(monkeypatch, _products(n_products), site_a)
-    rows = {"rotate-a": site_a, "rotate-b": site_b}
+    rows = {"rotate-a": site_a, "rotate-b": site_b, "rotate-c": site_c}
     monkeypatch.setattr(discovery, "_load_site", lambda _session, _tenant, key: rows.get(key))
     first = DimCustomer(id=11, tenant_id=TENANT, name="Counter")
     second = DimCustomer(id=12, tenant_id=TENANT, name="Counter Two")
@@ -357,7 +358,7 @@ def test_budget_rotation_lets_a_later_customer_progress(monkeypatch):
     assert by_customer[11]["sites"][0]["fetch"] is None
     assert by_customer[12]["sites"][0]["fetch"]["stopped"] == "time_limit"
     assert [c["customer_id"] for c in report["customers"]] == [11, 12]
-    assert run_store.get(f"discovery:{TENANT}:rotation") == {"start_customer_id": 12}
+    assert run_store.get(f"discovery:{TENANT}:rotation") == {"customer_id": 12, "site_key": "rotate-b"}
     # Next run: customer 12 goes first and finishes; customer 11 gets what is left.
     report2, hosts2 = _rotation_run(session, run_store, limit=22.0, seconds_per_request=1.0)
     assert hosts2[0] == "b.example.test"
@@ -366,17 +367,17 @@ def test_budget_rotation_lets_a_later_customer_progress(monkeypatch):
     assert by_customer2[11]["sites"][0]["fetch"]["stopped"] == "time_limit"
     # The report keeps customer order stable whatever order the run used.
     assert [c["customer_id"] for c in report2["customers"]] == [11, 12]
-    assert run_store.get(f"discovery:{TENANT}:rotation") == {"start_customer_id": 11}
+    assert run_store.get(f"discovery:{TENANT}:rotation") == {"customer_id": 11, "site_key": "rotate-a"}
 
 
 def test_budget_rotation_resets_when_nothing_is_cut_short(monkeypatch):
     session = _rotation_setup(monkeypatch)
     run_store = MemorySitePauseStore()
-    run_store.set(f"discovery:{TENANT}:rotation", {"start_customer_id": 12}, ttl_seconds=600)
+    run_store.set(f"discovery:{TENANT}:rotation", {"customer_id": 12, "site_key": "rotate-b"}, ttl_seconds=600)
     report, hosts = _rotation_run(session, run_store, limit=1000.0, seconds_per_request=4.0)
     assert hosts[0] == "b.example.test"
     assert all(c["sites"][0]["fetch"] is None for c in report["customers"])
-    assert run_store.get(f"discovery:{TENANT}:rotation") == {"start_customer_id": 0}
+    assert run_store.get(f"discovery:{TENANT}:rotation") == {"customer_id": 0, "site_key": ""}
 
 
 def test_dry_run_does_not_move_the_rotation(monkeypatch):
@@ -392,6 +393,108 @@ def test_dry_run_does_not_move_the_rotation(monkeypatch):
         apply=False,
     )
     assert run_store.get(f"discovery:{TENANT}:rotation") is None
+
+
+def test_budget_rotation_is_per_site_so_a_multi_site_customer_cannot_starve_others(monkeypatch):
+    """Codex re-review of PR #100 (round 2, B1): rotation is over (customer, site) pairs.
+
+    Customer 11 has two sites (a, c), customer 12 one (b). Each site needs 19 s for its
+    two products and the budget is 22 s, so every run finishes one site and cuts the
+    next two short. The cycle is a, c, b: run 1 finishes a, run 2 starts at c and
+    finishes it, run 3 starts at b and finishes it. Customer rotation alone would start
+    customer 11 again on run 3 and customer 12 would never finish.
+    """
+    session = _rotation_setup(monkeypatch)
+    monkeypatch.setattr(
+        discovery,
+        "_site_keys",
+        lambda _session, *, tenant_id, customer_id, seed: ["rotate-a", "rotate-c"] if customer_id == 11 else ["rotate-b"],
+    )
+    run_store = MemorySitePauseStore()
+    finished: list[str] = []
+    firsts: list[str] = []
+    for _ in range(3):
+        report, hosts = _rotation_run(session, run_store, limit=22.0, seconds_per_request=1.0)
+        firsts.append(hosts[0])
+        for customer in report["customers"]:
+            finished.extend(site["site_key"] for site in customer["sites"] if site["fetch"] is None)
+    assert firsts == ["a.example.test", "c.example.test", "b.example.test"]
+    assert finished == ["rotate-a", "rotate-c", "rotate-b"]
+    assert run_store.get(f"discovery:{TENANT}:rotation") == {"customer_id": 11, "site_key": "rotate-a"}
+
+
+def test_rotation_skips_to_the_next_pair_when_the_saved_site_is_gone(monkeypatch):
+    session = _rotation_setup(monkeypatch)
+    run_store = MemorySitePauseStore()
+    run_store.set(f"discovery:{TENANT}:rotation", {"customer_id": 11, "site_key": "rotate-gone"}, ttl_seconds=600)
+    _report, hosts = _rotation_run(session, run_store, limit=1000.0, seconds_per_request=1.0)
+    assert hosts[0] == "b.example.test"
+
+
+def test_scheduled_autoconfigure_rotates_tenants_cut_short(monkeypatch):
+    """Codex re-review of PR #100 (round 2, B2): the scheduled run's shared discovery
+    budget must not always go to the first tenant."""
+    from app.services.listing_capture import autoconfig
+
+    monkeypatch.setattr(
+        "app.services.listing_capture.observation.listing_live_fetch_enabled", lambda: True
+    )
+    monkeypatch.setattr(autoconfig, "_advisory_lock", lambda *_a: None)
+    monkeypatch.setattr(autoconfig, "_tenant_ids", lambda *_a: ["tenant-a", "tenant-b", "tenant-c"])
+    monkeypatch.setattr(autoconfig, "_site_run_summary", lambda *_a: [])
+    monkeypatch.setattr(autoconfig, "_configure_tenant", lambda *_a, **_k: [])
+    order: list[str] = []
+    cut = {"tenant-a"}
+
+    def fake_discover(_session, **kwargs):
+        tid = kwargs["tenant_id"]
+        order.append(tid)
+        stopped = {"stopped": "time_limit", "requests": 1} if tid in cut else None
+        return {"customers": [{"customer_id": 1, "tenant_id": tid, "sites": [{"site_key": "s", "fetch": stopped}]}]}
+
+    monkeypatch.setattr(discovery, "discover_reporting_customers", fake_discover)
+    run_store = MemorySitePauseStore()
+
+    def run():
+        order.clear()
+        report = autoconfig.autoconfigure_sites(
+            MagicMock(), http_get=lambda url: (200, ""), run_store=run_store
+        )
+        return list(order), [c["tenant_id"] for c in report["discovery"]["customers"]]
+
+    first, reported = run()
+    assert first == ["tenant-a", "tenant-b", "tenant-c"]
+    assert run_store.get(autoconfig.TENANT_ROTATION_KEY) == {"tenant_id": "tenant-a"}
+    cut.clear()
+    cut.add("tenant-b")
+    second, reported2 = run()
+    assert second == ["tenant-a", "tenant-b", "tenant-c"]
+    assert run_store.get(autoconfig.TENANT_ROTATION_KEY) == {"tenant_id": "tenant-b"}
+    third, reported3 = run()
+    assert third == ["tenant-b", "tenant-c", "tenant-a"]
+    # The report keeps tenant order stable.
+    assert reported == reported2 == reported3 == ["tenant-a", "tenant-b", "tenant-c"]
+    cut.clear()
+    run()
+    assert run_store.get(autoconfig.TENANT_ROTATION_KEY) == {"tenant_id": ""}
+
+
+def test_single_tenant_autoconfigure_does_not_move_the_tenant_rotation(monkeypatch):
+    from app.services.listing_capture import autoconfig
+
+    monkeypatch.setattr(
+        "app.services.listing_capture.observation.listing_live_fetch_enabled", lambda: True
+    )
+    monkeypatch.setattr(autoconfig, "_advisory_lock", lambda *_a: None)
+    monkeypatch.setattr(autoconfig, "_tenant_ids", lambda *_a: [TENANT])
+    monkeypatch.setattr(autoconfig, "_site_run_summary", lambda *_a: [])
+    monkeypatch.setattr(autoconfig, "_configure_tenant", lambda *_a, **_k: [])
+    monkeypatch.setattr(discovery, "discover_reporting_customers", lambda *_a, **_k: {"customers": []})
+    run_store = MemorySitePauseStore()
+    run_store.set(autoconfig.TENANT_ROTATION_KEY, {"tenant_id": "tenant-b"}, ttl_seconds=600)
+    autoconfig.autoconfigure_sites(MagicMock(), tenant_id=TENANT, http_get=lambda url: (200, ""), run_store=run_store)
+    assert run_store.get(autoconfig.TENANT_ROTATION_KEY) == {"tenant_id": "tenant-b"}
+
 
 def _probe_inputs():
     from app.models.listing_capture import CustomerListing

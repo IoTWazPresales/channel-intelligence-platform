@@ -21,11 +21,14 @@ request to a site paused by an earlier 403/429, a 403/429 pauses the site and en
 search for this run (the product being searched is rolled back and searched again next
 run), and a run stops starting requests after the shared time budget.
 
-The budget is shared by every reporting customer, so a run does not always start with the
-lowest customer id: when the budget cuts a customer short, the next run starts with that
-customer and wraps round to the rest (``discovery:<tenant>:rotation`` in the run-state
-store). A customer that uses most of the budget every run therefore cannot starve the
-customers after it. A dry run (``apply=False``) does not move the rotation.
+The budget is shared by every (customer, site) pair of a tenant, so a run does not always
+start with the lowest customer id. The pairs form one fixed cycle (customer id, then the
+customer's site order); when the budget cuts a pair short, the next run starts at that
+pair and carries on round the cycle (``discovery:<tenant>:rotation`` in the run-state
+store). Pairs before it in the cycle wait until the cycle comes back round, so a customer
+or site that uses most of the budget every run cannot starve the pairs after it. A dry
+run (``apply=False``) does not move the rotation. ``autoconfigure_sites`` rotates the
+tenants of a scheduled run the same way.
 
 An empty adapter is set to the general HTML reader after a corroborated page. Price,
 stock, the page seller, and the buy box are stored on the proposal for the steward.
@@ -140,18 +143,41 @@ def discover_reporting_customers(
         ]
         rotate = apply and policy is not None
         rotation_key = f"discovery:{tid}:rotation"
-        if rotate:
-            state = load_run_state(rotation_key, store=run_store) or {}
-            pairs = _rotated(pairs, int(state.get("start_customer_id") or 0))
-        tenant_entries: list[dict[str, Any]] = []
-        cut_short: int | None = None
+        plans: list[dict[str, Any]] = []
+        units: list[tuple[int, str]] = []
         for config, customer in pairs:
+            seed = _seed(config)
+            plan: dict[str, Any] = {"customer": customer, "seed": seed, "keys": [], "sites": {}, "entry": None}
+            try:
+                plan["keys"] = _site_keys(session, tenant_id=tid, customer_id=int(customer.id), seed=seed)
+            except Exception as exc:
+                plan["entry"] = _failed_entry(customer, tid, exc)
+            if plan["entry"] is None and not plan["keys"]:
+                plan["entry"] = _entry(
+                    customer_id=int(customer.id),
+                    tenant_id=tid,
+                    site_key=None,
+                    reason=REASON_NO_SITE_KEY,
+                )
+            plan["own_site"] = bool(_seed_origin(seed)) and not bool(str(seed.get("marketplace") or "").strip())
+            plans.append(plan)
+            units.extend((len(plans) - 1, key) for key in plan["keys"])
+        if rotate:
+            units = _rotated_units(units, plans, load_run_state(rotation_key, store=run_store) or {})
+        cut_short: dict[str, Any] | None = None
+        for index, key in units:
+            plan = plans[index]
+            if plan["entry"] is not None:
+                continue
+            customer = plan["customer"]
             try:
                 with session.begin_nested():
-                    entry = _discover_customer(
+                    site_row = _discover_site(
                         session,
                         customer=customer,
-                        seed=_seed(config),
+                        site_key=key,
+                        seed=plan["seed"],
+                        own_site=plan["own_site"],
                         http_get=http_get,
                         apply=apply,
                         product_limit=product_limit,
@@ -159,76 +185,61 @@ def discover_reporting_customers(
                         policy=policy,
                     )
             except Exception as exc:
-                entry = _entry(
-                    customer_id=int(customer.id),
-                    tenant_id=tid,
-                    site_key=None,
-                    reason="discovery_failed",
-                    detail=type(exc).__name__,
-                )
-            tenant_entries.append(entry)
-            if cut_short is None and _time_limited(entry):
-                cut_short = int(customer.id)
+                plan["entry"] = _failed_entry(customer, tid, exc)
+                continue
+            plan["sites"][key] = site_row
+            if cut_short is None and _site_time_limited(site_row):
+                cut_short = {"customer_id": int(customer.id), "site_key": key}
         if rotate:
-            save_run_state(rotation_key, {"start_customer_id": cut_short or 0}, store=run_store)
-        entries.extend(sorted(tenant_entries, key=lambda row: int(row.get("customer_id") or 0)))
+            save_run_state(rotation_key, cut_short or {"customer_id": 0, "site_key": ""}, store=run_store)
+        for plan in plans:
+            if plan["entry"] is None:
+                plan["entry"] = _customer_entry(plan["customer"], [plan["sites"][k] for k in plan["keys"]])
+            entries.append(plan["entry"])
     return {"customers": entries}
 
 
-def _rotated(pairs: list[tuple[Any, DimCustomer]], start_customer_id: int) -> list[tuple[Any, DimCustomer]]:
-    """Customers from ``start_customer_id`` upwards first, then the lower ids."""
-    if start_customer_id <= 0:
-        return pairs
-    later = [pair for pair in pairs if int(pair[1].id) >= start_customer_id]
-    earlier = [pair for pair in pairs if int(pair[1].id) < start_customer_id]
-    return later + earlier
+def _failed_entry(customer: DimCustomer, tenant_id: str, exc: Exception) -> dict[str, Any]:
+    return _entry(
+        customer_id=int(customer.id),
+        tenant_id=tenant_id,
+        site_key=None,
+        reason="discovery_failed",
+        detail=type(exc).__name__,
+    )
+
+
+def _rotated_units(
+    units: list[tuple[int, str]], plans: list[dict[str, Any]], state: dict[str, Any]
+) -> list[tuple[int, str]]:
+    """The cycle of (customer, site) pairs, starting at the pair the budget last cut short.
+
+    If that pair no longer exists, start at the next pair after it in the cycle.
+    """
+    start_customer = int(state.get("customer_id") or 0)
+    start_key = str(state.get("site_key") or "")
+    if start_customer <= 0 or not units:
+        return units
+    for position, (index, key) in enumerate(units):
+        if int(plans[index]["customer"].id) == start_customer and key == start_key:
+            return units[position:] + units[:position]
+    for position, (index, _key) in enumerate(units):
+        if int(plans[index]["customer"].id) > start_customer:
+            return units[position:] + units[:position]
+    return units
+
+
+def _site_time_limited(site_row: dict[str, Any] | None) -> bool:
+    return ((site_row or {}).get("fetch") or {}).get("stopped") == REASON_TIME_LIMIT
 
 
 def _time_limited(entry: dict[str, Any]) -> bool:
     """True when the shared time budget cut one of this customer's sites short."""
-    for site in entry.get("sites") or []:
-        if ((site or {}).get("fetch") or {}).get("stopped") == REASON_TIME_LIMIT:
-            return True
-    return False
+    return any(_site_time_limited(site) for site in entry.get("sites") or [])
 
 
-def _discover_customer(
-    session: Session,
-    *,
-    customer: DimCustomer,
-    seed: dict[str, Any],
-    http_get: _HttpGet | None,
-    apply: bool,
-    product_limit: int,
-    run_store=None,
-    policy: FetchPolicy | None = None,
-) -> dict[str, Any]:
+def _customer_entry(customer: DimCustomer, site_rows: list[dict[str, Any]]) -> dict[str, Any]:
     tenant_id = str(customer.tenant_id)
-    keys = _site_keys(session, tenant_id=tenant_id, customer_id=int(customer.id), seed=seed)
-    own_site = bool(_seed_origin(seed)) and not bool(str(seed.get("marketplace") or "").strip())
-    if not keys:
-        return _entry(
-            customer_id=int(customer.id),
-            tenant_id=tenant_id,
-            site_key=None,
-            reason=REASON_NO_SITE_KEY,
-        )
-    site_rows: list[dict[str, Any]] = []
-    for key in keys:
-        site_rows.append(
-            _discover_site(
-                session,
-                customer=customer,
-                site_key=key,
-                seed=seed,
-                own_site=own_site,
-                http_get=http_get,
-                apply=apply,
-                product_limit=product_limit,
-                run_store=run_store,
-                policy=policy,
-            )
-        )
     ready = [row for row in site_rows if row["reader_ready"] and row["proposed_listings"] + row["watched_listings"] > 0]
     reason = None if ready else _first_reason(site_rows)
     return _entry(

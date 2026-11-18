@@ -139,14 +139,33 @@ def autoconfigure_sites(
     _advisory_lock(session)
     entries: list[dict[str, Any]] = []
     tenants = _tenant_ids(session, tenant_id)
-    discovery: list[dict[str, Any]] = []
-    for tid in tenants:
+    # A scheduled run (every tenant) shares one discovery budget, so the tenants rotate:
+    # the next run starts at the first tenant whose discovery the budget cut short.
+    rotate_tenants = tenant_id is None and policy is not None
+    order = list(tenants)
+    if rotate_tenants:
+        start = str((load_run_state(TENANT_ROTATION_KEY, store=run_store) or {}).get("tenant_id") or "")
+        if start in order:
+            at = order.index(start)
+            order = order[at:] + order[:at]
+    found_by_tenant: dict[str, list[dict[str, Any]]] = {}
+    entries_by_tenant: dict[str, list[dict[str, Any]]] = {}
+    cut_short: str | None = None
+    for tid in order:
         found = discover_reporting_customers(
             session, tenant_id=tid, http_get=fetch_get, run_store=run_store, fetch_policy=policy
         )
-        discovery.extend(found["customers"])
+        found_by_tenant[tid] = found["customers"]
+        if cut_short is None and any(discovery_module._time_limited(row) for row in found["customers"]):
+            cut_short = tid
         probe_policy = policy.fork() if policy is not None else None
-        entries.extend(_configure_tenant(session, tid, http_get=fetch_get, policy=probe_policy))
+        entries_by_tenant[tid] = _configure_tenant(session, tid, http_get=fetch_get, policy=probe_policy)
+    if rotate_tenants:
+        save_run_state(TENANT_ROTATION_KEY, {"tenant_id": cut_short or ""}, store=run_store)
+    discovery: list[dict[str, Any]] = []
+    for tid in tenants:
+        discovery.extend(found_by_tenant.get(tid, []))
+        entries.extend(entries_by_tenant.get(tid, []))
     report = _bucket(entries)
     report["discovery"] = {"customers": discovery}
     report["live_fetch_disabled"] = not live
@@ -167,6 +186,9 @@ def autoconfigure_sites(
             store=run_store,
         )
     return report
+
+
+TENANT_ROTATION_KEY = "discovery:tenant-rotation"
 
 
 def run_state_key_autoconfigure(tenant_id: str) -> str:
