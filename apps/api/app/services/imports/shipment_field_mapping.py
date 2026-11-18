@@ -543,13 +543,8 @@ SKIP_UNRECOGNISED_LAYOUT = "unrecognised_layout"
 
 
 def _in_scope_frames(frames: list[tuple[Any, Any, str, str]]) -> list[tuple[Any, Any, str, str]]:
-    """BACKLOG-046: frames whose layout is recognised (report type known) and so will be ingested.
-
-    A file where no sheet is recognised keeps every frame, so the mapping step still shows its
-    columns (validate then reports the unknown layout, as before).
-    """
-    known = [f for f in frames if f[2] != REPORT_UNKNOWN]
-    return known if known else list(frames)
+    """Use the same recognised frames as validation, even when none are in scope."""
+    return [f for f in frames if f[2] != REPORT_UNKNOWN]
 
 
 def skipped_sheets(
@@ -562,12 +557,11 @@ def skipped_sheets(
         for name in (available or [])
         if str(name) not in loaded
     ]
-    if any(rt != REPORT_UNKNOWN for _sn, _f, rt, _ls in frames):
-        out.extend(
-            {"sheet": str(sn), "reason": SKIP_UNRECOGNISED_LAYOUT}
-            for sn, _f, rt, _ls in frames
-            if sn is not None and rt == REPORT_UNKNOWN
-        )
+    out.extend(
+        {"sheet": str(sn), "reason": SKIP_UNRECOGNISED_LAYOUT}
+        for sn, _f, rt, _ls in frames
+        if sn is not None and rt == REPORT_UNKNOWN
+    )
     return out
 
 
@@ -639,7 +633,13 @@ def infer_shipment_import_job_sync(db: Session, job_id: int) -> ImportJob:
                 "in_scope": rt != REPORT_UNKNOWN,
             }
         )
-        if tabular_column_infer is None and frame is not None and len(frame.columns) > 0 and len(frame) > 0:
+        if (
+            rt != REPORT_UNKNOWN
+            and tabular_column_infer is None
+            and frame is not None
+            and len(frame.columns) > 0
+            and len(frame) > 0
+        ):
             try:
                 tabular_column_infer = infer_schema(frame)
             except Exception:

@@ -1,6 +1,8 @@
 # CURRENT state
 
-**BACKLOG-046 shipment sheet scope (branch `feat/b046-sheet-scope-20261118`, 2026-11-18):** the shipment mapping step unions headers only from selected sheets with a recognised layout, and lists every sheet left out (not selected, or layout not recognised) as an Ignored badge (`skipped_sheets` on `shipment-mapping-state`). Ingest rules are unchanged: unknown layouts were already skipped at validate. No migration. Not merged.
+**BACKLOG-046 shipment sheet scope (2026-11-19, PR #112 Fix Round 1; branch `feat/b046-sheet-scope-20261118`):** the mapping step no longer falls back to every column when no selected sheet is recognised; headers, samples, `in_scope` and `skipped_sheets` now agree, and every unrecognised sheet is listed as Ignored. An empty scope gives no headers, mappings or samples and stays blocked by the existing mapping gate. Selection and explicit BOM opt-in are unchanged. **PARTIAL-DEFERRED:** the shared detector still accepts exception/summary tabs with operational headers; BACKLOG-046 records the policy decision Warren must make and the strict expected-failure tests. N-0072 is not complete. No migration. Not merged.
+
+**Round 1 verification (2026-11-19):** `cip_test` pytest (scope unit, new DB-backed scope tests and existing shipment mapping/selection tests) 32 passed, 7 xfailed (strict, the deferred detector guard); `tsc` clean; Vitest imports 4 passed. Browser viewport proof not yet run.
 
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
