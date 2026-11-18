@@ -406,6 +406,17 @@ export function ReplenishmentView({
               {section.need_from_distributor.map((line) => (
                 <Typography key={line.product_id} variant="body2" data-testid="dc-need">
                   {line.sku} · distributor need {fmt(line.need_units)} · {line.need_reason} · {line.lead_time_label} · DC stock {fmt(line.stock_on_hand)}
+                  {line.supplier ? (
+                    <span data-testid="dc-supplier">
+                      {' · supplier '}
+                      {line.supplier.distributor_name ?? 'Distributor'}
+                      {line.supplier.sku_stock_on_hand === null
+                        ? ` · ${line.supplier.stock_note ?? 'stock not reported'}`
+                        : ` · their stock ${fmt(line.supplier.sku_stock_on_hand)}`}
+                    </span>
+                  ) : (
+                    <span data-testid="dc-supplier">{' · no distributor history for this DC'}</span>
+                  )}
                 </Typography>
               ))}
             </Box>

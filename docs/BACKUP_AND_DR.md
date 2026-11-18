@@ -15,11 +15,11 @@ Hosting / cloud DR remains deferred with P2-1 until a hosting target is set.
 
 ```powershell
 # From repo root — writes custom-format dump under .tmp/ (gitignored)
-pwsh -File scripts/ops/backup_cip.ps1
+pwsh -File scripts/ops/backup_cip.ps1 -DatabaseUrl "postgresql://<user>:<password>@127.0.0.1:5432/<db>"
 ```
 
 Defaults:
-- URL: `postgresql://cip:cip@127.0.0.1:5432/cip`
+- URL: none. `-DatabaseUrl` is required; since #97 (`fa962f36`) the script throws `Pass -DatabaseUrl explicitly; there is no default database.` when it is missing.
 - Output: `.tmp/backups/cip_YYYYMMDD_HHMMSS.dump`
 
 Never commit `*.dump` files.
@@ -30,7 +30,7 @@ Preferred local path when role `cip` lacks `CREATEDB` (common on Windows install
 
 ```powershell
 # 1) Backup
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ops/backup_cip.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ops/backup_cip.ps1 -DatabaseUrl "postgresql://<user>:<password>@127.0.0.1:5432/<db>"
 
 # 2) Restore into an existing disposable DB owned by cip (default: cip_alembic_smoke)
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ops/restore_cip_smoke.ps1 `

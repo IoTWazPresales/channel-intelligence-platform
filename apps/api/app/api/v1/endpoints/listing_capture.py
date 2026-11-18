@@ -232,6 +232,7 @@ def post_autoconfigure_sites(user: dict = Depends(require_roles(Role.STEWARD))):
     """Fill empty listing sites for this tenant's reporting customers. Steward only."""
     from app.services.listing_capture.autoconfig import autoconfigure_sites
     from app.services.listing_capture.observation import default_http_get, listing_live_fetch_enabled
+    from app.services.listing_capture.site_fetch import STEWARD_RUN_TIME_LIMIT_SECONDS
 
     live = listing_live_fetch_enabled()
     with SessionLocal() as session:
@@ -240,6 +241,9 @@ def post_autoconfigure_sites(user: dict = Depends(require_roles(Role.STEWARD))):
                 session,
                 tenant_id=tenant_id_from_user(user),
                 http_get=default_http_get if live else None,
+                # The steward waits for this answer: a short budget per phase, the rest
+                # resumes on the next run.
+                time_limit_seconds=STEWARD_RUN_TIME_LIMIT_SECONDS,
             )
             session.commit()
         except Exception:

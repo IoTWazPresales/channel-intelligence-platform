@@ -116,20 +116,45 @@ def seller_from_page(text: str, price: float | None = None) -> str | None:
     would be one of those same offers, a guess. Only a page whose JSON-LD names no seller
     falls back to the first ``"seller"`` key (embedded JSON that is not JSON-LD).
     """
+    return page_seller(text, price)[0]
+
+
+def page_seller(text: str, price: float | None = None) -> tuple[str | None, bool]:
+    """(seller the page names or None, whether the page names any seller at all).
+
+    ``(None, True)`` means the page names sellers but none can be tied to the price: the
+    seller is unknown, and it must not be replaced by the site's own seller.
+    """
     if not text:
-        return None
+        return None, False
     from_offer, json_ld_names_sellers = _json_ld_seller(text, price)
     if json_ld_names_sellers:
-        return from_offer
+        return from_offer, True
     match = _SELLER_OBJECT.search(text) or _SELLER_STRING.search(text)
     if not match:
-        return None
-    return _decode_json_string(match.group(1))
+        return None, False
+    return _decode_json_string(match.group(1)), True
 
 
-def buy_box_seller(text: str, site: SiteConfig, price: float | None = None) -> str | None:
-    """The page-named seller when every seller identity on the site was configured (seed or
-    steward); otherwise, as before, the site's ``first_party_seller``.
+def seller_or_first_party(text: str, price: float | None, first_party: str | None) -> str | None:
+    """The page-named seller; the site's own seller only when the page names no seller.
+
+    A page whose offers name sellers that cannot be tied to the price gives None (unknown),
+    never the own seller (Codex review of PR #104, B1).
+    """
+    named, names_sellers = page_seller(text, price)
+    if names_sellers:
+        return named
+    return (first_party or "").strip() or None
+
+
+def buy_box_seller_info(text: str, site: SiteConfig, price: float | None = None) -> tuple[str | None, bool]:
+    """(buy-box seller, unknown).
+
+    The page-named seller when every seller identity on the site was configured (seed or
+    steward); otherwise, as before, the site's ``first_party_seller``. ``unknown`` is True
+    when the site is configured and the page names sellers but none can be tied to the
+    price: the seller is then None and nothing downstream may fill in the own seller.
 
     An identity discovery inferred from a customer name is not compared with a page-named
     seller: a differently written own name would read as Competition. Callers pass
@@ -137,8 +162,17 @@ def buy_box_seller(text: str, site: SiteConfig, price: float | None = None) -> s
     """
     sellers = tuple(site.sellers or ())
     configured = bool(sellers) and not any(getattr(s, "inferred", False) for s in sellers)
-    named = seller_from_page(text, price) if configured else None
-    return named or (site.first_party_seller or "").strip() or None
+    own = (site.first_party_seller or "").strip() or None
+    if not configured:
+        return own, False
+    named, names_sellers = page_seller(text, price)
+    if names_sellers:
+        return named, named is None
+    return own, False
+
+
+def buy_box_seller(text: str, site: SiteConfig, price: float | None = None) -> str | None:
+    return buy_box_seller_info(text, site, price)[0]
 
 
 def request_headers(site: "SiteConfig") -> dict[str, str]:
@@ -171,10 +205,11 @@ def parse(
 
     parsed = parse_snapshot_text(body, marketplace=site.site_key, parser_version=parser_version)
     if parsed.parse_status == "ok":
-        seller_name = buy_box_seller(body, site, parsed.price)
+        seller_name, seller_unknown = buy_box_seller_info(body, site, parsed.price)
         parsed.offers = [
             {
                 "seller_name": seller_name,
+                "seller_unknown": seller_unknown,
                 "seller_id": None,
                 "price": parsed.price,
                 "availability": parsed.availability,
