@@ -410,8 +410,9 @@ export function ReplenishmentView({
                     <span data-testid="dc-supplier">
                       {' · supplier '}
                       {line.supplier.distributor_name ?? 'Distributor'}
-                      {' · their stock '}
-                      {line.supplier.sku_stock_on_hand === null ? line.supplier.stock_note ?? 'not reported' : fmt(line.supplier.sku_stock_on_hand)}
+                      {line.supplier.sku_stock_on_hand === null
+                        ? ` · ${line.supplier.stock_note ?? 'stock not reported'}`
+                        : ` · their stock ${fmt(line.supplier.sku_stock_on_hand)}`}
                     </span>
                   ) : (
                     <span data-testid="dc-supplier">{' · no distributor history for this DC'}</span>

@@ -289,7 +289,9 @@ describe('ReplenishmentView', () => {
     );
     const rows = screen.getAllByTestId('dc-supplier');
     expect(rows[0]).toHaveTextContent('supplier SDC-D-B · their stock 40');
-    expect(rows[1]).toHaveTextContent('supplier SDC-D-A · their stock stock not reported');
+    expect(rows[1]).toHaveTextContent('supplier SDC-D-A · stock not reported');
+    expect(rows[1].textContent).not.toMatch(/their stock/);
+    expect(rows[1].textContent).not.toMatch(/stock stock/);
   });
 
   it('sends settings, thresholds, served accounts, refresh, and lead-time reload through the existing controls', () => {
