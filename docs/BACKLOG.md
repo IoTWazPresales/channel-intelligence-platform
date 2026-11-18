@@ -3599,7 +3599,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Found while recording the merge baseline on `a3d0a9cd`. |
+| **Status / parked** | **Fixed in code 2026-11-18** (branch `feat/b1-fast-ci-gate-20261118`), awaiting review. `apps/web/eslint.config.mjs` is the flat config: `next/core-web-vitals` through `FlatCompat`, with `@eslint/eslintrc` added as a web devDependency. The legacy `eslintConfig` block and CI's `ESLINT_USE_FLAT_CONFIG=false` are removed. Plain `pnpm lint` runs again. **Baseline:** 0 errors, 49 `react-hooks/exhaustive-deps` warnings. That matches the legacy run exactly: same findings at the same file/line/column, and the same files except that the config file itself is now linted. No new rules. The ruff I001 note below is unchanged. `.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc` still tells agents to set `ESLINT_USE_FLAT_CONFIG=false`. It was left alone because it is agent policy; setting the variable now makes ESLint 9 look for the removed legacy config, so the rule should be dropped in a separate, authorized change. Was parked 2026-11-12, found while recording the merge baseline on `a3d0a9cd`. |
 | **Source** | `pnpm --dir apps/web lint` (`eslint .`) with ESLint 9.39.4: "ESLint couldn't find an eslint.config.(js\|mjs\|cjs) file". `apps/web/package.json` still carries a legacy `eslintConfig` block. |
 | **Idea** | Add an `eslint.config.mjs` flat config equivalent to the current rules (`eslint-config-next`), so `pnpm lint` runs again. Small related item: ruff I001 (import block) at `apps/api/app/query/model/compiler.py:21` exists on the trunk. |
 | **Why it matters** | No lane or merge can run web lint today; only tsc and vitest gate web changes. |
@@ -3741,6 +3741,17 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ---
 
+## BACKLOG-246 — Wave 3 B1: make the fast API gate a required check
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18. It needs a GitHub admin, so it was not done by an agent. |
+| **Source** | Waves doc, Wave 3 B1: "a fast API test subset on an ephemeral Postgres, on every PR into the trunk; merges require it green." Alignment review Section D item 11. |
+| **What exists** | CI job `api-fast` (`.github/workflows/ci.yml`) runs on every pull request. `apps/api/tests/fast_gate.txt` is the subset; `scripts/run-api-fast-gate.cjs` is the runner, and `scripts/run-api-fast-gate.test.cjs` covers it with 4 node tests. |
+| **Needs** | A repository admin adds a branch ruleset or protection on the trunk (`feat/integrate-*`, and `main` when promotion starts) that requires the `api-fast` check, plus `test` if wanted. Related: BACKLOG-238 recommends a `main` ruleset as well. |
+| **Keep in mind** | Keep the gate under about 3 minutes. When a module is added to `fast_gate.txt`, re-measure on cip_test. Any `tests/unit` path runs in the second, database-free process. |
+| **TRIGGER** | Warren or an admin agrees the required checks. |
+
 ## BACKLOG-242 — Aged-stock rule consistency: what is left after 2026-11-18
 
 | Field | Detail |
@@ -3758,6 +3769,8 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ## BACKLOG-239 — Structured (REST) listing reader is retailer-shaped
 
+| Field | Detail |
+|-------|--------|
 | **Status** | **Open**, recorded 2026-11-18 from the requirements alignment review (Section C, Section D item 5). Not built: needs a schema change. |
 | **Source** | `apps/api/app/services/listing_capture/adapters/rest_buybox.py` reads fixed response fields (`buybox.items`, `plid`, `tsin`, `desktop_href`, a fixed seller/other-offer layout and a fixed saving-badge shape). URLs are configurable; the response interpretation is not. |
 | **What the work is** | Move the response-field mapping into per-site reader-profile data and prove a second, structurally different JSON response through the same mechanism. `listing_site` has no JSON column for a reader profile, so this needs a migration (new column or table) applied on `cip` with Warren's approval, plus a profile for each existing site written by a reviewed restore step. |

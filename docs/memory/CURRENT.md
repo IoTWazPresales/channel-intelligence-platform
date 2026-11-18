@@ -1,5 +1,11 @@
 # CURRENT state
 
+**Wave 3 B1 fast CI gate and lint (2026-11-18):** branch `feat/b1-fast-ci-gate-20261118`.
+- **New CI job `api-fast`:** runs the fixed subset in `apps/api/tests/fast_gate.txt` on an ephemeral Postgres 16, with a disposable `cip_test` migrated to head. The runner is `scripts/run-api-fast-gate.cjs` (`pnpm test:api:fast`). It runs database paths in one pytest process, then `tests/unit` in a second with `CIP_UNIT_TESTS_FORBID_DB=1`. It writes `.tmp/api-fast-summary.txt` (counts and sorted failing ids, no timings), the pytest log and junit files, all uploaded as an artifact.
+- **Measured on cip_test:** 188 + 44 passed, about 1.5 minutes.
+- **Web lint:** runs on an ESLint 9 flat config (BACKLOG-231). Baseline 0 errors, 49 warnings.
+- **Not done:** making `api-fast` a required check on `feat/integrate-*` or `main` is a GitHub admin setting (BACKLOG-246).
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
 **2026-11-18 - W1-A supplier selection (`fix/w1a-replenishment-semantics-20261118`, PR pending review):** lead-time samples are distinct deliveries, not shipment lines (five lines of one delivery no longer meet the five-delivery floor). Each confirmed-DC SKU names its supplier by that distributor's own SKU stock, then learned lead time to the DC, then deliveries to the DC; the need uses that supplier's lead time; the UI shows it. Delivery-identity question for Warren and remaining W1-A gaps: BACKLOG-241. Review fixes: DC supplier evidence is limited to the DC's own and linked accounts; sell rates are calendar-based for weekly/daily/monthly reports (last four calendar weeks, missing weeks not zero).

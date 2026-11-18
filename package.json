@@ -36,6 +36,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test:web": "pnpm --filter @cip/web test",
     "test:api": "node scripts/run-pytest.cjs",
+    "test:api:fast": "node scripts/run-api-fast-gate.cjs",
     "test:e2e": "pnpm --filter @cip/web test:e2e",
     "test": "pnpm test:api && pnpm test:web",
     "test:all": "pnpm test && pnpm test:e2e",
