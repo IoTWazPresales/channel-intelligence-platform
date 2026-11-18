@@ -51,8 +51,10 @@ export const STATES: readonly StateSpec[] = [
     name: 'error',
     produced: 'intercept',
     description:
-      'Every GET /api/** (auth endpoints excepted) is answered with HTTP 500 and a JSON {"detail": ...}. ' +
-      'Check: a visible error message, and the page did not crash (no uncaught error, no framework error screen).',
+      'Every GET /api/** (auth endpoints excepted) is answered with HTTP 500 and a JSON {"detail": ...} carrying a fixed marker, ' +
+      'without reaching the server. Check: at least one request was intercepted, and an error-specific indication is visible ' +
+      '(the marker text, an error-severity alert, or error wording in a non-informational alert); an informational alert does not count. ' +
+      'The page also must not crash (no uncaught error, no framework error screen).',
   },
   {
     name: 'loading',
@@ -63,15 +65,29 @@ export const STATES: readonly StateSpec[] = [
   },
 ];
 
+/** Where a run may look up an id read-only when its env var is not set. */
+export type DiscoverKind = 'cpor-case';
+
 export interface RouteEntry {
   /** In-app path under src/app/(app); `[id]` marks a dynamic segment. Static segments only. */
   path: string;
   /** Which wave item or doc line justifies including the route. */
   source: string;
-  /** True for `[id]` routes; skipped unless `idEnv` supplies a concrete id. */
+  /** True when the view needs an id (`[id]` in the path, or `idQuery`); skipped unless an id is supplied or discovered. */
   dynamic: boolean;
-  /** Env var that supplies the concrete id for a dynamic route. */
+  /** Env var that supplies the concrete id for a dynamic view. */
   idEnv?: string;
+  /**
+   * One static query parameter that selects the view inside the page, as `name=value` (for example a
+   * lens tab). The page mounts a different component per value, so each value is its own view.
+   */
+  query?: string;
+  /** Name of a query parameter that carries the id (for example `plan`); the view is `path?name=<id>`. */
+  idQuery?: string;
+  /** Read-only lookup of an id when `idEnv` is unset (see `firstCaseId`); the spec only does GETs. */
+  discover?: DiscoverKind;
+  /** `data-testid` of the component this view must mount; the `loaded` case fails if it is absent. */
+  mount?: string;
 }
 
 const WAVES = 'docs/CIP_ORCHESTRATOR_WAVES.md';
@@ -100,6 +116,16 @@ export const WAVE1_ROUTES: readonly RouteEntry[] = [
     dynamic: false,
   },
   {
+    // The quantity and export workspace mounts only for `?plan=<id>`; bare /promotions is the list.
+    path: '/promotions',
+    idQuery: 'plan',
+    source: `${WAVES} W1-C (N-0088 plan quantity and export workspace, mounted only with ?plan=<id>); ${CURRENT} #92 line quantity suggestions, stored-layout export`,
+    dynamic: true,
+    idEnv: 'CIP_VERIFY_ID_PLAN',
+    discover: 'cpor-case',
+    mount: 'plan-workspace',
+  },
+  {
     path: '/commercial-planner/cpor-cases',
     source: `${WAVES} W1-A (BACKLOG-227 folds in); ${CURRENT} #86 Lane B CPOR aged-stock drafts and stock actions`,
     dynamic: false,
@@ -109,6 +135,7 @@ export const WAVE1_ROUTES: readonly RouteEntry[] = [
     source: `${WAVES} W1-E (N-0082 case link, N-0083 FX at approval); ${CURRENT} #86 stock actions on a case`,
     dynamic: true,
     idEnv: 'CIP_VERIFY_ID_CPOR_CASE',
+    discover: 'cpor-case',
   },
   {
     path: '/commercial-planner/cpor-cases/historical-import',
@@ -124,6 +151,43 @@ export const WAVE1_ROUTES: readonly RouteEntry[] = [
     path: '/listing-capture',
     source: `${WAVES} W1-B (N-0102 generic discovery and reader, N-0103 proposed listings, N-0076 promotion activation) and W1-D (Link discovery panel mounts only in Market & Listings); ${CURRENT} #91 site/domain for a reporting customer, #95 retail discovery`,
     dynamic: false,
+  },
+  // The bare page shows only the default lens; each lens below mounts only for its `?tab=` value
+  // (marketLensFromLocation in features/market-listings/MarketChrome.tsx).
+  {
+    path: '/listing-capture',
+    query: 'tab=sites',
+    source: `${WAVES} W1-B (N-0102 sites and sellers: generic discovery and reader); ${CURRENT} #91 site/domain for a reporting customer`,
+    dynamic: false,
+    mount: 'listing-sites-lens',
+  },
+  {
+    path: '/listing-capture',
+    query: 'tab=links',
+    source: `${WAVES} W1-D (Link discovery panel mounts only in Market & Listings); ${CURRENT} #95 retail discovery link queue`,
+    dynamic: false,
+    mount: 'listing-links-lens',
+  },
+  {
+    path: '/listing-capture',
+    query: 'tab=coverage',
+    source: `${WAVES} W1-B (N-0102 listing coverage by customer); ${CURRENT} #95 retail discovery coverage`,
+    dynamic: false,
+    mount: 'listing-coverage-lens',
+  },
+  {
+    path: '/listing-capture',
+    query: 'tab=proposals',
+    source: `${WAVES} W1-B (N-0103 proposed listings)`,
+    dynamic: false,
+    mount: 'market-proposals-lens',
+  },
+  {
+    path: '/listing-capture',
+    query: 'tab=intelligence',
+    source: `${WAVES} W1-B (N-0076 promotion activation)`,
+    dynamic: false,
+    mount: 'market-activation-lens',
   },
   {
     path: '/competition',
@@ -156,6 +220,14 @@ export const WAVE1_ROUTES: readonly RouteEntry[] = [
     dynamic: false,
   },
   {
+    // The Stock gap section mounts only for `?tab=stock-gap` (admin/cst-steward/page.tsx).
+    path: '/admin/cst-steward',
+    query: 'tab=stock-gap',
+    source: `${WAVES} W1-E (N-0110 customer stock position: stock gap)`,
+    dynamic: false,
+    mount: 'cst-stock-gap',
+  },
+  {
     path: '/admin/imports',
     source: `${WAVES} W1-E (N-0111 sell-through upload by customer, N-0112 import job delete)`,
     dynamic: false,
@@ -175,27 +247,38 @@ export const WAVE1_ROUTES: readonly RouteEntry[] = [
 export type MatrixMode = 'readonly' | 'full';
 
 export interface MatrixCase {
-  /** Stable id, e.g. `brief@desktop#loaded`; dynamic routes keep the template (`...cpor-cases.id`). */
+  /** Stable id, e.g. `brief@desktop#loaded`; dynamic views keep the template (`promotions~plan-id@...`). */
   id: string;
-  /** Template path from the manifest. */
+  /** View template from the manifest: path plus query, with `[id]` for an id (e.g. `/promotions?plan=[id]`). */
   route: string;
-  /** Concrete path to visit (template with its id filled in). */
+  /** Concrete URL to visit; still holds `[id]` while `needsDiscovery` is true. */
   url: string;
   viewport: Viewport;
   state: StateName;
+  /** True when no id was supplied and the spec must look one up read-only before visiting. */
+  needsDiscovery: boolean;
+  discover?: DiscoverKind;
+  /** Env var that would have supplied the id (named in the skip reason). */
+  idEnv?: string;
+  /** `data-testid` the view must mount in the `loaded` state. */
+  mount?: string;
 }
 
 export interface BuildMatrixOptions {
   routes: readonly RouteEntry[];
   viewports: readonly Viewport[];
   states: readonly StateSpec[] | readonly StateName[];
-  mode: MatrixMode;
   /** Concrete ids keyed by `RouteEntry.idEnv`, typically from `idsFromEnv(process.env)`. */
   ids?: Readonly<Record<string, string | undefined>>;
+  /** Keep dynamic views that have a `discover` rule but no id; the spec resolves them at run time. */
+  discover?: boolean;
 }
 
 /** A path made only of lower-case static segments, plus the literal `[id]` placeholder. */
 export const STATIC_PATH = /^\/[a-z0-9-]+(?:\/(?:[a-z0-9-]+|\[id\]))*$/;
+/** One static `name=value` query parameter (a lens or tab selector). */
+export const STATIC_QUERY = /^[a-z][a-z0-9_]*=[a-z0-9-]+$/;
+export const ID_QUERY_NAME = /^[a-z][a-z0-9_]*$/;
 const CONCRETE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export function parseMode(raw: string | undefined): MatrixMode {
@@ -211,30 +294,89 @@ export function routeKey(path: string): string {
   return path.slice(1).replace(/\[id\]/g, 'id').replace(/\//g, '.');
 }
 
-export function caseId(path: string, viewport: ViewportName, state: StateName): string {
-  return `${routeKey(path)}@${viewport}#${state}`;
+/** Query part of a view template: the static selector plus `idQuery=[id]`, in that order. */
+function queryTemplate(entry: RouteEntry): string {
+  const parts: string[] = [];
+  if (entry.query) {
+    if (!STATIC_QUERY.test(entry.query)) throw new Error(`Route query is not one static name=value: ${entry.query}`);
+    parts.push(entry.query);
+  }
+  if (entry.idQuery) {
+    if (!ID_QUERY_NAME.test(entry.idQuery)) throw new Error(`idQuery is not a plain parameter name: ${entry.idQuery}`);
+    parts.push(`${entry.idQuery}=[id]`);
+  }
+  return parts.join('&');
 }
 
-/** Concrete path for a route, or null for a dynamic route without an id. Throws on a malformed id. */
+/** Template of a view: `/listing-capture?tab=sites`, `/promotions?plan=[id]`, `/brief`. */
+export function viewTemplate(entry: RouteEntry): string {
+  routeKey(entry.path);
+  const qs = queryTemplate(entry);
+  return qs ? `${entry.path}?${qs}` : entry.path;
+}
+
+/** File-safe key of a view template: `/listing-capture?tab=sites` -> `listing-capture~tab-sites`. */
+export function viewKey(template: string): string {
+  const [path, qs, ...rest] = template.split('?');
+  if (rest.length) throw new Error(`View template has more than one "?": ${template}`);
+  const base = routeKey(path);
+  if (qs === undefined) return base;
+  if (!/^[a-z][a-z0-9_]*=(?:[a-z0-9-]+|\[id\])(?:&[a-z][a-z0-9_]*=(?:[a-z0-9-]+|\[id\]))*$/.test(qs)) {
+    throw new Error(`View template has a non-static query: ${template}`);
+  }
+  return `${base}~${qs.replace(/\[id\]/g, 'id').replace(/[=&]/g, '-')}`;
+}
+
+export function caseId(template: string, viewport: ViewportName, state: StateName): string {
+  return `${viewKey(template)}@${viewport}#${state}`;
+}
+
+function checkedId(entry: RouteEntry, raw: string): string {
+  if (!CONCRETE_ID.test(raw)) {
+    throw new Error(`${entry.idEnv ?? 'the id'} must be a plain id (letters, digits, "_" or "-"), got ${JSON.stringify(raw)}.`);
+  }
+  return encodeURIComponent(raw);
+}
+
+/** Put a concrete id into a view template (every `[id]`). Throws on a malformed id. */
+export function fillId(template: string, id: string): string {
+  return template.replace(/\[id\]/g, checkedId({ path: '', source: '', dynamic: true }, id.trim()));
+}
+
+/** Concrete URL for a view, or null for a dynamic view without an id. Throws on a malformed id. */
 export function resolveRoutePath(
   entry: RouteEntry,
   ids: Readonly<Record<string, string | undefined>> = {},
 ): string | null {
-  if (!entry.dynamic) return entry.path;
+  const template = viewTemplate(entry);
+  if (!entry.dynamic) return template;
   const raw = entry.idEnv ? ids[entry.idEnv]?.trim() : undefined;
   if (!raw) return null;
-  if (!CONCRETE_ID.test(raw)) {
-    throw new Error(`${entry.idEnv} must be a plain id (letters, digits, "_" or "-"), got ${JSON.stringify(raw)}.`);
-  }
-  return entry.path.replace('[id]', encodeURIComponent(raw));
+  return template.replace(/\[id\]/g, checkedId(entry, raw));
 }
 
-/** Dynamic routes the matrix leaves out because no id was supplied. */
+/** Dynamic views the matrix leaves out because no id was supplied (and none is looked up at run time). */
 export function skippedDynamicRoutes(
   routes: readonly RouteEntry[],
   ids: Readonly<Record<string, string | undefined>> = {},
+  options: { discover?: boolean } = {},
 ): RouteEntry[] {
-  return routes.filter((r) => r.dynamic && resolveRoutePath(r, ids) === null);
+  return routes.filter((r) => r.dynamic && resolveRoutePath(r, ids) === null && !(options.discover && r.discover));
+}
+
+/**
+ * First case id in a `GET /api/v1/cpor/cases` page (`{items: [{id}]}`), or null. Used to discover a
+ * plan or case id read-only; ids that are not plain are ignored.
+ */
+export function firstCaseId(body: unknown): string | null {
+  const items = body && typeof body === 'object' ? (body as { items?: unknown }).items : undefined;
+  if (!Array.isArray(items)) return null;
+  for (const item of items) {
+    const id = item && typeof item === 'object' ? (item as { id?: unknown }).id : undefined;
+    if (typeof id === 'number' && Number.isInteger(id) && id > 0) return String(id);
+    if (typeof id === 'string' && CONCRETE_ID.test(id.trim())) return id.trim();
+  }
+  return null;
 }
 
 /** Collect the id env vars the manifest names from an env object (never hard-coded ids). */
@@ -247,20 +389,39 @@ export function idsFromEnv(
   return out;
 }
 
-/** Route x viewport x state. Readonly mode keeps only `loaded`: mocking the live app proves nothing. */
+/**
+ * View x viewport x state, the same in both modes. The `empty`, `error` and `loading` states are
+ * produced by request interception on GET only (no server write, no data change), so they run on the
+ * live app as well as on the test instance.
+ */
 export function buildMatrix(options: BuildMatrixOptions): MatrixCase[] {
-  const { routes, viewports, mode, ids = {} } = options;
-  const stateNames = (options.states as readonly (StateSpec | StateName)[]).map((s) =>
+  const { routes, viewports, ids = {}, discover = false } = options;
+  const states = (options.states as readonly (StateSpec | StateName)[]).map((s) =>
     typeof s === 'string' ? s : s.name,
   );
-  const states = mode === 'readonly' ? stateNames.filter((s) => s === 'loaded') : stateNames;
   const cases: MatrixCase[] = [];
   for (const route of routes) {
-    const url = resolveRoutePath(route, ids);
-    if (url === null) continue;
+    const template = viewTemplate(route);
+    let url = resolveRoutePath(route, ids);
+    let needsDiscovery = false;
+    if (url === null) {
+      if (!(discover && route.discover)) continue;
+      url = template;
+      needsDiscovery = true;
+    }
     for (const viewport of viewports) {
       for (const state of states) {
-        cases.push({ id: caseId(route.path, viewport.name, state), route: route.path, url, viewport, state });
+        cases.push({
+          id: caseId(template, viewport.name, state),
+          route: template,
+          url,
+          viewport,
+          state,
+          needsDiscovery,
+          discover: route.discover,
+          idEnv: route.idEnv,
+          mount: route.mount,
+        });
       }
     }
   }
@@ -284,15 +445,60 @@ function pathnameOf(url: string): string {
   }
 }
 
-/** POST to the sign-in endpoint: the only non-safe request the harness lets through by default. */
+/** POST to the sign-in endpoint. It commits a session row, so it is a write like any other. */
 export function isLoginRequest(method: string, url: string): boolean {
   return method.toUpperCase() === 'POST' && pathnameOf(url) === LOGIN_API_PATH;
 }
 
-/** True for every method other than GET, HEAD and OPTIONS, except POST /api/v1/auth/login. */
-export function isWriteRequest(method: string, url: string): boolean {
+/**
+ * True for every method other than GET, HEAD and OPTIONS. POST /api/v1/auth/login is a write too
+ * (it adds an AuthSession row); `allowLogin` exempts it and only the full-mode sign-in step sets it.
+ */
+export function isWriteRequest(method: string, url: string, options: { allowLogin?: boolean } = {}): boolean {
   if (SAFE_METHODS.has(method.toUpperCase())) return false;
-  return !isLoginRequest(method, url);
+  return !(options.allowLogin === true && isLoginRequest(method, url));
+}
+
+/** localStorage key the web app keeps its Bearer session token under (src/lib/authSession.ts). */
+export const AUTH_TOKEN_STORAGE_KEY = 'cip.auth.token.v1';
+
+export type AuthPlan =
+  | { kind: 'storage-state'; file: string }
+  | { kind: 'token'; token: string }
+  | { kind: 'login'; email: string; password: string };
+
+/**
+ * How the run gets a signed-in session.
+ * - readonly (live app): an existing session only, a Playwright storageState file
+ *   (`CIP_VERIFY_STORAGE_STATE`) or a session token (`CIP_VERIFY_SESSION_TOKEN`). The login form is
+ *   never submitted because login commits an AuthSession row. Without one, the run refuses.
+ * - full (test instance): the same two, else the verification user's login (a write on the test
+ *   instance only).
+ */
+export function resolveAuth(mode: MatrixMode, env: Readonly<Record<string, string | undefined>>): AuthPlan {
+  const file = env.CIP_VERIFY_STORAGE_STATE?.trim();
+  const token = env.CIP_VERIFY_SESSION_TOKEN?.trim();
+  if (file && token) {
+    throw new Error('Set only one of CIP_VERIFY_STORAGE_STATE and CIP_VERIFY_SESSION_TOKEN.');
+  }
+  if (file) return { kind: 'storage-state', file };
+  if (token) return { kind: 'token', token };
+  if (mode === 'readonly') {
+    throw new Error(
+      'Readonly mode never signs in (login writes an AuthSession row to the live database). ' +
+        'Supply an existing session: CIP_VERIFY_STORAGE_STATE=<Playwright storageState file> or ' +
+        'CIP_VERIFY_SESSION_TOKEN=<session token from an operator-issued session>.',
+    );
+  }
+  const email = env.CIP_VERIFY_EMAIL;
+  const password = env.CIP_VERIFY_PASSWORD;
+  if (!email || !password) {
+    throw new Error(
+      'Full mode needs a session (CIP_VERIFY_STORAGE_STATE or CIP_VERIFY_SESSION_TOKEN) or a verification ' +
+        'user (CIP_VERIFY_EMAIL and CIP_VERIFY_PASSWORD) to sign in on the test instance.',
+    );
+  }
+  return { kind: 'login', email, password };
 }
 
 /** GET on the app API (`/api/**`), excluding auth endpoints: the requests the state intercepts rewrite. */
@@ -343,4 +549,81 @@ export const STATE_SELECTORS = {
   errorText: /error|failed|could not|couldn't|unable|try again|went wrong/i,
   /** Next.js crash and not-found screens. Not "Internal Server Error": the error state shows that legitimately. */
   crashText: /Application error: a (client|server)-side exception|Unhandled Runtime Error|This page could not be found/i,
+  /** MUI alerts whose severity is not error: they never count as an error indication. */
+  nonErrorAlertClass: /MuiAlert-(?:standard|filled|outlined)(?:Info|Success|Warning)\b/,
+  errorAlertClass: /MuiAlert-(?:standard|filled|outlined)Error\b/,
 } as const;
+
+/** Detail the `error` state returns for every intercepted GET; the app shows it when it surfaces the API error. */
+export const ERROR_MARKER = 'Wave 2 verification: simulated server error';
+
+/** Wording the app's API error helper produces for a failed request (src/lib/api.ts `readFetchError`). */
+const FAILURE_WORDING =
+  /request failed|server error|\(500\)|http 500|(?:could not|couldn't|unable to|failed to) (?:load|fetch|retrieve|read)|went wrong/i;
+
+export interface AlertSnapshot {
+  /** Visible text of the element. */
+  text: string;
+  /** Its `class` attribute (the MUI severity class is how an error alert differs from an informational one). */
+  className: string;
+}
+
+export type ErrorIndication =
+  | { ok: true; via: 'injected-detail' | 'error-alert' | 'alert-text' | 'status-text'; evidence: string }
+  | { ok: false; reason: string };
+
+function clip(s: string): string {
+  return s.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+/**
+ * Decide whether a page shows an error-specific indication for the `error` state. `bodyText` is the
+ * page text, `alerts` every `[role=alert]` / `.MuiAlert-root` element. Not enough: any visible alert
+ * (an informational introduction is an alert), or the word "error" somewhere in page copy.
+ */
+export function evaluateErrorIndication(bodyText: string, alerts: readonly AlertSnapshot[]): ErrorIndication {
+  if (bodyText.toLowerCase().includes(ERROR_MARKER.toLowerCase())) {
+    return { ok: true, via: 'injected-detail', evidence: ERROR_MARKER };
+  }
+  const errorAlert = alerts.find((a) => STATE_SELECTORS.errorAlertClass.test(a.className));
+  if (errorAlert) return { ok: true, via: 'error-alert', evidence: clip(errorAlert.text) };
+  const failureAlert = alerts.find(
+    (a) => !STATE_SELECTORS.nonErrorAlertClass.test(a.className) && FAILURE_WORDING.test(a.text),
+  );
+  if (failureAlert) return { ok: true, via: 'alert-text', evidence: clip(failureAlert.text) };
+  const status = bodyText.match(/(?:request failed|server error) \(500\)|http 500/i);
+  if (status) return { ok: true, via: 'status-text', evidence: status[0] };
+  const informational = alerts.filter((a) => !STATE_SELECTORS.errorAlertClass.test(a.className)).length;
+  return {
+    ok: false,
+    reason: informational
+      ? `${informational} alert(s) are visible but none is error-specific (informational alerts do not count)`
+      : 'no error-specific indication is visible',
+  };
+}
+
+/** What a state's interception actually did while the page loaded. */
+export interface InterceptionCounts {
+  /** GET /api/** answered with the injected 500. */
+  error: number;
+  /** GET /api/** whose JSON body was emptied. */
+  empty: number;
+  /** GET /api/** held for the delay. */
+  loading: number;
+}
+
+export function newInterceptionCounts(): InterceptionCounts {
+  return { error: 0, empty: 0, loading: 0 };
+}
+
+/**
+ * A state case only counts when its injected condition really hit a request: otherwise the page was
+ * never put in that state and a pass proves nothing. Returns a problem or null.
+ */
+export function interceptionProblem(state: StateName, counts: InterceptionCounts): string | null {
+  if (state === 'loaded') return null;
+  if (counts[state] > 0) return null;
+  const what =
+    state === 'error' ? 'answered with the injected 500' : state === 'empty' ? 'had its JSON body emptied' : 'was held';
+  return `${state}: no GET /api/** request ${what}, so the page was never put in this state`;
+}

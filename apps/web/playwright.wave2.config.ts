@@ -8,9 +8,11 @@ import { parseMode } from './src/lib/verification/matrix';
  *
  * No webServer: this config only drives an app that is already running, named by
  * CIP_VERIFY_BASE_URL. CIP_VERIFY_MODE is required:
- *   readonly  the live app; one worker, no retries, only the `loaded` state, every write aborted.
- *   full      the test instance; all states (browser-side intercepts), writes still aborted unless
+ *   readonly  the live app; one worker, no retries, every write aborted (login included). Never
+ *             signs in: needs an existing session, CIP_VERIFY_STORAGE_STATE or CIP_VERIFY_SESSION_TOKEN.
+ *   full      the test instance; may sign in as the verification user, writes still aborted unless
  *             CIP_VERIFY_ALLOW_WRITES=1 is set explicitly.
+ * Both modes run all four states: empty/error/loading are GET interception in the browser, no writes.
  */
 const baseURL = process.env.CIP_VERIFY_BASE_URL?.trim();
 if (!baseURL) {
