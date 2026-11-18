@@ -514,6 +514,7 @@ def get_listing_intelligence():
                 "not_activated_worklist": 0,
                 "items": [],
                 "worklist": [],
+                "timing_alerts": [],
                 "data_unavailable": True,
             }
 
