@@ -1,5 +1,7 @@
 # CURRENT state
 
+**BACKLOG-046 shipment sheet scope (branch `feat/b046-sheet-scope-20261118`, 2026-11-18):** the shipment mapping step unions headers only from selected sheets with a recognised layout, and lists every sheet left out (not selected, or layout not recognised) as an Ignored badge (`skipped_sheets` on `shipment-mapping-state`). Ingest rules are unchanged: unknown layouts were already skipped at validate. No migration. Not merged.
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
 **2026-11-18 - entity-specific removal (`fix/entity-specific-removal-20261118`, PR pending review):** no person addresses or workstation paths left in `apps/api/app` (guard test `test_no_tenant_contact_literals.py`). Shipping-digest recipients seed only from `CIP_SHIPPING_MAILER_RECIPIENTS` (live `cip` has 4 stored recipients, unaffected). IMAP flags every allowlisted sender's message with no spreadsheet. The "derive eras from shipping" steward action reads `CIP_SCM_ARTICLES_WORKBOOK_PATH` (must be set on the live API before use). Payment overlay note is generic. Lineup archive config needs an explicit root. Remaining items: BACKLOG-240.
