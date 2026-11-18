@@ -65,9 +65,15 @@ def _owns_block(block: dict[str, Any], customer_id: int) -> bool:
     return owner is None or owner == int(customer_id)
 
 
-def _scope_key(block: dict[str, Any], customer_id: int) -> tuple[int, str | None]:
+def _scope_key(block: dict[str, Any], customer_id: int) -> tuple[int, str]:
+    """Owner and site, with the site compared as the read model compares it (``norm_label``).
+
+    Final wave (c): a store listed under the customer's sites and again under a confirmed DC
+    with different case or spacing ("North Mall" / "north  mall") is one site, not two lines.
+    """
     owner = _block_customer(block)
-    return (int(customer_id) if owner is None else owner, _blank_site(block.get("site_label")))
+    site = norm_label(_blank_site(block.get("site_label")))
+    return (int(customer_id) if owner is None else owner, site)
 
 
 def _blocks(view: dict[str, Any], *, customer_id: int) -> list[dict[str, Any]]:
@@ -102,7 +108,7 @@ def _blocks(view: dict[str, Any], *, customer_id: int) -> list[dict[str, Any]]:
         if not needs:
             continue
         label = section.get("site_label")
-        key = (int(customer_id), _blank_site(label))
+        key = (int(customer_id), norm_label(_blank_site(label)))
         if key in seen:
             continue
         seen.add(key)
@@ -112,7 +118,7 @@ def _blocks(view: dict[str, Any], *, customer_id: int) -> list[dict[str, Any]]:
 
 def _suggestion_rows(view: dict[str, Any], *, customer_id: int) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    seen: set[tuple[int, str | None]] = set()
+    seen: set[tuple[int, str]] = set()
     # Every row belongs to the viewed customer (_blocks drops other owners). Name only: no code.
     customer_name = view.get("customer_name")
     for block in _blocks(view, customer_id=customer_id):
@@ -123,7 +129,7 @@ def _suggestion_rows(view: dict[str, Any], *, customer_id: int) -> list[dict[str
             product_id = line.get("product_id")
             if product_id is None:
                 continue
-            key = (int(product_id), site)
+            key = (int(product_id), norm_label(site))
             if key in seen:
                 continue
             seen.add(key)
