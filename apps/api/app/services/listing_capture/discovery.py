@@ -21,6 +21,12 @@ request to a site paused by an earlier 403/429, a 403/429 pauses the site and en
 search for this run (the product being searched is rolled back and searched again next
 run), and a run stops starting requests after the shared time budget.
 
+The budget is shared by every reporting customer, so a run does not always start with the
+lowest customer id: when the budget cuts a customer short, the next run starts with that
+customer and wraps round to the rest (``discovery:<tenant>:rotation`` in the run-state
+store). A customer that uses most of the budget every run therefore cannot starve the
+customers after it. A dry run (``apply=False``) does not move the rotation.
+
 An empty adapter is set to the general HTML reader after a corroborated page. Price,
 stock, the page seller, and the buy box are stored on the proposal for the steward.
 """
@@ -127,9 +133,19 @@ def discover_reporting_customers(
         policy = fetch_policy if fetch_policy is not None else default_fetch_policy()
     entries: list[dict[str, Any]] = []
     for tid in _tenant_ids(session, tenant_id):
-        for config, customer in _reporting_customers(session, tid):
-            if str(customer.tenant_id) != tid:
-                continue
+        pairs = [
+            (config, customer)
+            for config, customer in _reporting_customers(session, tid)
+            if str(customer.tenant_id) == tid
+        ]
+        rotate = apply and policy is not None
+        rotation_key = f"discovery:{tid}:rotation"
+        if rotate:
+            state = load_run_state(rotation_key, store=run_store) or {}
+            pairs = _rotated(pairs, int(state.get("start_customer_id") or 0))
+        tenant_entries: list[dict[str, Any]] = []
+        cut_short: int | None = None
+        for config, customer in pairs:
             try:
                 with session.begin_nested():
                     entry = _discover_customer(
@@ -150,8 +166,30 @@ def discover_reporting_customers(
                     reason="discovery_failed",
                     detail=type(exc).__name__,
                 )
-            entries.append(entry)
+            tenant_entries.append(entry)
+            if cut_short is None and _time_limited(entry):
+                cut_short = int(customer.id)
+        if rotate:
+            save_run_state(rotation_key, {"start_customer_id": cut_short or 0}, store=run_store)
+        entries.extend(sorted(tenant_entries, key=lambda row: int(row.get("customer_id") or 0)))
     return {"customers": entries}
+
+
+def _rotated(pairs: list[tuple[Any, DimCustomer]], start_customer_id: int) -> list[tuple[Any, DimCustomer]]:
+    """Customers from ``start_customer_id`` upwards first, then the lower ids."""
+    if start_customer_id <= 0:
+        return pairs
+    later = [pair for pair in pairs if int(pair[1].id) >= start_customer_id]
+    earlier = [pair for pair in pairs if int(pair[1].id) < start_customer_id]
+    return later + earlier
+
+
+def _time_limited(entry: dict[str, Any]) -> bool:
+    """True when the shared time budget cut one of this customer's sites short."""
+    for site in entry.get("sites") or []:
+        if ((site or {}).get("fetch") or {}).get("stopped") == REASON_TIME_LIMIT:
+            return True
+    return False
 
 
 def _discover_customer(

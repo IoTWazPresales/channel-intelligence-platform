@@ -298,6 +298,101 @@ def test_two_customers_on_one_site_are_spaced_in_one_run(monkeypatch):
     assert all(gap >= 4 for gap in gaps), gaps
 
 
+
+def _rotation_setup(monkeypatch, n_products=2):
+    """Two customers on two different sites; the first site is slow enough to use the budget."""
+    site_a = _site(id=7, site_key="rotate-a", search_url_pattern="https://a.example.test/search?q={query}")
+    site_b = _site(id=8, site_key="rotate-b", search_url_pattern="https://b.example.test/search?q={query}")
+    session, _queue = _mock(monkeypatch, _products(n_products), site_a)
+    rows = {"rotate-a": site_a, "rotate-b": site_b}
+    monkeypatch.setattr(discovery, "_load_site", lambda _session, _tenant, key: rows.get(key))
+    first = DimCustomer(id=11, tenant_id=TENANT, name="Counter")
+    second = DimCustomer(id=12, tenant_id=TENANT, name="Counter Two")
+
+    def config(customer_id, key):
+        return CustomerReportConfig(
+            customer_id=customer_id,
+            reports_expected=True,
+            feed_profile_json={"listing_seed": {"marketplace": key}},
+        )
+
+    monkeypatch.setattr(
+        discovery,
+        "_reporting_customers",
+        lambda *args: [(config(11, "rotate-a"), first), (config(12, "rotate-b"), second)],
+    )
+    return session
+
+
+def _rotation_run(session, run_store, *, limit, seconds_per_request):
+    clock, policy = _policy(limit=limit)
+    hosts: list[str] = []
+
+    def http(url, headers=None):
+        hosts.append(url.split("/")[2])
+        clock.t += seconds_per_request
+        return 200, "no matches"
+
+    report = discovery.discover_reporting_customers(
+        session, tenant_id=TENANT, http_get=http, run_store=run_store, fetch_policy=policy
+    )
+    return report, hosts
+
+
+def test_budget_rotation_lets_a_later_customer_progress(monkeypatch):
+    """Codex review of PR #100 (B1): a customer that uses the whole budget every run must
+    not starve the customers after it. The next run starts at the customer the budget
+    stopped, then wraps round to the others.
+
+    Each product search here is two requests (1 s each, then the 5 s site spacing).
+    Customer 11 finishes its two products at t=19 s; customer 12 (another site) then gets
+    one request before the 22 s budget runs out, so its first search is cut short and
+    rolled back.
+    """
+    session = _rotation_setup(monkeypatch)
+    run_store = MemorySitePauseStore()
+    report, hosts = _rotation_run(session, run_store, limit=22.0, seconds_per_request=1.0)
+    assert hosts[0] == "a.example.test"
+    by_customer = {c["customer_id"]: c for c in report["customers"]}
+    assert by_customer[11]["sites"][0]["fetch"] is None
+    assert by_customer[12]["sites"][0]["fetch"]["stopped"] == "time_limit"
+    assert [c["customer_id"] for c in report["customers"]] == [11, 12]
+    assert run_store.get(f"discovery:{TENANT}:rotation") == {"start_customer_id": 12}
+    # Next run: customer 12 goes first and finishes; customer 11 gets what is left.
+    report2, hosts2 = _rotation_run(session, run_store, limit=22.0, seconds_per_request=1.0)
+    assert hosts2[0] == "b.example.test"
+    by_customer2 = {c["customer_id"]: c for c in report2["customers"]}
+    assert by_customer2[12]["sites"][0]["fetch"] is None
+    assert by_customer2[11]["sites"][0]["fetch"]["stopped"] == "time_limit"
+    # The report keeps customer order stable whatever order the run used.
+    assert [c["customer_id"] for c in report2["customers"]] == [11, 12]
+    assert run_store.get(f"discovery:{TENANT}:rotation") == {"start_customer_id": 11}
+
+
+def test_budget_rotation_resets_when_nothing_is_cut_short(monkeypatch):
+    session = _rotation_setup(monkeypatch)
+    run_store = MemorySitePauseStore()
+    run_store.set(f"discovery:{TENANT}:rotation", {"start_customer_id": 12}, ttl_seconds=600)
+    report, hosts = _rotation_run(session, run_store, limit=1000.0, seconds_per_request=4.0)
+    assert hosts[0] == "b.example.test"
+    assert all(c["sites"][0]["fetch"] is None for c in report["customers"])
+    assert run_store.get(f"discovery:{TENANT}:rotation") == {"start_customer_id": 0}
+
+
+def test_dry_run_does_not_move_the_rotation(monkeypatch):
+    session = _rotation_setup(monkeypatch)
+    run_store = MemorySitePauseStore()
+    _clock, policy = _policy(limit=22.0)
+    discovery.discover_reporting_customers(
+        session,
+        tenant_id=TENANT,
+        http_get=lambda url, headers=None: (200, "no matches"),
+        run_store=run_store,
+        fetch_policy=policy,
+        apply=False,
+    )
+    assert run_store.get(f"discovery:{TENANT}:rotation") is None
+
 def _probe_inputs():
     from app.models.listing_capture import CustomerListing
 

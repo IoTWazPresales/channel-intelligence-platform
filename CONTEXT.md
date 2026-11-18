@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-18 - **Discovery pacing (alignment D5):** discovery shares the poll's site spacing, 403/429 pause and time budget via `site_fetch.py`; interrupted searches roll back and resume. BACKLOG-239 records the reader-profile migration. `cip_test` only.
+- 2026-11-18 - **Discovery pacing (alignment D5):** discovery shares the poll's site spacing, 403/429 pause and time budget via `site_fetch.py`; interrupted searches roll back and resume; the budget rotates across customers so none is starved. BACKLOG-239 records the reader-profile migration. `cip_test` only.
 
 - 2026-11-17 - **PR #95 Round 2:** discovery validates seller seeds before writing sites, preserving bad-customer exclusion and stored seller identities. The existing DB-backed regression is unchanged. All 192 literal-scan hits came from Round 1 fixture keys `market`/`catalogue`; distinctive fixture keys yield zero app/alembic hits using fixture/config-derived keys. Database-free tests: 35 review + 55 existing passed (90), connections forbidden. No DB connection, service restart, commit or push; memory state updated, changes remain in this detached worktree at `a0c7dcc5`.
 
