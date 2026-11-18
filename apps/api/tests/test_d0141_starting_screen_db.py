@@ -11,7 +11,8 @@ from app.api.deps import get_db
 from app.core.config import get_settings
 from app.core.my_accounts import bind_my_accounts, request_my_account_ids, reset_my_accounts
 from app.main import app
-from sqlalchemy import text
+from app.models.saved_reports import Dashboard
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 TAG = secrets.token_hex(3)
@@ -143,3 +144,47 @@ async def test_default_policy_is_unchanged_behaviour(tx, monkeypatch) -> None:
     assert len(await _bound(session, finance, {}) or ()) == 1
     assert (await _me(client, finance, "off"))["my_accounts"]["filter_on"] is False
     assert (await _me(client, none))["my_accounts"]["filter_on"] is False
+
+@pytest.mark.anyio
+async def test_starting_screen_list_stays_owner_scoped_after_switching_users(tx, monkeypatch) -> None:
+    """B1 API contract: one client can switch users without losing either saved starter."""
+    client, session = tx
+    monkeypatch.setattr(get_settings(), "cip_auth_mode", "stub")
+    monkeypatch.setattr(get_settings(), "cip_starting_screen_policy", "d0141")
+    first = await _user(session, "switch-first", job="finance", accounts=0)
+    second = await _user(session, "switch-second", job="account_manager", accounts=1)
+    starters = [
+        Dashboard(
+            tenant_id="default",
+            owner_user_id=uid,
+            name=f"D0141 {TAG} starter {uid}",
+            visibility="personal",
+            shared_roles=[],
+            filters_json={},
+            template_key="my_accounts",
+        )
+        for uid in (first, second)
+    ]
+    session.add_all(starters)
+    await session.flush()
+    expected = {row.owner_user_id: row.id for row in starters}
+
+    for uid in (first, second, first):
+        response = await client.get("/api/v1/dashboards", headers={"X-User-Id": str(uid)})
+        assert response.status_code == 200, response.text
+        items = response.json()["items"]
+        own = [
+            row for row in items
+            if row["template_key"] == "my_accounts" and row["owner_user_id"] == uid
+        ]
+        assert [row["id"] for row in own] == [expected[uid]]
+        assert not any(row["id"] == expected[second if uid == first else first] for row in items)
+
+    assert (await _me(client, second))["starting_screen"]["path"] == "/dashboards?start=my_accounts"
+    count = await session.scalar(
+        select(func.count()).select_from(Dashboard).where(
+            Dashboard.owner_user_id.in_([first, second]),
+            Dashboard.template_key == "my_accounts",
+        )
+    )
+    assert count == 2

@@ -109,8 +109,11 @@ export function myAccountsStarterId(items: Dashboard[], userId: string | number 
 
 export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?: boolean }) {
   const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
+  // The API list depends on identity. Keep public reads and each user's fresh cache separate.
+  const listKey = ['dashboards', me?.tenant_id ?? null, me?.id ?? null] as const;
   const listQ = useQuery({
-    queryKey: ['dashboards'],
+    queryKey: listKey,
     queryFn: ({ signal }) => apiGet<{ items: Dashboard[] }>('/api/v1/dashboards', { signal }),
     retry: false,
   });
@@ -187,7 +190,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
   const builderAvailable = isBuilderAvailable(catalogV2, active);
 
   const replaceDashboard = (d: Dashboard) =>
-    qc.setQueryData(['dashboards'], (old: { items: Dashboard[] } | undefined) => {
+    qc.setQueryData(listKey, (old: { items: Dashboard[] } | undefined) => {
       if (!old) return old;
       return { ...old, items: old.items.map((x) => (x.id === d.id ? d : x)) };
     });
@@ -204,7 +207,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
       setCreateOpen(false);
       setName('');
       setActiveId(d.id);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
     },
   });
 
@@ -212,13 +215,12 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     mutationFn: (key: string) => createFromTemplate(key),
     onSuccess: async (d) => {
       setActiveId(d.id);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
     },
   });
 
   // D-0141: /dashboards?start=my_accounts (the account manager's starting screen) opens the caller's
   // My accounts starter, creating it from the template once if they have none.
-  const { data: me } = useCurrentUser();
   const startHandled = useRef(false);
   const startMyAccounts = fromTemplateMut.mutate;
   useEffect(() => {
@@ -242,7 +244,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     onSuccess: async () => {
       setEditorOpen(false);
       setEditorError(null);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
     },
     onError: (e) => setEditorError(safeDisplayError(e)),
   });
@@ -257,7 +259,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     onSuccess: async () => {
       setBuilderOpen(false);
       setEditorError(null);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
     },
     onError: (e) => setEditorError(safeDisplayError(e)),
   });
@@ -267,7 +269,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
       if (!active) throw new Error('No dashboard');
       return apiDelete(`/api/v1/dashboards/${active.id}/widgets/${widgetId}`);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboards'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: listKey }),
   });
 
   const duplicateMut = useMutation({
@@ -276,7 +278,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
       return apiPost<Dashboard>(`/api/v1/dashboards/${active.id}/widgets`, duplicateBody(active, w));
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
       // The copy sits below every widget: bring it into view once the list reloads.
       setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 300);
     },
@@ -300,7 +302,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     },
     onSuccess: async (message) => {
       setPromoteMessage(message);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
       await qc.invalidateQueries({ queryKey: ['saved-reports'] });
     },
   });
