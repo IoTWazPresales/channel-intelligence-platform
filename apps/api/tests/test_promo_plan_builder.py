@@ -448,6 +448,9 @@ def test_build_promo_plan_draft_from_customer_period_same_customer_only(monkeypa
                 return SimpleNamespace(id=int(key), sku="SKU", name="Name", sales_model_name="X-SALES-MODEL")
             return None
 
+        def scalar(self, *_a, **_k):
+            return None
+
         def scalars(self, *_a, **_k):
             return MagicMock(all=MagicMock(return_value=[]))
 
