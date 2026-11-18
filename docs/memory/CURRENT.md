@@ -2,6 +2,8 @@
 
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
+**2026-11-18 - entity-specific removal (`fix/entity-specific-removal-20261118`, PR pending review):** no person addresses or workstation paths left in `apps/api/app` (guard test `test_no_tenant_contact_literals.py`). Shipping-digest recipients seed only from `CIP_SHIPPING_MAILER_RECIPIENTS` (live `cip` has 4 stored recipients, unaffected). IMAP flags every allowlisted sender's message with no spreadsheet. The "derive eras from shipping" steward action reads `CIP_SCM_ARTICLES_WORKBOOK_PATH` (must be set on the live API before use). Payment overlay note is generic. Lineup archive config needs an explicit root. Remaining items: BACKLOG-240.
+
 **Branch:** `feat/integrate-20261103` at `b9f29a09` (Merge #95). Nothing pushed to `main`. Merged into it on 2026-11-17/18 (first-parent merges, SAST):
 - #97 `fa962f36` (13:56) - database settings fail loudly: `DATABASE_URL` and `DATABASE_URL_SYNC` have no default; `backup_cip.ps1` needs `-DatabaseUrl`; `clone_cip_db.py` needs `--source-db cip`; `schema_drift_report.py` needs `--db` or `--url`. Runbook examples corrected on this branch.
 - #96 `d70c49c8` (14:09) - stock-action price ignores superseded lineup rows (BACKLOG-227 partly; residuals open).
