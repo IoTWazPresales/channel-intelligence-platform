@@ -439,10 +439,11 @@ def _price_key(value: Any) -> str | None:
 def extraction_unchanged(prev: ListingObservation | None, *, parsed: Any, parser_version: str) -> bool:
     """True when ``parsed`` extracts exactly what ``prev`` holds.
 
-    Compared: parser version, price, availability, promo badge, and every key the parser
+    Compared: parser version, price, availability, promo badge, every key the parser
     put in its own flags (method, VAT basis, page id/variant id/SKU, RRP, canonical URL,
-    SKU match, ...). Fetch-side flags, CPOR activation and status transitions are not
-    extracted fields and are not compared.
+    SKU match, ...), and the buy-box seller and offer count when the reader returned offers
+    (a seller-only change is evidence for an Own/Competition change). Fetch-side flags,
+    CPOR activation and status transitions are not extracted fields and are not compared.
     """
     if prev is None or getattr(parsed, "parse_status", None) != "ok":
         return False
@@ -457,6 +458,21 @@ def extraction_unchanged(prev: ListingObservation | None, *, parsed: Any, parser
     prev_flags = prev.parse_flags if isinstance(prev.parse_flags, dict) else {}
     for key, value in (parsed.flags or {}).items():
         if prev_flags.get(key) != value:
+            return False
+    offers = [o for o in (getattr(parsed, "offers", None) or []) if isinstance(o, dict)]
+    if offers:
+        prev_count = getattr(prev, "offer_count", None)
+        if prev_count is not None and int(prev_count) != len(offers):
+            return False
+        buy = next((o for o in offers if o.get("is_buy_box")), None)
+        seller = str((buy or {}).get("seller_name") or "").strip()
+        # A reader that names no seller falls back to the site's own seller on write, so only
+        # a named seller is compared. A seller the page leaves unknown is not filled in, so it
+        # is a change from a stored seller.
+        prev_seller = str(getattr(prev, "buy_box_seller", None) or "").strip()
+        if seller and seller != prev_seller:
+            return False
+        if not seller and (buy or {}).get("seller_unknown") and prev_seller:
             return False
     return True
 
@@ -480,17 +496,32 @@ def _attach_offers(session: Session, obs: ListingObservation, listing: Any, site
         ]
     customer_id = getattr(listing, "customer_id", None)
     buy = next((o for o in offers if o.get("is_buy_box")), None)
-    if buy is not None and not buy.get("seller_name") and site is not None and site.first_party_seller:
+    # An unknown seller (the page names sellers, none tied to the price) stays unknown: filling
+    # in the own seller would read as Own (Codex review of PR #104, B1).
+    if (
+        buy is not None
+        and not buy.get("seller_name")
+        and not buy.get("seller_unknown")
+        and site is not None
+        and site.first_party_seller
+    ):
         buy["seller_name"] = site.first_party_seller
     tenant = site.tenant_id if site is not None else "default"
     if getattr(obs, "id", None) is None:
         return
+
+    def _ownership(offer: dict[str, Any]) -> bool | None:
+        # An unknown seller (no name, no id, marked seller_unknown by the reader) has unknown
+        # ownership: is_own_seller would answer False for it and the label would read
+        # Competition (Codex review of PR #104, round 2 B1).
+        if site is None:
+            return None
+        if offer.get("seller_unknown") and not offer.get("seller_name") and not offer.get("seller_id"):
+            return None
+        return site.is_own_seller(customer_id, name=offer.get("seller_name"), seller_id=offer.get("seller_id"))
+
     for offer in offers:
-        own = (
-            site.is_own_seller(customer_id, name=offer.get("seller_name"), seller_id=offer.get("seller_id"))
-            if site is not None
-            else None
-        )
+        own = _ownership(offer)
         session.add(
             ListingOffer(
                 tenant_id=tenant,
@@ -510,11 +541,7 @@ def _attach_offers(session: Session, obs: ListingObservation, listing: Any, site
     obs.offer_count = len(offers)
     if buy is not None:
         obs.buy_box_seller = buy.get("seller_name")
-        obs.buy_box_own = (
-            site.is_own_seller(customer_id, name=buy.get("seller_name"), seller_id=buy.get("seller_id"))
-            if site is not None
-            else None
-        )
+        obs.buy_box_own = _ownership(buy)
     session.add(obs)
 
 

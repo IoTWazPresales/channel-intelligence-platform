@@ -199,6 +199,9 @@ class Settings(BaseSettings):
     cip_mailbox_graph_client_id: str = ""
     cip_mailbox_graph_client_secret: str = ""
     cip_mailbox_graph_tenant: str = ""
+    # Wave 3 Phase C: where /ops/overview reads the supervisor status.json (always-on\) and
+    # the nightly backup status files (backups\). Empty means %LOCALAPPDATA%\CIP on the API host.
+    cip_ops_state_dir: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:
