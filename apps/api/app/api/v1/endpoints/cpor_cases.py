@@ -71,6 +71,7 @@ from app.services.cpor.evidence_basis import (
     load_source_attested_case_codes,
 )
 from app.services.cpor.intelligence_scope import (
+    STOCK_ACTION_ORIGIN,
     where_commercial_intelligence,
     where_test_data_only,
 )
@@ -971,6 +972,14 @@ def set_intelligence_exclude(
     actor = _actor(user)
     with SessionLocal() as session:
         case = _load_case(session, case_id, user)
+        if not body.exclude and (case.origin or "") == STOCK_ACTION_ORIGIN:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "stock_action_case_stays_excluded — a Move or Return case is logistics, "
+                    "not a support claim, so it cannot join commercial intelligence"
+                ),
+            )
         case.intelligence_exclude = bool(body.exclude)
         session.add(case)
         _record_event(
