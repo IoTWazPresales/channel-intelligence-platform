@@ -1,5 +1,24 @@
 # CURRENT state
 
+**W1-B worklist (2026-11-18):** branch `feat/w1b-stock-not-listed-20261118` (stacked on `fix/listing-coverage-226-20261118`) adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
+- the offer/competitor comparison needs data;
+- competitor-page monitoring needs a migration;
+- activation alerts need a decision.
+
+No migration, no deploy.
+
+**Listing coverage defects (2026-11-18):** branch `fix/listing-coverage-226-20261118` off `feat/integrate-20261103` closes all eight BACKLOG-226 sub-items in `listing_capture/coverage.py`, `registry.extraction_unchanged`, `adapters/html_page.py` and `ListingCoverageLens.tsx`:
+- an HTTP error page with a price is a failing read;
+- a seller-only change stores a snapshot;
+- a seed resolved before its listing keeps its evidence;
+- the seller comes from the priced JSON-LD offer;
+- latest reads run in batches;
+- delisted counts as Not found;
+- the lens shows loading and error states instead of "No reported products yet.";
+- product-less hand/CSV listings are counted.
+
+Review points: BACKLOG-243. No migration, no deploy; tests on `cip_test` only.
+
 **PR #95 review worktree (2026-11-17):** detached at `a0c7dcc5`; no branch created. Changes remain uncommitted and unpushed.
 **Wired + unit-tested:** shared autoconfigure invokes reporting-customer discovery for both the scheduled task and steward POST. Domain seeds target matching domains; URL-less feed proposals are enriched; generated external ids use product id + full-URL SHA-256; product links outrank navigation; a tenant/customer/site cursor resumes after 25 searches and wraps after the catalogue.
 **Round 2 fix:** discovery reuses autoconfiguration's seller-seed validator before writing a site, so a malformed seed cannot leave a discovery-created site behind after configuration rejects the customer. A stored customer seller identity still bypasses seed parsing. The existing DB-backed test is unchanged. The 192 `test_no_site_literals` hits reproduce without DB rows: Round 1 fixtures declared ordinary words `market` (64 hits) and `catalogue` (128 hits) as forbidden keys; distinctive fixture keys remove those matches without changing app wording or weakening the test.

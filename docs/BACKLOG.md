@@ -3528,7 +3528,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #88 merged at `000e1e1d`. One fix lane, not several. |
+| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #88 merged at `000e1e1d`. One fix lane, not several. **2026-11-18:** all eight sub-items fixed on `fix/listing-coverage-226-20261118`, as follows. (1) The latest read uses `http_status` and the `fetch_failed` snapshot marker. (2) `extraction_unchanged` compares the named buy-box seller and the offer count. (3) A confirmed seed resolved before its listing keeps that listing's evidence. (4) The seller is read from the parsed JSON-LD offer at the parsed price, with the old regex only as fallback. (5) Latest reads run in batches of 5,000 ids. (6) A delisted listing counts as Not found unless another listing is watched. (7) The lens shows loading and error states. (8) Hand/CSV listings with no product are their own row. Not changed: embedded JSON that is not JSON-LD still uses the first `"seller"` key; inferred identities keep `first_party_seller`. |
 | **Source** | Codex reviews of PR #88 at `9ba66022` and `000e1e1d`, and the lane A reports (2026-11-11/12). Line numbers are at `000e1e1d`. |
 | **Idea** | Make the Market Coverage counts and the Own/Competition label hold in the edge cases below. |
 | **Why it matters** | Coverage counts and Own/Competition labels are what account managers will read. Each item gives a wrong count or label in a narrow case. |
@@ -3737,3 +3737,29 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **What would close the gap (strongest first)** | (1) **Protect `main` on GitHub** with a ruleset: require a pull request, block force pushes and deletion, and restrict who can push. This is server-side, covers every agent and human, and needs no local change. *Risk:* low; merges to `main` go through PRs. (2) **Stop the default pointing at `cip`.** Make the default `cip_test` or no default (require an explicit `DATABASE_URL`). Give builders a role that is read-only on `cip`, and keep the write or migration role's password out of `.env.example`. Bind Postgres to `127.0.0.1`. *Risk:* medium; local scripts and the running API must set their URL explicitly. (3) **Start Codex builders in a sandbox with network access off** (`-s workspace-write`, network disabled), so `git push` and TCP database connections fail inside Codex. Pushes and database work then go through a hooked agent or the coordinator. *Risk:* low to medium. **Measured 2026-11-16: it does not work on this PC (see the probe row), so it is not a control on Windows today.** (4) **A local `pre-push` hook** in CIP that refuses `refs/heads/main`. *Risk:* low, but `--no-verify` bypasses it; useful only as a tripwire. (5) **EIF hooks for Codex**, if the installed Codex version supports pre-tool hooks: an adapter like `runtime/claude_code/eif_claude_adapter.cmd`. Not investigated; Codex 0.167–0.169 is installed. |
 | **Probe: Codex network sandbox on Windows (2026-11-16)** | Reported by the CIP coordinator's probe: a Codex run with `sandbox_workspace_write.network_access=false` still reached the network on Windows. `git ls-remote origin` succeeded, and Postgres on `127.0.0.1:5432` accepted a TCP connection. So option (3) does not stop a push or a database connection on this PC. `~/.codex/config.toml` sets only `windows.sandbox = "unelevated"` (last changed 2026-11-12) and no `sandbox_workspace_write` table, so the probe set the option for its own run. What remains: (1) the GitHub ruleset is the only server-side control for `main`; (2) the database default, a read-only builder role and a `127.0.0.1` bind are the controls for `cip`. A TCP connection being accepted is not proof that a login or write would succeed; the `cip` password in `.env.example` means it would. |
 | **TRIGGER** | Before the next Astra builder lane, or before any builder is given database or push work. |
+
+---
+
+## BACKLOG-243 — Listing coverage: review points left after the BACKLOG-226 fixes
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18 on `fix/listing-coverage-226-20261118`. Nothing here blocks the fix; each is a check for review or a later lane. |
+| **(a) Delisted = Not found** | A `delisted` listing now counts the product as Not found (the module's "not on the site" bucket), unless another listing of it is watched or failing. If account managers need delisted shown apart from never-found, that is a new bucket and a UI change. |
+| **(b) Embedded seller outside JSON-LD** | Pages that name the seller only in non-JSON-LD embedded JSON still use the first `"seller"` key in the page. A per-site reader profile would fix that; it depends on BACKLOG-239 (reader profiles need a migration). |
+| **(c) Older observations** | Observations written before this change with a non-200 status now read as failing. No data is rewritten. The count of listings that move from Watched to Failing on `cip` was not measured in this lane. |
+| **TRIGGER** | Before listing coverage goes to account managers. |
+
+---
+
+## BACKLOG-244 — W1-B commercial worklists: what shipped and what each remaining part needs
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Partly shipped**, 2026-11-18, on `feat/w1b-stock-not-listed-20261118` (stacked on the BACKLOG-226 branch). |
+| **Source** | `cip-requirements-alignment-20261118.md` Section D item 7: "Latest-stock/no-listing suggestions, own-versus-other-offer/competitor comparisons, competitor-page monitoring and the remaining price/activation alerts. Reuse existing proposal, offer and competitor-price writers." |
+| **Shipped: in stock, not watched** | `GET /api/v1/listing-capture/stock-not-listed` (`listing_capture/stock_not_listed.py`). Read-only, tenant from the caller, optional `customer_id`, `limit` up to 2,000 with `truncated`. For each reporting customer it takes the products with stock above zero on the latest stock report, summed over sites (the product set discovery searches). It drops the ones coverage counts as watched (`coverage.product_buckets`, the same rules as the Coverage tab). It lists the rest with stock, date, coverage reason and a worded next step. Shown under the Coverage tab (`StockNotListedWorklist.tsx`) with loading, error and empty states. |
+| **(a) Own vs other offer / competitor comparison** | Code-only to build. It needs no migration: `listing_offer`, `buy_box_own` and approved `fact_competitor_price` exist. It is useful only with data: seller identities per customer site (seed or steward), and approved competitor maps and prices. Today `fact_competitor_price` holds only imported prices. Not built in this lane. |
+| **(b) Competitor-page monitoring** | **Needs a migration.** `customer_listing` requires a customer, and `dim_competitor_product` / `fact_competitor_price` have no page URL or reader fields. Watching competitor pages needs a competitor-page table, or a nullable link from listings to `dim_competitor_product`. It also needs competitor page URLs (data). |
+| **(c) Late activation / early deactivation alerts** | **Needs a decision.** The timeline exists (observations plus CPOR windows). The decision is what counts as late or early: the days of tolerance after window start and before window end, and whether a single read is enough. Then it is code-only. |
+| **TRIGGER** | Before W1-B is reported complete. |
