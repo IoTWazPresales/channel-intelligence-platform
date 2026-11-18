@@ -1,5 +1,7 @@
 # CURRENT state
 
+**2026-11-18 - Wave 2 verification harness (`feat/w2-verification-matrix-20261118`, uncommitted for coordinator review):** reusable tooling for the Wave 2 pass, built but not run against any app or database. Route x viewport x state matrix over 17 Wave 1 routes (`apps/web/src/lib/verification/matrix.ts`), a Playwright spec/config with a write guard in both modes and no webServer (`apps/web/playwright.wave2.config.ts`), and a read-only figure checker (`apps/api/scripts/verify/figure_check.py`). Its database test `tests/test_figure_check_db.py` is written, not run. How to run: `docs/audits/WAVE2_VERIFICATION_HARNESS.md`. Deploy, test instance, live read-only run and verification credentials need authorization: BACKLOG-249.
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
 **2026-11-18 - entity-specific removal (`fix/entity-specific-removal-20261118`, PR pending review):** no person addresses or workstation paths left in `apps/api/app` (guard test `test_no_tenant_contact_literals.py`). Shipping-digest recipients seed only from `CIP_SHIPPING_MAILER_RECIPIENTS` (live `cip` has 4 stored recipients, unaffected). IMAP flags every allowlisted sender's message with no spreadsheet. The "derive eras from shipping" steward action reads `CIP_SCM_ARTICLES_WORKBOOK_PATH` (must be set on the live API before use). Payment overlay note is generic. Lineup archive config needs an explicit root. Remaining items: BACKLOG-240.
