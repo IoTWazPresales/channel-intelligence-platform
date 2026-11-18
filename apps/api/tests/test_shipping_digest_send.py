@@ -52,11 +52,10 @@ def test_mailer_send_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
     assert mailer_send_enabled() is False
 
 
-def test_default_recipients_are_the_five() -> None:
+def test_no_default_recipients(monkeypatch) -> None:
+    monkeypatch.delenv("CIP_SHIPPING_MAILER_RECIPIENTS", raising=False)
     rec = mailer_recipients()
-    assert rec == DEFAULT_SHIPPING_MAILER_RECIPIENTS
-    assert len(rec) == 5
-    assert all(addr.endswith("@asus.com") for addr in rec)
+    assert rec == DEFAULT_SHIPPING_MAILER_RECIPIENTS == ()
 
 
 class _FakeSMTP:

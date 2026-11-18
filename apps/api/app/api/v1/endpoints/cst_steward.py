@@ -550,7 +550,8 @@ def derive_eras_from_shipping(
 ):
     """Propose dated eras for SCM multi-model articles using inbound POD clock.
 
-    Re-reads Desktop Articles.xlsx when present; otherwise no-op with empty groups.
+    Re-reads the SCM article workbook at ``CIP_SCM_ARTICLES_WORKBOOK_PATH``. Unset or
+    missing file: HTTP 400, nothing written.
     Never confirms. Never rewrites applied facts.
     """
     from pathlib import Path
@@ -562,7 +563,15 @@ def derive_eras_from_shipping(
     from app.services.imports.cst_article_alias_import import parse_article_alias_workbook
 
     actor = _actor(x_user_id)
-    scm_path = Path(r"C:\Users\warren_eliason\OneDrive - ASUS\Desktop\Articles.xlsx")
+    from app.core.config import get_settings
+
+    configured = (get_settings().cip_scm_articles_workbook_path or "").strip()
+    if not configured:
+        raise HTTPException(
+            status_code=400,
+            detail="SCM article workbook not configured (set CIP_SCM_ARTICLES_WORKBOOK_PATH)",
+        )
+    scm_path = Path(configured)
     if not scm_path.is_file():
         raise HTTPException(status_code=400, detail=f"SCM file not found: {scm_path}")
     rows = parse_article_alias_workbook(scm_path.read_bytes())

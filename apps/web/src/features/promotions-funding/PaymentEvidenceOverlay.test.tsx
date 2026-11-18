@@ -45,7 +45,7 @@ vi.mock('@/lib/api', () => ({
           },
         ],
         paid_note:
-          'Paid on the ZAR open book only sums linked evidence in the case currency. This ASUS pending report is almost all USD, so it does not move R0 paid / R6.0m outstanding.',
+          'Paid on the ZAR open book only sums linked evidence in the case currency. Rows in this report in another currency do not move the ZAR paid or outstanding figures.',
         not_claim_evidence: true,
         match_rule: 'exact case_code == Case ID; no fuzzy; unmatched stays reviewable',
       });
@@ -67,7 +67,7 @@ describe('PaymentEvidenceOverlayPanel', () => {
     });
     expect(screen.getByTestId('cpor-payment-overlay')).toBeInTheDocument();
     expect(screen.getByText(/overclaim 75 units/i)).toBeInTheDocument();
-    expect(screen.getByTestId('cpor-payment-paid-note')).toHaveTextContent(/does not move R0 paid/i);
+    expect(screen.getByTestId('cpor-payment-paid-note')).toHaveTextContent(/do not move the ZAR paid or outstanding figures/i);
     // The unmatched file row is labelled by its evidence basis (evidenceBasis.ts): 'Source attested'.
     expect(screen.getByText(/C19A50693 · Source attested/)).toBeInTheDocument();
     const unmatched = screen.getByRole('link', { name: /C19A50693/i });
