@@ -3752,6 +3752,16 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **(c) Older observations** | Observations written before this change with a non-200 status now read as failing. No data is rewritten. The count of listings that move from Watched to Failing on `cip` was not measured in this lane. |
 | **TRIGGER** | Before listing coverage goes to account managers. |
 
+## BACKLOG-245 — Wave 3 B2: first authorized run of the batch deploy script
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18. The script is built and unit-tested; it has never been run with `-Execute`. |
+| **Source** | Alignment review 2026-11-18, Section D item 12: "Implement the complete batch-deploy script with recorded build identity, ordered restarts, readiness checks and stable launch-count verification." Brief section 8. |
+| **What exists** | `scripts/cip-deploy.ps1`. The plan is the default; `-Execute` deploys and `-SkipPull` skips the pull. Pure helpers are in `scripts/cip-deploy-lib.ps1`, and `scripts/cip-deploy.Tests.ps1` holds 14 Pester tests (incl. 2 for the native-call wrapper): restart order, lockfile detection, launch-count stability, healthy-after-request, Celery ping parsing and record format. A run from a linked worktree was checked and refused with `-Execute` before any step. |
+| **Needs** | An authorized deploy window. Run `.\scripts\cip-deploy.ps1 -Execute` from the primary checkout on the trunk, then paste the printed block into CURRENT.md. Watch for: (1) the supervisor's `last_start` must move for each restarted component, otherwise the script times out after `-HealthyTimeoutSeconds` (240 s); (2) `celery inspect ping` needs Redis up and reachable from the API venv. |
+| **TRIGGER** | The next merged batch that Warren authorizes for deploy. |
+
 ## BACKLOG-246 — Wave 3 B1: make the fast API gate a required check
 
 | Field | Detail |
