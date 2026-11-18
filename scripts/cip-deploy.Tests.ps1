@@ -95,3 +95,21 @@ Describe 'deploy record' {
         $b | Should Match 'web 3000 at t1: HTTP 200'
     }
 }
+
+Describe 'native calls (review fix: stderr must not stop the deploy under PS 5.1)' {
+    It 'captures stderr text from a command that succeeds without throwing, even with Stop' {
+        $ErrorActionPreference = 'Stop'
+        $r = Invoke-NativeCaptured -FilePath 'cmd.exe' -ArgumentList @('/c', 'echo progress 1>&2 & echo done & exit /b 0')
+        $r.ExitCode | Should Be 0
+        $r.Output | Should Match 'progress'
+        $r.Output | Should Match 'done'
+        $ErrorActionPreference | Should Be 'Stop'
+    }
+    It 'reports a failing exit code instead of throwing' {
+        $ErrorActionPreference = 'Stop'
+        $r = Invoke-NativeCaptured -FilePath 'cmd.exe' -ArgumentList @('/c', 'echo bad 1>&2 & exit /b 3')
+        $r.ExitCode | Should Be 3
+        $r.Output | Should Match 'bad'
+    }
+}
+

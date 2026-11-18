@@ -3753,6 +3753,8 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ## BACKLOG-242 — Aged-stock rule consistency: what is left after 2026-11-18
 
+| Field | Detail |
+|-------|--------|
 | **Status** | **Open**, recorded 2026-11-18 on `fix/aged-stock-consistency-20261118`. The decision-free parts of BACKLOG-227 shipped there; these need a migration or Warren's decision. |
 | **Source** | `cip-requirements-alignment-20261118.md` Section D item 3 (BACKLOG-227 code residuals) and Section A W1-A (Fold in BACKLOG-227). |
 | **(a) Price-free Move/Return: needs a migration** | `execute_aged_stock_action` still raises `no_positive_srp` for Move/Return when no shopper price exists. The price rule belongs to Promote, but `cpor_case_line.srp` is `NOT NULL` (`app/models/cpor.py:113`) and `create_case_from_promo_draft` refuses `seed_line_missing_srp`. Allowing a price-free logistics line needs `srp` nullable (or a separate logistics record) and a check that recompute, export and settle accept a line with no price. Do not write a placeholder price. |
@@ -3766,6 +3768,8 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ## BACKLOG-239 — Structured (REST) listing reader is retailer-shaped
 
+| Field | Detail |
+|-------|--------|
 | **Status** | **Open**, recorded 2026-11-18 from the requirements alignment review (Section C, Section D item 5). Not built: needs a schema change. |
 | **Source** | `apps/api/app/services/listing_capture/adapters/rest_buybox.py` reads fixed response fields (`buybox.items`, `plid`, `tsin`, `desktop_href`, a fixed seller/other-offer layout and a fixed saving-badge shape). URLs are configurable; the response interpretation is not. |
 | **What the work is** | Move the response-field mapping into per-site reader-profile data and prove a second, structurally different JSON response through the same mechanism. `listing_site` has no JSON column for a reader profile, so this needs a migration (new column or table) applied on `cip` with Warren's approval, plus a profile for each existing site written by a reviewed restore step. |
@@ -3774,6 +3778,8 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ## BACKLOG-240 — Remaining tenant-specific defaults in application code
 
+| Field | Detail |
+|-------|--------|
 | **Status** | **Open**, recorded 2026-11-18 (alignment review Section C / Section D item 9). Partly done on `fix/entity-specific-removal-20261118`. |
 | **Done** | Shipping-digest recipients: no built-in address list (seed only from `CIP_SHIPPING_MAILER_RECIPIENTS`; live `cip` already has 4 stored recipients for tenant `default`, checked read-only 2026-11-18, so nothing changes there). IMAP intake: no named sender; every allowlisted sender's message without a spreadsheet is flagged (same as the Graph path). Steward "derive eras from shipping": workbook path from `CIP_SCM_ARTICLES_WORKBOOK_PATH`, no workstation default. Payment-evidence overlay: fixed amount narrative replaced with generic wording. Lineup archive config: no workstation default root (`archive_config_for_root`), short-quarter folders not tied to one year. Guard test `tests/test_no_tenant_contact_literals.py` (no person email literals or workstation paths in `app/`). |
 | **Operator step after merge** | Set `CIP_SCM_ARTICLES_WORKBOOK_PATH` in the live API environment to the SCM `Articles.xlsx` location before using "derive eras from shipping"; until then the action answers HTTP 400 and writes nothing. |

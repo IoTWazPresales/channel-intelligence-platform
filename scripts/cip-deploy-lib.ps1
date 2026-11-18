@@ -87,3 +87,21 @@ function Format-DeployRecord {
     if ($Record.failure) { $lines += "- Stopped: $($Record.failure)" }
     return ($lines -join "`n")
 }
+
+function Invoke-NativeCaptured {
+    # Run a native command and capture stdout and stderr together without letting stderr text
+    # become a terminating error. Under Windows PowerShell 5.1, `& exe 2>&1` with
+    # $ErrorActionPreference = 'Stop' throws on the first stderr line (git pull writes progress
+    # there), so the caller would stop half-way. Success is decided by the exit code only.
+    param([Parameter(Mandatory)][string]$FilePath, [string[]]$ArgumentList = @())
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $lines = & $FilePath @ArgumentList 2>&1 | ForEach-Object { "$_" }
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    return [pscustomobject]@{ ExitCode = $code; Output = (($lines | Out-String).Trim()) }
+}
+

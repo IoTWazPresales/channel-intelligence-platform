@@ -44,9 +44,9 @@ $components = @('wsl', 'redis', 'worker', 'api', 'web', 'tunnel')
 
 function Invoke-Git {
     param([string[]]$GitArgs)
-    $out = & git -C $repo @GitArgs 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "git $($GitArgs -join ' ') failed: $out" }
-    return ($out | Out-String).Trim()
+    $r = Invoke-NativeCaptured -FilePath 'git' -ArgumentList (@('-C', $repo) + $GitArgs)
+    if ($r.ExitCode -ne 0) { throw "git $($GitArgs -join ' ') failed: $($r.Output)" }
+    return $r.Output
 }
 
 function Read-Status {
@@ -186,7 +186,7 @@ $ready = Get-HttpCode "$ApiBase/health/ready"
 $record.api_ready = $ready
 if ($ready -ne 200) { Stop-Deploy "/health/ready answered $ready" }
 Push-Location $apiDir
-$ping = (& $py -m celery -A app.worker.celery_app inspect ping --timeout 10 2>&1 | Out-String)
+$ping = (Invoke-NativeCaptured -FilePath $py -ArgumentList @('-m', 'celery', '-A', 'app.worker.celery_app', 'inspect', 'ping', '--timeout', '10')).Output
 Pop-Location
 $record.celery_ping = $(if (Test-CeleryPingOutput $ping) { 'replied' } else { 'no reply' })
 if ($record.celery_ping -ne 'replied') { Stop-Deploy "celery ping: $($ping.Trim())" }
