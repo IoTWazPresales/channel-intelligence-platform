@@ -161,6 +161,9 @@ class Settings(BaseSettings):
 
     # Mailbox ingest (apps/api/.env). Loaded via Settings — os.environ alone misses .env.
     cip_mailbox_ingest_enabled: bool = False
+    # SCM article workbook read by the steward "derive eras from shipping" action.
+    # Tenant/workstation data: no default path.
+    cip_scm_articles_workbook_path: str | None = None
     cip_mailbox_imap_host: str = "outlook.office365.com"
     cip_mailbox_imap_port: int = 993
     cip_mailbox_imap_user: str = ""
