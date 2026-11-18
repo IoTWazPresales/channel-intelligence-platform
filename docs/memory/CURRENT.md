@@ -1,5 +1,7 @@
 # CURRENT state
 
+**D-0141 starting screen (branch `feat/d0141-starting-screen-20261118`, 2026-11-18):** the accepted D-0141 rule is built behind `CIP_STARTING_SCREEN_POLICY` (default `assigned`, today's D-0145 behaviour, so nothing changes until it is switched). Under `d0141`, `/auth/me` reports `filter_default_on` true and `starting_screen.path` `/dashboards?start=my_accounts` only for an `account_manager` with a non-empty assignment; everyone else lands on Brief with the filter off and may turn it on (header `X-Cip-My-Accounts: on`; `off` still clears). Login lands on `starting_screen.path`; the dashboards page opens the user's own My accounts starter or creates it once. No migration. Rollout (set jobs, then switch) and the per-job access matrix: BACKLOG-248. Not merged.
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
 **Branch:** `feat/integrate-20261103` at `b9f29a09` (Merge #95). Nothing pushed to `main`. Merged into it on 2026-11-17/18 (first-parent merges, SAST):

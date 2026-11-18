@@ -9,7 +9,7 @@ import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
 import { ReadStrip } from '@/features/shell/ReadStrip';
 import { apiGet } from '@/lib/api';
 import { briefSignalsQueryKey } from '@/lib/myAccounts';
-import { useMyAccountsCleared } from '@/lib/useMyAccountsCleared';
+import { useMyAccountsChoice } from '@/lib/useMyAccountsCleared';
 
 type BriefSignalsResponse = {
   as_of: string;
@@ -29,10 +29,10 @@ function formatBriefFooterAsOf(iso: string): string {
 export function BriefPageContent() {
   const theme = useTheme();
   const line = theme.palette.divider;
-  const cleared = useMyAccountsCleared();
+  const accountsChoice = useMyAccountsChoice();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: briefSignalsQueryKey(cleared),
+    queryKey: briefSignalsQueryKey(accountsChoice),
     queryFn: ({ signal }) => apiGet<BriefSignalsResponse>('/api/v1/brief/signals', { signal }),
     staleTime: 30_000,
   });

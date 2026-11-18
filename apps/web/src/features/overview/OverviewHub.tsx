@@ -16,7 +16,7 @@ import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { apiDelete, apiGet } from '@/lib/api';
 import { briefSignalsQueryKey } from '@/lib/myAccounts';
-import { useMyAccountsCleared } from '@/lib/useMyAccountsCleared';
+import { useMyAccountsChoice } from '@/lib/useMyAccountsCleared';
 
 import { overviewAttentionFirst } from './overviewPaths';
 import { useClientReady } from './useClientReady';
@@ -87,10 +87,10 @@ export function OverviewHub() {
   });
   const attentionFirst = overviewAttentionFirst(isMobile, search?.get('zone'));
   const [columns, setColumns] = useDashboardColumns();
-  const accountsCleared = useMyAccountsCleared();
+  const accountsChoice = useMyAccountsChoice();
 
   const briefQ = useQuery({
-    queryKey: briefSignalsQueryKey(accountsCleared),
+    queryKey: briefSignalsQueryKey(accountsChoice),
     queryFn: ({ signal }) => apiGet<BriefSignalsResponse>('/api/v1/brief/signals', { signal }),
     staleTime: 30_000,
   });

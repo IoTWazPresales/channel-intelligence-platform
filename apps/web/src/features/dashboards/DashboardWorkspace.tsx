@@ -31,10 +31,11 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
+import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPatch, apiPost, safeDisplayError } from '@/lib/api';
 
@@ -93,6 +94,17 @@ export function v2MeasureFor(catalog: CatalogV2 | null | undefined, metricKey: s
 /** New builder (v2 editor, filter bar) only when the server has the v2 catalog AND v2 storage (0048). */
 export function isBuilderAvailable(catalog: CatalogV2 | null | undefined, dashboard: Pick<Dashboard, 'filters_json'> | undefined): boolean {
   return Boolean(catalog) && dashboard != null && dashboard.filters_json !== undefined;
+}
+
+export const MY_ACCOUNTS_TEMPLATE = 'my_accounts';
+
+/** D-0141: the caller's own dashboard made from the My accounts starter (newest first), if any. */
+export function myAccountsStarterId(items: Dashboard[], userId: string | number | null | undefined): number | null {
+  if (userId == null) return null;
+  const own = items.find(
+    (d) => d.template_key === MY_ACCOUNTS_TEMPLATE && d.owner_user_id != null && String(d.owner_user_id) === String(userId),
+  );
+  return own ? own.id : null;
 }
 
 export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?: boolean }) {
@@ -203,6 +215,21 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
       await qc.invalidateQueries({ queryKey: ['dashboards'] });
     },
   });
+
+  // D-0141: /dashboards?start=my_accounts (the account manager's starting screen) opens the caller's
+  // My accounts starter, creating it from the template once if they have none.
+  const { data: me } = useCurrentUser();
+  const startHandled = useRef(false);
+  const startMyAccounts = fromTemplateMut.mutate;
+  useEffect(() => {
+    if (startHandled.current || !listQ.isSuccess || !me || typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('start') !== MY_ACCOUNTS_TEMPLATE) return;
+    startHandled.current = true;
+    window.history.replaceState(null, '', window.location.pathname);
+    const existing = myAccountsStarterId(listQ.data?.items ?? [], me.id);
+    if (existing != null) setActiveId(existing);
+    else startMyAccounts(MY_ACCOUNTS_TEMPLATE);
+  }, [listQ.isSuccess, listQ.data, me, startMyAccounts]);
 
   const saveWidgetMut = useMutation({
     mutationFn: async (value: WidgetEditorValue) => {

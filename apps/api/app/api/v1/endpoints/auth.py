@@ -121,7 +121,13 @@ async def me(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    from app.core.my_accounts import header_clears_my_accounts, load_assigned_customer_ids
+    from app.core.my_accounts import (
+        filter_default_on,
+        filter_on,
+        header_my_accounts_choice,
+        load_assigned_customer_ids,
+        starting_screen,
+    )
 
     settings = get_settings()
     uid = str(user.get("id") or "")
@@ -132,11 +138,13 @@ async def me(
             tenant_id=str(user.get("tenant_id") or "default").strip() or "default",
             user_id=int(uid),
         )
-    cleared = header_clears_my_accounts(request.headers)
+    choice = header_my_accounts_choice(request.headers)
     job: str | None = None
     if uid.isdigit():
         row = await db.get(AppUser, int(uid))
         job = row.job if row is not None else None
+    policy = settings.cip_starting_screen_policy
+    default_on = filter_default_on(policy=policy, job=job, assigned_count=len(assigned))
     return {
         "id": user["id"],
         "role": user["role"].value if isinstance(user["role"], Role) else user["role"],
@@ -148,7 +156,14 @@ async def me(
         "roles_supported": [r.value for r in Role],
         "my_accounts": {
             "assigned_count": len(assigned),
-            "filter_on": bool(assigned) and not cleared,
+            "filter_default_on": default_on,
+            "filter_on": filter_on(
+                default_on=default_on, assigned_count=len(assigned), choice=choice
+            ),
+        },
+        "starting_screen": {
+            "path": starting_screen(policy=policy, job=job, assigned_count=len(assigned)),
+            "policy": policy,
         },
     }
 
