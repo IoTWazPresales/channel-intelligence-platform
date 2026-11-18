@@ -1,5 +1,10 @@
 # CURRENT state
 
+**W1-B activation timing (2026-11-18):** branch `feat/w1b-activation-timing-20261118`, stacked on #105 and #104. It adds late-activation and early-deactivation alerts to listing intelligence and the Market activation lens.
+- **Threshold:** Warren decided 3 days (13:27 SAST). It is set by `CIP_LISTING_ACTIVATION_ALERT_DAYS` (default 3), not hard-coded.
+- **Evidence:** alerts come from stored per-check activation results; nothing is guessed between checks.
+- No migration, no deploy.
+
 **W1-B worklist (2026-11-18):** branch `feat/w1b-stock-not-listed-20261118` (stacked on `fix/listing-coverage-226-20261118`) adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
 - the offer/competitor comparison needs data;
 - competitor-page monitoring needs a migration;
