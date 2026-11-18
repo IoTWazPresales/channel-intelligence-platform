@@ -230,4 +230,3 @@ def test_a_same_amount_offer_in_another_currency_is_not_the_priced_offer():
     # An offer without a currency is still a candidate, so the answer stays unknown.
     no_currency = page.replace('"priceCurrency":"%s",' % other, "")
     assert seller_from_json_ld(no_currency, 1999.0) is None
-
