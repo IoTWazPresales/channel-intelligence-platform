@@ -7,7 +7,7 @@ Calculated stock is not written. Reported on-hand is the checkpoint.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -18,6 +18,8 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.facts import FactInboundShipment, FactInventoryDistributor
 from app.models.store_dc import SiteCandidate
+from app.services.channel_intelligence.customer_stock_gap import grain_of
+from app.services.imports.parsers.customer_sell_through_grain import period_end
 from app.services.store_dc.candidates import served_customer_ids, tenant_config
 from app.services.store_dc.rules import (
     COLLAPSED_NOTE,
@@ -25,7 +27,6 @@ from app.services.store_dc.rules import (
     inbound_leg,
     is_slow,
     is_unsold,
-    is_weekly,
     need_units,
     norm_label,
     onward_leg,
@@ -34,7 +35,6 @@ from app.services.store_dc.rules import (
     stock_action_identity,
     suggestion_labels,
     unsold_window_weeks,
-    weekly_rate,
     weeks_of_cover,
     window_count,
 )
@@ -93,12 +93,68 @@ def _latest_soh(rows: list[_Fact]) -> float | None:
     return dated[-1].soh
 
 
-def _weekly_totals(rows: list[_Fact]) -> list[tuple[date, float]]:
-    buckets: dict[date, float] = defaultdict(float)
-    for row in rows:
-        if is_weekly(row.grain, row.kind):
-            buckets[row.period] += row.units
-    return sorted(buckets.items())
+RATE_WINDOW_WEEKS = 4
+
+
+class _Sales:
+    """Units per calendar day from weekly, daily and monthly reports.
+
+    Grains are read the way the stock-gap check reads them (``grain_of``) and each period
+    ends where the sell-through parser says it ends (``period_end``): a day row is that
+    day, a week row its seven days, a month row the calendar month. A period's units are
+    spread evenly over its days. A day covered by a weekly or daily report ignores
+    monthly reports for that day, so mixed grains are not counted twice. A day no sales
+    report covers is missing, not zero.
+    """
+
+    def __init__(self, rows: list[_Fact]) -> None:
+        fine: dict[date, float] = defaultdict(float)
+        coarse: dict[date, float] = defaultdict(float)
+        for row in rows:
+            if row.period is None:
+                continue
+            grain = grain_of(row.grain, row.kind)
+            end = period_end(row.period, grain)
+            days = (end - row.period).days + 1
+            if days < 1:
+                continue
+            per_day = row.units / days
+            target = coarse if grain == "month" else fine
+            for offset in range(days):
+                target[row.period + timedelta(days=offset)] += per_day
+        self.by_day: dict[date, float] = dict(coarse)
+        self.by_day.update(fine)
+        self.latest: date | None = max(self.by_day) if self.by_day else None
+
+    def observed_weeks(self) -> int:
+        """Monday-Sunday calendar weeks that any sales report covers."""
+        return len({day - timedelta(days=day.weekday()) for day in self.by_day})
+
+    def _window(self, weeks: int) -> tuple[float, int]:
+        if self.latest is None or weeks < 1:
+            return 0.0, 0
+        start = self.latest - timedelta(days=weeks * 7 - 1)
+        units = 0.0
+        covered = 0
+        for day, value in self.by_day.items():
+            if start <= day <= self.latest:
+                units += value
+                covered += 1
+        return units, covered
+
+    def weekly_rate(self, weeks: int = RATE_WINDOW_WEEKS) -> float | None:
+        """Units per week over the last ``weeks`` calendar weeks up to the newest report.
+
+        Only reported days count: a missing week inside the window lowers the days, not
+        the units, so a gap neither inflates nor deflates the rate.
+        """
+        units, covered = self._window(weeks)
+        if covered == 0:
+            return None
+        return units / covered * 7.0
+
+    def units_in_last_weeks(self, weeks: int) -> float:
+        return self._window(weeks)[0]
 
 
 def _open_stock_actions(
@@ -168,18 +224,16 @@ def _line(
     leg: dict[str, Any],
     executed_actions: set[str] | None = None,
 ) -> dict[str, Any]:
-    weeks = _weekly_totals(rows)
-    rate_n = min(4, len(weeks))
-    rate_units = [units for _, units in weeks[-rate_n:]] if rate_n else []
-    rate = weekly_rate(rate_units)
+    sales = _Sales(rows)
+    rate = sales.weekly_rate()
     soh = _latest_soh(rows)
     woc = weeks_of_cover(soh, rate)
     lead_weeks = float(leg["lead_time_weeks"] or 0)
     need = need_units(rate=rate, soh=soh, target_weeks=cover["target_weeks"], lead_weeks=lead_weeks)
     unsold_n = window_count(unsold_weeks)
-    window_units = sum(units for _, units in weeks[-unsold_n:]) if weeks else 0.0
+    window_units = sales.units_in_last_weeks(unsold_n)
     slow = is_slow(woc, cover["target_weeks"], multiple)
-    unsold = is_unsold(soh, window_units, len(weeks), unsold_weeks)
+    unsold = is_unsold(soh, window_units, sales.observed_weeks(), unsold_weeks)
     taken = set(executed_actions or ())
     return {
         "product_id": product_id,
@@ -274,22 +328,49 @@ def _lead_index(db: Session, tenant_id: str, min_deliveries: int) -> dict[tuple[
     whose lines carry different dates takes its longest line (the delivery was complete
     only when its last line arrived).
     """
-    rows = db.execute(
-        select(
-            FactInboundShipment.distributor_id,
-            FactInboundShipment.ship_to_raw,
-            FactInboundShipment.ship_confirm_date,
-            FactInboundShipment.pod_date,
-            FactInboundShipment.delivery_no,
-            FactInboundShipment.order_no,
-        ).where(
-            FactInboundShipment.tenant_id == tenant_id,
-            FactInboundShipment.distributor_id.is_not(None),
-            FactInboundShipment.ship_confirm_date.is_not(None),
-            FactInboundShipment.pod_date.is_not(None),
-            FactInboundShipment.line_state != "closed_superseded",
+    return _legs_from_rows(db.execute(_lead_rows_query(tenant_id)).all(), min_deliveries)
+
+
+def _lead_rows_query(tenant_id: str):
+    return select(
+        FactInboundShipment.distributor_id,
+        FactInboundShipment.ship_to_raw,
+        FactInboundShipment.ship_confirm_date,
+        FactInboundShipment.pod_date,
+        FactInboundShipment.delivery_no,
+        FactInboundShipment.order_no,
+    ).where(
+        FactInboundShipment.tenant_id == tenant_id,
+        FactInboundShipment.distributor_id.is_not(None),
+        FactInboundShipment.ship_confirm_date.is_not(None),
+        FactInboundShipment.pod_date.is_not(None),
+        FactInboundShipment.line_state != "closed_superseded",
+    )
+
+
+def _dc_lead_index(
+    db: Session, tenant_id: str, site_norm: str, customer_ids: list[int], min_deliveries: int
+) -> dict[tuple[int, str], dict[str, Any]]:
+    """Lead legs to one confirmed DC from deliveries made for the customers that DC serves.
+
+    A site label is not unique across customers: two unrelated accounts can each have a
+    site with the same name. Only deliveries whose customer (or resolved customer) is the
+    DC's owner or an account the steward linked to it count, so another account's
+    distributor and its lead time never become this DC's supplier.
+    """
+    if not customer_ids or not site_norm:
+        return {}
+    query = _lead_rows_query(tenant_id).where(
+        or_(
+            FactInboundShipment.customer_id.in_(customer_ids),
+            FactInboundShipment.resolved_customer_id.in_(customer_ids),
         )
-    ).all()
+    )
+    rows = [row for row in db.execute(query).all() if norm_label(row[1]) == site_norm]
+    return _legs_from_rows(rows, min_deliveries)
+
+
+def _legs_from_rows(rows: list[Any], min_deliveries: int) -> dict[tuple[int, str], dict[str, Any]]:
     grouped: dict[tuple[int, str], dict[tuple, int]] = defaultdict(dict)
     for distributor_id, ship_to, confirm, pod, delivery_no, order_no in rows:
         if pod < confirm:
@@ -517,10 +598,14 @@ def _dc_section(
     owner_multiple = slow_multiple(owner_cfg)
     owner_unsold = unsold_window_weeks(owner_cfg, owner_cover["min_weeks"])
     site_norm = candidate.site_label_norm
+    # Delivery history to this DC for the accounts it serves only (a label can repeat
+    # across unrelated customers). ``lead_index`` stays the tenant-wide view elsewhere.
+    supply_customers = sorted({int(cid) for cid in served} | ({int(candidate.customer_id)} if candidate.customer_id else set()))
+    dc_index = _dc_lead_index(db, tenant_id, site_norm, supply_customers, min_deliveries)
     # Distributors with delivery history to this DC, then the account's distributors.
     dc_ids = sorted(
-        {did for (did, norm) in lead_index if norm == site_norm},
-        key=lambda did: (-int(lead_index[(did, site_norm)].get("sample_count") or 0), did),
+        {did for (did, norm) in dc_index if norm == site_norm},
+        key=lambda did: (-int(dc_index[(did, site_norm)].get("sample_count") or 0), did),
     )
     candidate_ids = list(dict.fromkeys([*dc_ids, *(int(d["id"]) for d in distributors)]))
     known = {int(d["id"]): (d.get("name"), d.get("code")) for d in distributors}
@@ -536,7 +621,7 @@ def _dc_section(
     # account's main distributor.
     distributor_id = dc_ids[0] if dc_ids else _primary_distributor(distributors)
     dc_rows = [r for r in facts if norm_label(r.site) == site_norm]
-    inbound = lead_index.get((distributor_id, site_norm)) if distributor_id else None
+    inbound = dc_index.get((distributor_id, site_norm)) if distributor_id else None
     if inbound is None:
         inbound = inbound_leg([], min_deliveries)
     flat = dc_rows
@@ -596,7 +681,7 @@ def _dc_section(
             pid,
             candidate_ids,
             site_norm=site_norm,
-            lead_index=lead_index,
+            lead_index=dc_index,
             sku_stock=sku_stock,
             names=known,
             min_deliveries=min_deliveries,

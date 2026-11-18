@@ -101,6 +101,8 @@ class World:
         soh: float | None = None,
         site: str | None = None,
         raw: dict | None = None,
+        period_type: str = "weekly",
+        period_grain: str = "week",
     ) -> None:
         self._n += 1
         self.db.add(
@@ -110,8 +112,8 @@ class World:
                 customer_id=customer.id,
                 product_id=product.id,
                 period_start_date=start,
-                period_type="weekly",
-                period_grain="week",
+                period_type=period_type,
+                period_grain=period_grain,
                 units_sold=units,
                 reported_soh=soh,
                 site_label=site,

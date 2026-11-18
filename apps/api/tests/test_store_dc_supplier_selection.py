@@ -7,7 +7,7 @@ from app.services.store_dc.candidates import decide_candidate, refresh_candidate
 from app.services.store_dc.read_model import build_customer_view
 from app.services.store_dc.rules import NO_HISTORY
 from sqlalchemy import select
-from tests.store_dc_fixture import World
+from tests.store_dc_fixture import WEEK0, World
 
 pytest_plugins = ("tests.store_dc_fixture",)
 
@@ -140,3 +140,112 @@ def test_dc_supplier_stock_is_per_sku_not_distributor_total(world: World):
     row = view["dc_sections"][0]["need_from_distributor"][0]
     assert row["supplier"]["distributor_id"] == dist.id
     assert row["supplier"]["sku_stock_on_hand"] is None
+
+
+def _confirm_owned_hub(world: World, owner, hub: str) -> None:
+    refresh_candidates(world.db, world.tenant)
+    candidate = world.db.execute(
+        select(SiteCandidate).where(
+            SiteCandidate.tenant_id == world.tenant,
+            SiteCandidate.site_label == hub,
+            SiteCandidate.customer_id == owner.id,
+        )
+    ).scalar_one()
+    decide_candidate(world.db, world.tenant, candidate.id, "confirm", "steward-test")
+
+
+def test_unrelated_customer_with_the_same_dc_label_is_not_a_supplier(world: World):
+    """Codex review of PR #102 (B1): supplier evidence keeps the DC's customer identity."""
+    owner = world.customer("SDC-C1")
+    stranger = world.customer("SDC-C2")
+    own_dist = world.distributor("SDC-DA")
+    other_dist = world.distributor("SDC-DX")
+    sku = world.product("SDC-SKU-A")
+    hub = world.code("SDC-HUB-1")
+    store = world.code("SDC-SITE-A")
+    world.weeks(owner, sku, [5, 5, 5, 5], soh=5, site=hub)
+    world.weeks(owner, sku, [10, 10, 10, 10], soh=0, site=store)
+    # The stranger has its own site with the same label, served by another distributor
+    # that is stocked and fast.
+    world.weeks(stranger, sku, [1, 1, 1, 1], soh=3, site=hub)
+    world.deliveries(owner, own_dist, hub, 5, days=21)
+    world.deliveries(stranger, other_dist, hub, 9, days=3)
+    world.distributor_stock(other_dist, sku, 100, date(2026, 3, 20))
+    world.db.flush()
+    _confirm_owned_hub(world, owner, hub)
+    view = build_customer_view(world.db, world.tenant, owner.id)
+    section = next(s for s in view["dc_sections"] if s["customer_id"] == owner.id)
+    row = {r["product_id"]: r for r in section["need_from_distributor"]}[sku.id]
+    assert [o["distributor_id"] for o in row["supplier_options"]] == [own_dist.id]
+    assert row["supplier"]["distributor_id"] == own_dist.id
+    assert row["lead_time_label"] == "lead time: 21 days"
+    assert section["lead_time"]["sample_count"] == 5
+    # The DC sells 5 a week, so the chosen supplier's 3-week lead time is in the need.
+    target = row["need_units"]
+    assert target is not None and target > 0
+
+
+def test_chosen_supplier_lead_time_changes_the_dc_need(world: World):
+    owner = world.customer("SDC-C1", target=2)
+    slow = world.distributor("SDC-DA")
+    sku = world.product("SDC-SKU-A")
+    hub = world.code("SDC-HUB-1")
+    store = world.code("SDC-SITE-A")
+    world.weeks(owner, sku, [7, 7, 7, 7], soh=10, site=hub)
+    world.weeks(owner, sku, [0, 0, 0, 0], soh=50, site=store)
+    world.deliveries(owner, slow, hub, 5, days=14)
+    world.db.flush()
+    _confirm_owned_hub(world, owner, hub)
+    view = build_customer_view(world.db, world.tenant, owner.id)
+    row = view["dc_sections"][0]["need_from_distributor"][0]
+    assert row["lead_time_label"] == "lead time: 14 days"
+    # 7/week x (2 target + 2 lead weeks) - 10 on hand = 18; without the lead time it would be 4.
+    assert row["need_units"] == 18.0
+    assert row["need_reason"] == "stores_plus_cover_and_lead_time"
+
+
+def test_rate_uses_consecutive_calendar_weeks_not_the_last_four_reports(world: World):
+    customer = world.customer("SDC-C")
+    product = world.product()
+    site = world.code("SDC-SITE-A")
+    for index, units in ((0, 100), (1, 100), (4, 10), (5, 10)):
+        world.sell(customer, product, WEEK0 + timedelta(weeks=index), units,
+                   soh=20 if index == 5 else None, site=site)
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    # Weeks 2-5 are the last four calendar weeks; weeks 2 and 3 were not reported, so the
+    # rate is the two reported weeks (10/week), not (100+100+10+10)/4 = 55.
+    assert line["weekly_rate"] == 10.0
+
+
+def test_daily_reports_give_a_weekly_rate(world: World):
+    customer = world.customer("SDC-C")
+    product = world.product()
+    site = world.code("SDC-SITE-A")
+    for offset in range(28):
+        world.sell(customer, product, WEEK0 + timedelta(days=offset), 2,
+                   soh=30 if offset == 27 else None, site=site,
+                   period_type="daily", period_grain="day")
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    assert line["weekly_rate"] == 14.0
+    assert line["weeks_of_cover"] == round(30 / 14, 2)
+
+
+def test_monthly_reports_give_a_weekly_rate_without_double_counting(world: World):
+    customer = world.customer("SDC-C")
+    product = world.product()
+    site = world.code("SDC-SITE-A")
+    # January: 310 units = 10 a day.
+    world.sell(customer, product, date(2026, 1, 1), 310, site=site,
+               period_type="monthly", period_grain="month")
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    assert line["weekly_rate"] == 70.0
+    # A weekly report for Mon 26 Jan - Sun 1 Feb replaces the month on those days.
+    world.sell(customer, product, date(2026, 1, 26), 7, soh=40, site=site)
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    # 5 Jan - 1 Feb: 21 month days x 10 + 7 from the week = 217 over 28 days.
+    assert line["weekly_rate"] == 54.25
+
