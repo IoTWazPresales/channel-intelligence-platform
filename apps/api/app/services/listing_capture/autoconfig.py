@@ -101,12 +101,29 @@ _FILLABLE = (
 _HttpGet = Callable[[str], tuple[int, str]]
 
 
+def _next_start_tenant(order: list[str], cut_short: list[str]) -> str:
+    """Where the next scheduled run starts, given this run's tenant order and the tenants
+    whose discovery the shared budget cut short (in run order).
+
+    Nothing cut short: no saved start. Otherwise the first cut-short tenant after this run's
+    starting tenant; when only the starting tenant was cut short, the tenant after it. The
+    start therefore moves forward round the tenant cycle on every interrupted run.
+    """
+    if not cut_short or not order:
+        return ""
+    later = [tid for tid in order[1:] if tid in cut_short]
+    if later:
+        return later[0]
+    return order[1] if len(order) > 1 else order[0]
+
+
 def autoconfigure_sites(
     session: Session,
     *,
     tenant_id: str | None = None,
     http_get: _HttpGet | None = None,
     run_store=None,
+    time_limit_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Discover product pages and fill listing sites under one advisory lock.
 
@@ -119,21 +136,57 @@ def autoconfigure_sites(
     tenant's latest autoconfigure run for capture health.
     Both the scheduled job and the steward POST use this service. Discovery only
     proposes listings; registration still requires a steward's confirmation.
+
+    Every request (discovery and the reader probe) goes through the shared per-site fetch
+    policy: site spacing across customers, the 403/429 pause, and a time budget per phase
+    (``time_limit_seconds``; default the 10-minute run budget, the steward POST passes a
+    short one). Work cut short resumes on the next run.
     """
     from app.services.listing_capture.observation import listing_live_fetch_enabled
     from app.services.listing_capture.discovery import discover_reporting_customers
 
+    from app.services.listing_capture import discovery as discovery_module
+
     live = listing_live_fetch_enabled()
+    fetch_get = http_get if live else None
+    policy = discovery_module.default_fetch_policy() if fetch_get is not None else None
+    if policy is not None and time_limit_seconds is not None:
+        policy.time_limit_seconds = float(time_limit_seconds)
     _advisory_lock(session)
     entries: list[dict[str, Any]] = []
     tenants = _tenant_ids(session, tenant_id)
+    # A scheduled run (every tenant) shares one discovery budget, so the tenants rotate:
+    # the next run starts at the first tenant after this run's starting tenant whose
+    # discovery the budget cut short. If only the starting tenant was cut short, the next
+    # run still moves on one tenant, so a tenant that is cut short on every run cannot keep
+    # the first place; its own customer/site rotation resumes when its turn comes round.
+    rotate_tenants = tenant_id is None and policy is not None
+    order = list(tenants)
+    if rotate_tenants:
+        start = str((load_run_state(TENANT_ROTATION_KEY, store=run_store) or {}).get("tenant_id") or "")
+        if start in order:
+            at = order.index(start)
+            order = order[at:] + order[:at]
+    found_by_tenant: dict[str, list[dict[str, Any]]] = {}
+    entries_by_tenant: dict[str, list[dict[str, Any]]] = {}
+    cut_short: list[str] = []
+    for tid in order:
+        found = discover_reporting_customers(
+            session, tenant_id=tid, http_get=fetch_get, run_store=run_store, fetch_policy=policy
+        )
+        found_by_tenant[tid] = found["customers"]
+        if any(discovery_module._time_limited(row) for row in found["customers"]):
+            cut_short.append(tid)
+        probe_policy = policy.fork() if policy is not None else None
+        entries_by_tenant[tid] = _configure_tenant(session, tid, http_get=fetch_get, policy=probe_policy)
+    if rotate_tenants:
+        save_run_state(
+            TENANT_ROTATION_KEY, {"tenant_id": _next_start_tenant(order, cut_short)}, store=run_store
+        )
     discovery: list[dict[str, Any]] = []
     for tid in tenants:
-        found = discover_reporting_customers(
-            session, tenant_id=tid, http_get=http_get if live else None, run_store=run_store
-        )
-        discovery.extend(found["customers"])
-        entries.extend(_configure_tenant(session, tid, http_get=http_get if live else None))
+        discovery.extend(found_by_tenant.get(tid, []))
+        entries.extend(entries_by_tenant.get(tid, []))
     report = _bucket(entries)
     report["discovery"] = {"customers": discovery}
     report["live_fetch_disabled"] = not live
@@ -154,6 +207,9 @@ def autoconfigure_sites(
             store=run_store,
         )
     return report
+
+
+TENANT_ROTATION_KEY = "discovery:tenant-rotation"
 
 
 def run_state_key_autoconfigure(tenant_id: str) -> str:
@@ -294,6 +350,7 @@ def _configure_tenant(
     *,
     http_get: _HttpGet | None,
     apply: bool = True,
+    policy: Any = None,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for config, customer in _reporting_customers(session, tenant_id):
@@ -308,6 +365,7 @@ def _configure_tenant(
                     seed=_seed(config),
                     http_get=http_get,
                     apply=apply,
+                    policy=policy,
                 )
         except SellerSeedError as exc:
             logger.info("listing autoconfigure: customer %s rejected seller seed: %s", customer.id, exc)
@@ -360,6 +418,7 @@ def _configure_customer(
     seed: dict[str, Any],
     http_get: _HttpGet | None,
     apply: bool,
+    policy: Any = None,
 ) -> list[dict[str, Any]]:
     keys = _site_keys(session, tenant_id=tenant_id, customer_id=int(customer.id), seed=seed)
     if not keys:
@@ -384,6 +443,7 @@ def _configure_customer(
                 seed=seed,
                 http_get=http_get,
                 apply=apply,
+                policy=policy,
             )
         )
     return entries
@@ -398,6 +458,7 @@ def _configure_site(
     seed: dict[str, Any],
     http_get: _HttpGet | None,
     apply: bool,
+    policy: Any = None,
 ) -> dict[str, Any]:
     listings = _listings(session, tenant_id=tenant_id, customer_id=int(customer.id), site_key=site_key)
     urls = [str(row.url).strip() for row in listings if str(row.url or "").strip()]
@@ -427,12 +488,14 @@ def _configure_site(
                     raise
                 row = _load_site(session, tenant_id, site_key)
         if row is not None:
-            probe = _html_probe(
+            probe = _gated_probe(
                 session,
                 tenant_id=tenant_id,
+                site_key=site_key,
+                row=row,
                 listings=listings,
                 http_get=http_get,
-                adapter_blank=_is_blank(row.adapter_key),
+                policy=policy,
             )
             probe_ok = bool(probe["corroborated"])
             fill = _fill_fields(row, seed=seed, derived=derived, probe_ok=probe_ok)
@@ -507,6 +570,59 @@ PROBE_FETCH_ERROR = "fetch_error"
 PROBE_HTTP_STATUS = "http_status_not_200"
 PROBE_EMPTY_BODY = "empty_body"
 PROBE_NO_MATCH = "no_barcode_or_model_match"
+PROBE_SITE_PAUSED = "site_paused"
+PROBE_TIME_LIMIT = "time_limit"
+
+
+def _gated_probe(
+    session: Session,
+    *,
+    tenant_id: str,
+    site_key: str,
+    row: ListingSite,
+    listings: list[CustomerListing],
+    http_get: _HttpGet | None,
+    policy: Any = None,
+) -> dict[str, Any]:
+    """The reader probe, sent through the shared per-site fetch policy.
+
+    A paused site gets no request; a 403/429 pauses the site (same store and key as the
+    poll and discovery); spacing and the phase budget apply. Without a policy (no live
+    fetch) the probe behaves as before.
+    """
+    from app.services.listing_capture.site_fetch import (
+        STOP_PAUSED,
+        SiteFetchGate,
+        site_spacing_seconds,
+    )
+
+    adapter_blank = _is_blank(row.adapter_key)
+    if http_get is None or policy is None:
+        return _html_probe(
+            session,
+            tenant_id=tenant_id,
+            listings=listings,
+            http_get=http_get,
+            adapter_blank=adapter_blank,
+        )
+    gate = SiteFetchGate(
+        site_key=site_key,
+        spacing_seconds=site_spacing_seconds(getattr(row, "rate_limit_seconds", None)),
+        policy=policy,
+    )
+    probe = _html_probe(
+        session,
+        tenant_id=tenant_id,
+        listings=listings,
+        http_get=gate.bind(http_get),
+        adapter_blank=adapter_blank,
+    )
+    if gate.requests == 0 and gate.stopped is not None:
+        # Nothing was sent: the site is paused or the phase budget is spent. A 403/429 the
+        # probe itself received stays reported as that HTTP status (and pauses the site).
+        reason = PROBE_SITE_PAUSED if gate.stopped == STOP_PAUSED else PROBE_TIME_LIMIT
+        return _probe(reason, status=gate.refused_status, listing_id=probe.get("listing_id"))
+    return probe
 
 
 def _probe(
