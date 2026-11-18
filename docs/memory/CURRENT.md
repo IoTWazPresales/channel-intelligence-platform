@@ -1,5 +1,11 @@
 # CURRENT state
 
+**Wave 3 B1 fast CI gate and lint (2026-11-18):** branch `feat/b1-fast-ci-gate-20261118`.
+- **New CI job `api-fast`:** runs the fixed subset in `apps/api/tests/fast_gate.txt` on an ephemeral Postgres 16, with a disposable `cip_test` migrated to head. The runner is `scripts/run-api-fast-gate.cjs` (`pnpm test:api:fast`). It runs database paths in one pytest process, then `tests/unit` in a second with `CIP_UNIT_TESTS_FORBID_DB=1`. It writes `.tmp/api-fast-summary.txt` (counts and sorted failing ids, no timings), the pytest log and junit files, all uploaded as an artifact.
+- **Measured on cip_test:** 188 + 44 passed, about 1.5 minutes.
+- **Web lint:** runs on an ESLint 9 flat config (BACKLOG-231). Baseline 0 errors, 49 warnings.
+- **Not done:** making `api-fast` a required check on `feat/integrate-*` or `main` is a GitHub admin setting (BACKLOG-246).
+
 **PR #95 review worktree (2026-11-17):** detached at `a0c7dcc5`; no branch created. Changes remain uncommitted and unpushed.
 **Wired + unit-tested:** shared autoconfigure invokes reporting-customer discovery for both the scheduled task and steward POST. Domain seeds target matching domains; URL-less feed proposals are enriched; generated external ids use product id + full-URL SHA-256; product links outrank navigation; a tenant/customer/site cursor resumes after 25 searches and wraps after the catalogue.
 **Round 2 fix:** discovery reuses autoconfiguration's seller-seed validator before writing a site, so a malformed seed cannot leave a discovery-created site behind after configuration rejects the customer. A stored customer seller identity still bypasses seed parsing. The existing DB-backed test is unchanged. The 192 `test_no_site_literals` hits reproduce without DB rows: Round 1 fixtures declared ordinary words `market` (64 hits) and `catalogue` (128 hits) as forbidden keys; distinctive fixture keys remove those matches without changing app wording or weakening the test.
