@@ -464,19 +464,74 @@ def test_scheduled_autoconfigure_rotates_tenants_cut_short(monkeypatch):
 
     first, reported = run()
     assert first == ["tenant-a", "tenant-b", "tenant-c"]
-    assert run_store.get(autoconfig.TENANT_ROTATION_KEY) == {"tenant_id": "tenant-a"}
-    cut.clear()
-    cut.add("tenant-b")
-    second, reported2 = run()
-    assert second == ["tenant-a", "tenant-b", "tenant-c"]
+    # Only the starting tenant was cut short: the next run still moves on one tenant.
     assert run_store.get(autoconfig.TENANT_ROTATION_KEY) == {"tenant_id": "tenant-b"}
+    cut.clear()
+    cut.add("tenant-c")
+    second, reported2 = run()
+    assert second == ["tenant-b", "tenant-c", "tenant-a"]
+    # A later tenant cut short becomes the next start.
+    assert run_store.get(autoconfig.TENANT_ROTATION_KEY) == {"tenant_id": "tenant-c"}
     third, reported3 = run()
-    assert third == ["tenant-b", "tenant-c", "tenant-a"]
+    assert third == ["tenant-c", "tenant-a", "tenant-b"]
     # The report keeps tenant order stable.
     assert reported == reported2 == reported3 == ["tenant-a", "tenant-b", "tenant-c"]
     cut.clear()
     run()
     assert run_store.get(autoconfig.TENANT_ROTATION_KEY) == {"tenant_id": ""}
+
+
+def test_scheduled_rotation_moves_on_when_the_first_tenant_is_cut_short_every_run(monkeypatch):
+    """Codex re-review of PR #100 (round 3, B2): a multi-site first tenant whose discovery is
+    interrupted on every run must not keep the first place; every tenant reaches the front."""
+    from app.services.listing_capture import autoconfig
+
+    monkeypatch.setattr(
+        "app.services.listing_capture.observation.listing_live_fetch_enabled", lambda: True
+    )
+    monkeypatch.setattr(autoconfig, "_advisory_lock", lambda *_a: None)
+    monkeypatch.setattr(autoconfig, "_tenant_ids", lambda *_a: ["tenant-a", "tenant-b", "tenant-c"])
+    monkeypatch.setattr(autoconfig, "_site_run_summary", lambda *_a: [])
+    monkeypatch.setattr(autoconfig, "_configure_tenant", lambda *_a, **_k: [])
+    firsts: list[str] = []
+    calls: list[str] = []
+    runs = {"n": 0}
+    stopped = {"stopped": "time_limit", "requests": 1}
+
+    def fake_discover(_session, **kwargs):
+        tid = kwargs["tenant_id"]
+        calls.append(tid)
+        if len(calls) == 1:
+            firsts.append(tid)
+        if tid == "tenant-a":
+            # Two sites; the budget always runs out on one of them (they alternate).
+            cut_site = "s1" if runs["n"] % 2 == 0 else "s2"
+            sites = [
+                {"site_key": key, "fetch": stopped if key == cut_site else None} for key in ("s1", "s2")
+            ]
+            return {"customers": [{"customer_id": 1, "tenant_id": tid, "sites": sites}]}
+        # The budget is spent by the time a later tenant runs, unless it ran first.
+        fetch = None if len(calls) == 1 else stopped
+        return {"customers": [{"customer_id": 2, "tenant_id": tid, "sites": [{"site_key": "s", "fetch": fetch}]}]}
+
+    monkeypatch.setattr(discovery, "discover_reporting_customers", fake_discover)
+    run_store = MemorySitePauseStore()
+    for _ in range(6):
+        calls.clear()
+        autoconfig.autoconfigure_sites(MagicMock(), http_get=lambda url: (200, ""), run_store=run_store)
+        runs["n"] += 1
+    assert firsts == ["tenant-a", "tenant-b", "tenant-c", "tenant-a", "tenant-b", "tenant-c"]
+
+
+def test_next_start_tenant_rules():
+    from app.services.listing_capture.autoconfig import _next_start_tenant
+
+    order = ["a", "b", "c"]
+    assert _next_start_tenant(order, []) == ""
+    assert _next_start_tenant(order, ["a"]) == "b"
+    assert _next_start_tenant(order, ["a", "c"]) == "c"
+    assert _next_start_tenant(order, ["b", "c"]) == "b"
+    assert _next_start_tenant(["a"], ["a"]) == "a"
 
 
 def test_single_tenant_autoconfigure_does_not_move_the_tenant_rotation(monkeypatch):

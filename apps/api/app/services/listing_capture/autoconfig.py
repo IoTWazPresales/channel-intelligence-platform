@@ -101,6 +101,22 @@ _FILLABLE = (
 _HttpGet = Callable[[str], tuple[int, str]]
 
 
+def _next_start_tenant(order: list[str], cut_short: list[str]) -> str:
+    """Where the next scheduled run starts, given this run's tenant order and the tenants
+    whose discovery the shared budget cut short (in run order).
+
+    Nothing cut short: no saved start. Otherwise the first cut-short tenant after this run's
+    starting tenant; when only the starting tenant was cut short, the tenant after it. The
+    start therefore moves forward round the tenant cycle on every interrupted run.
+    """
+    if not cut_short or not order:
+        return ""
+    later = [tid for tid in order[1:] if tid in cut_short]
+    if later:
+        return later[0]
+    return order[1] if len(order) > 1 else order[0]
+
+
 def autoconfigure_sites(
     session: Session,
     *,
@@ -140,7 +156,10 @@ def autoconfigure_sites(
     entries: list[dict[str, Any]] = []
     tenants = _tenant_ids(session, tenant_id)
     # A scheduled run (every tenant) shares one discovery budget, so the tenants rotate:
-    # the next run starts at the first tenant whose discovery the budget cut short.
+    # the next run starts at the first tenant after this run's starting tenant whose
+    # discovery the budget cut short. If only the starting tenant was cut short, the next
+    # run still moves on one tenant, so a tenant that is cut short on every run cannot keep
+    # the first place; its own customer/site rotation resumes when its turn comes round.
     rotate_tenants = tenant_id is None and policy is not None
     order = list(tenants)
     if rotate_tenants:
@@ -150,18 +169,20 @@ def autoconfigure_sites(
             order = order[at:] + order[:at]
     found_by_tenant: dict[str, list[dict[str, Any]]] = {}
     entries_by_tenant: dict[str, list[dict[str, Any]]] = {}
-    cut_short: str | None = None
+    cut_short: list[str] = []
     for tid in order:
         found = discover_reporting_customers(
             session, tenant_id=tid, http_get=fetch_get, run_store=run_store, fetch_policy=policy
         )
         found_by_tenant[tid] = found["customers"]
-        if cut_short is None and any(discovery_module._time_limited(row) for row in found["customers"]):
-            cut_short = tid
+        if any(discovery_module._time_limited(row) for row in found["customers"]):
+            cut_short.append(tid)
         probe_policy = policy.fork() if policy is not None else None
         entries_by_tenant[tid] = _configure_tenant(session, tid, http_get=fetch_get, policy=probe_policy)
     if rotate_tenants:
-        save_run_state(TENANT_ROTATION_KEY, {"tenant_id": cut_short or ""}, store=run_store)
+        save_run_state(
+            TENANT_ROTATION_KEY, {"tenant_id": _next_start_tenant(order, cut_short)}, store=run_store
+        )
     discovery: list[dict[str, Any]] = []
     for tid in tenants:
         discovery.extend(found_by_tenant.get(tid, []))
