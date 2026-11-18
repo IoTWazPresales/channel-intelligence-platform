@@ -17,6 +17,7 @@
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
 - 2026-11-18 - **Listing coverage (BACKLOG-226):** `fix/listing-coverage-226-20261118`. HTTP failures, seller-only changes, seed/listing reconciliation, bounded latest reads, delisted and product-less listings, and honest loading/error UI. Review points: BACKLOG-243.
+- 2026-11-18 - **Discovery pacing (alignment D5):** discovery shares the poll's site spacing, 403/429 pause and time budget via `site_fetch.py`; interrupted searches roll back and resume; the budget rotates round (customer, site) pairs and, for scheduled runs, tenants, so none is starved. BACKLOG-239 records the reader-profile migration. `cip_test` only.
 - 2026-11-18 - **Entity-specific removal (alignment D9):** recipients, sender, workbook path, payment narrative and archive root are no longer tenant data in code; guard test added; BACKLOG-240 lists what remains. `cip_test` only; `cip` read once (recipient count).
 - 2026-11-18 - **Docs reconcile (alignment review D1):** CURRENT leads with the merged state of #91-#98 at `b9f29a09`; #97 runbook commands fixed (`backup_cip.ps1 -DatabaseUrl`, `clone_cip_db.py --source-db cip`, no DB URL default); CONTEXT `06ababdf` pointer, BACKLOG-081 (alias seal shipped in N-0095) and BACKLOG-083 (partly shipped) corrected; Wave 1-A staged-store note dated; dashboard CPOR conflict (D-0123 vs 2026-11-10 proposal) recorded as needing Warren. Docs only.
 
