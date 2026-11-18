@@ -45,6 +45,21 @@ def _iso_date(raw: Any) -> date | None:
         return None
 
 
+def _failed_read(obs: Any, flags: dict[str, Any]) -> bool:
+    """A check whose fetch or parse failed proves nothing about the price (BACKLOG-226 item 1).
+
+    The poller still evaluates activation on an error page that parsed to a price, so such a
+    check must not count as "off the price" (or "at it").
+    """
+    http_status = getattr(obs, "http_status", None)
+    if http_status is not None and int(http_status) != 200:
+        return True
+    if flags.get("snapshot_stored") == "fetch_failed":
+        return True
+    parse_status = getattr(obs, "parse_status", None)
+    return parse_status is not None and str(parse_status) != "ok"
+
+
 def activation_timing(observations: list[Any], *, alert_days: int) -> list[dict[str, Any]]:
     """Late activation / early deactivation per promotion window, from stored check results.
 
@@ -55,6 +70,8 @@ def activation_timing(observations: list[Any], *, alert_days: int) -> list[dict[
     meta: dict[tuple[Any, date, date], dict[str, Any]] = {}
     for obs in observations:
         flags = obs.parse_flags if isinstance(getattr(obs, "parse_flags", None), dict) else {}
+        if _failed_read(obs, flags):
+            continue
         act = flags.get("cpor_activation") if isinstance(flags.get("cpor_activation"), dict) else {}
         status = act.get("status")
         if status not in (_AT_PRICE, _OFF_PRICE):

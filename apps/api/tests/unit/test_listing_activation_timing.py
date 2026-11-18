@@ -109,6 +109,21 @@ def test_each_window_is_judged_on_its_own():
     assert [(a["case_id"], a["kind"]) for a in alerts] == [(8, "late_activation")]
 
 
+def test_a_failed_check_proves_nothing():
+    # An error page that parsed to a price is evaluated by the poller; it must not count.
+    err = _obs(5, OFF)
+    err.http_status = 503
+    flagged = _obs(6, OFF)
+    flagged.parse_flags["snapshot_stored"] = "fetch_failed"
+    unparsed = _obs(7, OFF)
+    unparsed.parse_status = "parse_failed"
+    assert activation_timing([_obs(0, AT), err, flagged, unparsed], alert_days=3) == []
+    assert activation_timing([err, flagged, unparsed], alert_days=3) == []
+    ok = _obs(5, OFF)
+    ok.http_status, ok.parse_status = 200, "ok"
+    assert [a["kind"] for a in activation_timing([ok], alert_days=3)] == ["late_activation"]
+
+
 def _session(observations):
     listing = SimpleNamespace(
         id=4, customer_id=11, product_id=9, marketplace="shop-a", url="u", external_id="x"
