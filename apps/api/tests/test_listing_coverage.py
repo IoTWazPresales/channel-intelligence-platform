@@ -471,3 +471,177 @@ def test_a_not_on_site_decision_wins_over_a_listing_on_that_site(db_session: Ses
     assert row["not_found"] == 2
     assert row["watched"] == 1
     assert row["reported"] == 3
+
+
+# --- BACKLOG-226 (2026-11-18) -------------------------------------------------------------
+
+
+def _reporting_customer(session: Session, tenant: str) -> DimCustomer:
+    customer = _customer(session, tenant, "counter")
+    session.add(CustomerReportConfig(customer_id=int(customer.id), reports_expected=True))
+    session.add(_reader_site(tenant, "shop-a"))
+    session.flush()
+    return customer
+
+
+def _read(
+    session: Session,
+    listing: CustomerListing,
+    *,
+    http_status: int | None,
+    parse_status: str = "ok",
+    flags: dict | None = None,
+) -> None:
+    session.add(
+        ListingObservation(
+            listing_id=int(listing.id),
+            fetched_at=datetime.now(timezone.utc),
+            parser_version="test",
+            http_status=http_status,
+            extracted_price=1999,
+            parse_status=parse_status,
+            parse_flags=flags,
+        )
+    )
+    session.flush()
+
+
+def _bare_listing(session: Session, customer: DimCustomer, *, status: str, ext: str | None) -> CustomerListing:
+    row = CustomerListing(
+        customer_id=int(customer.id),
+        product_id=None,
+        url=f"https://shop-a.example.test/bare/{uuid.uuid4().hex[:8]}",
+        marketplace="shop-a",
+        external_id=ext,
+        status=status,
+        source="manual",
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def test_an_http_error_page_with_a_price_is_a_failing_read(db_session: Session) -> None:
+    """226(1): a 503 whose body parsed to a price is not watched."""
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _reporting_customer(db_session, tenant)
+    good, bad, flagged = (_product(db_session, tenant) for _ in range(3))
+    for product in (good, bad, flagged):
+        _sell(db_session, tenant, customer, product)
+    ok = _listing(db_session, customer, good, status="active", url=f"https://shop-a.example.test/{good.id}")
+    _read(db_session, ok, http_status=200)
+    err = _listing(db_session, customer, bad, status="active", url=f"https://shop-a.example.test/{bad.id}")
+    _read(db_session, err, http_status=503)
+    gone = _listing(db_session, customer, flagged, status="active", url=f"https://shop-a.example.test/{flagged.id}")
+    _read(db_session, gone, http_status=None, flags={"snapshot_stored": "fetch_failed"})
+
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["watched"] == 1
+    assert row["failing"] == 2
+    assert row["reported"] == 3
+
+
+def test_a_later_good_read_clears_the_failed_fetch(db_session: Session) -> None:
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _reporting_customer(db_session, tenant)
+    product = _product(db_session, tenant)
+    _sell(db_session, tenant, customer, product)
+    listing = _listing(db_session, customer, product, status="active", url=f"https://shop-a.example.test/{product.id}")
+    db_session.add(
+        ListingObservation(
+            listing_id=int(listing.id),
+            fetched_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            parser_version="test",
+            http_status=500,
+            parse_status="ok",
+        )
+    )
+    db_session.flush()
+    _read(db_session, listing, http_status=200)
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["watched"] == 1 and row["failing"] == 0
+
+
+def test_a_seed_resolved_before_its_listing_keeps_the_listing_evidence(db_session: Session) -> None:
+    """226(3): the seed got its product from a CST import; the listing did not."""
+    from app.services.listing_capture.registry import confirm_proposal
+
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _reporting_customer(db_session, tenant)
+    seed = _seed(db_session, customer, f"late-{uuid.uuid4().hex[:6]}")
+    listing = confirm_proposal(db_session, seed_id=int(seed.id), url=f"https://shop-a.example.test/p/{seed.id}")
+    assert listing.product_id is None
+    product = _product(db_session, tenant)
+    seed.product_id = int(product.id)
+    db_session.add(seed)
+    db_session.flush()
+
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["reported"] == 1
+    assert row["watched"] == 1
+    assert row["not_searched"] == 0
+
+    listing.product_id = int(product.id)
+    db_session.add(listing)
+    db_session.flush()
+    both = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert both["reported"] == 1 and both["watched"] == 1
+
+
+def test_latest_reads_in_batches_match_one_query(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """226(5): ids are read in batches; small tenants get the same result."""
+    import app.services.listing_capture.coverage as coverage
+
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _reporting_customer(db_session, tenant)
+    for status in (200, 503, 200):
+        product = _product(db_session, tenant)
+        _sell(db_session, tenant, customer, product)
+        listing = _listing(db_session, customer, product, status="active", url=f"https://shop-a.example.test/{product.id}")
+        _read(db_session, listing, http_status=status)
+    whole = _row(customer_coverage(db_session, tenant), int(customer.id))
+    monkeypatch.setattr(coverage, "_LATEST_BATCH", 1)
+    batched = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert batched == whole
+    assert whole["watched"] == 2 and whole["failing"] == 1
+
+
+def test_a_delisted_listing_is_not_found_unless_another_is_watched(db_session: Session) -> None:
+    """226(6)."""
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _reporting_customer(db_session, tenant)
+    db_session.add(_reader_site(tenant, "shop-b"))
+    db_session.flush()
+    only, also = _product(db_session, tenant), _product(db_session, tenant)
+    _sell(db_session, tenant, customer, only)
+    _sell(db_session, tenant, customer, also)
+    _listing(db_session, customer, only, status="delisted", url=f"https://shop-a.example.test/{only.id}")
+    _listing(db_session, customer, also, status="delisted", url=f"https://shop-a.example.test/{also.id}")
+    live = _listing(
+        db_session, customer, also, status="active", url=f"https://shop-b.example.test/{also.id}", marketplace="shop-b"
+    )
+    _read(db_session, live, http_status=200)
+
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["not_found"] == 1
+    assert row["watched"] == 1
+    assert row["not_searched"] == 0
+    assert row["reported"] == 2
+
+
+def test_a_hand_registered_listing_with_no_product_is_counted_once(db_session: Session) -> None:
+    """226(8): manual/CSV listings without a product are rows; seed-made ones stay with the seed."""
+    from app.services.listing_capture.registry import confirm_proposal
+
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _reporting_customer(db_session, tenant)
+    live = _bare_listing(db_session, customer, status="active", ext=None)
+    _read(db_session, live, http_status=200)
+    _bare_listing(db_session, customer, status="dead_link", ext=f"csv-{uuid.uuid4().hex[:6]}")
+    seed = _seed(db_session, customer, f"made-{uuid.uuid4().hex[:6]}")
+    confirm_proposal(db_session, seed_id=int(seed.id), url=f"https://shop-a.example.test/p/{seed.id}")
+
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["reported"] == 3
+    assert row["watched"] == 2
+    assert row["failing"] == 1

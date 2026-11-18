@@ -42,17 +42,83 @@ def _decode_json_string(raw: str) -> str | None:
     return name or None
 
 
-def seller_from_page(text: str) -> str | None:
-    """The seller the page itself names, or None when it names none."""
+_JSON_LD_BLOCK = re.compile(
+    r'<script[^>]*type\s*=\s*["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+
+
+def _offer_objects(node: Any) -> list[dict[str, Any]]:
+    """Every JSON object that carries a price, depth first, in document order."""
+    found: list[dict[str, Any]] = []
+    if isinstance(node, dict):
+        if "price" in node or "lowPrice" in node:
+            found.append(node)
+        for value in node.values():
+            found.extend(_offer_objects(value))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_offer_objects(item))
+    return found
+
+
+def _seller_name(raw: Any) -> str | None:
+    if isinstance(raw, dict):
+        raw = raw.get("name") or raw.get("display_name")
+    if isinstance(raw, str):
+        name = raw.strip()
+        return name or None
+    return None
+
+
+def _price_of(offer: dict[str, Any]) -> float | None:
+    raw = offer.get("price", offer.get("lowPrice"))
+    try:
+        return float(str(raw).replace(",", "")) if raw is not None else None
+    except ValueError:
+        return None
+
+
+def seller_from_json_ld(text: str, price: float | None = None) -> str | None:
+    """The seller of the JSON-LD offer that supplied ``price``.
+
+    JSON-LD blocks are parsed as objects, so a seller object with other properties before
+    ``name`` is still read. With a price, only an offer at that price counts; without one,
+    only a page with a single seller-bearing offer names a seller. None when unsure.
+    """
+    offers: list[dict[str, Any]] = []
+    for block in _JSON_LD_BLOCK.findall(text or ""):
+        try:
+            offers.extend(_offer_objects(json.loads(block.strip())))
+        except (json.JSONDecodeError, ValueError):
+            continue
+    named = [(o, _seller_name(o.get("seller"))) for o in offers]
+    named = [(o, name) for o, name in named if name]
+    if price is not None:
+        at_price = {name for o, name in named if _price_of(o) == float(price)}
+        return next(iter(at_price)) if len(at_price) == 1 else None
+    sellers = {name for _o, name in named}
+    return next(iter(sellers)) if len(sellers) == 1 else None
+
+
+def seller_from_page(text: str, price: float | None = None) -> str | None:
+    """The seller the page itself names, or None when it names none.
+
+    The JSON-LD offer that supplied the price wins; otherwise the first ``"seller"`` key in
+    the page (embedded JSON that is not JSON-LD).
+    """
     if not text:
         return None
+    from_offer = seller_from_json_ld(text, price)
+    if from_offer:
+        return from_offer
     match = _SELLER_OBJECT.search(text) or _SELLER_STRING.search(text)
     if not match:
         return None
     return _decode_json_string(match.group(1))
 
 
-def buy_box_seller(text: str, site: SiteConfig) -> str | None:
+def buy_box_seller(text: str, site: SiteConfig, price: float | None = None) -> str | None:
     """The page-named seller when every seller identity on the site was configured (seed or
     steward); otherwise, as before, the site's ``first_party_seller``.
 
@@ -62,7 +128,7 @@ def buy_box_seller(text: str, site: SiteConfig) -> str | None:
     """
     sellers = tuple(site.sellers or ())
     configured = bool(sellers) and not any(getattr(s, "inferred", False) for s in sellers)
-    named = seller_from_page(text) if configured else None
+    named = seller_from_page(text, price) if configured else None
     return named or (site.first_party_seller or "").strip() or None
 
 
@@ -96,7 +162,7 @@ def parse(
 
     parsed = parse_snapshot_text(body, marketplace=site.site_key, parser_version=parser_version)
     if parsed.parse_status == "ok":
-        seller_name = buy_box_seller(body, site)
+        seller_name = buy_box_seller(body, site, parsed.price)
         parsed.offers = [
             {
                 "seller_name": seller_name,

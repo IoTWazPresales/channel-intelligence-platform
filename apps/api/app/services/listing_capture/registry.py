@@ -439,10 +439,11 @@ def _price_key(value: Any) -> str | None:
 def extraction_unchanged(prev: ListingObservation | None, *, parsed: Any, parser_version: str) -> bool:
     """True when ``parsed`` extracts exactly what ``prev`` holds.
 
-    Compared: parser version, price, availability, promo badge, and every key the parser
+    Compared: parser version, price, availability, promo badge, every key the parser
     put in its own flags (method, VAT basis, page id/variant id/SKU, RRP, canonical URL,
-    SKU match, ...). Fetch-side flags, CPOR activation and status transitions are not
-    extracted fields and are not compared.
+    SKU match, ...), and the buy-box seller and offer count when the reader returned offers
+    (a seller-only change is evidence for an Own/Competition change). Fetch-side flags,
+    CPOR activation and status transitions are not extracted fields and are not compared.
     """
     if prev is None or getattr(parsed, "parse_status", None) != "ok":
         return False
@@ -457,6 +458,17 @@ def extraction_unchanged(prev: ListingObservation | None, *, parsed: Any, parser
     prev_flags = prev.parse_flags if isinstance(prev.parse_flags, dict) else {}
     for key, value in (parsed.flags or {}).items():
         if prev_flags.get(key) != value:
+            return False
+    offers = [o for o in (getattr(parsed, "offers", None) or []) if isinstance(o, dict)]
+    if offers:
+        prev_count = getattr(prev, "offer_count", None)
+        if prev_count is not None and int(prev_count) != len(offers):
+            return False
+        buy = next((o for o in offers if o.get("is_buy_box")), None)
+        seller = str((buy or {}).get("seller_name") or "").strip()
+        # A reader that names no seller falls back to the site's own seller on write, so only
+        # a named seller is compared.
+        if seller and seller != str(getattr(prev, "buy_box_seller", None) or "").strip():
             return False
     return True
 
