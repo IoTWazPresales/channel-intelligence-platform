@@ -149,6 +149,8 @@ class World:
         confirm: date | None = None,
         pod: date | None = None,
         line_state: str = "open",
+        delivery_no: str | None = None,
+        order_no: str | None = None,
     ) -> None:
         self._n += 1
         key = f"sdc-ship-{self.token}-{self._n}"
@@ -169,6 +171,8 @@ class World:
                 resolved_customer_id=customer.id,
                 ship_confirm_date=confirm,
                 pod_date=pod,
+                delivery_no=delivery_no,
+                order_no=order_no,
                 status="scheduled",
             )
         )
@@ -178,6 +182,22 @@ class World:
         for index in range(count):
             confirm = base + timedelta(days=index)
             self.shipment(customer=customer, distributor=distributor, ship_to=ship_to, confirm=confirm, pod=confirm + timedelta(days=days))
+
+    def distributor_stock(self, distributor: DimDistributor, product: DimProduct, units: float, as_of: date) -> None:
+        from app.models.facts import FactInventoryDistributor
+
+        self._n += 1
+        self.db.add(
+            FactInventoryDistributor(
+                source_key=f"sdc-inv-{self.token}-{self._n}",
+                tenant_id=self.tenant,
+                product_id=product.id,
+                distributor_id=distributor.id,
+                as_of_date=as_of,
+                on_hand_units=units,
+            )
+        )
+        self.db.flush()
 
     def counts(self) -> tuple[int, int, int]:
         # fact_promotion_plan was dropped by 20261011_0032. Shipments stay as the

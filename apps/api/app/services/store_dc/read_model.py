@@ -253,13 +253,35 @@ def _site_block(
     }
 
 
+def _delivery_key(delivery_no: Any, order_no: Any, confirm: date, pod: date) -> tuple:
+    """One delivery, however many product lines it carries.
+
+    A delivery number identifies the delivery. Without one, lines that share the order
+    number, ship-confirm date and proof-of-delivery date count as one delivery. That can
+    merge two same-day deliveries (fewer samples, never more), which is the safe side of
+    the minimum-deliveries floor.
+    """
+    number = str(delivery_no or "").strip().casefold()
+    if number:
+        return ("delivery", number)
+    return ("lines", str(order_no or "").strip().casefold(), confirm, pod)
+
+
 def _lead_index(db: Session, tenant_id: str, min_deliveries: int) -> dict[tuple[int, str], dict[str, Any]]:
+    """Ship-confirm to proof-of-delivery days per (distributor, receiving site).
+
+    One sample per distinct delivery (``_delivery_key``), not per shipment line. A delivery
+    whose lines carry different dates takes its longest line (the delivery was complete
+    only when its last line arrived).
+    """
     rows = db.execute(
         select(
             FactInboundShipment.distributor_id,
             FactInboundShipment.ship_to_raw,
             FactInboundShipment.ship_confirm_date,
             FactInboundShipment.pod_date,
+            FactInboundShipment.delivery_no,
+            FactInboundShipment.order_no,
         ).where(
             FactInboundShipment.tenant_id == tenant_id,
             FactInboundShipment.distributor_id.is_not(None),
@@ -268,13 +290,98 @@ def _lead_index(db: Session, tenant_id: str, min_deliveries: int) -> dict[tuple[
             FactInboundShipment.line_state != "closed_superseded",
         )
     ).all()
-    grouped: dict[tuple[int, str], list[int]] = defaultdict(list)
-    for distributor_id, ship_to, confirm, pod in rows:
+    grouped: dict[tuple[int, str], dict[tuple, int]] = defaultdict(dict)
+    for distributor_id, ship_to, confirm, pod, delivery_no, order_no in rows:
         if pod < confirm:
             continue
         key = (int(distributor_id), norm_label(ship_to))
-        grouped[key].append((pod - confirm).days)
-    return {key: inbound_leg(days, min_deliveries) for key, days in grouped.items()}
+        days = (pod - confirm).days
+        delivery = _delivery_key(delivery_no, order_no, confirm, pod)
+        previous = grouped[key].get(delivery)
+        if previous is None or days > previous:
+            grouped[key][delivery] = days
+    return {
+        key: inbound_leg(list(samples.values()), min_deliveries) for key, samples in grouped.items()
+    }
+
+
+def _distributor_sku_stock(
+    db: Session, tenant_id: str, distributor_ids: set[int], product_ids: set[int]
+) -> dict[tuple[int, int], dict[str, Any]]:
+    """Latest reported on-hand per (distributor, product)."""
+    if not distributor_ids or not product_ids:
+        return {}
+    rows = db.execute(
+        select(
+            FactInventoryDistributor.distributor_id,
+            FactInventoryDistributor.product_id,
+            FactInventoryDistributor.on_hand_units,
+            FactInventoryDistributor.as_of_date,
+        ).where(
+            FactInventoryDistributor.tenant_id == tenant_id,
+            FactInventoryDistributor.distributor_id.in_(sorted(distributor_ids)),
+            FactInventoryDistributor.product_id.in_(sorted(product_ids)),
+        )
+    ).all()
+    latest: dict[tuple[int, int], dict[str, Any]] = {}
+    for distributor_id, product_id, units, as_of in rows:
+        key = (int(distributor_id), int(product_id))
+        prev = latest.get(key)
+        if prev is None or as_of >= prev["as_of"]:
+            latest[key] = {"as_of": as_of, "units": float(units or 0)}
+    return latest
+
+
+def _rank_suppliers(
+    product_id: int,
+    candidate_ids: list[int],
+    *,
+    site_norm: str,
+    lead_index: dict[tuple[int, str], dict[str, Any]],
+    sku_stock: dict[tuple[int, int], dict[str, Any]],
+    names: dict[int, tuple[str | None, str | None]],
+    min_deliveries: int,
+) -> list[dict[str, Any]]:
+    """Distributors that can supply this SKU to this DC, best first.
+
+    Order: reported stock of this SKU above zero; then a learned lead time to this DC
+    (meets the minimum-deliveries floor), shorter first; then more deliveries to this DC;
+    then distributor id. A distributor with no stock row is "stock not reported", never zero.
+    """
+    options = []
+    for did in candidate_ids:
+        leg = lead_index.get((did, site_norm)) or inbound_leg([], min_deliveries)
+        stock = sku_stock.get((did, product_id))
+        units = stock["units"] if stock else None
+        learned = bool(leg.get("used_in_need"))
+        name, code = names.get(did, (None, None))
+        options.append(
+            {
+                "distributor_id": did,
+                "distributor_name": name,
+                "distributor_code": code,
+                "sku_stock_on_hand": None if units is None else round(units, 2),
+                "sku_stock_as_of": stock["as_of"].isoformat() if stock else None,
+                "stock_note": None if stock else "stock not reported",
+                "deliveries_to_dc": int(leg.get("sample_count") or 0),
+                "lead_time_label": leg["lead_time_label"],
+                "lead_time_weeks": leg["lead_time_weeks"],
+                "_leg": leg,
+                "_rank": (
+                    0 if (units or 0) > 0 else 1,
+                    0 if learned else 1,
+                    float(leg.get("median_days") or 0) if learned else 0.0,
+                    -int(leg.get("sample_count") or 0),
+                    did,
+                ),
+            }
+        )
+    options.sort(key=lambda item: item["_rank"])
+    return options
+
+
+def _public_option(option: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in option.items() if not k.startswith("_")}
 
 
 def _distributors_for(db: Session, tenant_id: str, customer_ids: list[int]) -> list[dict[str, Any]]:
@@ -409,9 +516,27 @@ def _dc_section(
     owner_cover = cover_weeks(owner_cfg)
     owner_multiple = slow_multiple(owner_cfg)
     owner_unsold = unsold_window_weeks(owner_cfg, owner_cover["min_weeks"])
-    distributor_id = _primary_distributor(distributors)
-    dc_rows = [r for r in facts if norm_label(r.site) == candidate.site_label_norm]
-    inbound = lead_index.get((distributor_id, candidate.site_label_norm)) if distributor_id else None
+    site_norm = candidate.site_label_norm
+    # Distributors with delivery history to this DC, then the account's distributors.
+    dc_ids = sorted(
+        {did for (did, norm) in lead_index if norm == site_norm},
+        key=lambda did: (-int(lead_index[(did, site_norm)].get("sample_count") or 0), did),
+    )
+    candidate_ids = list(dict.fromkeys([*dc_ids, *(int(d["id"]) for d in distributors)]))
+    known = {int(d["id"]): (d.get("name"), d.get("code")) for d in distributors}
+    missing = [did for did in candidate_ids if did not in known]
+    if missing:
+        for did, name, code in db.execute(
+            select(DimDistributor.id, DimDistributor.name, DimDistributor.code).where(
+                DimDistributor.id.in_(missing)
+            )
+        ).all():
+            known[int(did)] = (name, code)
+    # The DC's own inbound leg: the distributor with most deliveries to this DC, else the
+    # account's main distributor.
+    distributor_id = dc_ids[0] if dc_ids else _primary_distributor(distributors)
+    dc_rows = [r for r in facts if norm_label(r.site) == site_norm]
+    inbound = lead_index.get((distributor_id, site_norm)) if distributor_id else None
     if inbound is None:
         inbound = inbound_leg([], min_deliveries)
     flat = dc_rows
@@ -461,12 +586,24 @@ def _dc_section(
     dc_rate_by_product = {ln["product_id"]: ln["weekly_rate"] for ln in dc_block["lines"]}
     dc_detail = {ln["product_id"]: ln for ln in dc_block["lines"]}
     product_ids = set(store_need_by_product) | set(dc_soh_by_product)
+    sku_stock = _distributor_sku_stock(db, tenant_id, set(candidate_ids), product_ids)
     from_distributor = []
     for pid in sorted(product_ids):
         soh = dc_soh_by_product.get(pid)
         rate = dc_rate_by_product.get(pid) or 0.0
         asking = round(store_need_by_product.get(pid, 0.0), 2)
-        lead_weeks = float(inbound["lead_time_weeks"] or 0)
+        options = _rank_suppliers(
+            pid,
+            candidate_ids,
+            site_norm=site_norm,
+            lead_index=lead_index,
+            sku_stock=sku_stock,
+            names=known,
+            min_deliveries=min_deliveries,
+        )
+        chosen = options[0] if options else None
+        leg = chosen["_leg"] if chosen else inbound_leg([], min_deliveries)
+        lead_weeks = float(leg["lead_time_weeks"] or 0)
         if soh is None:
             units = None
             reason = "no stock reported"
@@ -483,7 +620,9 @@ def _dc_section(
                 "stock_on_hand": soh,
                 "need_units": units,
                 "need_reason": reason,
-                "lead_time_label": inbound["lead_time_label"],
+                "lead_time_label": leg["lead_time_label"],
+                "supplier": _public_option(chosen) if chosen else None,
+                "supplier_options": [_public_option(o) for o in options[:5]],
                 "weeks_of_cover": detail.get("weeks_of_cover"),
                 "slow": bool(detail.get("slow")),
                 "unsold": bool(detail.get("unsold")),
