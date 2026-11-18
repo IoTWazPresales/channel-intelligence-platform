@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,6 +33,10 @@ from app.services.listing_capture.observation import (
 
 STOP_PAUSED = "site_paused"
 STOP_TIME_LIMIT = "time_limit"
+
+# The steward's "autoconfigure" button waits for its answer, so each of its two phases
+# (discovery, then the reader probe) gets this budget instead of the 10-minute run budget.
+STEWARD_RUN_TIME_LIMIT_SECONDS = 45.0
 
 _HttpGet = Callable[..., tuple[int, Any]]
 
@@ -62,6 +66,9 @@ class FetchPolicy:
     now: Callable[[], datetime] = _utcnow
     time_limit_seconds: float = POLL_RUN_TIME_LIMIT_SECONDS
     started: float | None = None
+    # When each site (lower-cased key) last finished a request in this run. Shared by every
+    # gate on this policy, so two customers on one site are still spaced.
+    last_request_at: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.store is None:
@@ -74,6 +81,17 @@ class FetchPolicy:
 
     def time_left(self) -> float:
         return float(self.time_limit_seconds) - self.elapsed()
+
+    def fork(self) -> FetchPolicy:
+        """A new budget for the next phase, sharing the pause store and per-site spacing."""
+        return FetchPolicy(
+            store=self.store,
+            clock=self.clock,
+            sleep=self.sleep,
+            now=self.now,
+            time_limit_seconds=self.time_limit_seconds,
+            last_request_at=self.last_request_at,
+        )
 
 
 def default_fetch_policy() -> FetchPolicy:
@@ -92,7 +110,6 @@ class SiteFetchGate:
     paused_until: datetime | None = None
     pause_record: dict[str, Any] | None = None
     requests: int = 0
-    _last_at: float | None = None
     _checked: bool = False
     _had_record: bool = False
 
@@ -127,8 +144,9 @@ class SiteFetchGate:
     ) -> tuple[int, Any]:
         if not self.can_send():
             return int(self.refused_status or 0), ""
-        if self._last_at is not None and self.spacing_seconds > 0:
-            wait = self.spacing_seconds - (self.policy.clock() - self._last_at)
+        last_at = self.policy.last_request_at.get(self.key)
+        if last_at is not None and self.spacing_seconds > 0:
+            wait = self.spacing_seconds - (self.policy.clock() - last_at)
             if wait > 0:
                 if wait >= self.policy.time_left():
                     self.stopped = STOP_TIME_LIMIT
@@ -138,7 +156,7 @@ class SiteFetchGate:
         try:
             result = http_get(url, headers=headers) if headers else http_get(url)
         finally:
-            self._last_at = self.policy.clock()
+            self.policy.last_request_at[self.key] = self.policy.clock()
         status = result[0] if isinstance(result, tuple) and result else 0
         try:
             code = int(status or 0)
