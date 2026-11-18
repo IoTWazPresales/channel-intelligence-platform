@@ -26,6 +26,9 @@ from app.services.shipping_digest.recipients_store import (
     resolve_shipping_recipients_sync,
 )
 
+_SEED = ("seed-one@example.com", "seed-two@example.com", "seed-three@example.com", "seed-four@example.com", "seed-five@example.com")
+_SEED_ENV = ", ".join(_SEED)
+
 _MIG = (
     Path(__file__).resolve().parents[1]
     / "alembic"
@@ -100,19 +103,30 @@ def db():
         session.close()
 
 
-def test_empty_table_seeds_five_and_second_call_is_idempotent(db, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_built_in_recipients() -> None:
+    assert DEFAULT_SHIPPING_MAILER_RECIPIENTS == ()
+
+
+def test_empty_table_without_env_seeds_nothing(db, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CIP_SHIPPING_MAILER_RECIPIENTS", raising=False)
+    assert resolve_shipping_recipients_sync(db, "default") == ()
+    assert ensure_seeded_sync(db, "default") == 0
+    assert list_recipients_sync(db, "default") == []
+
+
+def test_empty_table_seeds_five_and_second_call_is_idempotent(db, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", _SEED_ENV)
     first = resolve_shipping_recipients_sync(db, "default")
-    assert first == DEFAULT_SHIPPING_MAILER_RECIPIENTS
+    assert first == _SEED
     n = ensure_seeded_sync(db, "default")
     assert n == 0
     listed = list_recipients_sync(db, "default")
     assert len(listed) == 5
-    assert [r["address"] for r in listed] == list(DEFAULT_SHIPPING_MAILER_RECIPIENTS)
+    assert [r["address"] for r in listed] == list(_SEED)
 
 
 def test_disabled_row_excluded_from_resolve_stable_order(db, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CIP_SHIPPING_MAILER_RECIPIENTS", raising=False)
+    monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", _SEED_ENV)
     resolve_shipping_recipients_sync(db, "default")
     rows = list_recipients_sync(db, "default")
     patch_recipient_sync(db, "default", rows[0]["id"], enabled=False)
@@ -123,7 +137,7 @@ def test_disabled_row_excluded_from_resolve_stable_order(db, monkeypatch: pytest
 
 
 def test_all_disabled_is_mute_does_not_reseed(db, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CIP_SHIPPING_MAILER_RECIPIENTS", raising=False)
+    monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", _SEED_ENV)
     resolve_shipping_recipients_sync(db, "default")
     for row in list_recipients_sync(db, "default"):
         patch_recipient_sync(db, "default", row["id"], enabled=False)
@@ -135,15 +149,15 @@ def test_env_seeds_when_table_empty(db, monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", "ops@example.com, other@example.com")
     rec = resolve_shipping_recipients_sync(db, "default")
     assert rec == ("ops@example.com", "other@example.com")
-    assert DEFAULT_SHIPPING_MAILER_RECIPIENTS[0] not in rec
+    assert _SEED[0] not in rec
 
 
 def test_env_ignored_when_table_has_rows(db, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CIP_SHIPPING_MAILER_RECIPIENTS", raising=False)
+    monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", _SEED_ENV)
     resolve_shipping_recipients_sync(db, "default")
     monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", "only-env@example.com")
     rec = resolve_shipping_recipients_sync(db, "default")
-    assert rec == DEFAULT_SHIPPING_MAILER_RECIPIENTS
+    assert rec == _SEED
     assert "only-env@example.com" not in rec
 
 
@@ -250,12 +264,12 @@ def api_client():
 
 
 def test_list_seeds_and_non_admin_forbidden(api_client, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CIP_SHIPPING_MAILER_RECIPIENTS", raising=False)
+    monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", _SEED_ENV)
     client, _session = api_client
     r = client.get("/api/v1/shipping-mailer/recipients")
     assert r.status_code == 200
     items = r.json()["items"]
-    assert [i["address"] for i in items] == list(DEFAULT_SHIPPING_MAILER_RECIPIENTS)
+    assert [i["address"] for i in items] == list(_SEED)
 
     app.dependency_overrides[get_current_user] = _stub_user(Role.VIEWER)
     denied = client.post(
@@ -273,7 +287,7 @@ def test_list_seeds_and_non_admin_forbidden(api_client, monkeypatch: pytest.Monk
 
 
 def test_api_add_disable_delete(api_client, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CIP_SHIPPING_MAILER_RECIPIENTS", raising=False)
+    monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", _SEED_ENV)
     client, _session = api_client
     listed = client.get("/api/v1/shipping-mailer/recipients")
     assert listed.status_code == 200

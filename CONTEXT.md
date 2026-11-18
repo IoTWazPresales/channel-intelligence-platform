@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-18 - **Entity-specific removal (alignment D9):** recipients, sender, workbook path, payment narrative and archive root are no longer tenant data in code; guard test added; BACKLOG-240 lists what remains. `cip_test` only; `cip` read once (recipient count).
+
 - 2026-11-17 - **PR #95 Round 2:** discovery validates seller seeds before writing sites, preserving bad-customer exclusion and stored seller identities. The existing DB-backed regression is unchanged. All 192 literal-scan hits came from Round 1 fixture keys `market`/`catalogue`; distinctive fixture keys yield zero app/alembic hits using fixture/config-derived keys. Database-free tests: 35 review + 55 existing passed (90), connections forbidden. No DB connection, service restart, commit or push; memory state updated, changes remain in this detached worktree at `a0c7dcc5`.
 
 - 2026-11-17 - **PR #95 review fixes:** detached review worktree at `a0c7dcc5`; shared autoconfigure now runs discovery from the schedule and steward POST, domain seeds stay on their domain, URL-less feed proposals are enriched, external ids use full-URL hashes, product links outrank navigation, and per-customer/site cursors continue past 25. Database-free tests: 27 new + 39 existing passed with connections forbidden. No database access, service restart, commit or push; changes remain in the working tree.

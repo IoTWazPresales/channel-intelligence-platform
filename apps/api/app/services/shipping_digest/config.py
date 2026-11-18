@@ -18,8 +18,8 @@ def mailer_recipients() -> tuple[str, ...]:
     """Seed source only — not the live send list.
 
     ``CIP_SHIPPING_MAILER_RECIPIENTS`` when set is the first-run seed / break-glass
-    source for an *empty* table. A populated UI list wins; see
-    ``resolve_shipping_recipients``.
+    source for an *empty* table. Unset means no seed (an empty table stays empty until
+    an admin adds recipients). A populated UI list wins; see ``resolve_shipping_recipients``.
     """
     settings = Settings()
     dedicated = tuple(
