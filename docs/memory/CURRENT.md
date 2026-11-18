@@ -2,6 +2,28 @@
 
 **Final wave (c) aged/slow stock (branch `feat/fwc-aged-stock-grouping-20261118`, 2026-11-18):** the planner's aged-stock panel shows one line per customer and product with Slow/Unsold badges and the sites folded underneath; `stock_actions` now matches site labels with `norm_label`, so a store listed again under a confirmed DC with different case or spacing no longer gives a second line. Live confirmation: BACKLOG-250. No migration. Not merged.
 
+**Listing coverage defects (2026-11-18):** branch `fix/listing-coverage-226-20261118` off `feat/integrate-20261103` closes all eight BACKLOG-226 sub-items in `listing_capture/coverage.py`, `registry.extraction_unchanged`, `adapters/html_page.py` and `ListingCoverageLens.tsx`:
+
+- an HTTP error page with a price is a failing read;
+
+- a seller-only change stores a snapshot;
+
+- a seed resolved before its listing keeps its evidence;
+
+- the seller comes from the priced JSON-LD offer;
+
+- latest reads run in batches;
+
+- delisted counts as Not found;
+
+- the lens shows loading and error states instead of "No reported products yet.";
+
+- product-less hand/CSV listings are counted.
+
+Review points: BACKLOG-243. No migration, no deploy; tests on `cip_test` only.
+
+**Wave 3 B2 batch deploy script (2026-11-18):** branch `feat/b2-batch-deploy-script-20261118` adds `scripts/cip-deploy.ps1` (pure helpers in `scripts/cip-deploy-lib.ps1`, Pester 3 tests in `scripts/cip-deploy.Tests.ps1`). With no switch it only prints the plan. `-Execute` refuses a linked worktree, a dirty tracked tree or a detached HEAD. It then runs `git pull --ff-only`, runs `pnpm install --frozen-lockfile` only when `pnpm-lock.yaml` changed, builds web (BUILD_ID must change), and restarts api, worker and web one at a time through `cip-supervisor-stop.ps1`, waiting for each to be healthy with a fresh launch. It checks `/health/ready` and the Celery ping, then checks web 3000 twice, 60 s apart, with unchanged launch counts. It writes a JSON record and a CURRENT.md block to `%LOCALAPPDATA%\CIP\deploys\`. It has **not been run with -Execute**: a deploy needs authorization (BACKLOG-245).
+
 **BACKLOG-229 My accounts trend (2026-11-18):** branch `fix/my-accounts-trend-grain-20261118`. The My accounts starter trend is now "Sell-through units by month", so a book with weekly and monthly reporters no longer gets the `W-ONE-STORED-PERIOD` refusal. Only dashboards created from the starter after this change get it; existing saved dashboards keep their widgets. New cip_test execution test on a mixed book. No migration, no deploy.
 
 **Wave 3 B1 fast CI gate and lint (2026-11-18):** branch `feat/b1-fast-ci-gate-20261118`.
