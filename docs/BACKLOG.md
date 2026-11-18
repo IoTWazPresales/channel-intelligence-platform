@@ -3741,6 +3741,21 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ---
 
+## BACKLOG-253 — Final wave (d): customer promotion calendar
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Code complete, uncommitted; migration not applied anywhere**, recorded 2026-11-19 on `feat/fwd-promo-calendar-20261118` (worktree `fwd-20261118`). Unit tests, web checks and ruff pass; the DB tests are written but have not been run. |
+| **Source** | `docs/CIP_ORCHESTRATOR_WAVES.md`, NEW FINAL WAVE item (d) (Warren, 2026-11-17): show our promotions alongside customer campaign or pillar calendars, per customer; upload those calendars through the existing mapping-profile upload; show clash warnings. Alignment review: no calendar model, mapped ingestion or clash workflow existed. |
+| **What shipped** | Migration `20261118_0063` (down_revision `20261113_0062`): `customer_calendar_mapping_profile` and `customer_calendar_event` (tenant, customer, name, kind campaign/pillar/other, start, end, upload id, source file/row/hash; `end_date >= start_date` check), forced row security bound to a transaction-local tenant setting (unset denies), grants to `cip`. Models in `models/customer_calendar.py`. Service `services/cpor/customer_calendar/`: profile validation, CSV/XLSX parsing through the profile's header aliases and kind map (reuses the payment-evidence date and header helpers), preview, apply (replaces the same upload for the same customers, so apply twice leaves the same rows), pure `compute_clashes` (inclusive days, same customer only), timeline read. API under `/api/v1/customer-calendar`: profile CRUD, `upload/preview`, `upload/apply` (`confirm=true`, steward-audited), `GET timeline?customer_id=&from=&to=`. Our promotions are existing case windows with superseded, cancelled, fixture (`intelligence_exclude`) and fully voided cases left out. Web: `/promotions/timeline` with a shared date axis, clash list and upload/mapping panel (reuses `ImportFileUploadZone` and `CanonicalColumnMappingPanel` by import). |
+| **Design notes** | Customer names in the file are matched to the tenant's customers by exact name or code (merges collapsed); unmatched or ambiguous names are listed and skipped, never created. The router is mounted at `/customer-calendar`, not `/cpor`: every write route under `/api/v1/cpor` must be in the N-0038 role matrix (`tests/test_rbac_n0038_cpor_roles.py`), which this lane does not own. Upload uses its own multipart preview/apply routes with the same profile shape; it is not an `import_job` because registering a template touches `template_definitions.py`, `ingestion/pipeline.py` and `imports.py`, outside this lane. |
+| **Open (a): apply the migration** | Apply `20261118_0063` on `cip` only with Warren's approval and after a backup (needs the table owner connection). Until then the timeline and profile reads answer `data_unavailable` instead of failing. |
+| **Open (b): DB tests** | `tests/test_customer_calendar_db.py` (migration, RLS isolation as the app role, apply idempotency, tenant isolation, timeline filters, endpoints) must be run on `cip_test`, one suite at a time, by the coordinator. |
+| **Open (c): real calendars** | Acceptance needs real customer campaign/pillar calendars; the default profile's header aliases are generic guesses and each tenant's profile will need editing. |
+| **Open (d): planner clash card** | A clash card on the promotion planner belongs to final wave (e) (`PromotionPlannerSurface.tsx`, `plannerCards*`); it can read `GET /api/v1/customer-calendar/timeline`. Navigation to `/promotions/timeline` from the planner is not added (the planner file belongs to (e)). |
+| **Open (e): decision** | Should rejected case windows count as clashes? They are currently shown (only superseded, cancelled, fixture and fully voided cases are left out, per the requirement). |
+| **TRIGGER** | Before the migration is applied on `cip`, before planners are asked to upload customer calendars, or when wave (e) builds the planner clash card. |
+
 ## BACKLOG-242 — Aged-stock rule consistency: what is left after 2026-11-18
 
 | Field | Detail |
