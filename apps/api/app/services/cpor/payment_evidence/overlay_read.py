@@ -131,7 +131,8 @@ def build_payment_evidence_overlay(session: Session) -> dict[str, Any]:
         "not_budget_ledger": True,
         "paid_note": (
             "Paid on the ZAR open book only sums linked evidence in the case currency. "
-            "This ASUS pending report is almost all USD, so it does not move R0 paid / R6.0m outstanding."
+            "Rows in this report in another currency do not move the ZAR paid or "
+            "outstanding figures."
         ),
         "unmatched_cip_note": (
             "CIP case_codes with no exact Case ID in this pending report — created in CIP and "

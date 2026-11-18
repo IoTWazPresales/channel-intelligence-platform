@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-18 - **Entity-specific removal (alignment D9):** recipients, sender, workbook path, payment narrative and archive root are no longer tenant data in code; guard test added; BACKLOG-240 lists what remains. `cip_test` only; `cip` read once (recipient count).
 - 2026-11-18 - **Docs reconcile (alignment review D1):** CURRENT leads with the merged state of #91-#98 at `b9f29a09`; #97 runbook commands fixed (`backup_cip.ps1 -DatabaseUrl`, `clone_cip_db.py --source-db cip`, no DB URL default); CONTEXT `06ababdf` pointer, BACKLOG-081 (alias seal shipped in N-0095) and BACKLOG-083 (partly shipped) corrected; Wave 1-A staged-store note dated; dashboard CPOR conflict (D-0123 vs 2026-11-10 proposal) recorded as needing Warren. Docs only.
 
 - 2026-11-17 - **PR #95 Round 2:** discovery validates seller seeds before writing sites, preserving bad-customer exclusion and stored seller identities. The existing DB-backed regression is unchanged. All 192 literal-scan hits came from Round 1 fixture keys `market`/`catalogue`; distinctive fixture keys yield zero app/alembic hits using fixture/config-derived keys. Database-free tests: 35 review + 55 existing passed (90), connections forbidden. No DB connection, service restart, commit or push; memory state updated, changes remain in this detached worktree at `a0c7dcc5`.
