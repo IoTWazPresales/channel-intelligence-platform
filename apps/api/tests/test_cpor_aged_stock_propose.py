@@ -186,6 +186,9 @@ def test_evidence_joins_approved_competitor_price_and_keeps_cover_grains_apart()
                 _Result(rows=[(11.0,)]),
             ]
 
+        def scalar(self, _stmt):
+            return None  # no customer report config: the shared slow multiple applies
+
         def execute(self, stmt):
             statements.append(str(stmt))
             return self.plan.pop(0)
