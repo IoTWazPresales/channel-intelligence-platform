@@ -33,7 +33,6 @@ _IMAP_MONTHS = (
     "Nov",
     "Dec",
 )
-_JESS_SENDER = "jess_mah@asus.com"
 
 
 class ImapBasicAuthDisabled(RuntimeError):
@@ -260,19 +259,13 @@ def fetch_unseen_shipment_attachments(
                 continue
             parts = attachments_from_rfc822(raw)
             if not parts:
-                from_addr = normalize_email_addr(from_hdr)
-                if from_addr == _JESS_SENDER:
-                    logger.warning(
-                        "FLAG mailbox message uid=%s from=%s has no xlsx/xlsm/csv attachment",
-                        uid,
-                        from_addr,
-                    )
-                else:
-                    logger.info(
-                        "mailbox ingest skipped no spreadsheet uid=%s from=%s",
-                        uid,
-                        from_addr,
-                    )
+                # Every sender reaching here is on the configured allowlist, so a message
+                # with no spreadsheet is flagged for all of them (same as the Graph path).
+                logger.warning(
+                    "FLAG mailbox message uid=%s from=%s has no xlsx/xlsm/csv attachment",
+                    uid,
+                    normalize_email_addr(from_hdr),
+                )
                 continue
             for part in parts:
                 found.append(
