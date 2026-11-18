@@ -3749,3 +3749,17 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **(b) Embedded seller outside JSON-LD** | Pages that name the seller only in non-JSON-LD embedded JSON still use the first `"seller"` key in the page. A per-site reader profile would fix that; it depends on BACKLOG-239 (reader profiles need a migration). |
 | **(c) Older observations** | Observations written before this change with a non-200 status now read as failing. No data is rewritten. The count of listings that move from Watched to Failing on `cip` was not measured in this lane. |
 | **TRIGGER** | Before listing coverage goes to account managers. |
+
+---
+
+## BACKLOG-244 — W1-B commercial worklists: what shipped and what each remaining part needs
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Partly shipped**, 2026-11-18, on `feat/w1b-stock-not-listed-20261118` (stacked on the BACKLOG-226 branch). |
+| **Source** | `cip-requirements-alignment-20261118.md` Section D item 7: "Latest-stock/no-listing suggestions, own-versus-other-offer/competitor comparisons, competitor-page monitoring and the remaining price/activation alerts. Reuse existing proposal, offer and competitor-price writers." |
+| **Shipped: in stock, not watched** | `GET /api/v1/listing-capture/stock-not-listed` (`listing_capture/stock_not_listed.py`). Read-only, tenant from the caller, optional `customer_id`, `limit` up to 2,000 with `truncated`. For each reporting customer it takes the products with stock above zero on the latest stock report, summed over sites (the product set discovery searches). It drops the ones coverage counts as watched (`coverage.product_buckets`, the same rules as the Coverage tab). It lists the rest with stock, date, coverage reason and a worded next step. Shown under the Coverage tab (`StockNotListedWorklist.tsx`) with loading, error and empty states. |
+| **(a) Own vs other offer / competitor comparison** | Code-only to build. It needs no migration: `listing_offer`, `buy_box_own` and approved `fact_competitor_price` exist. It is useful only with data: seller identities per customer site (seed or steward), and approved competitor maps and prices. Today `fact_competitor_price` holds only imported prices. Not built in this lane. |
+| **(b) Competitor-page monitoring** | **Needs a migration.** `customer_listing` requires a customer, and `dim_competitor_product` / `fact_competitor_price` have no page URL or reader fields. Watching competitor pages needs a competitor-page table, or a nullable link from listings to `dim_competitor_product`. It also needs competitor page URLs (data). |
+| **(c) Late activation / early deactivation alerts** | **Needs a decision.** The timeline exists (observations plus CPOR windows). The decision is what counts as late or early: the days of tolerance after window start and before window end, and whether a single read is enough. Then it is code-only. |
+| **TRIGGER** | Before W1-B is reported complete. |

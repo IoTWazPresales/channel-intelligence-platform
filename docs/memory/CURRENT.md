@@ -1,5 +1,12 @@
 # CURRENT state
 
+**W1-B worklist (2026-11-18):** branch `feat/w1b-stock-not-listed-20261118` (stacked on `fix/listing-coverage-226-20261118`) adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
+- the offer/competitor comparison needs data;
+- competitor-page monitoring needs a migration;
+- activation alerts need a decision.
+
+No migration, no deploy.
+
 **Listing coverage defects (2026-11-18):** branch `fix/listing-coverage-226-20261118` off `feat/integrate-20261103` closes all eight BACKLOG-226 sub-items in `listing_capture/coverage.py`, `registry.extraction_unchanged`, `adapters/html_page.py` and `ListingCoverageLens.tsx`:
 - an HTTP error page with a price is a failing read;
 - a seller-only change stores a snapshot;

@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-18 - **W1-B in stock, not watched:** `feat/w1b-stock-not-listed-20261118`, read-only worklist endpoint and Coverage-tab table. Remaining worklists and what each needs: BACKLOG-244.
+
 - 2026-11-18 - **Listing coverage (BACKLOG-226):** `fix/listing-coverage-226-20261118`. HTTP failures, seller-only changes, seed/listing reconciliation, bounded latest reads, delisted and product-less listings, and honest loading/error UI. Review points: BACKLOG-243.
 
 - 2026-11-17 - **PR #95 Round 2:** discovery validates seller seeds before writing sites, preserving bad-customer exclusion and stored seller identities. The existing DB-backed regression is unchanged. All 192 literal-scan hits came from Round 1 fixture keys `market`/`catalogue`; distinctive fixture keys yield zero app/alembic hits using fixture/config-derived keys. Database-free tests: 35 review + 55 existing passed (90), connections forbidden. No DB connection, service restart, commit or push; memory state updated, changes remain in this detached worktree at `a0c7dcc5`.
