@@ -211,3 +211,22 @@ def test_an_unknown_seller_keeps_unknown_ownership_through_persistence():
     assert observation_to_dict(obs)["buy_box_label"] == "Competition"
     offer, obs = run({"seller_name": "Own Store", "price": 1999, "is_buy_box": True})
     assert obs.buy_box_own is True
+
+
+def test_a_same_amount_offer_in_another_currency_is_not_the_priced_offer():
+    """Codex review of PR #104, round 3 (B3): the parsed price is in the reader's currency, so
+    an equal amount in another currency must not make the seller ambiguous."""
+    from app.services.listing_capture.observation import PARSED_PRICE_CURRENCY
+
+    other = "USD" if PARSED_PRICE_CURRENCY.upper() != "USD" else "EUR"
+    page = (
+        '<script type="application/ld+json">{"@type":"Product","offers":['
+        '{"@type":"Offer","priceCurrency":"%s","price":"1999.00","seller":{"@type":"Organization","name":"Seller A"}},'
+        '{"@type":"Offer","priceCurrency":"%s","price":"1999.00","seller":{"@type":"Organization","name":"Seller B"}}'
+        "]}</script>" % (PARSED_PRICE_CURRENCY, other)
+    )
+    assert seller_from_json_ld(page, 1999.0) == "Seller A"
+    assert seller_from_page(page, 1999.0) == "Seller A"
+    # An offer without a currency is still a candidate, so the answer stays unknown.
+    no_currency = page.replace('"priceCurrency":"%s",' % other, "")
+    assert seller_from_json_ld(no_currency, 1999.0) is None

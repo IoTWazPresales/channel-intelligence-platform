@@ -79,6 +79,22 @@ def _price_of(offer: dict[str, Any]) -> float | None:
         return None
 
 
+def _currency_of(offer: dict[str, Any]) -> str | None:
+    raw = offer.get("priceCurrency")
+    if not isinstance(raw, str) and isinstance(offer.get("priceSpecification"), dict):
+        raw = offer["priceSpecification"].get("priceCurrency")
+    return raw.strip().upper() or None if isinstance(raw, str) else None
+
+
+def _same_currency(offer: dict[str, Any]) -> bool:
+    """An offer in another currency than the parsed price cannot be the priced offer. An
+    offer with no currency stays a candidate (unsure, so it keeps the answer unknown)."""
+    from app.services.listing_capture.observation import PARSED_PRICE_CURRENCY
+
+    currency = _currency_of(offer)
+    return currency is None or currency == PARSED_PRICE_CURRENCY.upper()
+
+
 def seller_from_json_ld(text: str, price: float | None = None) -> str | None:
     """The seller of the JSON-LD offer that supplied ``price``.
 
@@ -102,7 +118,9 @@ def _json_ld_seller(text: str, price: float | None) -> tuple[str | None, bool]:
     if not named:
         return None, False
     if price is not None:
-        at_price = {name for o, name in named if _price_of(o) == float(price)}
+        # Amount and currency must both match the parsed price: the same amount in another
+        # currency is a different offer (Codex review of PR #104, round 3 B3).
+        at_price = {name for o, name in named if _price_of(o) == float(price) and _same_currency(o)}
         return (next(iter(at_price)) if len(at_price) == 1 else None), True
     sellers = {name for _o, name in named}
     return (next(iter(sellers)) if len(sellers) == 1 else None), True
