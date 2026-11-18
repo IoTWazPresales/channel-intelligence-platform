@@ -297,6 +297,47 @@ def test_stock_only_rows_do_not_replace_monthly_sales(world: World):
     assert line["stock_on_hand"] == 25.0
 
 
+def test_unsold_needs_four_consecutive_reported_calendar_weeks(world: World):
+    """Codex re-review of PR #102 (round 3, B1): a 28-day window touches five calendar
+    weeks, so four week labels with one wholly unreported week must not be unsold."""
+    customer = world.customer("SDC-C")
+    product = world.product()
+    site = world.code("SDC-SITE-A")
+    for start in (date(2026, 1, 5), date(2026, 1, 12), date(2026, 1, 26)):
+        world.sell(customer, product, start, 0, site=site)
+    # Nothing for the week of 2026-01-19; a zero daily report on Wednesday 2026-02-04.
+    world.sell(customer, product, date(2026, 2, 4), 0, soh=30, site=site,
+               period_type="daily", period_grain="day")
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    assert line["unsold"] is False
+    # With the missing week reported, the four calendar weeks up to the newest report are
+    # consecutive and the line is unsold.
+    world.sell(customer, product, date(2026, 1, 19), 0, site=site)
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    assert line["unsold"] is True
+
+
+def test_a_week_with_one_reported_day_breaks_the_consecutive_weeks():
+    """A week report that starts on a Sunday touches the next calendar week by one day;
+    that day alone does not make the calendar week reported."""
+    from types import SimpleNamespace
+
+    from app.services.store_dc.read_model import _Sales
+
+    def week(start):
+        return SimpleNamespace(period=start, sales_reported=True, grain="week", kind="weekly",
+                               units=0.0, site="s")
+
+    # Sunday-start weeks; the one starting 2026-01-18 is missing.
+    rows = [week(date(2026, 1, 4)), week(date(2026, 1, 11)), week(date(2026, 1, 25)), week(date(2026, 2, 1))]
+    sales = _Sales(rows)
+    # Calendar week of 2026-01-19 has only 2026-01-25 reported, so the run stops there.
+    assert sales.reported_weeks_in_last(4) == 2
+    assert sales.reported_weeks_in_last(1) == 1
+
+
 def test_unsold_needs_reports_inside_the_unsold_window(world: World):
     """Codex re-review of PR #102 (B3): old weeks cannot make a current gap look unsold."""
     customer = world.customer("SDC-C")

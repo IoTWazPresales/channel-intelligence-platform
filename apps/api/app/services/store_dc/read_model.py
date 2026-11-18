@@ -157,9 +157,29 @@ class _Sales:
                 mondays.add(day - timedelta(days=day.weekday()))
         return units, covered, len(mondays)
 
+    MIN_DAYS_FOR_A_REPORTED_WEEK = 4
+
     def reported_weeks_in_last(self, weeks: int) -> int:
-        """Calendar weeks inside the last ``weeks`` weeks that a sales report covers."""
-        return self._window(weeks)[2]
+        """Consecutive reported calendar weeks (Monday to Sunday) ending with the newest
+        report's week, at most ``weeks``.
+
+        The newest report's week counts (it holds the newest report). Each earlier week
+        counts only if sales reports cover at least four of its seven days, and the count
+        stops at the first week that does not, so one wholly or mostly unreported week
+        inside the window cannot be made up by a fifth calendar week that a rolling
+        28-day window happens to touch.
+        """
+        if self.latest is None or weeks < 1:
+            return 0
+        newest_monday = self.latest - timedelta(days=self.latest.weekday())
+        count = 1
+        while count < weeks:
+            monday = newest_monday - timedelta(weeks=count)
+            days = sum(1 for offset in range(7) if (monday + timedelta(days=offset)) in self.by_day)
+            if days < self.MIN_DAYS_FOR_A_REPORTED_WEEK:
+                break
+            count += 1
+        return count
 
     def weekly_rate(self, weeks: int = RATE_WINDOW_WEEKS) -> float | None:
         """Units per week over the last ``weeks`` calendar weeks up to the newest report.
