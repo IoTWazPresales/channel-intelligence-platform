@@ -3741,6 +3741,17 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ---
 
+## BACKLOG-251 — Final wave (b): line-up customer/period views, what is left
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18 on `feat/fwb-lineup-group-approval-20261118`. Grouping, line-up-level approve/reject and the customer/period slice view shipped there. |
+| **Source** | `docs/CIP_ORCHESTRATOR_WAVES.md` NEW FINAL WAVE item (b); `cip-requirements-alignment-20261118.md`. |
+| **Shipped** | `POST /lineup/items/group-approval` (`customer_id`, `period_start`, `approval_status` approved/rejected, `only_pending` default true, `notes`) applies the same per-item approval and audit event as `PATCH /lineup/items/{id}` to every matching item in one transaction (404 when none match). `/lineup/items` returns `customer_id`. The Line-up cases page groups rows by customer and period (`LineupGroupsPanel`) with Approve/Reject per group; Open slice sets `?customer=&period=` and the workspace filters the master line-up in place (a view, never a copy); clearing the chip returns to the full all-customer line-up. |
+| **(1) Economics in the slice** | The slice filters line-up rows only. Plan lines and economics for that customer/period in the workbench are not yet filtered to the slice; that needs the workbench economics view to accept the same customer/period scope. |
+| **(2) Role check on approval: needs a decision** | Neither `PATCH /lineup/items/{id}` nor the new group endpoint checks a role beyond sign-in (inherited). Which roles may approve or reject a line-up is Warren's decision; then add the same check to both endpoints. |
+| **TRIGGER** | Before line-up approval is used by more than the admin users, or when the workbench economics view is next changed. |
+
 ## BACKLOG-242 — Aged-stock rule consistency: what is left after 2026-11-18
 
 | Field | Detail |
@@ -3758,6 +3769,8 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ## BACKLOG-239 — Structured (REST) listing reader is retailer-shaped
 
+| Field | Detail |
+|-------|--------|
 | **Status** | **Open**, recorded 2026-11-18 from the requirements alignment review (Section C, Section D item 5). Not built: needs a schema change. |
 | **Source** | `apps/api/app/services/listing_capture/adapters/rest_buybox.py` reads fixed response fields (`buybox.items`, `plid`, `tsin`, `desktop_href`, a fixed seller/other-offer layout and a fixed saving-badge shape). URLs are configurable; the response interpretation is not. |
 | **What the work is** | Move the response-field mapping into per-site reader-profile data and prove a second, structurally different JSON response through the same mechanism. `listing_site` has no JSON column for a reader profile, so this needs a migration (new column or table) applied on `cip` with Warren's approval, plus a profile for each existing site written by a reviewed restore step. |
