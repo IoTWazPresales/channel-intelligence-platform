@@ -3572,7 +3572,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Non-blocking at the #85 merge. |
+| **Status / parked** | **Fixed in code 2026-11-18** (branch `fix/my-accounts-trend-grain-20261118`), awaiting review. The My accounts trend is now monthly, as the `sellthrough_stock` starter is. `test_my_accounts_starter_runs_on_a_mixed_weekly_and_monthly_book` runs every widget of the starter on a mixed weekly/monthly book; cover parity tests unchanged and passing. **Still open, not part of this fix:** the `account_overview` starter keeps its weekly trend because it is for one required customer; a monthly-reporting customer chosen there still gets the `W-ONE-STORED-PERIOD` refusal on that one widget. Choosing the grain from the selected customer's stored period is a separate change. Was parked 2026-11-12, non-blocking at the #85 merge. |
 | **Source** | Codex reviews of PR #85 at `af7af2ab` and `c05dd5a9`: `apps/api/app/services/dashboard_templates.py:215`. |
 | **Idea** | Give the `my_accounts` starter's trend a grain that works for monthly and mixed weekly/monthly books (monthly, as the `sellthrough_stock` starter does, or the coarsest stored grain). |
 | **Why it matters** | A new My accounts dashboard has a trend that `run_v2` refuses with `W-ONE-STORED-PERIOD` when any assigned account reports monthly. |
