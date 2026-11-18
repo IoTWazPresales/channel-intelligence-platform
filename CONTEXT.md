@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-18 - **Docs reconcile (alignment review D1):** CURRENT leads with the merged state of #91-#98 at `b9f29a09`; #97 runbook commands fixed (`backup_cip.ps1 -DatabaseUrl`, `clone_cip_db.py --source-db cip`, no DB URL default); CONTEXT `06ababdf` pointer, BACKLOG-081 (alias seal shipped in N-0095) and BACKLOG-083 (partly shipped) corrected; Wave 1-A staged-store note dated; dashboard CPOR conflict (D-0123 vs 2026-11-10 proposal) recorded as needing Warren. Docs only.
+
 - 2026-11-17 - **PR #95 Round 2:** discovery validates seller seeds before writing sites, preserving bad-customer exclusion and stored seller identities. The existing DB-backed regression is unchanged. All 192 literal-scan hits came from Round 1 fixture keys `market`/`catalogue`; distinctive fixture keys yield zero app/alembic hits using fixture/config-derived keys. Database-free tests: 35 review + 55 existing passed (90), connections forbidden. No DB connection, service restart, commit or push; memory state updated, changes remain in this detached worktree at `a0c7dcc5`.
 
 - 2026-11-17 - **PR #95 review fixes:** detached review worktree at `a0c7dcc5`; shared autoconfigure now runs discovery from the schedule and steward POST, domain seeds stay on their domain, URL-less feed proposals are enriched, external ids use full-URL hashes, product links outrank navigation, and per-customer/site cursors continue past 25. Database-free tests: 27 new + 39 existing passed with connections forbidden. No database access, service restart, commit or push; changes remain in the working tree.
@@ -57,7 +59,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 - 2026-11-06 - **N-0118 review blockers (B1/B2):** `slh:` site keys when normalization is empty; chain retirement counts same-job staging lines only; unit + `cip_test` tests for punctuation / mixed / partial re-key. Branch `feat/n0118-cst-apply-c57a`.
 
-- 2026-11-06 - **N-0118 chain-key re-apply:** branch `feat/n0118-cst-apply-c57a` from `c57adbbe`. A sell-through apply re-keys rows already stored on a chain-level key when the staged row names a site. The chain-level fact moves aside. Second apply changes nothing. `cip_test` only. No cip write. No migration. No main. Commit `06ababdf`.
+- 2026-11-06 - **N-0118 chain-key re-apply:** branch `feat/n0118-cst-apply-c57a` from `c57adbbe`. A sell-through apply re-keys rows already stored on a chain-level key when the staged row names a site. The chain-level fact moves aside. Second apply changes nothing. `cip_test` only. No cip write. No migration. No main. Commit `06ababdf` (pre-rebase pointer, never on origin; the same patch landed as `b6c60970` via #60 merge `46c98213`, truth audit F1, corrected 2026-11-18).
 
 - 2026-11-06 - **Warren decisions docs (PR #61):** merged `feat/integrate-20261103` at `c5e4f4e0`. `CURRENT` notes D-0144 implementation paths (`apps/api/alembic/versions/20261103_0055_tenant_mapping_memory_aliases.py`, `apps/api/app/services/imports/tenant_mapping_scope.py`) and records Warren's 2026-11-06 resolution for D-0141 vs D-0145 (D-0141 stays; job column and user–account assignments in N-0100 part B via the serial migration queue; until then behaviour stays as D-0145 with no job column). Docs only; no EIF ledger edits. Commit `81174a7e`.
 
