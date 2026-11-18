@@ -56,7 +56,7 @@ from app.models.listing_site import ListingSite
 from app.services.listing_capture.adapters import configured_adapter
 from app.services.listing_capture.adapters.html_page import ADAPTER_KEY as HTML_PAGE_ADAPTER
 from app.services.listing_capture.adapters.html_page import parse as parse_html
-from app.services.listing_capture.adapters.html_page import seller_from_page
+from app.services.listing_capture.adapters.html_page import seller_or_first_party
 from app.services.listing_capture.identity import (
     barcode_key,
     corroboration,
@@ -639,7 +639,8 @@ def _capture_url(
     availability = parsed.availability if parsed.availability in {"in_stock", "out_of_stock"} else None
     price = parsed.price if parsed.parse_status == "ok" else None
     # The seller of the offer that supplied the price (BACKLOG-226 item 4), not the first one.
-    seller = seller_from_page(body, price) or (config.first_party_seller or "").strip() or None
+    # An ambiguous page gives no seller rather than the own seller (Codex review of PR #104, B1).
+    seller = seller_or_first_party(body, price, config.first_party_seller)
     sellers = _seller_names(body)
     if seller and seller not in sellers:
         sellers.insert(0, seller)

@@ -112,3 +112,60 @@ def test_pages_without_json_ld_keep_the_old_reader():
     assert seller_from_page(page, 1999.0) == "Embedded Seller"
     broken = '<script type="application/ld+json">{not json</script>{"seller":"Fallback"}'
     assert seller_from_page(broken, 1999.0) == "Fallback"
+
+
+# Codex review of PR #104 (B1): two external offers at the parsed price must not become Own.
+_TWO_AT_ONE_PRICE = (
+    '<script type="application/ld+json">{"@type":"Product","offers":['
+    '{"@type":"Offer","price":"1999.00","seller":{"@type":"Organization","name":"Trader A"}},'
+    '{"@type":"Offer","price":"1999.00","seller":{"@type":"Organization","name":"Trader B"}}'
+    "]}</script>"
+)
+
+
+def _configured_site():
+    return SimpleNamespace(sellers=(SimpleNamespace(inferred=False),), first_party_seller="Own Store")
+
+
+def test_an_ambiguous_page_seller_is_unknown_not_own():
+    from app.services.listing_capture.adapters.html_page import (
+        buy_box_seller,
+        buy_box_seller_info,
+        seller_or_first_party,
+    )
+
+    site = _configured_site()
+    assert buy_box_seller_info(_TWO_AT_ONE_PRICE, site, 1999.0) == (None, True)
+    assert buy_box_seller(_TWO_AT_ONE_PRICE, site, 1999.0) is None
+    assert buy_box_seller_info(_TWO_AT_ONE_PRICE, site, 2499.0) == (None, True)
+    # Discovery uses the same rule.
+    assert seller_or_first_party(_TWO_AT_ONE_PRICE, 1999.0, "Own Store") is None
+    # A page that names no seller still reads as the site's own seller.
+    assert buy_box_seller_info("<html>no seller</html>", site, 1999.0) == ("Own Store", False)
+    assert seller_or_first_party("<html>no seller</html>", 1999.0, "Own Store") == "Own Store"
+    # A clear seller is kept.
+    assert buy_box_seller_info(_LD, site, 1999.0) == ("Trader B", False)
+    # Not configured (inferred identity): unchanged, the own seller.
+    inferred = SimpleNamespace(sellers=(SimpleNamespace(inferred=True),), first_party_seller="Own Store")
+    assert buy_box_seller_info(_TWO_AT_ONE_PRICE, inferred, 1999.0) == ("Own Store", False)
+
+
+def test_the_writer_does_not_fill_in_the_own_seller_for_an_unknown_seller():
+    from app.services.listing_capture.registry import _attach_offers
+
+    site = SimpleNamespace(first_party_seller="Own Store", tenant_id="t")
+    unknown = [{"seller_name": None, "seller_unknown": True, "price": 1999, "is_buy_box": True}]
+    _attach_offers(None, SimpleNamespace(id=None), SimpleNamespace(customer_id=1), site, _parsed(None, offers=unknown), None)
+    assert unknown[0]["seller_name"] is None
+    plain = [{"seller_name": None, "price": 1999, "is_buy_box": True}]
+    _attach_offers(None, SimpleNamespace(id=None), SimpleNamespace(customer_id=1), site, _parsed(None, offers=plain), None)
+    assert plain[0]["seller_name"] == "Own Store"
+
+
+def test_an_unknown_seller_after_a_named_one_is_a_change():
+    unknown = [{"seller_name": None, "seller_unknown": True, "price": 1999, "is_buy_box": True}]
+    assert extraction_unchanged(_prev(), parsed=_parsed(None, offers=unknown), parser_version="v") is False
+    assert (
+        extraction_unchanged(_prev(buy_box_seller=None), parsed=_parsed(None, offers=unknown), parser_version="v")
+        is True
+    )

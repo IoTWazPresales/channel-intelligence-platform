@@ -220,13 +220,16 @@ def _listing_signal(
     error page parsed), ``parse_failed``, or the stored parse status.
     """
     listing_status = str(status or "")
+    # A steward's delisted decision wins over that listing's own read history: a delisted
+    # listing is no longer polled, so an old failed read would keep it Failing for ever
+    # (Codex review of PR #104, B2).
+    if listing_status == "delisted":
+        return "delisted"
     read_failed = parse_status in _READ_FAILED
     if listing_status in _WATCHED and not read_failed and market in readable:
         return "watched"
     if listing_status == "dead_link" or read_failed:
         return "failing"
-    if listing_status == "delisted":
-        return "delisted"
     return None
 
 

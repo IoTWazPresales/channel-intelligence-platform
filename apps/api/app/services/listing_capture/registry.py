@@ -467,8 +467,12 @@ def extraction_unchanged(prev: ListingObservation | None, *, parsed: Any, parser
         buy = next((o for o in offers if o.get("is_buy_box")), None)
         seller = str((buy or {}).get("seller_name") or "").strip()
         # A reader that names no seller falls back to the site's own seller on write, so only
-        # a named seller is compared.
-        if seller and seller != str(getattr(prev, "buy_box_seller", None) or "").strip():
+        # a named seller is compared. A seller the page leaves unknown is not filled in, so it
+        # is a change from a stored seller.
+        prev_seller = str(getattr(prev, "buy_box_seller", None) or "").strip()
+        if seller and seller != prev_seller:
+            return False
+        if not seller and (buy or {}).get("seller_unknown") and prev_seller:
             return False
     return True
 
@@ -492,7 +496,15 @@ def _attach_offers(session: Session, obs: ListingObservation, listing: Any, site
         ]
     customer_id = getattr(listing, "customer_id", None)
     buy = next((o for o in offers if o.get("is_buy_box")), None)
-    if buy is not None and not buy.get("seller_name") and site is not None and site.first_party_seller:
+    # An unknown seller (the page names sellers, none tied to the price) stays unknown: filling
+    # in the own seller would read as Own (Codex review of PR #104, B1).
+    if (
+        buy is not None
+        and not buy.get("seller_name")
+        and not buy.get("seller_unknown")
+        and site is not None
+        and site.first_party_seller
+    ):
         buy["seller_name"] = site.first_party_seller
     tenant = site.tenant_id if site is not None else "default"
     if getattr(obs, "id", None) is None:
