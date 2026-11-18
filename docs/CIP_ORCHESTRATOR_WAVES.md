@@ -30,7 +30,7 @@ stores or customers, return to distributor; builds on the merged aged-stock work
 the store map in the On the water style; store location suggestions by one generic matcher (store label to a
 place from a bundled offline dataset, licence recorded; steward confirms; no external geocoding; D-0143 as
 amended); N-0108 Cover speed folds in.
-Note: store-level data for several customers is still staged, not loaded on `cip`. Do not load it. Prove the
+Note (corrected 2026-11-18): this was written before the 2026-11-10 N-0118 step 2 apply, which loaded jobs 913 and 912 on `cip` (see `docs/memory/CURRENT.md`; their unresolved lines stay staged). Jobs 900, 906 and 907 were not applied. Reconcile the current data state before any load; do not replay this instruction blindly. Original note: store-level data for several customers is still staged, not loaded on `cip`. Do not load it. Prove the
 module on `cip_test` with real staged/archived report files from this PC, and put "load staged store data
 (N-0118)" in the WARREN block with its clone-proven steps.
 

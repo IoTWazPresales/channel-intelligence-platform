@@ -248,4 +248,3 @@ def test_monthly_reports_give_a_weekly_rate_without_double_counting(world: World
     line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
     # 5 Jan - 1 Feb: 21 month days x 10 + 7 from the week = 217 over 28 days.
     assert line["weekly_rate"] == 54.25
-
