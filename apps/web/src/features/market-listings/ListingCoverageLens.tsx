@@ -41,12 +41,21 @@ export function ListingCoverageLens() {
         products not found on the site, and products not searched yet.
       </Typography>
       {health.isError || unavailable ? (
-        <Alert severity="warning">Coverage could not be loaded in full.</Alert>
+        <Alert severity="warning" data-testid="listing-coverage-error">
+          Coverage could not be loaded in full.
+        </Alert>
       ) : null}
-      {rows.length === 0 ? (
-        <Typography variant="body2" data-testid="listing-coverage-empty">
-          No reported products yet.
+      {health.isPending ? (
+        <Typography variant="body2" color="text.secondary" data-testid="listing-coverage-loading">
+          Loading coverage…
         </Typography>
+      ) : rows.length === 0 ? (
+        // An empty list after a failed or partial read is not "no products": the alert says so.
+        health.isError || unavailable ? null : (
+          <Typography variant="body2" data-testid="listing-coverage-empty">
+            No reported products yet.
+          </Typography>
+        )
       ) : (
         <Table size="small" data-testid="listing-coverage-table">
           <TableHead>
