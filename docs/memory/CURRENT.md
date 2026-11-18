@@ -1,5 +1,7 @@
 # CURRENT state
 
+**Final wave (c) aged/slow stock (branch `feat/fwc-aged-stock-grouping-20261118`, 2026-11-18):** the planner's aged-stock panel shows one line per customer and product with Slow/Unsold badges and the sites folded underneath; `stock_actions` now matches site labels with `norm_label`, so a store listed again under a confirmed DC with different case or spacing no longer gives a second line. Live confirmation: BACKLOG-250. No migration. Not merged.
+
 **Listing coverage defects (2026-11-18):** branch `fix/listing-coverage-226-20261118` off `feat/integrate-20261103` closes all eight BACKLOG-226 sub-items in `listing_capture/coverage.py`, `registry.extraction_unchanged`, `adapters/html_page.py` and `ListingCoverageLens.tsx`:
 
 - an HTTP error page with a price is a failing read;
