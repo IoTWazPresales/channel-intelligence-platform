@@ -225,6 +225,75 @@ describe('ReplenishmentView', () => {
     expect(screen.queryByTestId('no-dc')).toBeNull();
   });
 
+  it('shows the supplier chosen for each DC SKU and its own stock of that SKU', () => {
+    const supplier = {
+      distributor_id: 9,
+      distributor_name: 'SDC-D-B',
+      distributor_code: 'SDC-D-B',
+      sku_stock_on_hand: 40,
+      sku_stock_as_of: '2026-03-20',
+      stock_note: null,
+      deliveries_to_dc: 5,
+      lead_time_label: 'lead time: 21 days',
+      lead_time_weeks: 3,
+    };
+    renderWithProviders(
+      <ReplenishmentView
+        customers={[{ id: 1, code: 'SDC-C1', name: 'SDC-C1' }]}
+        customerId={1}
+        onSelect={() => undefined}
+        view={view({
+          grain: 'store',
+          account: null,
+          dc_sections: [
+            {
+              candidate_id: 8,
+              site_label: 'SDC-HUB-1',
+              stock_on_hand: 5,
+              stock_note: null,
+              serves: [{ customer_id: 1, customer_name: 'SDC-C1' }],
+              lead_time: leg(),
+              onward: leg({ leg: 'onward', title: 'Customer distribution centre to store' }),
+              stores: [],
+              need_from_distributor: [
+                {
+                  product_id: 1,
+                  sku: 'SDC-SKU-A',
+                  stock_on_hand: 5,
+                  need_units: 55,
+                  need_reason: 'stores_plus_cover_and_lead_time',
+                  lead_time_label: 'lead time: 21 days',
+                  stores_asking: 60,
+                  supplier,
+                  supplier_options: [supplier],
+                },
+                {
+                  product_id: 2,
+                  sku: 'SDC-SKU-B',
+                  stock_on_hand: 5,
+                  need_units: 55,
+                  need_reason: 'stores_plus_cover',
+                  lead_time_label: 'lead time: no history',
+                  stores_asking: 60,
+                  supplier: { ...supplier, distributor_name: 'SDC-D-A', sku_stock_on_hand: null, stock_note: 'stock not reported' },
+                  supplier_options: [],
+                },
+              ],
+            },
+          ],
+          lead_times: [],
+        })}
+        candidates={[]}
+        onDecide={() => undefined}
+      />,
+    );
+    const rows = screen.getAllByTestId('dc-supplier');
+    expect(rows[0]).toHaveTextContent('supplier SDC-D-B · their stock 40');
+    expect(rows[1]).toHaveTextContent('supplier SDC-D-A · stock not reported');
+    expect(rows[1].textContent).not.toMatch(/their stock/);
+    expect(rows[1].textContent).not.toMatch(/stock stock/);
+  });
+
   it('sends settings, thresholds, served accounts, refresh, and lead-time reload through the existing controls', () => {
     const onRefresh = vi.fn();
     const onSaveConfig = vi.fn();

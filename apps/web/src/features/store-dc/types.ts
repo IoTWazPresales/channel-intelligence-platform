@@ -105,6 +105,8 @@ export type ReplenishmentViewData = {
       need_reason: string;
       lead_time_label: string;
       stores_asking: number;
+      supplier?: DcSupplierOption | null;
+      supplier_options?: DcSupplierOption[];
     }[];
   }[];
   sites: SiteBlock[];
@@ -160,4 +162,16 @@ export type CustomerThresholds = {
 export type ThresholdInput = {
   slow_cover_multiple?: number;
   unsold_weeks?: number;
+};
+
+export type DcSupplierOption = {
+  distributor_id: number;
+  distributor_name: string | null;
+  distributor_code: string | null;
+  sku_stock_on_hand: number | null;
+  sku_stock_as_of: string | null;
+  stock_note: string | null;
+  deliveries_to_dc: number;
+  lead_time_label: string;
+  lead_time_weeks: number | null;
 };
