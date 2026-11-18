@@ -3529,7 +3529,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #88 merged at `000e1e1d`. One fix lane, not several. |
+| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #88 merged at `000e1e1d`. One fix lane, not several. **2026-11-18:** all eight sub-items fixed on `fix/listing-coverage-226-20261118`, as follows. (1) The latest read uses `http_status` and the `fetch_failed` snapshot marker. (2) `extraction_unchanged` compares the named buy-box seller and the offer count. (3) A confirmed seed resolved before its listing keeps that listing's evidence. (4) The seller is read from the parsed JSON-LD offer at the parsed price, with the old regex only as fallback. (5) Latest reads run in batches of 5,000 ids. (6) A delisted listing counts as Not found unless another listing is watched. (7) The lens shows loading and error states. (8) Hand/CSV listings with no product are their own row. Codex round 3 (B3): the JSON-LD seller matcher now needs the priced offer's currency to match the reader's price currency (`PARSED_PRICE_CURRENCY`), so an equal amount in another currency no longer makes the seller unknown. Not changed: embedded JSON that is not JSON-LD still uses the first `"seller"` key; inferred identities keep `first_party_seller`. |
 | **Source** | Codex reviews of PR #88 at `9ba66022` and `000e1e1d`, and the lane A reports (2026-11-11/12). Line numbers are at `000e1e1d`. |
 | **Idea** | Make the Market Coverage counts and the Own/Competition label hold in the edge cases below. |
 | **Why it matters** | Coverage counts and Own/Competition labels are what account managers will read. Each item gives a wrong count or label in a narrow case. |
@@ -3573,7 +3573,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Non-blocking at the #85 merge. |
+| **Status / parked** | **Fixed in code 2026-11-18** (branch `fix/my-accounts-trend-grain-20261118`), awaiting review. The My accounts trend is now monthly, as the `sellthrough_stock` starter is. `test_my_accounts_starter_runs_on_a_mixed_weekly_and_monthly_book` runs every widget of the starter on a mixed weekly/monthly book; cover parity tests unchanged and passing. **Still open, not part of this fix:** the `account_overview` starter keeps its weekly trend because it is for one required customer; a monthly-reporting customer chosen there still gets the `W-ONE-STORED-PERIOD` refusal on that one widget. Choosing the grain from the selected customer's stored period is a separate change. Was parked 2026-11-12, non-blocking at the #85 merge. |
 | **Source** | Codex reviews of PR #85 at `af7af2ab` and `c05dd5a9`: `apps/api/app/services/dashboard_templates.py:215`. |
 | **Idea** | Give the `my_accounts` starter's trend a grain that works for monthly and mixed weekly/monthly books (monthly, as the `sellthrough_stock` starter does, or the coarsest stored grain). |
 | **Why it matters** | A new My accounts dashboard has a trend that `run_v2` refuses with `W-ONE-STORED-PERIOD` when any assigned account reports monthly. |
@@ -3599,7 +3599,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Found while recording the merge baseline on `a3d0a9cd`. |
+| **Status / parked** | **Fixed in code 2026-11-18** (branch `feat/b1-fast-ci-gate-20261118`), awaiting review. `apps/web/eslint.config.mjs` is the flat config: `next/core-web-vitals` through `FlatCompat`, with `@eslint/eslintrc` added as a web devDependency. The legacy `eslintConfig` block and CI's `ESLINT_USE_FLAT_CONFIG=false` are removed. Plain `pnpm lint` runs again. **Baseline:** 0 errors, 49 `react-hooks/exhaustive-deps` warnings. That matches the legacy run exactly: same findings at the same file/line/column, and the same files except that the config file itself is now linted. No new rules. The ruff I001 note below is unchanged. `.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc` still tells agents to set `ESLINT_USE_FLAT_CONFIG=false`. It was left alone because it is agent policy; setting the variable now makes ESLint 9 look for the removed legacy config, so the rule should be dropped in a separate, authorized change. Was parked 2026-11-12, found while recording the merge baseline on `a3d0a9cd`. |
 | **Source** | `pnpm --dir apps/web lint` (`eslint .`) with ESLint 9.39.4: "ESLint couldn't find an eslint.config.(js\|mjs\|cjs) file". `apps/web/package.json` still carries a legacy `eslintConfig` block. |
 | **Idea** | Add an `eslint.config.mjs` flat config equivalent to the current rules (`eslint-config-next`), so `pnpm lint` runs again. Small related item: ruff I001 (import block) at `apps/api/app/query/model/compiler.py:21` exists on the trunk. |
 | **Why it matters** | No lane or merge can run web lint today; only tsc and vitest gate web changes. |
@@ -3741,6 +3741,38 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ---
 
+## BACKLOG-243 — Listing coverage: review points left after the BACKLOG-226 fixes
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18 on `fix/listing-coverage-226-20261118`. Nothing here blocks the fix; each is a check for review or a later lane. |
+| **(a) Delisted = Not found** | A `delisted` listing now counts the product as Not found (the module's "not on the site" bucket), unless another listing of it is watched or failing. If account managers need delisted shown apart from never-found, that is a new bucket and a UI change. |
+| **(b) Embedded seller outside JSON-LD** | Pages that name the seller only in non-JSON-LD embedded JSON still use the first `"seller"` key in the page. (A page whose JSON-LD offers name sellers but none at the read price names no seller; it does not fall back to that key. Double-check fix, 2026-11-18.) A per-site reader profile would fix that; it depends on BACKLOG-239 (reader profiles need a migration). |
+| **Review fixes 2026-11-18 (Codex round 1)** | (B1) When a page's JSON-LD offers name sellers but none can be tied to the price, the buy-box seller is unknown: the reader marks the offer `seller_unknown`, the writer no longer fills in the site's own seller for it, discovery does the same, and an unknown seller after a stored seller counts as a change. Before, two outside sellers at one price read as Own. (B2) A steward's `delisted` status is checked before that listing's own read history, so a listing that failed a read and was then delisted counts as Not found instead of staying Failing (delisted listings are not polled again). (Round 2) An unknown buy-box seller's ownership is stored as unknown (None) on the offer and the observation, so the label is neither Own nor Competition. |
+| **(c) Older observations** | Observations written before this change with a non-200 status now read as failing. No data is rewritten. The count of listings that move from Watched to Failing on `cip` was not measured in this lane. |
+| **TRIGGER** | Before listing coverage goes to account managers. |
+
+## BACKLOG-245 — Wave 3 B2: first authorized run of the batch deploy script
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18. The script is built and unit-tested; it has never been run with `-Execute`. |
+| **Source** | Alignment review 2026-11-18, Section D item 12: "Implement the complete batch-deploy script with recorded build identity, ordered restarts, readiness checks and stable launch-count verification." Brief section 8. |
+| **What exists** | `scripts/cip-deploy.ps1`. The plan is the default; `-Execute` deploys and `-SkipPull` skips the pull. Pure helpers are in `scripts/cip-deploy-lib.ps1`, and `scripts/cip-deploy.Tests.ps1` holds 14 Pester tests (incl. 2 for the native-call wrapper): restart order, lockfile detection, launch-count stability, healthy-after-request, Celery ping parsing and record format. A run from a linked worktree was checked and refused with `-Execute` before any step. |
+| **Needs** | An authorized deploy window. Run `.\scripts\cip-deploy.ps1 -Execute` from the primary checkout on the trunk, then paste the printed block into CURRENT.md. Watch for: (1) the supervisor's `last_start` must move for each restarted component, otherwise the script times out after `-HealthyTimeoutSeconds` (240 s); (2) `celery inspect ping` needs Redis up and reachable from the API venv. |
+| **TRIGGER** | The next merged batch that Warren authorizes for deploy. |
+
+## BACKLOG-246 — Wave 3 B1: make the fast API gate a required check
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18. It needs a GitHub admin, so it was not done by an agent. |
+| **Source** | Waves doc, Wave 3 B1: "a fast API test subset on an ephemeral Postgres, on every PR into the trunk; merges require it green." Alignment review Section D item 11. |
+| **What exists** | CI job `api-fast` (`.github/workflows/ci.yml`) runs on every pull request. `apps/api/tests/fast_gate.txt` is the subset; `scripts/run-api-fast-gate.cjs` is the runner, and `scripts/run-api-fast-gate.test.cjs` covers it with 4 node tests. |
+| **Needs** | A repository admin adds a branch ruleset or protection on the trunk (`feat/integrate-*`, and `main` when promotion starts) that requires the `api-fast` check, plus `test` if wanted. Related: BACKLOG-238 recommends a `main` ruleset as well. |
+| **Keep in mind** | Keep the gate under about 3 minutes. When a module is added to `fast_gate.txt`, re-measure on cip_test. Any `tests/unit` path runs in the second, database-free process. |
+| **TRIGGER** | Warren or an admin agrees the required checks. |
+
 ## BACKLOG-242 — Aged-stock rule consistency: what is left after 2026-11-18
 
 | Field | Detail |
@@ -3758,6 +3790,8 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ## BACKLOG-239 — Structured (REST) listing reader is retailer-shaped
 
+| Field | Detail |
+|-------|--------|
 | **Status** | **Open**, recorded 2026-11-18 from the requirements alignment review (Section C, Section D item 5). Not built: needs a schema change. |
 | **Source** | `apps/api/app/services/listing_capture/adapters/rest_buybox.py` reads fixed response fields (`buybox.items`, `plid`, `tsin`, `desktop_href`, a fixed seller/other-offer layout and a fixed saving-badge shape). URLs are configurable; the response interpretation is not. |
 | **What the work is** | Move the response-field mapping into per-site reader-profile data and prove a second, structurally different JSON response through the same mechanism. `listing_site` has no JSON column for a reader profile, so this needs a migration (new column or table) applied on `cip` with Warren's approval, plus a profile for each existing site written by a reviewed restore step. |
@@ -3791,3 +3825,25 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Codex review B1 (fix round 1)** | The dashboard list used one fresh cache across sign-ins, so another user's cached list could make the starter screen create a duplicate My accounts starter. `DashboardWorkspace.tsx` now scopes the list, cache replacements and invalidations by tenant and user, and keeps the existing template writer. Vitest covers two successive users on one QueryClient, tenant changes, delayed identity/list responses, empty-list creation and failed reads; `test_d0141_starting_screen_db.py` gains an owner-isolation test on `cip_test`. No API, config or writer change. |
 | **Needs (not built)** | (1) **Warren:** set jobs for real users (admin Users page, `PUT /auth/users/{id}/job`), then switch `CIP_STARTING_SCREEN_POLICY=d0141` and restart the API. Switching before jobs are set lands everyone on Brief with the filter off. (2) **PARTIAL-DEFERRED, Warren decision:** the accepted job names do not define which routes and approvals each job may use. An accepted route/approval matrix is needed first; inventing one would change authorization without an agreed rule. Jobs still grant nothing (N-0100 B1). |
 | **TRIGGER** | Warren accepts the per-job route/approval matrix; for D-0141 activation, an admin sets real jobs and assignments and Warren authorizes switching the policy. |
+
+## BACKLOG-249 — Wave 2 verification pass: run authorization
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18 (alignment review Section D item 10). The harness is built on `feat/w2-verification-matrix-20261118` (PR #113; fix round 1 after the Codex review, 2026-11-18); the pass has not run. |
+| **Source** | `docs/CIP_ORCHESTRATOR_WAVES.md` "Wave 2: verify on the running web app"; harness and run order in `docs/audits/WAVE2_VERIFICATION_HARNESS.md`. |
+| **Built** | View x viewport x state matrix (`apps/web/src/lib/verification/matrix.ts`): the 17 Wave 1 routes plus the views that mount only behind a query (`/promotions?plan=<id>` quantity and export workspace, `/listing-capture?tab=sites\|links\|coverage\|proposals\|intelligence`, `/admin/cst-steward?tab=stock-gap`); each names the test id it must mount. Dynamic views (`?plan=`, `cpor-cases/[id]`) take an id from `CIP_VERIFY_ID_PLAN` / `CIP_VERIFY_ID_CPOR_CASE` or a read-only lookup of the cases list, and are recorded `skipped` (not passed) when there is none. Playwright spec and config (`apps/web/e2e/wave2-matrix.spec.ts`, `apps/web/playwright.wave2.config.ts`): write guard in both modes; **readonly mode never signs in** (login commits an `AuthSession` row, so it counts as a write and is aborted): it consumes an existing session (`CIP_VERIFY_STORAGE_STATE` or `CIP_VERIFY_SESSION_TOKEN`) and refuses to start without one; login is let through only in full mode's sign-in step. Empty, error and loading are produced in both modes by GET interception (no server write); each state case fails when its interception hit no request, and the error state needs an error-specific indication (injected detail, error-severity alert, or failure wording in a non-informational alert), not any `role=alert`. Read-only figure checker (`apps/api/scripts/verify/figure_check.py`). Checked: vitest (49 tests in `matrix.test.ts`), tsc, eslint, `playwright --list` against a fake target; figure-checker unit tests with database connections forbidden. `test_figure_check_db.py` is reported passing on `cip_test` by the coordinator (not re-run in fix round 1). Playwright has not been executed against any app. |
+| **PARTIAL-DEFERRED (browser states)** | (a) **POST-read widgets:** pages that load data through POST (for example dashboard widgets on `POST /query/v2/execute`) are aborted by the write guard in readonly runs, so their loaded data and their empty/loading states cannot be exercised there; the interception covers GET only, and forwarding or simulating POST reads would need a reviewed read-only allowlist or a server-side read endpoint. Their error state is exercised only by the aborted request. Run those widgets in the full run on the test instance (writes still aborted unless `CIP_VERIFY_ALLOW_WRITES=1`). (b) **Interaction:** the spec navigates by URL only; controls, filters, in-page tab clicks, row drawers and click-through are not exercised (Wave 2 step "exercise controls" stays open). (c) **No app to render:** the empty-state and error-indication rules (text patterns, MUI severity classes) are verified in vitest and by `--list`, not against a rendered page; the first real run may need its selectors tuned, and a page that swallows an API failure shows up as a failed `error` case (a finding, not a harness fault). |
+| **Needs** | (1) Deploy merged Wave 1 (brief section 8). (2) Test instance on `cip_test` with the uploaded real files and queued migrations (section 7). (3) A verification user and its credentials for the test instance, and **an existing session for the live readonly run** (`CIP_VERIFY_STORAGE_STATE` or `CIP_VERIFY_SESSION_TOKEN`) issued by the operator: readonly never logs in. (4) Approval of the live read-only run, and of a read-only figure-check session on `cip`. (5) Re-run `apps/api/tests/test_figure_check_db.py` on `cip_test` before the pass. (6) A checks file for the figures each route shows (run data, kept out of the repository if entity-specific). (7) Decide how readonly runs treat pages that read through POST endpoints (see PARTIAL-DEFERRED (a)): the guard aborts them, so those widgets render without data on the live run. |
+| **TRIGGER** | After Wave 1 is merged and deployed, before Wave 3 Phase B. |
+
+## BACKLOG-250 — Final wave (c): aged/slow stock duplication — confirm on live data
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18. Code fix on branch `feat/fwc-aged-stock-grouping-20261118`. |
+| **Source** | Final wave (c), `docs/CIP_ORCHESTRATOR_WAVES.md`: "Find and fix why the promotion planner duplicates aged/slow stock lines. Then show one line per product, with aged/slow reason badges and the sites folded underneath." |
+| **Causes found in code** | (1) The aged-stock list is one row per customer, product and site, so a product stocked at several stores showed once per store; nothing grouped it. (2) `stock_actions._blocks` and `_suggestion_rows` compared site labels as raw strings, while the read model compares them with `norm_label` (case and spacing folded). A store listed under the customer's sites and again under that customer's confirmed DC with a differently cased or spaced label, or a DC need block whose label matches a store that way, gave a second line for the same site. |
+| **Fixed** | Site keys use `norm_label`. The planner's Aged and slow stock panel shows one line per customer and product, with the summed stock, Slow/Unsold badges and a "Show N sites" fold listing each site with its own badges and actions. A single-site product keeps its actions on the line. When the list is capped (`truncated`, 200 site rows), the API stops inside the last customer's rows, so that customer's product lines are marked "at least" for sites and stock and the panel shows a warning (Codex review of PR #114, B1). |
+| **Not proven** | That these are the duplicates Warren saw. No read of live `cip` was made. Check the planner on the running app after deploy (Wave 2 harness route `/promotions`), and if a product still repeats within one site, capture the customer and product ids for a trace. |
+| **TRIGGER** | First run of the Wave 2 pass after this merges. |

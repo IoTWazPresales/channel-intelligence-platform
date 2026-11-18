@@ -4,6 +4,40 @@
 
 **PR #111 fix round 1 (branch `feat/d0141-starting-screen-20261118`):** the Codex review B1 fix scopes the dashboard list and its cache writes and invalidations by tenant and user, so a list retained from a previous sign-in cannot trigger starter creation. Vitest covers successive users on one QueryClient, tenant changes, delayed identity/list responses, creation/refetch and failed lists; `test_d0141_starting_screen_db.py` adds an owner-isolation test. Results: `cip_test` 95 passed, 1 skipped; web tsc 0, vitest dashboards 26 files / 194 tests passed. Browser check at 1280x800 and 390x844 is still to do on the running app. Rollout and the permission matrix stay PARTIAL-DEFERRED in BACKLOG-248.
 
+**2026-11-18 - Wave 2 verification harness (`feat/w2-verification-matrix-20261118`, PR #113, fix round 1 after the Codex review):** reusable tooling for the Wave 2 pass, built but not run against any app. View x viewport x state matrix (`apps/web/src/lib/verification/matrix.ts`): the 17 Wave 1 routes plus the views that mount only behind a query (`/promotions?plan=<id>`, `/listing-capture?tab=sites|links|coverage|proposals|intelligence`, `/admin/cst-steward?tab=stock-gap`). A Playwright spec/config (`apps/web/playwright.wave2.config.ts`) with a write guard in both modes and no webServer. **Readonly mode never signs in** (login writes a session row, so it is a blocked write): it needs an existing session (`CIP_VERIFY_STORAGE_STATE` or `CIP_VERIFY_SESSION_TOKEN`) and refuses to start without one. Empty/error/loading run in both modes by GET interception; each state case checks the interception fired, and the error state needs an error-specific indication (an informational alert no longer passes it). Read-only figure checker (`apps/api/scripts/verify/figure_check.py`); its database test `tests/test_figure_check_db.py` is reported passing on `cip_test` by the coordinator. How to run: `docs/audits/WAVE2_VERIFICATION_HARNESS.md`. Deploy, test instance, live read-only run, credentials and the live readonly session need authorization; POST-read widgets and interaction stay deferred: BACKLOG-249.
+
+**Final wave (c) aged/slow stock (branch `feat/fwc-aged-stock-grouping-20261118`, 2026-11-18):** the planner's aged-stock panel shows one line per customer and product with Slow/Unsold badges and the sites folded underneath; `stock_actions` now matches site labels with `norm_label`, so a store listed again under a confirmed DC with different case or spacing no longer gives a second line. Live confirmation: BACKLOG-250. No migration. Not merged.
+
+**Listing coverage defects (2026-11-18):** branch `fix/listing-coverage-226-20261118` off `feat/integrate-20261103` closes all eight BACKLOG-226 sub-items in `listing_capture/coverage.py`, `registry.extraction_unchanged`, `adapters/html_page.py` and `ListingCoverageLens.tsx`:
+
+- an HTTP error page with a price is a failing read;
+
+- a seller-only change stores a snapshot;
+
+- a seed resolved before its listing keeps its evidence;
+
+- the seller comes from the priced JSON-LD offer;
+
+- latest reads run in batches;
+
+- delisted counts as Not found;
+
+- the lens shows loading and error states instead of "No reported products yet.";
+
+- product-less hand/CSV listings are counted.
+
+Review points: BACKLOG-243. No migration, no deploy; tests on `cip_test` only.
+
+**Wave 3 B2 batch deploy script (2026-11-18):** branch `feat/b2-batch-deploy-script-20261118` adds `scripts/cip-deploy.ps1` (pure helpers in `scripts/cip-deploy-lib.ps1`, Pester 3 tests in `scripts/cip-deploy.Tests.ps1`). With no switch it only prints the plan. `-Execute` refuses a linked worktree, a dirty tracked tree or a detached HEAD. It then runs `git pull --ff-only`, runs `pnpm install --frozen-lockfile` only when `pnpm-lock.yaml` changed, builds web (BUILD_ID must change), and restarts api, worker and web one at a time through `cip-supervisor-stop.ps1`, waiting for each to be healthy with a fresh launch. It checks `/health/ready` and the Celery ping, then checks web 3000 twice, 60 s apart, with unchanged launch counts. It writes a JSON record and a CURRENT.md block to `%LOCALAPPDATA%\CIP\deploys\`. It has **not been run with -Execute**: a deploy needs authorization (BACKLOG-245).
+
+**BACKLOG-229 My accounts trend (2026-11-18):** branch `fix/my-accounts-trend-grain-20261118`. The My accounts starter trend is now "Sell-through units by month", so a book with weekly and monthly reporters no longer gets the `W-ONE-STORED-PERIOD` refusal. Only dashboards created from the starter after this change get it; existing saved dashboards keep their widgets. New cip_test execution test on a mixed book. No migration, no deploy.
+
+**Wave 3 B1 fast CI gate and lint (2026-11-18):** branch `feat/b1-fast-ci-gate-20261118`.
+- **New CI job `api-fast`:** runs the fixed subset in `apps/api/tests/fast_gate.txt` on an ephemeral Postgres 16, with a disposable `cip_test` migrated to head. The runner is `scripts/run-api-fast-gate.cjs` (`pnpm test:api:fast`). It runs database paths in one pytest process, then `tests/unit` in a second with `CIP_UNIT_TESTS_FORBID_DB=1`. It writes `.tmp/api-fast-summary.txt` (counts and sorted failing ids, no timings), the pytest log and junit files, all uploaded as an artifact.
+- **Measured on cip_test:** 188 + 44 passed, about 1.5 minutes.
+- **Web lint:** runs on an ESLint 9 flat config (BACKLOG-231). Baseline 0 errors, 49 warnings.
+- **Not done:** making `api-fast` a required check on `feat/integrate-*` or `main` is a GitHub admin setting (BACKLOG-246).
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
 **2026-11-18 - W1-A supplier selection (`fix/w1a-replenishment-semantics-20261118`, PR pending review):** lead-time samples are distinct deliveries, not shipment lines (five lines of one delivery no longer meet the five-delivery floor). Each confirmed-DC SKU names its supplier by that distributor's own SKU stock, then learned lead time to the DC, then deliveries to the DC; the need uses that supplier's lead time; the UI shows it. Delivery-identity question for Warren and remaining W1-A gaps: BACKLOG-241. Review fixes: DC supplier evidence is limited to the DC's own and linked accounts; sell rates are calendar-based for weekly/daily/monthly reports (last four calendar weeks, missing weeks not zero).

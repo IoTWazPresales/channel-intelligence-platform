@@ -476,6 +476,42 @@ async def test_weeks_of_cover_follows_the_sell_through_overview_rule():
 
 
 @pytest.mark.anyio
+async def test_my_accounts_starter_runs_on_a_mixed_weekly_and_monthly_book():
+    """BACKLOG-229: every My accounts starter widget runs when the book mixes weekly and monthly
+    reporters (tenant A: cA1 weekly, cA2 monthly). A weekly trend is refused on the same book."""
+    from app.services.dashboard_definitions import check_definition, request_from_definition
+    from app.services.dashboard_templates import TEMPLATE_BY_KEY
+
+    db = await _session_or_skip()
+    try:
+        await _seed(db)
+        t = TEMPLATE_BY_KEY["my_accounts"]
+        trend = [w for w in t.widgets if "period" in w.breakdowns]
+        assert trend and all(w.grain == "month" for w in trend)
+        for w in t.widgets:
+            c = check_definition(w.definition(), tenant_id=TA)
+            req = request_from_definition(
+                c.definition, period_from="2026-01-01", period_to="2026-12-31"
+            )
+            r = await run_v2(db, req, tenant_id=TA, skip_cache=True)
+            assert r["ok"], (w.title, r.get("refusals"))
+        monthly = await _v2(
+            db, ["cst_sellthrough.units"], ["period"], period_grain="month",
+            period_from="2026-01-01", period_to="2026-12-31",
+        )
+        assert monthly["totals"]["cst_sellthrough.units"] == 59.0
+        assert any(row["bucket_key"] == "2026-03" for row in monthly["rows"])
+        weekly = await _v2(
+            db, ["cst_sellthrough.units"], ["period"], period_grain="week",
+            period_from="2026-01-01", period_to="2026-12-31",
+        )
+        assert not weekly["ok"] and weekly["refusals"][0]["wall"] == "W-ONE-STORED-PERIOD"
+    finally:
+        await db.rollback()
+        await db.close()
+
+
+@pytest.mark.anyio
 async def test_weeks_of_cover_matches_overview_last_reported_day():
     """Parity with sell_through_overview: anchor is last_reported_day, capped by period.to.
 
