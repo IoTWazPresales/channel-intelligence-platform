@@ -3741,6 +3741,19 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ---
 
+## BACKLOG-247 — Wave 3 Phase C: install the nightly backup task and prove it
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18. PR #110 Round 1 is a proposed diff against the worktree, retaining the earlier unfinished fixes. Re-review and orchestrator validation are pending; the scheduler and secrets remain operator steps. |
+| **Source** | Waves doc Phase C: "backups (confirm nightly `cip` backups run per BACKUP_AND_DR.md, retention, a periodic restore test)". Alignment review Section D item 14. |
+| **What exists** | `nightly_backup_cip.ps1`, shared URL/retention/success helpers, task registration tooling, and `/admin/ops` service/backup/report cards. Runbook: `docs/BACKUP_AND_DR.md`. Unit and mocked-native regressions accompany the proposed review fixes; historical test counts do not certify this candidate. |
+| **Round 1 blocking items** | P1 target: strict URL grammar for source and target; no connection overrides or encoded database aliases; standalone helper protects `cip_test` and source and checks actual identities before wiping. P1 success: every native step must exit zero; nightly success also needs the complete marker; refusal writes failed restore status. P2 reports: due is pending, current due-week tracking is required per expected customer, and exact receipt age must be within 8 days and not future-dated. |
+| **Validation** | Round 2 (Codex r2 P2): the due/late/missing counts now count only customers with `reports_expected`, like the other report figures; cip_test 73 passed. Fix round 1: Pester nightly_backup_cip.Tests.ps1 37 passed and restore_cip_smoke.Tests.ps1 17 passed; cip_test 73 passed (ops logs/overview health/unit ops health and config tests); web tsc 0 and vitest administration 18 passed. No real backup, restore, scheduler registration or service restart was run. Still needed: database-backed endpoint and browser checks on the running app, and the operator steps in BACKLOG-247. |
+| **Needs (Warren)** | (1) Set the user environment variables `CIP_BACKUP_DATABASE_URL` and `CIP_RESTORE_SMOKE_URL`; the restore target must be a disposable database. (2) Run `install_backup_task.ps1 -Register`. (3) After the first night, check `last_backup.json` and `/admin/ops`, then force one restore with the task, or run it by hand once and confirm `last_restore.json` is `ok`. |
+| **Not covered** | No push alert (e-mail or chat) on a failed backup or a flapping service. The failure shows in `/admin/ops` and in the Task Scheduler result only. An alert channel would need a recipient decision. |
+| **TRIGGER** | Warren agrees to install the task. |
+
 ## BACKLOG-243 — Listing coverage: review points left after the BACKLOG-226 fixes
 
 | Field | Detail |
@@ -3837,4 +3850,3 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Fixed** | Site keys use `norm_label`. The planner's Aged and slow stock panel shows one line per customer and product, with the summed stock, Slow/Unsold badges and a "Show N sites" fold listing each site with its own badges and actions. A single-site product keeps its actions on the line. When the list is capped (`truncated`, 200 site rows), the API stops inside the last customer's rows, so that customer's product lines are marked "at least" for sites and stock and the panel shows a warning (Codex review of PR #114, B1). |
 | **Not proven** | That these are the duplicates Warren saw. No read of live `cip` was made. Check the planner on the running app after deploy (Wave 2 harness route `/promotions`), and if a product still repeats within one site, capture the customer and product ids for a trace. |
 | **TRIGGER** | First run of the Wave 2 pass after this merges. |
-
