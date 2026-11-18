@@ -1,5 +1,7 @@
 # CURRENT state
 
+**2026-11-18 - Final wave (b) part 2, plan lines and economics in the customer/period slice (`feat/fwb2-slice-economics-20261118`, stacked on #115, uncommitted, web only):** each line-up group has Open in workbench to `/commercial-planner?customer=&period=`. The workbench opens the plan whose date window covers the period (Warren's rule), shows only that customer's lines, the existing economics waterfall and slice totals (summed from the stored line results), a `Customer · period` chip, All customers and Back to line-up. No API change. Open, BACKLOG-251: server-side customer scope on `/plans/{id}/lines` and `/summary`, whole-plan Recalculate/Add actions, period label on the chip, and line-up approval roles (item 2, Warren's decision, unchanged).
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
 **2026-11-18 - Final wave (b) line-up customer/period views (`feat/fwb-lineup-group-approval-20261118`, PR pending review):** the Line-up cases page groups line-up rows by customer and period with Approve/Reject per group (`POST /lineup/items/group-approval`, same per-item approval and audit as the item PATCH, one transaction). Open slice filters the master line-up to `?customer=&period=` as a view (no copy); the master all-customer line-up opens as before. Open, BACKLOG-251: economics in the slice, and which roles may approve (decision). Tests on `cip_test` only.

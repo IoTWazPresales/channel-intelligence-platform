@@ -2,9 +2,15 @@
 
 import { Alert, Button, Stack, Typography } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 
 import { formatUnits, type LineupPlanRow } from '@/features/lineup/lineupTypes';
-import { groupLineupRows, type LineupGroup, type LineupSlice } from '@/features/lineup/lineupViews';
+import {
+  groupLineupRows,
+  workbenchSliceHref,
+  type LineupGroup,
+  type LineupSlice,
+} from '@/features/lineup/lineupViews';
 import { apiPost, safeDisplayError } from '@/lib/api';
 
 type Props = {
@@ -67,6 +73,15 @@ export function LineupGroupsPanel({ rows, slice, onOpen }: Props) {
               onClick={() => onOpen(g)}
             >
               {active ? 'Viewing' : 'Open'}
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              component={Link}
+              href={workbenchSliceHref({ customerId: g.customerId, periodStart: g.periodStart })}
+              data-testid={`lineup-group-workbench-${g.key}`}
+            >
+              Open in workbench
             </Button>
             <Button
               size="small"

@@ -5,6 +5,8 @@ import {
   lineupTaskSubtitle,
   parseExactLineupProductId,
   parseLineupApprovalFilter,
+  parseLineupSlice,
+  workbenchSliceHref,
 } from '@/features/lineup/lineupViews';
 
 describe('lineupViews', () => {
@@ -45,5 +47,12 @@ describe('lineupViews', () => {
     expect(filterLineupRowsByExactProductId(rows, 42).map((r) => r.id)).toEqual([1]);
     expect(filterLineupRowsByExactProductId(rows, 4).map((r) => r.id)).toEqual([3]);
     expect(filterLineupRowsByExactProductId(rows, 99)).toEqual([]);
+  });
+
+  it('builds the workbench link for a slice and it round-trips through the slice parser', () => {
+    const href = workbenchSliceHref({ customerId: 12, periodStart: '2026-04-01' });
+    expect(href).toBe('/commercial-planner?customer=12&period=2026-04-01');
+    const q = new URLSearchParams(href.split('?')[1]);
+    expect(parseLineupSlice(q.get('customer'), q.get('period'))).toEqual({ customerId: 12, periodStart: '2026-04-01' });
   });
 });

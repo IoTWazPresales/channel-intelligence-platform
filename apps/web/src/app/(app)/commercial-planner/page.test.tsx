@@ -182,10 +182,12 @@ const mockState = vi.hoisted(() => {
   };
 });
 
+const navState = vi.hoisted(() => ({ search: '' }));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => '/commercial-planner',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(navState.search),
 }));
 vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
@@ -2175,5 +2177,122 @@ describe('CurrentLineupSection — sync to plan', () => {
     await user.click(await screen.findByTestId('lineup-workbench-3'));
     expect(await screen.findByTestId('lineup-entity-resolution-open')).toBeInTheDocument();
     expect(await screen.findByTestId('lineup-workbench-counts')).toBeInTheDocument();
+  });
+});
+
+// ── Final wave (b): ?customer=&period= opens one customer's slice of the plan lines and economics ──
+describe('CommercialPlannerPage — customer/period slice', () => {
+  const PLANS = [
+    { id: 1, plan_name: 'Q3 Plan', status: 'draft', period_start: '2026-07-01', period_end: null, owner: 'planner', currency_code: 'USD', line_count: 1, notes: null },
+    { id: 2, plan_name: 'Q1 Plan', status: 'draft', period_start: '2026-01-01', period_end: '2026-03-31', owner: 'planner', currency_code: 'USD', line_count: 3, notes: null },
+  ];
+  const mkLine = (id: number, customerId: number, name: string, units: number, gp: number) => ({
+    id,
+    commercial_plan_id: 2,
+    customer_id: customerId,
+    distributor_id: 1,
+    product_id: id,
+    customer_code: `C${customerId}`,
+    customer_name: name,
+    distributor_code: 'D1',
+    distributor_name: 'Dist',
+    product_sku: `SKU-${id}`,
+    product_name: `Product ${id}`,
+    target_units: units,
+    target_srp_local: 100,
+    promo_srp_local: null,
+    promo_mix_pct: 0.5,
+    calc_oem_sell_in_amount: 40,
+    calc_distributor_net_amount: 36,
+    calc_campaign_support_reserve_amount: 2,
+    calc_non_campaign_reserve_amount: 3,
+    calc_internal_gp_amount: gp,
+    calc_flags: [],
+    calc_explanation: 'ok',
+    economics_calc_currency_code: 'USD',
+    economics_line_trust: 'ok',
+    economics_line_trust_reasons: [],
+    economics_field_provenance: {},
+  });
+  const PLAN2_LINES = [mkLine(21, 5, 'Customer A', 10, 100), mkLine(22, 6, 'Customer B', 20, 200), mkLine(23, 5, 'Customer A', 30, 300)];
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CommercialPlannerPage />
+      </QueryClientProvider>
+    );
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    mockState.apiGetMock.mockClear();
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (url === '/api/v1/commercial-planner/plans') return PLANS;
+      if (url === '/api/v1/commercial-planner/plans/2/lines') return PLAN2_LINES;
+      if (url === '/api/v1/commercial-planner/plans/2/summary') {
+        // Plan-wide totals (all customers). The slice must not show these.
+        return { line_count: 3, total_units: 999, total_internal_gp_amount: 9999, total_campaign_support_reserve_amount: 6, total_non_campaign_reserve_amount: 9, economics_calc_currency_code: 'USD', flags: [] };
+      }
+      return [];
+    });
+  });
+
+  afterEach(() => {
+    navState.search = '';
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
+  });
+
+  it('opens the plan whose date window covers the period and shows only that customer\'s lines', async () => {
+    navState.search = 'customer=5&period=2026-01-01';
+    renderPage();
+    expect(await screen.findByTestId('grid-row-21')).toBeInTheDocument();
+    expect(screen.getByTestId('grid-row-23')).toBeInTheDocument();
+    expect(screen.queryByTestId('grid-row-22')).not.toBeInTheDocument();
+    const calls = mockState.apiGetMock.mock.calls.map((c) => String(c[0]));
+    expect(calls).toContain('/api/v1/commercial-planner/plans/2/lines');
+    expect(calls).not.toContain('/api/v1/commercial-planner/plans/1/lines');
+  });
+
+  it('shows the Customer · period chip, the plan, and ways back', async () => {
+    navState.search = 'customer=5&period=2026-01-01';
+    renderPage();
+    const banner = await screen.findByTestId('planner-slice-banner');
+    await waitFor(() => expect(banner).toHaveTextContent('Customer A · 2026-01-01'));
+    expect(banner).toHaveTextContent('Q1 Plan');
+    expect(screen.getByTestId('planner-slice-clear')).toHaveAttribute('href', '/commercial-planner');
+    expect(screen.getByTestId('planner-slice-back-to-lineup')).toHaveAttribute(
+      'href',
+      '/lineup/cases?customer=5&period=2026-01-01'
+    );
+  });
+
+  it('totals the slice from its own lines, not the plan-wide summary', async () => {
+    navState.search = 'customer=5&period=2026-01-01';
+    renderPage();
+    const panel = await screen.findByTestId('plan-summary-panel');
+    await waitFor(() => expect(panel).toHaveTextContent(/Lines:\s*2/));
+    expect(panel).toHaveTextContent(/Units:\s*40/);
+    expect(panel).toHaveTextContent(/after reserves\):\s*400/);
+    expect(panel).not.toHaveTextContent('999');
+    expect(panel).not.toHaveTextContent('9999');
+  });
+
+  it('says so when no plan covers the period, and does not fall back to another plan\'s lines', async () => {
+    navState.search = 'customer=5&period=2025-01-01';
+    renderPage();
+    expect(await screen.findByTestId('planner-slice-no-plan')).toHaveTextContent('2025-01-01');
+    await waitFor(() => expect(mockState.apiGetMock).toHaveBeenCalledWith('/api/v1/commercial-planner/plans'));
+    const calls = mockState.apiGetMock.mock.calls.map((c) => String(c[0]));
+    expect(calls.some((u) => u.includes('/lines'))).toBe(false);
+  });
+
+  it('without slice params shows the whole plan and no slice banner', async () => {
+    navState.search = '';
+    mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
+    renderPage();
+    expect(await screen.findByTestId('grid-row-11')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-slice-banner')).not.toBeInTheDocument();
   });
 });
