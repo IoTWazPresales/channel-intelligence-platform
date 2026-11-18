@@ -1,0 +1,32 @@
+# Fast API gate (Wave 3 B1): a fixed subset of the API suite for every pull request.
+# One path per line, relative to apps/api; run in this order (scripts/run-api-fast-gate.cjs).
+# Paths under tests/unit run in a second pytest process with CIP_UNIT_TESTS_FORBID_DB=1 (no database).
+# They cannot share a process with tests/test_conftest_cip_guard.py: naming tests/unit on the command
+# line loads tests/unit/conftest.py as the initial `conftest` module, which that guard test imports.
+# Chosen for: database-identity and cip guards, tenant/RLS/role scope, auth, the query model,
+# dashboards, CPOR case API and scope, approvals, Celery never-live, Brief, My accounts, job column,
+# shipment single-write, worker liveness, calendar and volume series. Measured on cip_test
+# 2026-11-18: about 2 minutes. The full suite still runs in the main CI job.
+tests/test_conftest_cip_guard.py
+tests/test_cip_db_identity.py
+tests/test_config_alembic_sync_url.py
+tests/test_sync_url.py
+tests/test_tenant_scope.py
+tests/test_auth_password_roles.py
+tests/test_auth_login_throttle.py
+tests/test_cpor_rbac_r1_auth.py
+tests/test_budget_ledger_rls_db.py
+tests/test_query_model_db.py
+tests/test_dashboard_v2_definitions.py
+tests/test_cpor_cases_api.py
+tests/test_cpor_intelligence_scope.py
+tests/test_customer_approval_db.py
+tests/test_celery_never_live.py
+tests/test_brief_signals.py
+tests/test_my_accounts_filter.py
+tests/test_user_job_n0100b_db.py
+tests/test_shipment_evidence_single_write.py
+tests/test_worker_liveness.py
+tests/test_business_calendar.py
+tests/test_volume_series.py
+tests/unit
