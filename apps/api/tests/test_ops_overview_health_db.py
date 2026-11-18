@@ -96,8 +96,9 @@ async def test_overview_health_counts_only_the_callers_tenant(tmp_path, monkeypa
             db=db, user={"id": "1", "tenant_id": TA, "role": "admin"}, failed_limit=5
         )
         rep = out["health"]["reports"]
-        assert rep["late"] == 1 and rep["missing"] == 1 and rep["expected_customers"] == 1
-        assert rep["state"] == "missing"
+        # ca2 has reports_expected False: its retained missing slot does not count.
+        assert rep["late"] == 1 and rep["missing"] == 0 and rep["expected_customers"] == 1
+        assert rep["state"] == "late"
         assert rep["newest_received"] == received.isoformat()
         assert out["health"]["backups"]["backup"]["state"] == "ok"
         assert out["health"]["backups"]["restore"]["state"] == "unknown"

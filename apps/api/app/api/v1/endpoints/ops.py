@@ -104,7 +104,12 @@ async def ops_overview(
         await db.execute(
             select(CustomerCstReportSlot.status, func.count())
             .join(DimCustomer, DimCustomer.id == CustomerCstReportSlot.customer_id)
+            # Only customers whose reports are expected count, as for the other report figures:
+            # a disabled customer's retained slot must not keep the card late or missing
+            # (Codex review of PR #110, round 2).
+            .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
             .where(where_tenant(DimCustomer.tenant_id, user))
+            .where(CustomerReportConfig.reports_expected.is_(True))
             .where(CustomerCstReportSlot.status.in_(("due", "late", "missing")))
             .group_by(CustomerCstReportSlot.status)
         )
