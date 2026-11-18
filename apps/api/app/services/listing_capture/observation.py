@@ -39,6 +39,10 @@ SITE_PAUSE_MAX_HOURS = 24
 
 # Each poll run stops after this long (beat runs every 30 min on a single worker).
 POLL_RUN_TIME_LIMIT_SECONDS = 600.0
+# The currency the schema.org Offer price reader accepts (``parse_listing_price``). The
+# JSON-LD seller matcher uses it too, so a same-amount offer in another currency is not
+# mistaken for the priced offer (Codex review of PR #104, round 3 B3).
+PARSED_PRICE_CURRENCY = "ZAR"
 
 
 def compress_snapshot(raw: str | bytes) -> bytes:
@@ -102,13 +106,13 @@ def parse_snapshot_text(
     # JSON-LD / embedded schema.org Offer price (common on product pages).
     # Prefer currency-tagged Offer blocks; ignore tiny noise values (< 50).
     offer_m = re.search(
-        r'"priceCurrency"\s*:\s*"ZAR"\s*,\s*"price"\s*:\s*(\d+(?:\.\d+)?)',
+        r'"priceCurrency"\s*:\s*"' + PARSED_PRICE_CURRENCY + r'"\s*,\s*"price"\s*:\s*(\d+(?:\.\d+)?)',
         text,
         flags=re.IGNORECASE,
     )
     if not offer_m:
         offer_m = re.search(
-            r'"price"\s*:\s*(\d+(?:\.\d+)?)\s*,\s*"priceCurrency"\s*:\s*"ZAR"',
+            r'"price"\s*:\s*(\d+(?:\.\d+)?)\s*,\s*"priceCurrency"\s*:\s*"' + PARSED_PRICE_CURRENCY + r'"',
             text,
             flags=re.IGNORECASE,
         )

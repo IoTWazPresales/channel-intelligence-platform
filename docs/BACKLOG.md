@@ -3529,7 +3529,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #88 merged at `000e1e1d`. One fix lane, not several. |
+| **Status / parked** | **Parked** — 2026-11-12. Accepted by Warren as non-blocking when #88 merged at `000e1e1d`. One fix lane, not several. **2026-11-18:** all eight sub-items fixed on `fix/listing-coverage-226-20261118`, as follows. (1) The latest read uses `http_status` and the `fetch_failed` snapshot marker. (2) `extraction_unchanged` compares the named buy-box seller and the offer count. (3) A confirmed seed resolved before its listing keeps that listing's evidence. (4) The seller is read from the parsed JSON-LD offer at the parsed price, with the old regex only as fallback. (5) Latest reads run in batches of 5,000 ids. (6) A delisted listing counts as Not found unless another listing is watched. (7) The lens shows loading and error states. (8) Hand/CSV listings with no product are their own row. Codex round 3 (B3): the JSON-LD seller matcher now needs the priced offer's currency to match the reader's price currency (`PARSED_PRICE_CURRENCY`), so an equal amount in another currency no longer makes the seller unknown. Not changed: embedded JSON that is not JSON-LD still uses the first `"seller"` key; inferred identities keep `first_party_seller`. |
 | **Source** | Codex reviews of PR #88 at `9ba66022` and `000e1e1d`, and the lane A reports (2026-11-11/12). Line numbers are at `000e1e1d`. |
 | **Idea** | Make the Market Coverage counts and the Own/Competition label hold in the edge cases below. |
 | **Why it matters** | Coverage counts and Own/Competition labels are what account managers will read. Each item gives a wrong count or label in a narrow case. |
@@ -3740,6 +3740,17 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **TRIGGER** | Before the next Astra builder lane, or before any builder is given database or push work. |
 
 ---
+
+## BACKLOG-243 — Listing coverage: review points left after the BACKLOG-226 fixes
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18 on `fix/listing-coverage-226-20261118`. Nothing here blocks the fix; each is a check for review or a later lane. |
+| **(a) Delisted = Not found** | A `delisted` listing now counts the product as Not found (the module's "not on the site" bucket), unless another listing of it is watched or failing. If account managers need delisted shown apart from never-found, that is a new bucket and a UI change. |
+| **(b) Embedded seller outside JSON-LD** | Pages that name the seller only in non-JSON-LD embedded JSON still use the first `"seller"` key in the page. (A page whose JSON-LD offers name sellers but none at the read price names no seller; it does not fall back to that key. Double-check fix, 2026-11-18.) A per-site reader profile would fix that; it depends on BACKLOG-239 (reader profiles need a migration). |
+| **Review fixes 2026-11-18 (Codex round 1)** | (B1) When a page's JSON-LD offers name sellers but none can be tied to the price, the buy-box seller is unknown: the reader marks the offer `seller_unknown`, the writer no longer fills in the site's own seller for it, discovery does the same, and an unknown seller after a stored seller counts as a change. Before, two outside sellers at one price read as Own. (B2) A steward's `delisted` status is checked before that listing's own read history, so a listing that failed a read and was then delisted counts as Not found instead of staying Failing (delisted listings are not polled again). (Round 2) An unknown buy-box seller's ownership is stored as unknown (None) on the offer and the observation, so the label is neither Own nor Competition. |
+| **(c) Older observations** | Observations written before this change with a non-200 status now read as failing. No data is rewritten. The count of listings that move from Watched to Failing on `cip` was not measured in this lane. |
+| **TRIGGER** | Before listing coverage goes to account managers. |
 
 ## BACKLOG-245 — Wave 3 B2: first authorized run of the batch deploy script
 
