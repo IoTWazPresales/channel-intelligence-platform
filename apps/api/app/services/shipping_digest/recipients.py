@@ -1,18 +1,17 @@
-"""Default seed addresses for an empty shipping-mailer recipient table."""
+"""Seed addresses for an empty shipping-mailer recipient table.
+
+There is no built-in address list: a tenant's first recipients come from
+``CIP_SHIPPING_MAILER_RECIPIENTS`` (comma-separated) or are added in the UI.
+"""
 
 from __future__ import annotations
 
-DEFAULT_SHIPPING_MAILER_RECIPIENTS: tuple[str, ...] = (
-    "Leigh_Sharpe@asus.com",
-    "Wayne_Holt@asus.com",
-    "Kyle_Chung@asus.com",
-    "Theshan_Naidoo@asus.com",
-    "Warren_Eliason@asus.com",
-)
+# Empty on purpose: recipients are tenant data (env seed or the admin UI), never code.
+DEFAULT_SHIPPING_MAILER_RECIPIENTS: tuple[str, ...] = ()
 
 
 def intended_mailer_recipients() -> tuple[str, ...]:
-    """Seed source (env or the five). Live send list is ``resolve_shipping_recipients``."""
+    """Seed source (env, else none). Live send list is ``resolve_shipping_recipients``."""
     from app.services.shipping_digest.config import mailer_recipients
 
     return mailer_recipients()

@@ -1,7 +1,7 @@
 """Configurable archive layout for bulk lineup backfill (Spec C Step C).
 
 Tenant-specific roots, folder segment conventions, and BU vocabulary are **config inputs** —
-not hardcoded in detection logic. Default factory targets the ACZA Consumer archive.
+not hardcoded in detection logic. The archive root is always supplied by the caller.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Any, Iterator
 
 _YEAR_RE = re.compile(r"^20\d{2}$")
 _QUARTER_RE = re.compile(r"^Q[1-4]$", re.IGNORECASE)
-_SHORT_QUARTER_RE = re.compile(r"^26Q[1-4]$", re.IGNORECASE)
+_SHORT_QUARTER_RE = re.compile(r"^\d{2}Q[1-4]$", re.IGNORECASE)
 _LINEUP_GLOB = ("*.xlsx", "*.xls", "*.xlsm")
 
 
@@ -20,7 +20,7 @@ _LINEUP_GLOB = ("*.xlsx", "*.xls", "*.xlsm")
 class FolderConventionConfig:
     """Path segment roles relative to ``archive_root`` (outermost first).
 
-    Example ACZA tree: ``{BU}/{year}/{quarter}/file.xlsx``.
+    Example tree: ``{BU}/{year}/{quarter}/file.xlsx``.
     Irregular paths (``PF/Q2/file``, ``NV/2026/file``) are classified heuristically
     per segment — not every role is present on every file.
     """
@@ -60,20 +60,15 @@ class BackfillArchiveConfig:
         }
 
 
-def default_acza_consumer_config(
-    archive_root: Path | str | None = None,
+def archive_config_for_root(
+    archive_root: Path | str,
     *,
     extra_file_paths: list[Path | str] | None = None,
 ) -> BackfillArchiveConfig:
-    """Factory for the local ASUS Consumer Product Lineup tree."""
-    root = Path(
-        archive_root
-        or Path.home()
-        / "OneDrive - ASUS"
-        / "ACZA Consumer - Sales"
-        / "Consumer PM Team"
-        / "Product Lineup"
-    )
+    """Config for one lineup archive root. The root is tenant data and must be given."""
+    if archive_root is None or not str(archive_root).strip():
+        raise ValueError("archive_root is required (no default archive location)")
+    root = Path(archive_root)
     extras = [Path(p) for p in (extra_file_paths or [])]
     return BackfillArchiveConfig(
         archive_roots=[root],
