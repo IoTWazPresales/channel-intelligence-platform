@@ -112,3 +112,52 @@ async def test_overview_health_counts_only_the_callers_tenant(tmp_path, monkeypa
     finally:
         await db.rollback()
         await db.close()
+
+
+@pytest.mark.anyio
+async def test_overview_reports_pending_and_untracked_are_not_ok(tmp_path, monkeypatch):
+    """Review fix P2: a due slot reads pending and an expected customer with no recent slot reads
+    untracked; neither is 'ok' without receipt evidence."""
+    monkeypatch.setattr(
+        ops_endpoint, "get_settings", lambda: SimpleNamespace(cip_ops_state_dir=str(tmp_path))
+    )
+    tc, td = f"opsh-c-{TAG}", f"opsh-d-{TAG}"
+    today = datetime.now(UTC).astimezone().date()
+    last_week = today - timedelta(days=today.weekday() + 7)
+    db = await _session_or_skip()
+    try:
+        c1 = DimCustomer(code=f"opsh-{TAG}-c1", name=f"Ops C1 {TAG}", tenant_id=tc)
+        c2 = DimCustomer(code=f"opsh-{TAG}-c2", name=f"Ops C2 {TAG}", tenant_id=tc)
+        d1 = DimCustomer(code=f"opsh-{TAG}-d1", name=f"Ops D1 {TAG}", tenant_id=td)
+        db.add_all([c1, c2, d1])
+        await db.flush()
+        db.add_all(
+            [
+                CustomerReportConfig(customer_id=c1.id, reports_expected=True),
+                CustomerReportConfig(customer_id=c2.id, reports_expected=True),
+                CustomerReportConfig(customer_id=d1.id, reports_expected=True),
+                CustomerCstReportSlot(customer_id=c1.id, week_start_date=last_week, status="due"),
+                # A fresh upload for an older period must not hide this week's missing tracker.
+                CustomerCstReportSlot(
+                    customer_id=c2.id, week_start_date=last_week - timedelta(days=7),
+                    status="received", received_at=datetime.now(UTC) - timedelta(days=1),
+                ),
+                CustomerCstReportSlot(customer_id=d1.id, week_start_date=last_week, status="due"),
+            ]
+        )
+        await db.flush()
+        mixed = await ops_endpoint.ops_overview(
+            db=db, user={"id": "1", "tenant_id": tc, "role": "admin"}, failed_limit=5
+        )
+        rep = mixed["health"]["reports"]
+        assert rep["due"] == 1 and rep["untracked_customers"] == 1 and rep["expected_customers"] == 2
+        assert rep["state"] == "untracked" and rep["newest_received"] is not None
+
+        pending = await ops_endpoint.ops_overview(
+            db=db, user={"id": "1", "tenant_id": td, "role": "admin"}, failed_limit=5
+        )
+        rep = pending["health"]["reports"]
+        assert rep["due"] == 1 and rep["untracked_customers"] == 0 and rep["state"] == "pending"
+    finally:
+        await db.rollback()
+        await db.close()

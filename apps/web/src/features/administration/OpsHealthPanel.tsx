@@ -31,6 +31,10 @@ export type OpsHealth = {
     detail: string;
     late: number;
     missing: number;
+    /** Slots due and not yet received (pending, not a problem yet). */
+    due?: number;
+    /** Expected customers with no recent tracker slot (receipt cannot be confirmed). */
+    untracked_customers?: number;
     expected_customers: number;
     newest_received: string | null;
     days_since_newest: number | null;
@@ -42,7 +46,7 @@ type ChipColor = 'success' | 'warning' | 'error' | 'default';
 export function healthColor(state: string | null | undefined): ChipColor {
   if (state === 'ok' || state === 'healthy') return 'success';
   if (state === 'failed' || state === 'flapping' || state === 'missing') return 'error';
-  if (state === 'stale' || state === 'degraded' || state === 'late') return 'warning';
+  if (state === 'stale' || state === 'degraded' || state === 'late' || state === 'untracked') return 'warning';
   return 'default';
 }
 
@@ -94,6 +98,8 @@ export function OpsHealthPanel({ health }: { health: OpsHealth | null | undefine
         <Typography variant="body2">{reports.detail}</Typography>
         <Typography variant="caption" display="block">
           Customers expected to report: {reports.expected_customers}
+          {reports.due ? ` · ${reports.due} due` : ''}
+          {reports.untracked_customers ? ` · ${reports.untracked_customers} untracked` : ''}
           {reports.days_since_newest != null ? ` · newest report ${reports.days_since_newest} days ago` : ''}
         </Typography>
       </Paper>

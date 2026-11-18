@@ -1,8 +1,11 @@
 # CURRENT state
 
 **Wave 3 Phase C ops health and backups (2026-11-18):** branch `feat/ops-backup-schedule-20261118`.
-- **Health:** `GET /admin/ops/overview` adds `health` (`app/services/ops_health.py`): services from the supervisor `status.json` (flapping, stale heartbeat, degraded), backups and restore tests from the nightly status files, and expected weekly reports for the caller's tenant (late and missing against the Monday-due rule, plus the newest report). `/admin/ops` shows the three cards.
+- **Health (PR #110 Round 1 candidate):** `GET /admin/ops/overview` reads due/late/missing and requires each expected customer's current Monday-due period to be tracked. Due reads pending; absent tracking/receipt evidence reads untracked. "Every expected report has arrived" needs receipt evidence in the exact preceding 8 days, never future-dated. Supervisor and backup cards remain in place.
 - **Scripts:** `scripts/ops/nightly_backup_cip.ps1` (verify, retention 14 daily + 8 weekly, a disposable restore every 7 days, status JSON) and `scripts/ops/install_backup_task.ps1`, which only prints unless `-Register` is given.
+- **P1 restore guard:** source and target use the same restricted URL grammar (only sslmode/connect_timeout/application_name query keys); encoded database paths and connection overrides fail closed. The standalone helper requires SourceUrl, protects cip_test/source, and verifies both actual database identities before wiping.
+- **P1 restore success:** all native steps must exit zero; nightly also requires the target's complete success marker. A refused restore writes failed status. Pester adds mocked identity/native-failure regressions.
+- **Validation:** seven report-health cases passed against the in-memory candidate; repository files remain untouched. No DB connected, backup/restore run, service restarted, commit or push. API venv/dependencies are absent; PowerShell parser checks were blocked by Constrained Language mode, so Pester and endpoint suites are unverified. Next: orchestrator applies the diff, runs pure tests and cip_test/browser gates, re-reviews, and adds the CONTEXT changelog (outside this fix's allowed file set).
 - **Not done (operator):** registering the task, setting `CIP_BACKUP_DATABASE_URL` and `CIP_RESTORE_SMOKE_URL`, and the first real nightly and restore run (BACKLOG-247).
 
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).

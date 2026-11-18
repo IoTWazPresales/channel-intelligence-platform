@@ -48,6 +48,32 @@ describe('OpsHealthPanel', () => {
     expect(screen.getByText(/Customers expected to report: 4 · newest report 2 days ago/)).toBeInTheDocument();
   });
 
+  it('shows pending (due) and untracked report states without calling them ok', () => {
+    render(
+      <ThemeProvider theme={theme}>
+        <OpsHealthPanel
+          health={{
+            ...health,
+            reports: {
+              ...health.reports,
+              state: 'untracked',
+              detail: '1 customers expected to report have no tracking slot for the recent weeks.',
+              late: 0,
+              due: 2,
+              untracked_customers: 1,
+              newest_received: null,
+              days_since_newest: null,
+            },
+          }}
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('ops-health-reports-state')).toHaveTextContent('untracked');
+    expect(screen.getByText(/Customers expected to report: 4 · 2 due · 1 untracked/)).toBeInTheDocument();
+    expect(healthColor('untracked')).toBe('warning');
+    expect(healthColor('pending')).toBe('default');
+  });
+
   it('says so when the API does not report health', () => {
     render(
       <ThemeProvider theme={theme}>

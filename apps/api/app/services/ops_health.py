@@ -11,8 +11,9 @@ Three parts, each with an explicit state, so a missing source reads as "unknown"
   A backup older than ``BACKUP_MAX_AGE_HOURS`` or a restore test older than ``RESTORE_MAX_AGE_DAYS``
   is stale; a recorded failure is failed.
 - reports: expected customer sell-through reports against the Monday-due rule (the
-  ``customer_cst_report_slot`` tracker: late from Tuesday, then missing), plus the newest received
-  report, for the caller's tenant.
+  ``customer_cst_report_slot`` tracker: due Monday, late from Tuesday, then missing), plus the newest
+  received report, for the caller's tenant. ``ok`` needs receipt evidence; ``pending`` (due) and
+  ``untracked`` (no slot / no recent receipt) are reported separately.
 
 The pure functions take parsed JSON and ``now`` so they are tested without files or a database.
 """
@@ -21,7 +22,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ FLAP_LIMIT = 5
 HEARTBEAT_STALE_SECONDS = 180
 BACKUP_MAX_AGE_HOURS = 26
 RESTORE_MAX_AGE_DAYS = 8
+REPORT_RECEIPT_WINDOW_DAYS = 8  # weekly cadence plus the Tuesday-late grace
 SUPERVISED = ("api", "worker", "web", "redis", "tunnel", "wsl")
 
 
@@ -169,28 +171,62 @@ def reports_health(
     newest_received: datetime | None,
     expected_customers: int,
     now: datetime,
+    due: int = 0,
+    untracked_customers: int = 0,
 ) -> dict[str, Any]:
-    """Monday-due rule: a slot turns late on Tuesday and missing after that (imports/cst_d1.py)."""
-    days = (
-        None
-        if newest_received is None
-        else round((now - newest_received).total_seconds() / 86400, 1)
-    )
+    """Monday-due rule: a slot is due on Monday, late on Tuesday and missing after that
+    (imports/cst_d1.py).
+
+    "ok" is only said with receipt evidence: a received report inside ``REPORT_RECEIPT_WINDOW_DAYS``
+    and nothing outstanding. Absence of late/missing slots is not evidence, because the tracker may
+    not have created or advanced any slot (``untracked``) and a ``due`` slot is simply still pending.
+    Order, worst first: missing, late, untracked, pending, ok.
+    """
+    received = newest_received
+    if received is not None and received.tzinfo is None:
+        received = received.replace(tzinfo=UTC)
+    age = None if received is None else now - received
+    days = None if age is None else round(age.total_seconds() / 86400, 1)
+    # Classify using the exact interval, never the rounded display age. Future receipts are not proof.
+    has_evidence = age is not None and timedelta(0) <= age <= timedelta(days=REPORT_RECEIPT_WINDOW_DAYS)
+    late, missing, due = int(late), int(missing), int(due)
+    untracked_customers = int(untracked_customers)
     if expected_customers == 0:
         state, detail = "unknown", "No customer is set to send weekly reports."
     elif missing:
         state, detail = "missing", f"{late} late and {missing} missing expected reports."
     elif late:
         state, detail = "late", f"{late} expected reports are late."
+    elif untracked_customers:
+        state, detail = (
+            "untracked",
+            f"{untracked_customers} customers expected to report have no tracking slot "
+            "with valid receipt evidence or a pending status for the current due week, "
+            "so their reports cannot be confirmed.",
+        )
+    elif due:
+        state, detail = "pending", f"{due} expected reports are due and have not arrived yet."
+    elif not has_evidence:
+        state = "untracked"
+        detail = (
+            "No report receipt has been recorded."
+            if received is None
+            else "The newest receipt is dated in the future and cannot confirm arrival."
+            if age < timedelta(0)
+            else f"The newest report arrived {days} days ago, outside the "
+            f"{REPORT_RECEIPT_WINDOW_DAYS} day window, and no slot is outstanding."
+        )
     else:
         state, detail = "ok", "Every expected report has arrived."
     return {
         "state": state,
         "detail": detail,
-        "late": int(late),
-        "missing": int(missing),
+        "due": due,
+        "late": late,
+        "missing": missing,
+        "untracked_customers": untracked_customers,
         "expected_customers": int(expected_customers),
-        "newest_received": None if newest_received is None else newest_received.isoformat(),
+        "newest_received": None if received is None else received.isoformat(),
         "days_since_newest": days,
     }
 

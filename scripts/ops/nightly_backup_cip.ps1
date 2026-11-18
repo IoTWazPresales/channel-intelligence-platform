@@ -4,7 +4,8 @@
 #
 # The database URL is read from an environment variable (default CIP_BACKUP_DATABASE_URL), so no
 # password is written into the scheduled task. The restore target, also from an environment variable
-# (default CIP_RESTORE_SMOKE_URL), must be a disposable database; restore_cip_smoke.ps1 refuses cip.
+# (default CIP_RESTORE_SMOKE_URL), must use a plain URL naming a disposable database.
+# restore_cip_smoke.ps1 independently protects cip, cip_test, the source and actual server identities.
 #
 #   .\scripts\ops\nightly_backup_cip.ps1                       # backup, verify, prune, restore if due
 #   .\scripts\ops\nightly_backup_cip.ps1 -NoRestore            # never restore on this run
@@ -103,21 +104,32 @@ if ($record.result -eq 'ok' -and -not $NoRestore) {
     $target = [Environment]::GetEnvironmentVariable($RestoreTargetUrlEnv)
     if ([string]::IsNullOrWhiteSpace($target)) {
         $record.restore = "not configured ($RestoreTargetUrlEnv unset)"
-    } elseif (-not (Test-DisposableRestoreTarget $target $url)) {
-        # Review fix: never let the schedule wipe a real database (cip_test, the source, ...).
-        $record.restore = "refused: $RestoreTargetUrlEnv must name a disposable database (name containing restore, smoke, scratch or disposable; not cip, cip_test, postgres or the backed-up database)"
+    } elseif ($refusal = (Get-RestoreTargetRefusal -TargetUrl $target -SourceUrl $url)) {
+        # Review fix: never let the schedule wipe a real database (cip_test, the source, a URL whose
+        # query string overrides the database, ...). The reason never contains the URL (password).
+        $record.restore = "refused: $RestoreTargetUrlEnv is not a safe disposable restore target. $refusal"
         $exitCode = 1
-        Write-Log "RESTORE REFUSED: target database '$(Get-DatabaseName $target)' is not a disposable name"
+        Write-Log "RESTORE REFUSED: $refusal"
+        # Surface the refusal on the health card too; do not leave an older successful restore green.
+        Write-Json $restoreStatus ([ordered]@{
+            result = 'failed'; started = (Get-Date).ToString('s'); finished = (Get-Date).ToString('s')
+            dump = $record.path; detail = $record.restore
+        })
     } elseif (-not (Test-RestoreDue $last (Get-Date) $RestoreEveryDays)) {
         $record.restore = 'not due'
     } else {
         $r = [ordered]@{ result = 'failed'; started = (Get-Date).ToString('s'); finished = $null; dump = $record.path; detail = $null }
         try {
             Write-Log 'disposable restore start'
-            $rout = & (Join-Path $PSScriptRoot 'restore_cip_smoke.ps1') -DumpPath $record.path -TargetUrl $target -PgBin $PgBin 6>&1 | Out-String
-            $ok = ($rout -split "`r?`n" | Where-Object { $_ -match '^RESTORE_SMOKE_OK ' } | Select-Object -Last 1)
-            if (-not $ok) { throw 'restore_cip_smoke.ps1 did not print RESTORE_SMOKE_OK' }
-            $r.detail = $ok.Trim(); $r.result = 'ok'
+            # Review fix: good only with exit code 0 AND the marker for the expected database. The helper
+            # ends with an explicit exit 0 on success and throws on any failed native step, so a missing
+            # or non-zero code means the restore did not complete.
+            $global:LASTEXITCODE = $null
+            $rout = & (Join-Path $PSScriptRoot 'restore_cip_smoke.ps1') -DumpPath $record.path -TargetUrl $target -SourceUrl $url -PgBin $PgBin 6>&1 | Out-String
+            $smokeExit = $LASTEXITCODE
+            $ok = Test-RestoreSmokeResult -ExitCode $smokeExit -Output $rout -ExpectedDatabase (Get-EffectiveDatabaseName $target)
+            if (-not $ok) { throw "restore_cip_smoke.ps1 did not succeed (exit code '$smokeExit'; RESTORE_SMOKE_OK for the target database was not printed)" }
+            $r.detail = $ok; $r.result = 'ok'
             Write-Log "restore ok: $($r.detail)"
         } catch {
             $r.detail = "$_"; $exitCode = 1
