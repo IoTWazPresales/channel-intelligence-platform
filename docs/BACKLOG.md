@@ -3468,6 +3468,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **TRIGGER** | Next competition / market-listings unit, or Warren asks to wire suggested matches / price import. |
 
 ---
+
 ## BACKLOG-222 — Brief Attention signal `promo_not_activated`
 
 | Field | Detail |
@@ -3738,10 +3739,18 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Probe: Codex network sandbox on Windows (2026-11-16)** | Reported by the CIP coordinator's probe: a Codex run with `sandbox_workspace_write.network_access=false` still reached the network on Windows. `git ls-remote origin` succeeded, and Postgres on `127.0.0.1:5432` accepted a TCP connection. So option (3) does not stop a push or a database connection on this PC. `~/.codex/config.toml` sets only `windows.sandbox = "unelevated"` (last changed 2026-11-12) and no `sandbox_workspace_write` table, so the probe set the option for its own run. What remains: (1) the GitHub ruleset is the only server-side control for `main`; (2) the database default, a read-only builder role and a `127.0.0.1` bind are the controls for `cip`. A TCP connection being accepted is not proof that a login or write would succeed; the `cip` password in `.env.example` means it would. |
 | **TRIGGER** | Before the next Astra builder lane, or before any builder is given database or push work. |
 
-## BACKLOG-240 — Remaining tenant-specific defaults in application code
+## BACKLOG-239 — Structured (REST) listing reader is retailer-shaped
 
 | Field | Detail |
 |-------|--------|
+| **Status** | **Open**, recorded 2026-11-18 from the requirements alignment review (Section C, Section D item 5). Not built: needs a schema change. |
+| **Source** | `apps/api/app/services/listing_capture/adapters/rest_buybox.py` reads fixed response fields (`buybox.items`, `plid`, `tsin`, `desktop_href`, a fixed seller/other-offer layout and a fixed saving-badge shape). URLs are configurable; the response interpretation is not. |
+| **What the work is** | Move the response-field mapping into per-site reader-profile data and prove a second, structurally different JSON response through the same mechanism. `listing_site` has no JSON column for a reader profile, so this needs a migration (new column or table) applied on `cip` with Warren's approval, plus a profile for each existing site written by a reviewed restore step. |
+| **Done in the meantime** | 2026-11-18 (`fix/w1b-discovery-pacing-20261118`): discovery now sends every request through the shared per-site fetch policy (`site_fetch.py`): site spacing, 403/429 pause, time budget. The autoconfigure reader probe uses the same policy, spacing is per site across customers, and the steward POST has a 45 s budget per phase. Codex review fixes: the shared budget rotates round one fixed cycle of (customer, site) pairs per tenant (`discovery:<tenant>:rotation`): when the budget cuts a pair short, the next run starts at that pair and carries on round the cycle, so neither an earlier customer nor a customer with several sites can starve the pairs after it. A scheduled run over every tenant rotates tenants (`discovery:tenant-rotation`): the next run starts at the first tenant after this run's starting tenant that the budget cut short, and if only the starting tenant was cut short it still moves on one tenant, so a tenant interrupted on every run cannot keep the first place (third review round, approved by Warren 15:03). A single-tenant (steward) run leaves the tenant rotation alone. |
+| **TRIGGER** | Warren approves the reader-profile migration, or a second structured-API site is onboarded. |
+
+## BACKLOG-240 — Remaining tenant-specific defaults in application code
+
 | **Status** | **Open**, recorded 2026-11-18 (alignment review Section C / Section D item 9). Partly done on `fix/entity-specific-removal-20261118`. |
 | **Done** | Shipping-digest recipients: no built-in address list (seed only from `CIP_SHIPPING_MAILER_RECIPIENTS`; live `cip` already has 4 stored recipients for tenant `default`, checked read-only 2026-11-18, so nothing changes there). IMAP intake: no named sender; every allowlisted sender's message without a spreadsheet is flagged (same as the Graph path). Steward "derive eras from shipping": workbook path from `CIP_SCM_ARTICLES_WORKBOOK_PATH`, no workstation default. Payment-evidence overlay: fixed amount narrative replaced with generic wording. Lineup archive config: no workstation default root (`archive_config_for_root`), short-quarter folders not tied to one year. Guard test `tests/test_no_tenant_contact_literals.py` (no person email literals or workstation paths in `app/`). |
 | **Operator step after merge** | Set `CIP_SCM_ARTICLES_WORKBOOK_PATH` in the live API environment to the SCM `Articles.xlsx` location before using "derive eras from shipping"; until then the action answers HTTP 400 and writes nothing. |
