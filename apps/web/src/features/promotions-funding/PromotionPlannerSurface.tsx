@@ -51,12 +51,25 @@ import {
   type PlanStage,
 } from '@/features/promotions-funding/lifecycle';
 import { PlanWorkspace } from '@/features/promotions-funding/PlanWorkspace';
-import type { CporCaseListRow, CporCasesPage, SupportBiasRead } from '@/features/promotions-funding/types';
+import {
+  awaitingApproval,
+  startingNext4Weeks,
+  todayIso,
+  unplannedAgedStockValue,
+  addDaysIso,
+  STARTING_WINDOW_DAYS,
+  type AgedStockResponseLike,
+} from '@/features/promotions-funding/plannerCards';
+import { ActionQueuePanel } from '@/features/promotions-funding/plannerLayout/ActionQueuePanel';
+import { buildActionQueue } from '@/features/promotions-funding/plannerLayout/actionQueue';
+import { CaseSidePanel } from '@/features/promotions-funding/plannerLayout/CaseSidePanel';
+import { PlannerTimeline } from '@/features/promotions-funding/plannerLayout/PlannerTimeline';
+import type { CporCaseListRow, CporCasesPage } from '@/features/promotions-funding/types';
 import { apiGet, apiPost } from '@/lib/api';
 import { CapabilityLedger } from '@/features/workbench-ui/CapabilityLedger';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { LifecycleRail } from '@/features/workbench-ui/LifecycleRail';
-import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
+import { Panel } from '@/features/workbench-ui/Panel';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
@@ -128,7 +141,6 @@ function PlannerList({
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'), { noSsr: true });
-  const router = useRouter();
   const qc = useQueryClient();
   const [proposeOpen, setProposeOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -155,7 +167,7 @@ function PlannerList({
   const { data: proposedPage } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'proposed'],
     queryFn: ({ signal }) =>
-      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=20&status=proposed', { signal }),
+      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&status=proposed', { signal }),
   });
 
   const { data: endedPage } = useQuery({
@@ -164,22 +176,58 @@ function PlannerList({
       apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&status=ended', { signal }),
   });
 
-  const { data: bias } = useQuery({
-    queryKey: ['cpor', 'support-bias', 'planner'],
-    queryFn: ({ signal }) => apiGet<SupportBiasRead>('/api/v1/cpor/intelligence/support-bias', { signal }),
+  // Campaigns starting in the next 4 weeks: the existing case list filtered by the existing window_from / window_to
+  // (both filter on window_start), independent of the stage chips so the card does not move with them.
+  const today = useMemo(() => todayIso(), []);
+  const startingTo = addDaysIso(today, STARTING_WINDOW_DAYS);
+  const { data: startingPage } = useQuery({
+    queryKey: ['cpor', 'cases', 'planner', 'starting', today],
+    queryFn: ({ signal }) =>
+      apiGet<CporCasesPage>(
+        `/api/v1/cpor/cases?page=1&page_size=500&window_from=${today}&window_to=${startingTo}`,
+        { signal },
+      ),
   });
+
+  // Same query key and URL as AgedStockPanel, so the card and the panel share one request.
+  const aged = useQuery({
+    queryKey: ['cpor', 'aged-stock'],
+    queryFn: ({ signal }) =>
+      apiGet<AgedStockResponseLike>('/api/v1/cpor/intelligence/promo-plan-draft/aged-stock', { signal }),
+  });
+
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const counts = data?.status_counts ?? {};
   const rowsAll = data?.items ?? [];
   const rows = rowsAll;
   const draftsN = counts.draft ?? 0;
   const endedN = counts.ended ?? 0;
-  const settledN = counts.settled ?? 0;
   const proposedN = counts.proposed ?? 0;
   const planningN = countPlanning(counts);
   const bookN = Object.values(counts).reduce((n, v) => n + (Number(v) || 0), 0);
-  const plannedUsd = bias?.totals?.planned_usd ?? null;
-  const drawnUsd = bias?.totals?.actual_usd ?? null;
+
+  const awaiting = awaitingApproval(proposedPage?.items ?? []);
+  const starting = startingNext4Weeks(startingPage?.items ?? [], today);
+  const agedUnplanned = unplannedAgedStockValue(aged.data);
+  const queue = useMemo(
+    () =>
+      buildActionQueue({
+        cases: data?.items ?? [],
+        proposed: proposedPage?.items ?? [],
+        ended: endedPage?.items ?? [],
+      }),
+    [data?.items, proposedPage?.items, endedPage?.items],
+  );
+  const selectedRow: CporCaseListRow | null = useMemo(() => {
+    if (selectedId == null) return null;
+    const pools = [data?.items, proposedPage?.items, endedPage?.items, startingPage?.items];
+    for (const pool of pools) {
+      const hit = pool?.find((r) => r.id === selectedId);
+      if (hit) return hit;
+    }
+    return null;
+  }, [selectedId, data?.items, proposedPage?.items, endedPage?.items, startingPage?.items]);
 
   const inPlanningSupport = rowsAll
     .filter((r) => ['draft', 'proposed', 'approved', 'rejected'].includes(r.status))
@@ -225,25 +273,38 @@ function PlannerList({
             onClick={() => setParam('stage', 'ended')}
           />
           <HeadlineFigure
-            label="Settled book"
-            value={settledN}
+            label="Awaiting approval"
+            value={awaiting.count}
             unit="cases"
             compact
-            caption="Same-customer history for proposals — not a live work queue"
-            onClick={() => setParam('stage', 'settled')}
+            testId="planner-card-awaiting"
+            severity={awaiting.count > 0 ? 'warn' : 'neutral'}
+            caption="Proposed cases waiting for a decision"
+            onClick={() => setParam('stage', 'proposed')}
           />
           <HeadlineFigure
-            label="Planned reserve"
-            value={plannedUsd == null ? '—' : fmtCompact(plannedUsd, 'USD')}
+            label="Starting in 4 weeks"
+            value={starting.count}
+            unit="campaigns"
             compact
-            caption="SKU-economics case lines only. Not lineup reservation. Not a percent."
+            testId="planner-card-starting"
+            caption={`Window starts ${starting.from} to ${starting.to}; cancelled and rejected left out`}
+            onClick={() => setParams({ stage: null, window_from: starting.from, window_to: starting.to })}
           />
           <HeadlineFigure
-            label="Actual support"
-            value={drawnUsd == null ? '—' : fmtCompact(drawnUsd, 'USD')}
+            label="Unplanned aged stock"
+            value={fmtInt(agedUnplanned.value)}
+            unit="units"
             compact
-            caption="Same SKU-economics lines as planned reserve. Do not divide these two figures."
+            testId="planner-card-aged"
+            state={aged.isLoading ? 'loading' : aged.isError ? 'empty' : 'ready'}
+            stateNote={aged.isError ? 'Aged stock could not be loaded' : undefined}
+            caption={`${agedUnplanned.lineCount} slow or unsold lines with no open action${
+              agedUnplanned.truncated ? ' (list capped, so at least this many)' : ''
+            }. Units on hand: the API gives no money value yet.`}
+            onClick={() => document.getElementById('planner-aged-stock')?.scrollIntoView?.({ behavior: 'smooth' })}
           />
+          {/* Calendar clashes: reserved, see CALENDAR_CLASH_CARD in plannerCards.ts. Waits for final-wave (d). */}
         </HeadlineStrip>
 
         <Box
@@ -308,6 +369,7 @@ function PlannerList({
                 </Stack>
               }
             />
+            <PlannerTimeline cases={rows} today={today} selectedId={selectedId} onSelect={setSelectedId} />
             <ModuleDataSection
               isLoading={isLoading}
               isError={isError}
@@ -363,100 +425,23 @@ function PlannerList({
                   })}
                 </Stack>
               ) : (
-                <PlanGrid rows={rows} onOpen={onOpen} />
+                <PlanGrid rows={rows} onOpen={setSelectedId} />
               )}
             </ModuleDataSection>
           </Stack>
 
           <Stack spacing={2}>
-            <Panel title="Aged and slow stock" subtitle="One draft per customer, or one action on a line" flush>
-              <AgedStockPanel onOpen={onOpen} />
-            </Panel>
-            <Panel title="Needs a decision" subtitle="Grouped by condition, then ranked" flush>
-              <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
-                {(() => {
-                  const seen = new Set<number>();
-                  const reapproval = [...(data?.items ?? []), ...(endedPage?.items ?? []), ...(proposedPage?.items ?? [])].filter(
-                    (p) => {
-                      if (!p.needs_reapproval || seen.has(p.id)) return false;
-                      seen.add(p.id);
-                      return true;
-                    },
-                  );
-                  const n = reapproval.length;
-                  if (!n) return null;
-                  const one = n === 1 ? reapproval[0] : null;
-                  return (
-                    <PanelRow
-                      severity="warning"
-                      primary={
-                        one
-                          ? `${one.case_code} · reapproval required`
-                          : `${n} cases flagged for reapproval`
-                      }
-                      secondary="Money-ceiling reapproval — not the same as Proposed, and not claim evidence."
-                      figure="Case book"
-                      onClick={() => {
-                        if (one) onOpen(one.id);
-                        else router.push('/commercial-planner/cpor-cases');
-                      }}
-                    />
-                  );
-                })()}
-                {proposedN > 0 ? (
-                  <PanelRow
-                    severity="warning"
-                    primary={
-                      proposedN === 1
-                        ? `${proposedPage?.items?.[0]?.case_code ?? 'Proposal'} · review proposal`
-                        : `${proposedN} proposals need a review`
-                    }
-                    secondary={
-                      proposedN === 1
-                        ? `${proposedPage?.items?.[0]?.customer_name ?? ''} · ${proposedPage?.items?.[0]?.line_count ?? 0} lines · ${fmtCompact(proposedPage?.items?.[0]?.ttl_support_zar, proposedPage?.items?.[0]?.currency_code)}`
-                        : 'CIP and planner proposals in Proposed — open the planner filter'
-                    }
-                    onClick={() => {
-                      if (proposedN === 1 && proposedPage?.items?.[0]) onOpen(proposedPage.items[0].id);
-                      else setParam('stage', 'proposed');
-                    }}
-                  />
-                ) : null}
-                {(() => {
-                  const pending = (endedPage?.items ?? []).filter(
-                    (p) => (p.settle_readiness?.claim_evidence_count ?? 0) === 0,
-                  );
-                  const n = pending.length;
-                  if (!n) return null;
-                  return (
-                    <PanelRow
-                      severity="info"
-                      primary={`${n} ended cases · claim evidence pending`}
-                      secondary="One condition: the window ended and no claim file is applied. Open the case book on Ended."
-                      figure="Case book"
-                      onClick={() => router.push('/commercial-planner/cpor-cases?status=ended')}
-                    />
-                  );
-                })()}
-                {!proposedN &&
-                !(endedPage?.items ?? []).some((p) => p.needs_reapproval) &&
-                !(endedPage?.items ?? []).some((p) => (p.settle_readiness?.claim_evidence_count ?? 0) === 0) ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
-                    Nothing waiting on you. This list does not flag a live listing that is off the promo
-                    price. Listing, competitor price, and observed cover are on the Evidence column when
-                    you create a promotion plan.
-                  </Typography>
-                ) : (
-                  <PanelRow
-                    severity="neutral"
-                    primary="Live listing vs promo price is not a row on this list"
-                    secondary="Create a promotion plan. Suggested quantity uses cover, forecast and this customer's history. Flags do not block, and cover policy is not written."
-                    figure="Evidence"
-                    onClick={() => setProposeOpen(true)}
-                  />
-                )}
-              </Stack>
-            </Panel>
+            <CaseSidePanel row={selectedRow} onOpen={onOpen} onClear={() => setSelectedId(null)} />
+            <ActionQueuePanel items={queue} onSelect={setSelectedId} />
+            <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
+              The queue does not flag a live listing that is off the promo price. Listing, competitor price and
+              observed cover are on the Evidence column when you create a promotion plan.
+            </Typography>
+            <Box id="planner-aged-stock">
+              <Panel title="Aged and slow stock" subtitle="One draft per customer, or one action on a line" flush>
+                <AgedStockPanel onOpen={onOpen} />
+              </Panel>
+            </Box>
             <CapabilityLedger items={PLANNER_CAPABILITIES} />
           </Stack>
         </Box>

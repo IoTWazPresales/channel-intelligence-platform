@@ -3741,6 +3741,22 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ---
 
+## BACKLOG-254 — Final wave (e): planner layout and cards
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Part 1 shipped, part 2 open**, recorded 2026-11-19 on `feat/fwe-planner-cards-20261118`. Layout (timeline, case side panel, action queue) and three planner cards are built; the calendar-clash card and a design check against Warren's mock-up are open. |
+| **Source** | `docs/CIP_ORCHESTRATOR_WAVES.md` NEW FINAL WAVE (Warren, 2026-11-17) item (e): "Planner layout and useful cards. Redesign the planner using Warren's mock-up (timeline, case side panel, action queue) in the current CIP theming. Replace the top cards that duplicate the Budget ledger or other pages with planner-specific cards: awaiting approval, campaigns starting in the next 4 weeks, unplanned aged-stock value, and calendar clashes." Scope narrowed by Warren 2026-11-18 18:05 SAST. |
+| **What shipped** | `PromotionPlannerSurface.tsx`: the Settled book, Planned reserve and Actual support cards are gone (planned/actual reserve is the Budget ledger's figure from `support-bias`; Settled book is a stage count the lifecycle rail already shows). "Drafts to finish" and "Ended" stay: they only drive the existing stage filters. New cards, pure logic in `plannerCards.ts`: **Awaiting approval** (cases in Proposed; click filters to Proposed), **Starting in 4 weeks** (cases from the existing `/cpor/cases` list with `window_from`/`window_to` = today..today+28, which filter on `window_start`; cancelled, rejected, voided and superseded left out; click sets those two existing scope filters), **Unplanned aged stock** (sum of `stock_on_hand` over aged-stock lines with no executed action; click scrolls to the aged-stock panel). Layout in the new `plannerLayout/` folder: a timeline of our CPOR case windows on a date axis (scoped by the existing stage and case-scope filters), a case side panel (summary, opens `PlanWorkspace`, which is unchanged and keeps the quantity, export and economics actions), and an action queue (reapproval required, awaiting approval, ended with no claim evidence; same conditions as the old "Needs a decision" panel, now one row per case). Case-list rows now select a case into the side panel; the mobile cards still open the workspace directly. No API change; existing endpoints only. |
+| **Layout source** | **Warren's mock-up is not in the repo.** The layout follows the alignment report's description (timeline, case side panel, action queue), not the mock-up. Visual details (density, placement, bar colours) are a first reading and need a check against the mock-up when it is shared. |
+| **Open: money value on the aged-stock card** | The aged-stock API (`/cpor/intelligence/promo-plan-draft/aged-stock`) returns units (`stock_on_hand`) per line and no money value, so the card is labelled "units". Nothing is priced on the web side. Follow-up: an API value for aged lines (needs a cost or price source Warren accepts) so the card can show value as the requirement says. Owner of that API is PR #114 / `store_dc/stock_actions.py`. |
+| **Open: calendar-clash card** | Needs the customer promotion calendar endpoint from final-wave (d). The reserved place is `CALENDAR_CLASH_CARD` in `plannerCards.ts` (`available: false`); the surface renders nothing for it and shows no figure. After (d) merges: add the card to the headline strip and a clash marker on the timeline. The strip is five columns now; adding the card makes six. |
+| **Open: timeline scope** | The timeline shows our case windows only. A customer's own calendar entries and the clash overlay are lane (d) data and are not drawn. The case list is capped at 500 rows; a larger book needs a window filter (the scope bar has one). |
+| **Tests** | `plannerCards.test.ts`, `plannerLayout/*.test.ts(x)`, and `PromotionPlannerSurface.test.tsx` (new card, selection and queue tests; the test did not assert the removed cards before, and now asserts they are absent). Web unit tests only; no DB tests in this lane. |
+| **TRIGGER** | When final-wave (d) merges (clash card), when Warren shares the mock-up (layout check), or when an aged-stock money value exists on the API. |
+
+---
+
 ## BACKLOG-242 — Aged-stock rule consistency: what is left after 2026-11-18
 
 | Field | Detail |

@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,8 +7,10 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { PromotionPlannerSurface } from './PromotionPlannerSurface';
 
+const { replaceMock } = vi.hoisted(() => ({ replaceMock: vi.fn() }));
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ replace: replaceMock, push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/promotions',
 }));
@@ -58,7 +60,16 @@ const listPayload = {
 
 const apiGetMock = vi.fn(async (url: string) => {
   if (url.includes('/cpor/cases')) return listPayload;
-  if (url.includes('/support-bias')) return { totals: { planned_usd: null, actual_usd: 0 } };
+  if (url.includes('/aged-stock')) {
+    return {
+      lines: [
+        { customer_id: 1, product_id: 1, stock_on_hand: 120, suggestion_executed: false, executed_actions: [] },
+        { customer_id: 1, product_id: 2, stock_on_hand: 30.5, suggestion_executed: false, executed_actions: [] },
+        { customer_id: 2, product_id: 3, stock_on_hand: 999, suggestion_executed: true, executed_actions: ['promote'] },
+      ],
+      truncated: false,
+    };
+  }
   if (url.includes('/promotion-types')) return { promotion_types: ['Sell out PP'] };
   return {};
 });
@@ -73,6 +84,62 @@ vi.mock('@/lib/api', () => ({
 describe('PromotionPlannerSurface', () => {
   beforeEach(() => {
     apiGetMock.mockClear();
+    replaceMock.mockClear();
+  });
+
+  const renderPlanner = () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <PromotionPlannerSurface />
+      </QueryClientProvider>,
+    );
+  };
+
+  it('shows the planner cards and no longer repeats the Budget ledger figures', async () => {
+    renderPlanner();
+    await waitFor(() => expect(screen.getByTestId('planner-card-awaiting')).toHaveTextContent(/Awaiting approval1/i));
+    expect(screen.getByTestId('planner-card-starting')).toHaveTextContent(/Starting in 4 weeks/i);
+    await waitFor(() => expect(screen.getByTestId('planner-card-aged')).toHaveTextContent('151'));
+    expect(screen.getByTestId('planner-card-aged')).toHaveTextContent(/units/);
+    expect(screen.getByText('Drafts to finish')).toBeInTheDocument();
+    expect(screen.queryByText(/Planned reserve/i)).toBeNull();
+    expect(screen.queryByText(/Actual support/i)).toBeNull();
+    expect(screen.queryByText(/Settled book/i)).toBeNull();
+    expect(screen.queryByText(/Calendar clashes/i)).toBeNull();
+    expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/support-bias'))).toBe(false);
+  });
+
+  it('asks the existing case list for windows starting in the next 28 days', async () => {
+    renderPlanner();
+    await screen.findByTestId('planner-card-starting');
+    await waitFor(() => {
+      expect(
+        apiGetMock.mock.calls.some(([u]) => /window_from=\d{4}-\d{2}-\d{2}&window_to=\d{4}-\d{2}-\d{2}/.test(String(u))),
+      ).toBe(true);
+    });
+  });
+
+  it('awaiting approval filters the planner to Proposed', async () => {
+    renderPlanner();
+    fireEvent.click(await screen.findByTestId('planner-card-awaiting'));
+    expect(replaceMock).toHaveBeenCalledWith('/promotions?stage=proposed', { scroll: false });
+  });
+
+  it('selecting a case on the timeline fills the side panel, which opens the plan workspace', async () => {
+    renderPlanner();
+    expect(await screen.findByTestId('planner-side-panel-empty')).toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('planner-timeline-bar-41'));
+    expect(screen.getByTestId('planner-side-panel')).toHaveTextContent('CPR-26-1204');
+    fireEvent.click(screen.getByTestId('planner-side-open'));
+    expect(replaceMock).toHaveBeenCalledWith('/promotions?plan=41', { scroll: false });
+  });
+
+  it('puts a proposed case in the action queue', async () => {
+    renderPlanner();
+    await waitFor(() =>
+      expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-26-1204 · awaiting approval'),
+    );
   });
 
   it('lists real CPOR cases and shows line-sum support, not a stale plan total', async () => {
