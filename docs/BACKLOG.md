@@ -3573,7 +3573,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Non-blocking at the #85 merge. |
+| **Status / parked** | **Fixed in code 2026-11-18** (branch `fix/my-accounts-trend-grain-20261118`), awaiting review. The My accounts trend is now monthly, as the `sellthrough_stock` starter is. `test_my_accounts_starter_runs_on_a_mixed_weekly_and_monthly_book` runs every widget of the starter on a mixed weekly/monthly book; cover parity tests unchanged and passing. **Still open, not part of this fix:** the `account_overview` starter keeps its weekly trend because it is for one required customer; a monthly-reporting customer chosen there still gets the `W-ONE-STORED-PERIOD` refusal on that one widget. Choosing the grain from the selected customer's stored period is a separate change. Was parked 2026-11-12, non-blocking at the #85 merge. |
 | **Source** | Codex reviews of PR #85 at `af7af2ab` and `c05dd5a9`: `apps/api/app/services/dashboard_templates.py:215`. |
 | **Idea** | Give the `my_accounts` starter's trend a grain that works for monthly and mixed weekly/monthly books (monthly, as the `sellthrough_stock` starter does, or the coarsest stored grain). |
 | **Why it matters** | A new My accounts dashboard has a trend that `run_v2` refuses with `W-ONE-STORED-PERIOD` when any assigned account reports monthly. |
@@ -3599,7 +3599,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** — 2026-11-12. Found while recording the merge baseline on `a3d0a9cd`. |
+| **Status / parked** | **Fixed in code 2026-11-18** (branch `feat/b1-fast-ci-gate-20261118`), awaiting review. `apps/web/eslint.config.mjs` is the flat config: `next/core-web-vitals` through `FlatCompat`, with `@eslint/eslintrc` added as a web devDependency. The legacy `eslintConfig` block and CI's `ESLINT_USE_FLAT_CONFIG=false` are removed. Plain `pnpm lint` runs again. **Baseline:** 0 errors, 49 `react-hooks/exhaustive-deps` warnings. That matches the legacy run exactly: same findings at the same file/line/column, and the same files except that the config file itself is now linted. No new rules. The ruff I001 note below is unchanged. `.cursor/rules/Supply-Chain-Intelligence-Project-Rules.mdc` still tells agents to set `ESLINT_USE_FLAT_CONFIG=false`. It was left alone because it is agent policy; setting the variable now makes ESLint 9 look for the removed legacy config, so the rule should be dropped in a separate, authorized change. Was parked 2026-11-12, found while recording the merge baseline on `a3d0a9cd`. |
 | **Source** | `pnpm --dir apps/web lint` (`eslint .`) with ESLint 9.39.4: "ESLint couldn't find an eslint.config.(js\|mjs\|cjs) file". `apps/web/package.json` still carries a legacy `eslintConfig` block. |
 | **Idea** | Add an `eslint.config.mjs` flat config equivalent to the current rules (`eslint-config-next`), so `pnpm lint` runs again. Small related item: ruff I001 (import block) at `apps/api/app/query/model/compiler.py:21` exists on the trunk. |
 | **Why it matters** | No lane or merge can run web lint today; only tsc and vitest gate web changes. |
@@ -3741,6 +3741,17 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 ---
 
+## BACKLOG-246 — Wave 3 B1: make the fast API gate a required check
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18. It needs a GitHub admin, so it was not done by an agent. |
+| **Source** | Waves doc, Wave 3 B1: "a fast API test subset on an ephemeral Postgres, on every PR into the trunk; merges require it green." Alignment review Section D item 11. |
+| **What exists** | CI job `api-fast` (`.github/workflows/ci.yml`) runs on every pull request. `apps/api/tests/fast_gate.txt` is the subset; `scripts/run-api-fast-gate.cjs` is the runner, and `scripts/run-api-fast-gate.test.cjs` covers it with 4 node tests. |
+| **Needs** | A repository admin adds a branch ruleset or protection on the trunk (`feat/integrate-*`, and `main` when promotion starts) that requires the `api-fast` check, plus `test` if wanted. Related: BACKLOG-238 recommends a `main` ruleset as well. |
+| **Keep in mind** | Keep the gate under about 3 minutes. When a module is added to `fast_gate.txt`, re-measure on cip_test. Any `tests/unit` path runs in the second, database-free process. |
+| **TRIGGER** | Warren or an admin agrees the required checks. |
+
 ## BACKLOG-242 — Aged-stock rule consistency: what is left after 2026-11-18
 
 | Field | Detail |
@@ -3765,6 +3776,15 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **What the work is** | Move the response-field mapping into per-site reader-profile data and prove a second, structurally different JSON response through the same mechanism. `listing_site` has no JSON column for a reader profile, so this needs a migration (new column or table) applied on `cip` with Warren's approval, plus a profile for each existing site written by a reviewed restore step. |
 | **Done in the meantime** | 2026-11-18 (`fix/w1b-discovery-pacing-20261118`): discovery now sends every request through the shared per-site fetch policy (`site_fetch.py`): site spacing, 403/429 pause, time budget. The autoconfigure reader probe uses the same policy, spacing is per site across customers, and the steward POST has a 45 s budget per phase. Codex review fixes: the shared budget rotates round one fixed cycle of (customer, site) pairs per tenant (`discovery:<tenant>:rotation`): when the budget cuts a pair short, the next run starts at that pair and carries on round the cycle, so neither an earlier customer nor a customer with several sites can starve the pairs after it. A scheduled run over every tenant rotates tenants (`discovery:tenant-rotation`): the next run starts at the first tenant after this run's starting tenant that the budget cut short, and if only the starting tenant was cut short it still moves on one tenant, so a tenant interrupted on every run cannot keep the first place (third review round, approved by Warren 15:03). A single-tenant (steward) run leaves the tenant rotation alone. |
 | **TRIGGER** | Warren approves the reader-profile migration, or a second structured-API site is onboarded. |
+
+## BACKLOG-241 — W1-A replenishment semantics still open after the supplier/delivery fix
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Open**, recorded 2026-11-18 (alignment review Section A W1-A, Section D item 4). |
+| **Done 2026-11-18** (`fix/w1a-replenishment-semantics-20261118`) | `_lead_index` counts one sample per distinct delivery (`delivery_no`; without one, lines sharing order number, ship-confirm and POD dates are one delivery; a delivery takes its longest line). Each confirmed DC SKU in `need_from_distributor` names a `supplier` and up to five `supplier_options`, ranked by that distributor's latest reported stock of this SKU (> 0 first; no stock row = "stock not reported", never zero), then a learned lead time to this DC (meets the floor; shorter first), then deliveries to this DC. The need uses the chosen supplier's lead time. The DC's own inbound leg uses the distributor with most deliveries to that DC. The UI shows the supplier and their SKU stock per DC line. **Codex review fixes (same day):** (a) a DC's supplier candidates and lead samples come only from deliveries for the DC's owner and the accounts linked to it (`_dc_lead_index`), because a site label can repeat across unrelated customers; (b) sell rates are calendar-based for every grain: weekly, daily and monthly reports are spread over their calendar days (grain read with `grain_of`, period ends from the sell-through parser's `period_end`; per site each day takes its units from one grain only, weekly first, then daily, then monthly, so overlapping reports are not added twice; rows whose load did not set units (stock-only, per `figure_import_jobs` provenance, same rule as the stock-gap check) give no sales), and the rate is units per reported day x 7 over the last four calendar weeks up to the newest report, so a missing week is not counted as zero and old weeks are not pulled in. The unsold check needs consecutive reported calendar weeks (Monday to Sunday) ending with the newest report's week, one per week of its window: each earlier week must have sales reports on at least four of its seven days, and the run stops at the first week that does not, so a wholly unreported week is never made up by a fifth calendar week (history outside the window does not count; extra fix round approved by Warren 15:27). |
+| **Decision needed (Warren)** | Delivery identity: is `delivery_no` unique per distributor delivery in every shipment report we load, and is the fallback (order number + ship-confirm date + POD date) acceptable? The fallback can merge two same-day deliveries, which lowers the sample count (safe for the floor) but never raises it. |
+| **Still open** | (1) Done 2026-11-18 (calendar rates, above); the store map (`store_dc/map.py`) still reads weekly rows only for its pin colour. (2) Learned onward (DC to store) lead time needs dispatch/receipt evidence that is not loaded; stays "no history". (3) Promote/Move/Return destination recommendation needs an accepted ranking rule (Warren). (4) Store-level supplier selection for accounts without a DC still uses the account's main distributor. |
 
 ## BACKLOG-240 — Remaining tenant-specific defaults in application code
 
