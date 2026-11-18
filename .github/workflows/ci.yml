@@ -6,6 +6,81 @@ on:
   pull_request:
 
 jobs:
+  # Wave 3 B1: fast API gate. A fixed subset (apps/api/tests/fast_gate.txt) on an ephemeral Postgres,
+  # with stable outputs (.tmp/api-fast-summary.txt: counts and sorted failing ids, no timings).
+  # Making this a required check for merges is a GitHub branch-protection setting, not done here.
+  api-fast:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: cip
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://cip:cip@localhost:5432/cip_test
+      DATABASE_URL_SYNC: postgresql://cip:cip@localhost:5432/cip_test
+      DATABASE_URL_SYNC_MIGRATE: postgresql://cip:cip@localhost:5432/cip_test
+      CIP_DEV_CELERY_DISPATCH: in_process_thread
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Fast gate runner self-test
+        run: node --test scripts/run-api-fast-gate.test.cjs
+
+      - name: Install Python dependencies
+        run: pip install -r apps/api/requirements.txt
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Create cip role and disposable cip_test
+        run: |
+          PGPASSWORD=cip psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE cip LOGIN PASSWORD 'cip' NOSUPERUSER NOBYPASSRLS;" \
+            -c "CREATE DATABASE cip_test OWNER cip;"
+
+      - name: Alembic migrate cip_test
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          alembic upgrade head
+          PGPASSWORD=cip psql -h localhost -U cip -d cip_test -v ON_ERROR_STOP=1 \
+            -c "SELECT current_database(), version_num FROM alembic_version;"
+
+      - name: Fast API gate
+        run: PYTHON=python node scripts/run-api-fast-gate.cjs
+
+      - name: Upload fast gate outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: api-fast-gate
+          path: |
+            .tmp/api-fast-summary.txt
+            .tmp/api-fast-gate.txt
+            .tmp/api-fast-junit.xml
+            .tmp/api-fast-unit-junit.xml
+          if-no-files-found: warn
+
   test:
     runs-on: ubuntu-latest
     services:
@@ -30,8 +105,6 @@ jobs:
       DATABASE_URL_SYNC_MIGRATE: postgresql://cip:cip@localhost:5432/cip_test
       # No Redis in CI — skip broker retry loops; use in-process thread fallback for import tasks.
       CIP_DEV_CELERY_DISPATCH: in_process_thread
-      # Next.js 15 + ESLint 9: legacy eslintrc until a dedicated flat-config migration (BACKLOG-070).
-      ESLINT_USE_FLAT_CONFIG: "false"
     steps:
       # Pinned 2026-08-02 to the commit currently resolved by moving tag @v4 (do not upgrade).
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

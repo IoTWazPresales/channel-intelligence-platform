@@ -2,7 +2,17 @@
 
 **Final wave (c) aged/slow stock (branch `feat/fwc-aged-stock-grouping-20261118`, 2026-11-18):** the planner's aged-stock panel shows one line per customer and product with Slow/Unsold badges and the sites folded underneath; `stock_actions` now matches site labels with `norm_label`, so a store listed again under a confirmed DC with different case or spacing no longer gives a second line. Live confirmation: BACKLOG-250. No migration. Not merged.
 
+**BACKLOG-229 My accounts trend (2026-11-18):** branch `fix/my-accounts-trend-grain-20261118`. The My accounts starter trend is now "Sell-through units by month", so a book with weekly and monthly reporters no longer gets the `W-ONE-STORED-PERIOD` refusal. Only dashboards created from the starter after this change get it; existing saved dashboards keep their widgets. New cip_test execution test on a mixed book. No migration, no deploy.
+
+**Wave 3 B1 fast CI gate and lint (2026-11-18):** branch `feat/b1-fast-ci-gate-20261118`.
+- **New CI job `api-fast`:** runs the fixed subset in `apps/api/tests/fast_gate.txt` on an ephemeral Postgres 16, with a disposable `cip_test` migrated to head. The runner is `scripts/run-api-fast-gate.cjs` (`pnpm test:api:fast`). It runs database paths in one pytest process, then `tests/unit` in a second with `CIP_UNIT_TESTS_FORBID_DB=1`. It writes `.tmp/api-fast-summary.txt` (counts and sorted failing ids, no timings), the pytest log and junit files, all uploaded as an artifact.
+- **Measured on cip_test:** 188 + 44 passed, about 1.5 minutes.
+- **Web lint:** runs on an ESLint 9 flat config (BACKLOG-231). Baseline 0 errors, 49 warnings.
+- **Not done:** making `api-fast` a required check on `feat/integrate-*` or `main` is a GitHub admin setting (BACKLOG-246).
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
+
+**2026-11-18 - W1-A supplier selection (`fix/w1a-replenishment-semantics-20261118`, PR pending review):** lead-time samples are distinct deliveries, not shipment lines (five lines of one delivery no longer meet the five-delivery floor). Each confirmed-DC SKU names its supplier by that distributor's own SKU stock, then learned lead time to the DC, then deliveries to the DC; the need uses that supplier's lead time; the UI shows it. Delivery-identity question for Warren and remaining W1-A gaps: BACKLOG-241. Review fixes: DC supplier evidence is limited to the DC's own and linked accounts; sell rates are calendar-based for weekly/daily/monthly reports (last four calendar weeks, missing weeks not zero).
 
 **Aged-stock consistency (2026-11-18):** branch `fix/aged-stock-consistency-20261118` off `feat/integrate-20261103`. The planner's observed-cover flag (`load_promotion_line_evidence`) now uses the customer's configured `slow_cover_multiple` (the store/DC board's setting; fallback 2.0) and reports it as `observed_cover.slow_multiple`. `POST /cpor/cases/{id}/intelligence-exclude` refuses (409 `stock_action_case_stays_excluded`) to clear the flag on a Move/Return case (`origin='stock_action'`), so logistics never re-enters support comparisons. `where_commercial_intelligence()` is unchanged (query model rules depend on its shape). Open, BACKLOG-242: price-free Move/Return needs `cpor_case_line.srp` nullable (migration); the planner cover target and DC rows in customer cover need decisions. Tests on `cip_test` only; no migration, no deploy.
 
