@@ -1092,7 +1092,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Partly shipped** (reconciled 2026-11-18): N-0095 (`694b46b8`) shipped the related-name worklist (`apps/api/app/services/customer_related_master_groups.py`), the Past merges / change-keeper tab, and the ops scripts `apps/api/scripts/ops/backfill_merged_customer_alias_seals.py` and `repair_open_channel_wrong_merge.py`; merge redirects exist in `apps/api/app/services/merge_redirect.py`. Still open: an end-to-end clone proof of the whole merge story against current merge APIs, and any companion not listed here. · Originally Parked 2026-07-29 per D-021 |
 | **Effort** | Medium–Large |
 | **Source** | D-021 fuller diff; `customer_merge_redirect.py`, `customer_related_master_groups.py`, RelatedName UI, ops scripts `backfill_merged_customer_alias_seals.py` / `repair_open_channel_wrong_merge.py` (and peers on tip) |
 | **Idea** | Merge-engine adjacent surfaces: follow redirects after merge, related-name worklist for subset merges, repair/backfill scripts for wrong OPEN_CHANNEL / seal gaps. |
@@ -1127,7 +1127,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `alias_seal` absent from tree; consult READY; Stage 4.8) · **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Done (2026-10-15, N-0095)** · reconciled 2026-11-18: `apps/api/app/services/customer_merge_alias_seal.py` is on the trunk (commit `694b46b8`); a confirmed merge seals merged names as approved global aliases to the keeper, never overwrites a third customer's alias, never seals OPEN_CHANNEL. Backfill run on `cip` 2026-10-15 (112 aliases, 0 conflicts; see `docs/memory/CURRENT.md` N-0095). Earlier: Confirmed open (2026-09-21 N-0030 audit, before N-0095) · Parked 2026-07-29 per D-021 |
 | **Effort** | Medium–Large |
 | **Source** | D-021 extract; branch tip `customer_merge_alias_seal.py` |
 | **Idea** | On full customer merge, mint approved aliases from loser display names → keeper so future DSI resolution does not re-steward merged tokens. |
