@@ -57,7 +57,7 @@ Optional alternate (needs a role with `CREATEDB`, via env `CIP_PG_ADMIN_URL`): c
   - `last_backup.json` and `last_restore.json` in that folder;
   - the exit code, which shows in Task Scheduler's "Last Run Result" (0 means all ok);
   - `/admin/ops`, which shows a Backups card (`GET /admin/ops/overview` `health.backups`). A backup older than 26 hours, or a restore test older than 8 days, shows as stale. A recorded failure shows as failed.
-- **Secrets:** the database URLs are read from the user environment variables `CIP_BACKUP_DATABASE_URL` (the database to back up) and `CIP_RESTORE_SMOKE_URL` (a disposable database, never `cip`), so no password is written into the task.
+- **Secrets:** the database URLs are read from the user environment variables `CIP_BACKUP_DATABASE_URL` (the database to back up) and `CIP_RESTORE_SMOKE_URL` (a disposable database, never `cip`; the nightly script refuses any target whose database name does not contain `restore`, `smoke`, `scratch` or `disposable`, and always refuses `cip`, `cip_test`, `postgres` and the backed-up database), so no password is written into the task.
 - **Plan without changes:** `.\scripts\ops\nightly_backup_cip.ps1 -PlanOnly` prints what it would back up, prune and restore.
 
 One-time operator setup (Warren; not done by agents):

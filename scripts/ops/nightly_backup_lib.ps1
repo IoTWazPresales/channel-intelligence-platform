@@ -62,3 +62,26 @@ function Test-DumpListing {
     if (-not $Text) { return $false }
     return ($Text -match '(?m)^;\s*Archive created at') -and ($Text -match '(?m)^\d+;\s')
 }
+
+function Get-DatabaseName {
+    # Database name from a postgresql:// URL (last path segment, without query string).
+    param([string]$Url)
+    if ([string]::IsNullOrWhiteSpace($Url)) { return $null }
+    $path = ($Url -split '\?')[0]
+    $name = ($path -split '/')[-1]
+    if ([string]::IsNullOrWhiteSpace($name)) { return $null }
+    return $name.Trim().ToLowerInvariant()
+}
+
+function Test-DisposableRestoreTarget {
+    # The scheduled restore drops the target's public schema, so only a database whose name says
+    # it is disposable (contains restore, smoke, scratch or disposable), that is not cip, cip_test
+    # or postgres, and that is not the database being backed up, may be the target.
+    param([string]$TargetUrl, [string]$SourceUrl)
+    $target = Get-DatabaseName $TargetUrl
+    if (-not $target) { return $false }
+    if (@('cip', 'cip_test', 'postgres', 'template0', 'template1') -contains $target) { return $false }
+    if ($target -eq (Get-DatabaseName $SourceUrl)) { return $false }
+    return ($target -match 'restore|smoke|scratch|disposable')
+}
+

@@ -66,3 +66,22 @@ Describe 'Test-DumpListing' {
         Test-DumpListing '' | Should Be $false
     }
 }
+
+Describe 'disposable restore target (review fix: the schedule must not wipe a real database)' {
+    $src = 'postgresql://u:p@127.0.0.1:5432/cip'
+    It 'accepts a database whose name says it is disposable' {
+        Test-DisposableRestoreTarget 'postgresql://u:p@127.0.0.1:5432/cip_restore_smoke' $src | Should Be $true
+        Test-DisposableRestoreTarget 'postgresql://u:p@127.0.0.1:5432/Scratch_DB?sslmode=disable' $src | Should Be $true
+    }
+    It 'refuses cip, cip_test, postgres and other real names' {
+        Test-DisposableRestoreTarget 'postgresql://u:p@127.0.0.1:5432/cip' $src | Should Be $false
+        Test-DisposableRestoreTarget 'postgresql://u:p@127.0.0.1:5432/cip_test' $src | Should Be $false
+        Test-DisposableRestoreTarget 'postgresql://u:p@127.0.0.1:5432/postgres' $src | Should Be $false
+        Test-DisposableRestoreTarget 'postgresql://u:p@127.0.0.1:5432/reporting' $src | Should Be $false
+        Test-DisposableRestoreTarget '' $src | Should Be $false
+    }
+    It 'refuses the database being backed up even with a disposable-looking name' {
+        Test-DisposableRestoreTarget 'postgresql://u:p@h:5432/restore_x' 'postgresql://u:p@h:5432/restore_x' | Should Be $false
+    }
+}
+

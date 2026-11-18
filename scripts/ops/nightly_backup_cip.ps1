@@ -103,6 +103,11 @@ if ($record.result -eq 'ok' -and -not $NoRestore) {
     $target = [Environment]::GetEnvironmentVariable($RestoreTargetUrlEnv)
     if ([string]::IsNullOrWhiteSpace($target)) {
         $record.restore = "not configured ($RestoreTargetUrlEnv unset)"
+    } elseif (-not (Test-DisposableRestoreTarget $target $url)) {
+        # Review fix: never let the schedule wipe a real database (cip_test, the source, ...).
+        $record.restore = "refused: $RestoreTargetUrlEnv must name a disposable database (name containing restore, smoke, scratch or disposable; not cip, cip_test, postgres or the backed-up database)"
+        $exitCode = 1
+        Write-Log "RESTORE REFUSED: target database '$(Get-DatabaseName $target)' is not a disposable name"
     } elseif (-not (Test-RestoreDue $last (Get-Date) $RestoreEveryDays)) {
         $record.restore = 'not due'
     } else {
