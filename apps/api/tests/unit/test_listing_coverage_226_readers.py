@@ -89,6 +89,13 @@ def test_the_seller_is_the_one_on_the_priced_offer():
 def test_no_guess_when_the_offer_is_ambiguous():
     assert seller_from_json_ld(_LD) is None
     assert seller_from_json_ld(_LD, 1234.0) is None
+    # The page reader must not fall back to the first "seller" key: that is one of the
+    # same ambiguous offers (the first-match defect, BACKLOG-226 item 4).
+    assert seller_from_page(_LD) is None
+    assert seller_from_page(_LD, 1234.0) is None
+    with_embedded = _LD + '<div>{"seller": {"name": "Embedded Seller"}}</div>'
+    assert seller_from_page(with_embedded, 1234.0) is None
+    assert seller_from_page(with_embedded, 1999.0) == "Trader B"
 
 
 def test_a_single_offer_names_its_seller_without_a_price():
