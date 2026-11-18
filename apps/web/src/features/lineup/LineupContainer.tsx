@@ -16,6 +16,7 @@ import {
   filterLineupRowsByExactProductId,
   parseExactLineupProductId,
   parseLineupApprovalFilter,
+  parseLineupSlice,
 } from '@/features/lineup/lineupViews';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { ScopeBar } from '@/features/workbench-ui/controls';
@@ -26,6 +27,7 @@ function LineupContainerInner() {
   const searchParams = useSearchParams();
   const approval = parseLineupApprovalFilter(searchParams?.get('approval'));
   const productId = parseExactLineupProductId(searchParams?.get('product'));
+  const slice = parseLineupSlice(searchParams?.get('customer'), searchParams?.get('period'));
 
   const { data: items } = useQuery({
     queryKey: ['lineup-items'],
@@ -87,12 +89,28 @@ function LineupContainerInner() {
     });
   };
 
+  const clearSlice = () => {
+    setQuery((params) => {
+      params.delete('customer');
+      params.delete('period');
+    });
+  };
+
   const clearScope = () => {
     setQuery((params) => {
       params.delete('approval');
       params.delete('product');
+      params.delete('customer');
+      params.delete('period');
     });
   };
+
+  const sliceChipLabel = (() => {
+    if (!slice) return null;
+    const hit = rows.find((r) => r.customer_id === slice.customerId && r.period_start === slice.periodStart);
+    const who = hit?.customer_name || hit?.customer_code || `Customer ${slice.customerId}`;
+    return `${who} · ${hit?.period_label || slice.periodStart}`;
+  })();
 
   const productChipLabel = (() => {
     if (productId == null) return null;
@@ -144,7 +162,7 @@ function LineupContainerInner() {
             {
               key: 'all',
               label: 'All lines',
-              active: approval === 'all' && productId == null,
+              active: approval === 'all' && productId == null && slice == null,
               onToggle: () => clearScope(),
             },
             {
@@ -154,6 +172,16 @@ function LineupContainerInner() {
               onToggle: () => setApproval(approval === 'pending' ? 'all' : 'pending'),
               tone: 'warning',
             },
+            ...(sliceChipLabel
+              ? [
+                  {
+                    key: 'slice',
+                    label: sliceChipLabel,
+                    active: true,
+                    onToggle: clearSlice,
+                  },
+                ]
+              : []),
             ...(productChipLabel
               ? [
                   {
@@ -171,7 +199,7 @@ function LineupContainerInner() {
               : `${scopedRows.length} of ${rows.length} plan lines`
           }
           onClear={clearScope}
-          clearAvailable={productId != null || approval === 'pending'}
+          clearAvailable={productId != null || approval === 'pending' || slice != null}
         />
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
