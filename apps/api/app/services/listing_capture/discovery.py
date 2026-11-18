@@ -521,12 +521,13 @@ def _capture_url(
     if how is None:
         return {"url": url, "corroboration": None, "token": token}
     parsed = parse_html(body, site=config, parser_version="discovery")
-    seller = seller_from_page(body) or (config.first_party_seller or "").strip() or None
+    availability = parsed.availability if parsed.availability in {"in_stock", "out_of_stock"} else None
+    price = parsed.price if parsed.parse_status == "ok" else None
+    # The seller of the offer that supplied the price (BACKLOG-226 item 4), not the first one.
+    seller = seller_from_page(body, price) or (config.first_party_seller or "").strip() or None
     sellers = _seller_names(body)
     if seller and seller not in sellers:
         sellers.insert(0, seller)
-    availability = parsed.availability if parsed.availability in {"in_stock", "out_of_stock"} else None
-    price = parsed.price if parsed.parse_status == "ok" else None
     used = token or (product_barcodes(product)[0] if product_barcodes(product) else "")
     return {
         "url": url,

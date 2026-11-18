@@ -3746,6 +3746,6 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 |-------|--------|
 | **Status** | **Open**, recorded 2026-11-18 on `fix/listing-coverage-226-20261118`. Nothing here blocks the fix; each is a check for review or a later lane. |
 | **(a) Delisted = Not found** | A `delisted` listing now counts the product as Not found (the module's "not on the site" bucket), unless another listing of it is watched or failing. If account managers need delisted shown apart from never-found, that is a new bucket and a UI change. |
-| **(b) Embedded seller outside JSON-LD** | Pages that name the seller only in non-JSON-LD embedded JSON still use the first `"seller"` key in the page. A per-site reader profile would fix that; it depends on BACKLOG-239 (reader profiles need a migration). |
+| **(b) Embedded seller outside JSON-LD** | Pages that name the seller only in non-JSON-LD embedded JSON still use the first `"seller"` key in the page. (A page whose JSON-LD offers name sellers but none at the read price names no seller; it does not fall back to that key. Double-check fix, 2026-11-18.) A per-site reader profile would fix that; it depends on BACKLOG-239 (reader profiles need a migration). |
 | **(c) Older observations** | Observations written before this change with a non-200 status now read as failing. No data is rewritten. The count of listings that move from Watched to Failing on `cip` was not measured in this lane. |
 | **TRIGGER** | Before listing coverage goes to account managers. |
