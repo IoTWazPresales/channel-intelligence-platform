@@ -1,8 +1,29 @@
 # CURRENT state
 
+**Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
+
 **Aged-stock consistency (2026-11-18):** branch `fix/aged-stock-consistency-20261118` off `feat/integrate-20261103`. The planner's observed-cover flag (`load_promotion_line_evidence`) now uses the customer's configured `slow_cover_multiple` (the store/DC board's setting; fallback 2.0) and reports it as `observed_cover.slow_multiple`. `POST /cpor/cases/{id}/intelligence-exclude` refuses (409 `stock_action_case_stays_excluded`) to clear the flag on a Move/Return case (`origin='stock_action'`), so logistics never re-enters support comparisons. `where_commercial_intelligence()` is unchanged (query model rules depend on its shape). Open, BACKLOG-242: price-free Move/Return needs `cpor_case_line.srp` nullable (migration); the planner cover target and DC rows in customer cover need decisions. Tests on `cip_test` only; no migration, no deploy.
 
-**PR #95 review worktree (2026-11-17):** detached at `a0c7dcc5`; no branch created. Changes remain uncommitted and unpushed.
+**2026-11-18 - entity-specific removal (`fix/entity-specific-removal-20261118`, PR pending review):** no person addresses or workstation paths left in `apps/api/app` (guard test `test_no_tenant_contact_literals.py`). Shipping-digest recipients seed only from `CIP_SHIPPING_MAILER_RECIPIENTS` (live `cip` has 4 stored recipients, unaffected). IMAP flags every allowlisted sender's message with no spreadsheet. The "derive eras from shipping" steward action reads `CIP_SCM_ARTICLES_WORKBOOK_PATH` (must be set on the live API before use). Payment overlay note is generic. Lineup archive config needs an explicit root. Remaining items: BACKLOG-240.
+
+**Branch:** `feat/integrate-20261103` at `b9f29a09` (Merge #95). Nothing pushed to `main`. Merged into it on 2026-11-17/18 (first-parent merges, SAST):
+- #97 `fa962f36` (13:56) - database settings fail loudly: `DATABASE_URL` and `DATABASE_URL_SYNC` have no default; `backup_cip.ps1` needs `-DatabaseUrl`; `clone_cip_db.py` needs `--source-db cip`; `schema_drift_report.py` needs `--db` or `--url`. Runbook examples corrected on this branch.
+- #96 `d70c49c8` (14:09) - stock-action price ignores superseded lineup rows (BACKLOG-227 partly; residuals open).
+- #93 `5bce57c1` (14:10) - suggested store places as unconfirmed map pins.
+- #91 `2cb728f5` (15:57) - record a site/domain for a reporting customer.
+- #98 `aa293ca0` (17:46) - Final Wave recorded after Waves 1-3 (docs).
+- #92 `b0fe5713` (22:58) - line quantity suggestions and stored-layout export, including its review fixes.
+- #95 `b9f29a09` (2026-11-18 00:36) - retail discovery proposes catalogue pages, including its review fixes.
+
+The detached review worktrees and "uncommitted" notes below for #92 (`2ff65298`) and #95 (`a0c7dcc5`) are historical: that work is merged in the commits above.
+
+**Open from the 2026-11-18 alignment review (not done by this docs change):** #95 discovery does not use per-site spacing or the 403/429 pause; the structured reader is retailer-shaped; distributor-to-DC selection uses shipment-line counts; BACKLOG-226 and BACKLOG-227 residuals; Wave 2 acceptance evidence is missing. Migration `20261113_0062` was last documented as not applied on `cip` (not re-checked).
+
+**Store data on `cip`:** jobs 913 and 912 were applied on 2026-11-10 (N-0118 step 2, below); their unresolved lines stay staged. Jobs 900, 906, 907 were not applied. The Wave 1-A note "still staged, not loaded" predates that apply.
+
+**Needs Warren decision (dashboard CPOR semantics):** D-0123 (accepted 2026-11-09, `docs/decisions/DECISIONS_20261109_WARREN.md`) says CPOR open = not superseded and `workflow_status` not in {settled, ended, cancelled, rejected, voided}, and CPOR value = support USD (`ttl_support_usd`) with ZAR beside it. The later proposal `docs/proposals/2026-11-10-rand-sales-value-and-cpor-measures.md` says `cpor.open_cases` = cases in draft/proposed/approved/active, Rand case value = existing `cpor.support_zar`, and keep `cpor.value` refused. They differ on the value currency/measure (USD support vs ZAR support, and whether `cpor.value` exists) and on how open is defined (closed-set exclusion including `voided` vs an explicit open-set list). `semantics/models/default.yaml` still marks these measures proposed. Do not build either interpretation until Warren picks one.
+
+**PR #95 review worktree (2026-11-17, historical - merged as `b9f29a09`):** detached at `a0c7dcc5`; no branch created. Changes remain uncommitted and unpushed.
 **Wired + unit-tested:** shared autoconfigure invokes reporting-customer discovery for both the scheduled task and steward POST. Domain seeds target matching domains; URL-less feed proposals are enriched; generated external ids use product id + full-URL SHA-256; product links outrank navigation; a tenant/customer/site cursor resumes after 25 searches and wraps after the catalogue.
 **Round 2 fix:** discovery reuses autoconfiguration's seller-seed validator before writing a site, so a malformed seed cannot leave a discovery-created site behind after configuration rejects the customer. A stored customer seller identity still bypasses seed parsing. The existing DB-backed test is unchanged. The 192 `test_no_site_literals` hits reproduce without DB rows: Round 1 fixtures declared ordinary words `market` (64 hits) and `catalogue` (128 hits) as forbidden keys; distinctive fixture keys remove those matches without changing app wording or weakening the test.
 **Checks:** 35 review regressions plus 55 existing database-free listing tests passed (90 total), with `CIP_UNIT_TESTS_FORBID_DB=1` vetoing connections before collection. Fixture/config-derived site-key scan of app + alembic: zero hits; DB-derived keys were not inspected. `git diff --check` passed. No database connected (including `cip_test`), service restarted, commit, push, or live/UI verification performed. Next: review the working-tree diff; DB-backed test was not rerun under Warren's database-free constraint.

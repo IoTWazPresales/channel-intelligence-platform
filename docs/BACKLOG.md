@@ -1092,7 +1092,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Partly shipped** (reconciled 2026-11-18): N-0095 (`694b46b8`) shipped the related-name worklist (`apps/api/app/services/customer_related_master_groups.py`), the Past merges / change-keeper tab, and the ops scripts `apps/api/scripts/ops/backfill_merged_customer_alias_seals.py` and `repair_open_channel_wrong_merge.py`; merge redirects exist in `apps/api/app/services/merge_redirect.py`. Still open: an end-to-end clone proof of the whole merge story against current merge APIs, and any companion not listed here. · Originally Parked 2026-07-29 per D-021 |
 | **Effort** | Medium–Large |
 | **Source** | D-021 fuller diff; `customer_merge_redirect.py`, `customer_related_master_groups.py`, RelatedName UI, ops scripts `backfill_merged_customer_alias_seals.py` / `repair_open_channel_wrong_merge.py` (and peers on tip) |
 | **Idea** | Merge-engine adjacent surfaces: follow redirects after merge, related-name worklist for subset merges, repair/backfill scripts for wrong OPEN_CHANNEL / seal gaps. |
@@ -1127,7 +1127,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `alias_seal` absent from tree; consult READY; Stage 4.8) · **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Done (2026-10-15, N-0095)** · reconciled 2026-11-18: `apps/api/app/services/customer_merge_alias_seal.py` is on the trunk (commit `694b46b8`); a confirmed merge seals merged names as approved global aliases to the keeper, never overwrites a third customer's alias, never seals OPEN_CHANNEL. Backfill run on `cip` 2026-10-15 (112 aliases, 0 conflicts; see `docs/memory/CURRENT.md` N-0095). Earlier: Confirmed open (2026-09-21 N-0030 audit, before N-0095) · Parked 2026-07-29 per D-021 |
 | **Effort** | Medium–Large |
 | **Source** | D-021 extract; branch tip `customer_merge_alias_seal.py` |
 | **Idea** | On full customer merge, mint approved aliases from loser display names → keeper so future DSI resolution does not re-steward merged tokens. |
@@ -3468,6 +3468,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **TRIGGER** | Next competition / market-listings unit, or Warren asks to wire suggested matches / price import. |
 
 ---
+
 ## BACKLOG-222 — Brief Attention signal `promo_not_activated`
 
 | Field | Detail |
@@ -3754,3 +3755,10 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **(e) Data check** | Before this fix, a planner could clear the flag on a Move/Return case. Run a read-only count of `cpor_case` rows with `origin='stock_action' AND intelligence_exclude IS false` on `cip`; if any exist, setting them back is a data fix that needs Warren's approval. Not run in this lane. |
 | **Regression traps** | Query model rules (`app/query/model/rules.py`) rebind `where_commercial_intelligence()` by its column, so that predicate must stay a single comparison on `intelligence_exclude`; the stock-action guard lives on the writer, not the predicate. Never invent a price. Tests on `cip_test` only. |
 | **TRIGGER** | Before aged-stock Move/Return drafts are raised for customers with no shopper price, or before the planner's aged-stock flag is used for decisions. |
+
+## BACKLOG-240 — Remaining tenant-specific defaults in application code
+
+| **Status** | **Open**, recorded 2026-11-18 (alignment review Section C / Section D item 9). Partly done on `fix/entity-specific-removal-20261118`. |
+| **Done** | Shipping-digest recipients: no built-in address list (seed only from `CIP_SHIPPING_MAILER_RECIPIENTS`; live `cip` already has 4 stored recipients for tenant `default`, checked read-only 2026-11-18, so nothing changes there). IMAP intake: no named sender; every allowlisted sender's message without a spreadsheet is flagged (same as the Graph path). Steward "derive eras from shipping": workbook path from `CIP_SCM_ARTICLES_WORKBOOK_PATH`, no workstation default. Payment-evidence overlay: fixed amount narrative replaced with generic wording. Lineup archive config: no workstation default root (`archive_config_for_root`), short-quarter folders not tied to one year. Guard test `tests/test_no_tenant_contact_literals.py` (no person email literals or workstation paths in `app/`). |
+| **Operator step after merge** | Set `CIP_SCM_ARTICLES_WORKBOOK_PATH` in the live API environment to the SCM `Articles.xlsx` location before using "derive eras from shipping"; until then the action answers HTTP 400 and writes nothing. |
+| **Still open (needs tenant-profile provisioning or a decision)** | (1) `imports/dsi_product_token_identity.py` model-code regex and dealer suffixes (`cm`, `e`, `demo`, `dem`) feed identity matching for DSI, shipments and CPOR history; moving them to tenant vocabulary changes match results and needs a before/after proof on `cip_test` plus Warren's sign-off. (2) CPOR historical-import and payment-evidence profile defaults and their pipeline fallbacks (`profile_defaults.py`, `pipeline.py`); move to provisioned profile rows (data step on `cip`). (3) `shipping/on_the_water.py` lane geometry and ports. (4) `cpor/customer_soh_check.py` fixed VAT divisor 1.15 (use the tenant VAT setting). (5) `imports/template_definitions.py` part-number header aliases. (6) `docs/ops/listing_site_readers_20261113.json` (BACKLOG-234). (7) Structured listing reader (BACKLOG-239). (8) `commercial_tenant_profile.py` `REPORTING_TIMEZONE` fixed default (used for the reporting date and by `imports/upload_date_rule.py` for the upload-day SQL); move to a tenant reporting-timezone setting. Deferred: changing it moves the reporting/upload day boundary for every stored job, so it needs a tenant setting (schema or profile row) and a before/after check on `cip_test`. (9) `commercial_planner/lineup_distributor_as_customer_remediation.py` keeps fixed customer/distributor identities and name tokens. Retained as a dormant one-off repair helper (no application caller; only `tests/test_lineup_distributor_as_customer_remediation.py` imports it; the repair it served is recorded done in BACKLOG-125/126). Not run by any schedule or endpoint; remove or rewrite to take its identities as arguments before any reuse. (10) `apps/api/scripts/merge_shipped_fact_identity_twins.py` keeps a fixed PO/customer diagnostic. Retained as an explicit operator repair tool named by migrations 0049/0050 and the legacy 0060/0061 notes; it runs only by hand (preview, then `--confirm`). Make the diagnostic an argument before any reuse. One-off operator scripts under `apps/api/scripts/ops/` stay as explicit operator tools. |
