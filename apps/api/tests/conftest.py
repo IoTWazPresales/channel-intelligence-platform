@@ -184,6 +184,24 @@ def _mock_db_safe_stub_user(monkeypatch: pytest.MonkeyPatch):
 
 # N-0037: the login throttle is process-global; clear it so one test's failures never lock another.
 @pytest.fixture(autouse=True)
+def _discovery_fetch_policy_without_waits(monkeypatch: pytest.MonkeyPatch):
+    """Discovery tests use an in-process pause store and do not sleep between requests.
+
+    Tests that check spacing or pauses pass their own ``fetch_policy``.
+    """
+    from app.services.listing_capture import discovery
+    from app.services.listing_capture.site_fetch import FetchPolicy
+    from app.services.listing_capture.site_pause import MemorySitePauseStore
+
+    monkeypatch.setattr(
+        discovery,
+        "default_fetch_policy",
+        lambda: FetchPolicy(store=MemorySitePauseStore(), sleep=lambda _seconds: None),
+    )
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _reset_login_throttle():
     from app.core.login_throttle import login_throttle
 
