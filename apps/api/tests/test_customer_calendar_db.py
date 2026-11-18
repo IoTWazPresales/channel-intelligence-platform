@@ -501,6 +501,11 @@ def test_endpoints_preview_apply_and_timeline(conn, migrated) -> None:
     app.dependency_overrides[get_current_user] = lambda: user
     app.dependency_overrides[ep._require_calendar_writer] = lambda: user
     try:
+        # The apply step writes a steward audit event, whose tenant_id references tenant.
+        session.execute(
+            text("INSERT INTO tenant (id, name) VALUES (:id, :name)"),
+            {"id": tenant, "name": "Calendar fixture tenant"},
+        )
         cust = _customer(session, tenant, tag, "A")
         case = _case(session, tenant, cust.id, tag, "live", date(2026, 3, 1), date(2026, 3, 15))
         client = TestClient(app)
