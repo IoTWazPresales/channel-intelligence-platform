@@ -169,3 +169,45 @@ def test_an_unknown_seller_after_a_named_one_is_a_change():
         extraction_unchanged(_prev(buy_box_seller=None), parsed=_parsed(None, offers=unknown), parser_version="v")
         is True
     )
+
+
+def test_an_unknown_seller_keeps_unknown_ownership_through_persistence():
+    """Codex review of PR #104, round 2 (B1): stored ownership and the API label stay unknown."""
+    from app.services.listing_capture.adapters import SiteConfig, SiteSeller
+    from app.services.listing_capture.registry import _attach_offers, observation_to_dict
+
+    site = SiteConfig(
+        site_key="shop-a",
+        display_name="Shop A",
+        first_party_seller="Own Store",
+        tenant_id="t",
+        sellers=(SiteSeller(customer_id=1, names=("Own Store",)),),
+    )
+
+    class _Session:
+        def __init__(self):
+            self.added = []
+
+        def add(self, row):
+            self.added.append(row)
+
+    def run(offer):
+        from app.models.listing_capture import ListingObservation
+        from app.models.listing_offer import ListingOffer
+
+        session = _Session()
+        obs = ListingObservation(id=1, listing_id=5, parser_version="v", parse_status="ok")
+        _attach_offers(session, obs, SimpleNamespace(id=5, customer_id=1), site, _parsed(None, offers=[offer]), None)
+        stored = [row for row in session.added if isinstance(row, ListingOffer)]
+        return stored[0], obs
+
+    offer, obs = run({"seller_name": None, "seller_unknown": True, "price": 1999, "is_buy_box": True})
+    assert offer.is_own_seller is None
+    assert obs.buy_box_own is None
+    assert observation_to_dict(obs)["buy_box_label"] not in ("Competition", "Own")
+    # Control: a named outside seller is still Competition, the own seller still Own.
+    offer, obs = run({"seller_name": "Other Trader", "price": 1999, "is_buy_box": True})
+    assert offer.is_own_seller is False and obs.buy_box_own is False
+    assert observation_to_dict(obs)["buy_box_label"] == "Competition"
+    offer, obs = run({"seller_name": "Own Store", "price": 1999, "is_buy_box": True})
+    assert obs.buy_box_own is True

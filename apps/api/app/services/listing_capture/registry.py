@@ -509,12 +509,19 @@ def _attach_offers(session: Session, obs: ListingObservation, listing: Any, site
     tenant = site.tenant_id if site is not None else "default"
     if getattr(obs, "id", None) is None:
         return
+
+    def _ownership(offer: dict[str, Any]) -> bool | None:
+        # An unknown seller (no name, no id, marked seller_unknown by the reader) has unknown
+        # ownership: is_own_seller would answer False for it and the label would read
+        # Competition (Codex review of PR #104, round 2 B1).
+        if site is None:
+            return None
+        if offer.get("seller_unknown") and not offer.get("seller_name") and not offer.get("seller_id"):
+            return None
+        return site.is_own_seller(customer_id, name=offer.get("seller_name"), seller_id=offer.get("seller_id"))
+
     for offer in offers:
-        own = (
-            site.is_own_seller(customer_id, name=offer.get("seller_name"), seller_id=offer.get("seller_id"))
-            if site is not None
-            else None
-        )
+        own = _ownership(offer)
         session.add(
             ListingOffer(
                 tenant_id=tenant,
@@ -534,11 +541,7 @@ def _attach_offers(session: Session, obs: ListingObservation, listing: Any, site
     obs.offer_count = len(offers)
     if buy is not None:
         obs.buy_box_seller = buy.get("seller_name")
-        obs.buy_box_own = (
-            site.is_own_seller(customer_id, name=buy.get("seller_name"), seller_id=buy.get("seller_id"))
-            if site is not None
-            else None
-        )
+        obs.buy_box_own = _ownership(buy)
     session.add(obs)
 
 
