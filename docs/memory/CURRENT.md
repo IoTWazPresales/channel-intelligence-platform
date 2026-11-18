@@ -1,5 +1,13 @@
 # CURRENT state
 
+**BACKLOG-229 My accounts trend (2026-11-18):** branch `fix/my-accounts-trend-grain-20261118`. The My accounts starter trend is now "Sell-through units by month", so a book with weekly and monthly reporters no longer gets the `W-ONE-STORED-PERIOD` refusal. Only dashboards created from the starter after this change get it; existing saved dashboards keep their widgets. New cip_test execution test on a mixed book. No migration, no deploy.
+
+**Wave 3 B1 fast CI gate and lint (2026-11-18):** branch `feat/b1-fast-ci-gate-20261118`.
+- **New CI job `api-fast`:** runs the fixed subset in `apps/api/tests/fast_gate.txt` on an ephemeral Postgres 16, with a disposable `cip_test` migrated to head. The runner is `scripts/run-api-fast-gate.cjs` (`pnpm test:api:fast`). It runs database paths in one pytest process, then `tests/unit` in a second with `CIP_UNIT_TESTS_FORBID_DB=1`. It writes `.tmp/api-fast-summary.txt` (counts and sorted failing ids, no timings), the pytest log and junit files, all uploaded as an artifact.
+- **Measured on cip_test:** 188 + 44 passed, about 1.5 minutes.
+- **Web lint:** runs on an ESLint 9 flat config (BACKLOG-231). Baseline 0 errors, 49 warnings.
+- **Not done:** making `api-fast` a required check on `feat/integrate-*` or `main` is a GitHub admin setting (BACKLOG-246).
+
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
 
 **2026-11-18 - Final wave (b) line-up customer/period views (`feat/fwb-lineup-group-approval-20261118`, PR pending review):** the Line-up cases page groups line-up rows by customer and period with Approve/Reject per group (`POST /lineup/items/group-approval`, same per-item approval and audit as the item PATCH, one transaction). Open slice filters the master line-up to `?customer=&period=` as a view (no copy); the master all-customer line-up opens as before. Open, BACKLOG-251: economics in the slice, and which roles may approve (decision). Tests on `cip_test` only.
