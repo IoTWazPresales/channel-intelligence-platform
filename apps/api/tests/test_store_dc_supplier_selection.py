@@ -248,3 +248,70 @@ def test_monthly_reports_give_a_weekly_rate_without_double_counting(world: World
     line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
     # 5 Jan - 1 Feb: 21 month days x 10 + 7 from the week = 217 over 28 days.
     assert line["weekly_rate"] == 54.25
+
+
+def test_daily_rows_inside_a_weekly_report_are_not_added_twice(world: World):
+    """Codex re-review of PR #102 (B1)."""
+    customer = world.customer("SDC-C")
+    product = world.product()
+    site = world.code("SDC-SITE-A")
+    for index in range(4):
+        world.sell(customer, product, WEEK0 + timedelta(weeks=index), 70,
+                   soh=20 if index == 3 else None, site=site)
+    # A one-day load inside the last week repeats part of that week's total.
+    world.sell(customer, product, WEEK0 + timedelta(weeks=3, days=2), 10, site=site,
+               period_type="daily", period_grain="day")
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    assert line["weekly_rate"] == 70.0
+
+
+def test_stock_only_rows_do_not_replace_monthly_sales(world: World):
+    """Codex re-review of PR #102 (B2): a stock-only load stores units 0 without provenance."""
+    from app.models.fact_customer_sellthrough import FactCustomerSellthrough
+
+    customer = world.customer("SDC-C")
+    product = world.product()
+    site = world.code("SDC-SITE-A")
+    world.sell(customer, product, date(2026, 1, 1), 310, site=site,
+               period_type="monthly", period_grain="month")
+    world.db.flush()
+    world.db.add(
+        FactCustomerSellthrough(
+            source_key=f"sdc-{world.token}-stock-only",
+            tenant_id=world.tenant,
+            customer_id=customer.id,
+            product_id=product.id,
+            period_start_date=date(2026, 1, 19),
+            period_type="weekly",
+            period_grain="week",
+            units_sold=0,
+            reported_soh=25,
+            site_label=site,
+            figure_import_jobs={"reported_soh": 1},
+        )
+    )
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    assert line["weekly_rate"] == 70.0
+    assert line["stock_on_hand"] == 25.0
+
+
+def test_unsold_needs_reports_inside_the_unsold_window(world: World):
+    """Codex re-review of PR #102 (B3): old weeks cannot make a current gap look unsold."""
+    customer = world.customer("SDC-C")
+    product = world.product()
+    site = world.code("SDC-SITE-A")
+    for index in range(3):
+        world.sell(customer, product, WEEK0 + timedelta(weeks=index), 5, site=site)
+    world.sell(customer, product, date(2026, 3, 2), 0, soh=30, site=site)
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    assert line["unsold"] is False
+    # Four reported zero weeks in a row with stock on hand are unsold.
+    for index in range(1, 4):
+        world.sell(customer, product, date(2026, 3, 2) + timedelta(weeks=index), 0,
+                   soh=30 if index == 3 else None, site=site)
+    world.db.flush()
+    line = _site_line(build_customer_view(world.db, world.tenant, customer.id), site, product.id)
+    assert line["unsold"] is True

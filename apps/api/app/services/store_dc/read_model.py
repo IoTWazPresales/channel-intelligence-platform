@@ -51,9 +51,9 @@ def _opt(value: Any) -> float | None:
 
 
 class _Fact:
-    __slots__ = ("customer_id", "product_id", "period", "grain", "kind", "units", "soh", "site")
+    __slots__ = ("customer_id", "product_id", "period", "grain", "kind", "units", "soh", "site", "sales_reported")
 
-    def __init__(self, customer_id, product_id, period, grain, kind, units, soh, site):
+    def __init__(self, customer_id, product_id, period, grain, kind, units, soh, site, figures=None):
         self.customer_id = int(customer_id)
         self.product_id = int(product_id)
         self.period = period
@@ -62,6 +62,11 @@ class _Fact:
         self.units = _f(units)
         self.soh = _opt(soh)
         self.site = (site or "").strip()
+        # ``units_sold`` is NOT NULL, so a stock-only load stores 0. The per-figure
+        # provenance says whether a load set the units (same rule as the stock-gap check);
+        # rows stored before provenance existed have none and came from one full load.
+        provenance = figures if isinstance(figures, dict) else {}
+        self.sales_reported = units is not None and (not provenance or "units_sold" in provenance)
 
 
 def _load_facts(db: Session, tenant_id: str, customer_ids: list[int]) -> list[_Fact]:
@@ -77,6 +82,7 @@ def _load_facts(db: Session, tenant_id: str, customer_ids: list[int]) -> list[_F
             FactCustomerSellthrough.units_sold,
             FactCustomerSellthrough.reported_soh,
             FactCustomerSellthrough.site_label,
+            FactCustomerSellthrough.figure_import_jobs,
         ).where(
             FactCustomerSellthrough.tenant_id == tenant_id,
             FactCustomerSellthrough.customer_id.in_(customer_ids),
@@ -102,16 +108,21 @@ class _Sales:
     Grains are read the way the stock-gap check reads them (``grain_of``) and each period
     ends where the sell-through parser says it ends (``period_end``): a day row is that
     day, a week row its seven days, a month row the calendar month. A period's units are
-    spread evenly over its days. A day covered by a weekly or daily report ignores
-    monthly reports for that day, so mixed grains are not counted twice. A day no sales
-    report covers is missing, not zero.
+    spread evenly over its days.
+
+    Overlapping reports for one site are not added together: each day of a site takes
+    its units from one grain only, weekly first, then daily, then monthly (a weekly
+    total is a whole week; a day row inside it repeats part of it). Different sites add
+    up. A row whose load did not set units (stock-only) supplies no sales and does not
+    cover the day. A day no sales report covers is missing, not zero.
     """
 
+    _PRECEDENCE = ("month", "day", "week")  # later grains win a day
+
     def __init__(self, rows: list[_Fact]) -> None:
-        fine: dict[date, float] = defaultdict(float)
-        coarse: dict[date, float] = defaultdict(float)
+        layers: dict[str, dict[str, dict[date, float]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
         for row in rows:
-            if row.period is None:
+            if row.period is None or not row.sales_reported:
                 continue
             grain = grain_of(row.grain, row.kind)
             end = period_end(row.period, grain)
@@ -119,28 +130,36 @@ class _Sales:
             if days < 1:
                 continue
             per_day = row.units / days
-            target = coarse if grain == "month" else fine
+            target = layers[norm_label(row.site)][grain]
             for offset in range(days):
                 target[row.period + timedelta(days=offset)] += per_day
-        self.by_day: dict[date, float] = dict(coarse)
-        self.by_day.update(fine)
+        self.by_day: dict[date, float] = defaultdict(float)
+        for grains in layers.values():
+            site_days: dict[date, float] = {}
+            for grain in self._PRECEDENCE:
+                site_days.update(grains.get(grain, {}))
+            for day, value in site_days.items():
+                self.by_day[day] += value
         self.latest: date | None = max(self.by_day) if self.by_day else None
 
-    def observed_weeks(self) -> int:
-        """Monday-Sunday calendar weeks that any sales report covers."""
-        return len({day - timedelta(days=day.weekday()) for day in self.by_day})
-
-    def _window(self, weeks: int) -> tuple[float, int]:
+    def _window(self, weeks: int) -> tuple[float, int, int]:
+        """Units, reported days and reported calendar weeks in the last ``weeks`` weeks."""
         if self.latest is None or weeks < 1:
-            return 0.0, 0
+            return 0.0, 0, 0
         start = self.latest - timedelta(days=weeks * 7 - 1)
         units = 0.0
         covered = 0
+        mondays: set[date] = set()
         for day, value in self.by_day.items():
             if start <= day <= self.latest:
                 units += value
                 covered += 1
-        return units, covered
+                mondays.add(day - timedelta(days=day.weekday()))
+        return units, covered, len(mondays)
+
+    def reported_weeks_in_last(self, weeks: int) -> int:
+        """Calendar weeks inside the last ``weeks`` weeks that a sales report covers."""
+        return self._window(weeks)[2]
 
     def weekly_rate(self, weeks: int = RATE_WINDOW_WEEKS) -> float | None:
         """Units per week over the last ``weeks`` calendar weeks up to the newest report.
@@ -148,7 +167,7 @@ class _Sales:
         Only reported days count: a missing week inside the window lowers the days, not
         the units, so a gap neither inflates nor deflates the rate.
         """
-        units, covered = self._window(weeks)
+        units, covered, _weeks = self._window(weeks)
         if covered == 0:
             return None
         return units / covered * 7.0
@@ -233,7 +252,8 @@ def _line(
     unsold_n = window_count(unsold_weeks)
     window_units = sales.units_in_last_weeks(unsold_n)
     slow = is_slow(woc, cover["target_weeks"], multiple)
-    unsold = is_unsold(soh, window_units, sales.observed_weeks(), unsold_weeks)
+    # Unsold needs sales reports inside the unsold window itself, not anywhere in history.
+    unsold = is_unsold(soh, window_units, sales.reported_weeks_in_last(unsold_n), unsold_weeks)
     taken = set(executed_actions or ())
     return {
         "product_id": product_id,
