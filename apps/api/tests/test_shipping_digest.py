@@ -5,10 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.services.shipping_digest.build import group_line_rows, section_dims
-from app.services.shipping_digest.recipients import (
-    DEFAULT_SHIPPING_MAILER_RECIPIENTS,
-    intended_mailer_recipients,
-)
+from app.services.shipping_digest.recipients import intended_mailer_recipients
 from app.services.shipping_digest.render import render_html, render_text
 
 _COLS = ("distributor", "customer", "date", "sales_model", "qty")
@@ -30,7 +27,7 @@ def _digest() -> dict:
                 "eta_changes": 1,
             },
         },
-        "intended_recipients": list(DEFAULT_SHIPPING_MAILER_RECIPIENTS),
+        "intended_recipients": ["seed-one@example.com", "seed-two@example.com"],
         "sections": [
             {
                 "id": "arriving_week",
@@ -88,11 +85,11 @@ def _digest() -> dict:
     }
 
 
-def test_intended_recipients_are_the_five() -> None:
-    rec = intended_mailer_recipients()
-    assert "Warren_Eliason@asus.com" in rec
-    assert "Leigh_Sharpe@asus.com" in rec
-    assert len(rec) >= 5
+def test_intended_recipients_come_from_env_only(monkeypatch) -> None:
+    monkeypatch.delenv("CIP_SHIPPING_MAILER_RECIPIENTS", raising=False)
+    assert intended_mailer_recipients() == ()
+    monkeypatch.setenv("CIP_SHIPPING_MAILER_RECIPIENTS", "seed-one@example.com, seed-two@example.com")
+    assert intended_mailer_recipients() == ("seed-one@example.com", "seed-two@example.com")
 
 
 def test_renderer_three_sections_no_placeholder() -> None:
@@ -111,7 +108,7 @@ def test_renderer_three_sections_no_placeholder() -> None:
     assert "<h3>Pinnacle" in html
     assert "<h3>ACZA" in html
     assert "Would send To:" in text
-    assert "Leigh_Sharpe@asus.com" in text
+    assert "seed-one@example.com" in text
     for tok in ("lorem", "placeholder", "pending owner"):
         assert tok not in html.lower()
         assert tok not in text.lower()

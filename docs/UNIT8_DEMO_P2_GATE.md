@@ -33,7 +33,7 @@ Target **must not** be live `cip`. Default disposable: `cip_alembic_smoke`.
 
 ```powershell
 # From repo root
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ops/backup_cip.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ops/backup_cip.ps1 -DatabaseUrl "postgresql://<user>:<password>@127.0.0.1:5432/<db>"
 
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ops/restore_cip_smoke.ps1 `
   -DumpPath .tmp\backups\<file>.dump

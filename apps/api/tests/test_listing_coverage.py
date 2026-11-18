@@ -629,6 +629,25 @@ def test_a_delisted_listing_is_not_found_unless_another_is_watched(db_session: S
     assert row["reported"] == 2
 
 
+def test_a_delisted_listing_with_a_failed_read_is_not_found(db_session: Session) -> None:
+    """Codex review of PR #104 (B2): a 503, then a steward marks the listing delisted.
+    Delisted listings are not polled again, so the old failed read must not keep it Failing."""
+    tenant = f"t-cov-{uuid.uuid4().hex[:6]}"
+    customer = _reporting_customer(db_session, tenant)
+    product = _product(db_session, tenant)
+    _sell(db_session, tenant, customer, product)
+    listing = _listing(db_session, customer, product, status="active", url=f"https://shop-a.example.test/{product.id}")
+    _read(db_session, listing, http_status=503)
+    assert _row(customer_coverage(db_session, tenant), int(customer.id))["failing"] == 1
+    listing.status = "delisted"
+    db_session.add(listing)
+    db_session.flush()
+    row = _row(customer_coverage(db_session, tenant), int(customer.id))
+    assert row["not_found"] == 1
+    assert row["failing"] == 0
+    assert row["reported"] == 1
+
+
 def test_a_hand_registered_listing_with_no_product_is_counted_once(db_session: Session) -> None:
     """226(8): manual/CSV listings without a product are rows; seed-made ones stay with the seed."""
     from app.services.listing_capture.registry import confirm_proposal

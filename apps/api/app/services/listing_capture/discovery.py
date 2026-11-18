@@ -15,6 +15,21 @@ URL-less feed proposals are enriched in place. Each run searches at most 25 prod
 per customer/site and keeps its last product id in the shared run-state store; the
 next run resumes there, wrapping after the catalogue has been visited.
 
+Every request goes through the shared per-site fetch policy (``site_fetch``), the same
+rules the listing poll uses: the site's ``rate_limit_seconds`` spacing (default 5 s), no
+request to a site paused by an earlier 403/429, a 403/429 pauses the site and ends its
+search for this run (the product being searched is rolled back and searched again next
+run), and a run stops starting requests after the shared time budget.
+
+The budget is shared by every (customer, site) pair of a tenant, so a run does not always
+start with the lowest customer id. The pairs form one fixed cycle (customer id, then the
+customer's site order); when the budget cuts a pair short, the next run starts at that
+pair and carries on round the cycle (``discovery:<tenant>:rotation`` in the run-state
+store). Pairs before it in the cycle wait until the cycle comes back round, so a customer
+or site that uses most of the budget every run cannot starve the pairs after it. A dry
+run (``apply=False``) does not move the rotation. ``autoconfigure_sites`` rotates the
+tenants of a scheduled run the same way.
+
 An empty adapter is set to the general HTML reader after a corroborated page. Price,
 stock, the page seller, and the buy box are stored on the proposal for the steward.
 """
@@ -41,7 +56,7 @@ from app.models.listing_site import ListingSite
 from app.services.listing_capture.adapters import configured_adapter
 from app.services.listing_capture.adapters.html_page import ADAPTER_KEY as HTML_PAGE_ADAPTER
 from app.services.listing_capture.adapters.html_page import parse as parse_html
-from app.services.listing_capture.adapters.html_page import seller_from_page
+from app.services.listing_capture.adapters.html_page import seller_or_first_party
 from app.services.listing_capture.identity import (
     barcode_key,
     corroboration,
@@ -52,6 +67,12 @@ from app.services.listing_capture.identity import (
     product_models,
 )
 from app.services.listing_capture.links import confirmed_link, queue_case, remember_link
+from app.services.listing_capture.site_fetch import (
+    FetchPolicy,
+    SiteFetchGate,
+    default_fetch_policy,
+    site_spacing_seconds,
+)
 from app.services.listing_capture.site_pause import load_run_state, save_run_state
 from app.services.listing_capture.sites import SITE_KEY_RE, create_site, site_config_from_row, update_site
 
@@ -64,6 +85,8 @@ REASON_NOT_FOUND = "not_found_on_site"
 REASON_AMBIGUOUS = "ambiguous"
 REASON_READER = "reader_not_configured"
 REASON_NO_IDENTITY = "no_barcode_or_model"
+REASON_PAUSED = "site_paused"
+REASON_TIME_LIMIT = "time_limit"
 
 _HttpGet = Callable[[str], tuple[int, str]]
 _SELLER_NAME = re.compile(
@@ -99,73 +122,124 @@ def discover_reporting_customers(
     apply: bool = True,
     product_limit: int = 25,
     run_store=None,
+    fetch_policy: FetchPolicy | None = None,
 ) -> dict[str, Any]:
-    """Propose listings for reporting customers. ``apply=False`` does not write."""
+    """Propose listings for reporting customers. ``apply=False`` does not write.
+
+    ``fetch_policy`` carries the pause store, clock, sleep and time budget shared by
+    every site in this run (default: the app pause store, real time, 10 min).
+    """
     if product_limit < 1:
         raise ValueError("product_limit must be positive")
+    policy = None
+    if http_get is not None:
+        policy = fetch_policy if fetch_policy is not None else default_fetch_policy()
     entries: list[dict[str, Any]] = []
     for tid in _tenant_ids(session, tenant_id):
-        for config, customer in _reporting_customers(session, tid):
-            if str(customer.tenant_id) != tid:
+        pairs = [
+            (config, customer)
+            for config, customer in _reporting_customers(session, tid)
+            if str(customer.tenant_id) == tid
+        ]
+        rotate = apply and policy is not None
+        rotation_key = f"discovery:{tid}:rotation"
+        plans: list[dict[str, Any]] = []
+        units: list[tuple[int, str]] = []
+        for config, customer in pairs:
+            seed = _seed(config)
+            plan: dict[str, Any] = {"customer": customer, "seed": seed, "keys": [], "sites": {}, "entry": None}
+            try:
+                plan["keys"] = _site_keys(session, tenant_id=tid, customer_id=int(customer.id), seed=seed)
+            except Exception as exc:
+                plan["entry"] = _failed_entry(customer, tid, exc)
+            if plan["entry"] is None and not plan["keys"]:
+                plan["entry"] = _entry(
+                    customer_id=int(customer.id),
+                    tenant_id=tid,
+                    site_key=None,
+                    reason=REASON_NO_SITE_KEY,
+                )
+            plan["own_site"] = bool(_seed_origin(seed)) and not bool(str(seed.get("marketplace") or "").strip())
+            plans.append(plan)
+            units.extend((len(plans) - 1, key) for key in plan["keys"])
+        if rotate:
+            units = _rotated_units(units, plans, load_run_state(rotation_key, store=run_store) or {})
+        cut_short: dict[str, Any] | None = None
+        for index, key in units:
+            plan = plans[index]
+            if plan["entry"] is not None:
                 continue
+            customer = plan["customer"]
             try:
                 with session.begin_nested():
-                    entry = _discover_customer(
+                    site_row = _discover_site(
                         session,
                         customer=customer,
-                        seed=_seed(config),
+                        site_key=key,
+                        seed=plan["seed"],
+                        own_site=plan["own_site"],
                         http_get=http_get,
                         apply=apply,
                         product_limit=product_limit,
                         run_store=run_store,
+                        policy=policy,
                     )
             except Exception as exc:
-                entry = _entry(
-                    customer_id=int(customer.id),
-                    tenant_id=tid,
-                    site_key=None,
-                    reason="discovery_failed",
-                    detail=type(exc).__name__,
-                )
-            entries.append(entry)
+                plan["entry"] = _failed_entry(customer, tid, exc)
+                continue
+            plan["sites"][key] = site_row
+            if cut_short is None and _site_time_limited(site_row):
+                cut_short = {"customer_id": int(customer.id), "site_key": key}
+        if rotate:
+            save_run_state(rotation_key, cut_short or {"customer_id": 0, "site_key": ""}, store=run_store)
+        for plan in plans:
+            if plan["entry"] is None:
+                plan["entry"] = _customer_entry(plan["customer"], [plan["sites"][k] for k in plan["keys"]])
+            entries.append(plan["entry"])
     return {"customers": entries}
 
 
-def _discover_customer(
-    session: Session,
-    *,
-    customer: DimCustomer,
-    seed: dict[str, Any],
-    http_get: _HttpGet | None,
-    apply: bool,
-    product_limit: int,
-    run_store=None,
-) -> dict[str, Any]:
+def _failed_entry(customer: DimCustomer, tenant_id: str, exc: Exception) -> dict[str, Any]:
+    return _entry(
+        customer_id=int(customer.id),
+        tenant_id=tenant_id,
+        site_key=None,
+        reason="discovery_failed",
+        detail=type(exc).__name__,
+    )
+
+
+def _rotated_units(
+    units: list[tuple[int, str]], plans: list[dict[str, Any]], state: dict[str, Any]
+) -> list[tuple[int, str]]:
+    """The cycle of (customer, site) pairs, starting at the pair the budget last cut short.
+
+    If that pair no longer exists, start at the next pair after it in the cycle.
+    """
+    start_customer = int(state.get("customer_id") or 0)
+    start_key = str(state.get("site_key") or "")
+    if start_customer <= 0 or not units:
+        return units
+    for position, (index, key) in enumerate(units):
+        if int(plans[index]["customer"].id) == start_customer and key == start_key:
+            return units[position:] + units[:position]
+    for position, (index, _key) in enumerate(units):
+        if int(plans[index]["customer"].id) > start_customer:
+            return units[position:] + units[:position]
+    return units
+
+
+def _site_time_limited(site_row: dict[str, Any] | None) -> bool:
+    return ((site_row or {}).get("fetch") or {}).get("stopped") == REASON_TIME_LIMIT
+
+
+def _time_limited(entry: dict[str, Any]) -> bool:
+    """True when the shared time budget cut one of this customer's sites short."""
+    return any(_site_time_limited(site) for site in entry.get("sites") or [])
+
+
+def _customer_entry(customer: DimCustomer, site_rows: list[dict[str, Any]]) -> dict[str, Any]:
     tenant_id = str(customer.tenant_id)
-    keys = _site_keys(session, tenant_id=tenant_id, customer_id=int(customer.id), seed=seed)
-    own_site = bool(_seed_origin(seed)) and not bool(str(seed.get("marketplace") or "").strip())
-    if not keys:
-        return _entry(
-            customer_id=int(customer.id),
-            tenant_id=tenant_id,
-            site_key=None,
-            reason=REASON_NO_SITE_KEY,
-        )
-    site_rows: list[dict[str, Any]] = []
-    for key in keys:
-        site_rows.append(
-            _discover_site(
-                session,
-                customer=customer,
-                site_key=key,
-                seed=seed,
-                own_site=own_site,
-                http_get=http_get,
-                apply=apply,
-                product_limit=product_limit,
-                run_store=run_store,
-            )
-        )
     ready = [row for row in site_rows if row["reader_ready"] and row["proposed_listings"] + row["watched_listings"] > 0]
     reason = None if ready else _first_reason(site_rows)
     return _entry(
@@ -193,6 +267,7 @@ def _discover_site(
     apply: bool,
     product_limit: int,
     run_store=None,
+    policy: FetchPolicy | None = None,
 ) -> dict[str, Any]:
     from app.services.listing_capture.autoconfig import _seed_seller, _seller_present
 
@@ -228,6 +303,21 @@ def _discover_site(
             reader=_reader_name(row),
             reader_ready=_reader_ready(row),
         )
+    gate = SiteFetchGate(
+        site_key=site_key,
+        spacing_seconds=site_spacing_seconds(row.rate_limit_seconds),
+        policy=policy if policy is not None else default_fetch_policy(),
+    )
+    if gate.check_pause():
+        return _site_entry(
+            site_key,
+            reason=REASON_PAUSED,
+            reader=_reader_name(row),
+            reader_ready=_reader_ready(row),
+            fetch=gate.summary(),
+        )
+    raw_get = http_get
+    http_get = gate.bind(raw_get)
 
     proposed = 0
     created = 0
@@ -238,11 +328,13 @@ def _discover_site(
     previous = load_run_state(cursor_key, store=run_store) or {}
     after = int(previous.get("after_product_id") or 0)
     ordered = sorted(set(product_ids))
-    remaining = [pid for pid in ordered if pid > after] or ordered
-    last_product_id = 0
+    resumed = [pid for pid in ordered if pid > after]
+    remaining = resumed or ordered
+    last_product_id = after if resumed else 0
     for product_id in remaining:
         if searched >= product_limit:
             break
+        previous_product_id = last_product_id
         last_product_id = product_id
         if _has_listing(session, customer_id=int(customer.id), site_key=site_key, product_id=product_id):
             watched += 1
@@ -260,16 +352,35 @@ def _discover_site(
         if not product_barcodes(product) and not product_models(product):
             reasons.append(REASON_NO_IDENTITY)
             continue
+        if not gate.can_send():
+            last_product_id = previous_product_id
+            break
+        # A refusal or the time budget can cut a search short; its partial result must not
+        # be written (it would look like "not found"), so each search has its own savepoint.
+        savepoint = session.begin_nested() if apply else None
+        try:
+            outcome = _find_and_propose(
+                session,
+                customer=customer,
+                product=product,
+                row=row,
+                seed=seed,
+                http_get=http_get,
+                apply=apply,
+            )
+        except Exception:
+            if savepoint is not None and savepoint.is_active:
+                savepoint.rollback()
+            raise
+        if gate.stopped is not None:
+            if savepoint is not None and savepoint.is_active:
+                savepoint.rollback()
+            last_product_id = previous_product_id
+            row = _load_site(session, tenant_id, site_key) or row
+            break
+        if savepoint is not None and savepoint.is_active:
+            savepoint.commit()
         searched += 1
-        outcome = _find_and_propose(
-            session,
-            customer=customer,
-            product=product,
-            row=row,
-            seed=seed,
-            http_get=http_get,
-            apply=apply,
-        )
         row = _load_site(session, tenant_id, site_key) or row
         if outcome["created"]:
             created += 1
@@ -283,8 +394,11 @@ def _discover_site(
         save_run_state(cursor_key, {"after_product_id": next_after}, store=run_store)
     ready = _reader_ready(row)
     reason = None
-    if proposed + watched == 0:
-        reason = reasons[0] if reasons else REASON_NOT_FOUND
+    if gate.stopped == "site_paused":
+        reason = REASON_PAUSED
+    elif proposed + watched == 0:
+        fallback = REASON_TIME_LIMIT if gate.stopped else REASON_NOT_FOUND
+        reason = reasons[0] if reasons else fallback
     elif not ready:
         reason = REASON_READER
     return _site_entry(
@@ -296,6 +410,7 @@ def _discover_site(
         proposed_created=created,
         watched_listings=watched,
         next_after_product_id=next_after or None,
+        fetch=gate.summary(),
     )
 
 
@@ -524,7 +639,8 @@ def _capture_url(
     availability = parsed.availability if parsed.availability in {"in_stock", "out_of_stock"} else None
     price = parsed.price if parsed.parse_status == "ok" else None
     # The seller of the offer that supplied the price (BACKLOG-226 item 4), not the first one.
-    seller = seller_from_page(body, price) or (config.first_party_seller or "").strip() or None
+    # An ambiguous page gives no seller rather than the own seller (Codex review of PR #104, B1).
+    seller = seller_or_first_party(body, price, config.first_party_seller)
     sellers = _seller_names(body)
     if seller and seller not in sellers:
         sellers.insert(0, seller)
@@ -1049,8 +1165,10 @@ def _site_entry(
     proposed_created: int = 0,
     watched_listings: int = 0,
     next_after_product_id: int | None = None,
+    fetch: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
+        "fetch": fetch,
         "site_key": site_key,
         "reason": reason,
         "reader": reader,
