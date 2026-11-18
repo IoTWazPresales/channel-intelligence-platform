@@ -86,6 +86,11 @@ def seller_from_json_ld(text: str, price: float | None = None) -> str | None:
     ``name`` is still read. With a price, only an offer at that price counts; without one,
     only a page with a single seller-bearing offer names a seller. None when unsure.
     """
+    return _json_ld_seller(text, price)[0]
+
+
+def _json_ld_seller(text: str, price: float | None) -> tuple[str | None, bool]:
+    """(seller or None, whether any JSON-LD offer names a seller)."""
     offers: list[dict[str, Any]] = []
     for block in _JSON_LD_BLOCK.findall(text or ""):
         try:
@@ -94,23 +99,27 @@ def seller_from_json_ld(text: str, price: float | None = None) -> str | None:
             continue
     named = [(o, _seller_name(o.get("seller"))) for o in offers]
     named = [(o, name) for o, name in named if name]
+    if not named:
+        return None, False
     if price is not None:
         at_price = {name for o, name in named if _price_of(o) == float(price)}
-        return next(iter(at_price)) if len(at_price) == 1 else None
+        return (next(iter(at_price)) if len(at_price) == 1 else None), True
     sellers = {name for _o, name in named}
-    return next(iter(sellers)) if len(sellers) == 1 else None
+    return (next(iter(sellers)) if len(sellers) == 1 else None), True
 
 
 def seller_from_page(text: str, price: float | None = None) -> str | None:
     """The seller the page itself names, or None when it names none.
 
-    The JSON-LD offer that supplied the price wins; otherwise the first ``"seller"`` key in
-    the page (embedded JSON that is not JSON-LD).
+    The JSON-LD offer that supplied the price wins. When the page's JSON-LD offers name
+    sellers but none can be tied to the price, the answer is None: the first ``"seller"`` key
+    would be one of those same offers, a guess. Only a page whose JSON-LD names no seller
+    falls back to the first ``"seller"`` key (embedded JSON that is not JSON-LD).
     """
     if not text:
         return None
-    from_offer = seller_from_json_ld(text, price)
-    if from_offer:
+    from_offer, json_ld_names_sellers = _json_ld_seller(text, price)
+    if json_ld_names_sellers:
         return from_offer
     match = _SELLER_OBJECT.search(text) or _SELLER_STRING.search(text)
     if not match:
