@@ -1,0 +1,204 @@
+"""Discovery shares the poll's per-site spacing and 403/429 pause (alignment D5, finding 2).
+
+In-memory models, mocked sessions and HTTP only.
+"""
+
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
+
+import pytest
+from app.models.customer_report_config import CustomerReportConfig
+from app.models.dimensions import DimCustomer, DimProduct
+from app.models.listing_site import ListingSite
+from app.services.listing_capture import discovery, site_pause
+from app.services.listing_capture.site_fetch import FetchPolicy, SiteFetchGate, site_spacing_seconds
+from app.services.listing_capture.site_pause import MemorySitePauseStore
+
+HOST = "https://catalogue.example.test"
+TENANT = "unit-tenant"
+SITE_KEY = "pace-catalogue"
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.t = 0.0
+        self.sleeps: list[float] = []
+
+    def __call__(self) -> float:
+        return self.t
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(round(seconds, 3))
+        self.t += seconds
+
+
+def _policy(store=None, clock=None, limit=600.0):
+    clock = clock or FakeClock()
+    return clock, FetchPolicy(
+        store=store if store is not None else MemorySitePauseStore(),
+        clock=clock,
+        sleep=clock.sleep,
+        time_limit_seconds=limit,
+    )
+
+
+def _site(**fields):
+    return ListingSite(**{
+        "id": 7, "tenant_id": TENANT, "site_key": SITE_KEY, "display_name": "Catalogue",
+        "adapter_key": "html_page", "is_active": True, "first_party_seller": "Counter",
+        "search_url_pattern": f"{HOST}/search?q={{query}}", "sellers": [], **fields,
+    })
+
+
+def _products(n):
+    return {pid: DimProduct(id=pid, tenant_id=TENANT, sku=f"sku-{pid}", name=f"MODEL{pid}X",
+                            model_name=f"MODEL{pid}X") for pid in range(1, n + 1)}
+
+
+def _mock(monkeypatch, products, row):
+    session = MagicMock()
+    session.scalar.return_value = None
+    session.get.side_effect = lambda model, pid: products.get(pid)
+    customer = DimCustomer(id=11, tenant_id=TENANT, name="Counter")
+    config = CustomerReportConfig(customer_id=11, reports_expected=True,
+                                  feed_profile_json={"listing_seed": {"marketplace": row.site_key}})
+    monkeypatch.setattr(discovery, "_reporting_customers", lambda *args: [(config, customer)])
+    monkeypatch.setattr(discovery, "_load_site", lambda *args: row)
+    monkeypatch.setattr(discovery, "_catalogue_product_ids", lambda *args, **kwargs: list(products))
+    monkeypatch.setattr(discovery, "_has_listing", lambda *args, **kwargs: False)
+    monkeypatch.setattr(discovery, "_queue_exists", lambda *args, **kwargs: False)
+    monkeypatch.setattr(discovery, "_proposed_seed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(discovery, "confirmed_link", lambda *args: None)
+    monkeypatch.setattr(discovery, "_rejected_urls", lambda *args: set())
+    monkeypatch.setattr(discovery, "remember_link", MagicMock())
+    queue = MagicMock()
+    monkeypatch.setattr(discovery, "queue_case", queue)
+    return session, queue
+
+
+def _site_row(report):
+    return report["customers"][0]["sites"][0]
+
+
+def test_spacing_default_and_configured():
+    assert site_spacing_seconds(None) == 5.0
+    assert site_spacing_seconds(2) == 2.0
+    assert site_spacing_seconds(-1) == 0.0
+
+
+def test_discovery_waits_site_spacing_between_requests(monkeypatch):
+    row = _site(rate_limit_seconds=3)
+    session, _queue = _mock(monkeypatch, _products(2), row)
+    clock, policy = _policy()
+    calls: list[float] = []
+
+    def http(url, headers=None):
+        calls.append(clock.t)
+        return 200, "no matches"
+
+    discovery.discover_reporting_customers(session, tenant_id=TENANT, http_get=http,
+                                           run_store=MemorySitePauseStore(), fetch_policy=policy)
+    assert len(calls) >= 2
+    gaps = [b - a for a, b in zip(calls, calls[1:], strict=False)]
+    assert all(gap >= 3 for gap in gaps), gaps
+    assert clock.sleeps and all(s <= 3 for s in clock.sleeps)
+
+
+def test_paused_site_gets_no_request(monkeypatch):
+    row = _site()
+    session, _queue = _mock(monkeypatch, _products(2), row)
+    store = MemorySitePauseStore()
+    site_pause.pause_site(store, SITE_KEY, http_status=429, now=datetime.now(UTC))
+    _clock, policy = _policy(store)
+    http = MagicMock(return_value=(200, "no matches"))
+    run_store = MemorySitePauseStore()
+    run_store.set(f"discovery:{TENANT}:11:7", {"after_product_id": 1}, ttl_seconds=600)
+    report = discovery.discover_reporting_customers(session, tenant_id=TENANT, http_get=http,
+                                                    run_store=run_store, fetch_policy=policy)
+    http.assert_not_called()
+    entry = _site_row(report)
+    assert entry["reason"] == discovery.REASON_PAUSED
+    assert entry["fetch"]["stopped"] == "site_paused"
+    assert run_store.get(f"discovery:{TENANT}:11:7") == {"after_product_id": 1}
+
+
+@pytest.mark.parametrize("refusal", [403, 429])
+def test_refusal_pauses_site_stops_run_and_writes_nothing(monkeypatch, refusal):
+    row = _site()
+    products = _products(3)
+    session, queue = _mock(monkeypatch, products, row)
+    store = MemorySitePauseStore()
+    _clock, policy = _policy(store)
+    urls: list[str] = []
+
+    def http(url, headers=None):
+        urls.append(url)
+        if "MODEL2X" in url:
+            return refusal, "<html>blocked</html>"
+        return 200, "no matches"
+
+    run_store = MemorySitePauseStore()
+    report = discovery.discover_reporting_customers(session, tenant_id=TENANT, http_get=http,
+                                                    run_store=run_store, fetch_policy=policy)
+    # Nothing after the refusal: product 3 is never searched.
+    assert not any("MODEL3X" in u for u in urls)
+    assert sum(1 for u in urls if "MODEL2X" in u) == 1
+    record = store.get(SITE_KEY)
+    assert record and record["http_status"] == refusal and record["hours"] == 1
+    entry = _site_row(report)
+    assert entry["reason"] == discovery.REASON_PAUSED
+    assert entry["fetch"]["pause"]["http_status"] == refusal
+    # The interrupted product is searched again next run.
+    assert run_store.get(f"discovery:{TENANT}:11:7") == {"after_product_id": 1}
+    queue.assert_not_called()
+
+
+def test_refused_search_is_rolled_back(monkeypatch):
+    row = _site()
+    session, _queue = _mock(monkeypatch, _products(1), row)
+    savepoint = MagicMock()
+    savepoint.is_active = True
+    session.begin_nested.return_value = savepoint
+    _clock, policy = _policy()
+    discovery.discover_reporting_customers(
+        session, tenant_id=TENANT, http_get=lambda url, headers=None: (403, ""),
+        run_store=MemorySitePauseStore(), fetch_policy=policy,
+    )
+    savepoint.rollback.assert_called()
+    savepoint.commit.assert_not_called()
+
+
+def test_pause_set_by_discovery_holds_back_the_poll_key():
+    store = MemorySitePauseStore()
+    _clock, policy = _policy(store)
+    gate = SiteFetchGate(site_key="Pace-Catalogue", spacing_seconds=0, policy=policy)
+    assert gate.get(lambda url: (429, "x"), f"{HOST}/a") == (429, "")
+    assert gate.get(lambda url: (200, "ok"), f"{HOST}/b") == (429, "")
+    # Same key the poll checks (lower-cased marketplace).
+    assert site_pause.paused_until(store, "pace-catalogue", now=datetime.now(UTC)) is not None
+
+
+def test_good_response_clears_an_expired_pause_record():
+    store = MemorySitePauseStore()
+    past = datetime.now(UTC) - timedelta(hours=2)
+    site_pause.pause_site(store, SITE_KEY, http_status=403, now=past)
+    _clock, policy = _policy(store)
+    gate = SiteFetchGate(site_key=SITE_KEY, spacing_seconds=0, policy=policy)
+    assert gate.get(lambda url: (200, "ok"), f"{HOST}/a") == (200, "ok")
+    assert store.get(SITE_KEY) is None
+
+
+def test_time_budget_stops_new_requests_and_keeps_cursor(monkeypatch):
+    row = _site(rate_limit_seconds=5)
+    session, _queue = _mock(monkeypatch, _products(4), row)
+    clock, policy = _policy(limit=7.0)
+    http = MagicMock(return_value=(200, "no matches"))
+    run_store = MemorySitePauseStore()
+    report = discovery.discover_reporting_customers(session, tenant_id=TENANT, http_get=http,
+                                                    run_store=run_store, fetch_policy=policy)
+    assert clock.t < 7.0
+    entry = _site_row(report)
+    assert entry["fetch"]["stopped"] == "time_limit"
+    after = (run_store.get(f"discovery:{TENANT}:11:7") or {}).get("after_product_id")
+    assert after in (0, 1, 2)
+    assert entry["reason"] in (discovery.REASON_TIME_LIMIT, discovery.REASON_NOT_FOUND)
