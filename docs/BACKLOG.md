@@ -3739,7 +3739,6 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Probe: Codex network sandbox on Windows (2026-11-16)** | Reported by the CIP coordinator's probe: a Codex run with `sandbox_workspace_write.network_access=false` still reached the network on Windows. `git ls-remote origin` succeeded, and Postgres on `127.0.0.1:5432` accepted a TCP connection. So option (3) does not stop a push or a database connection on this PC. `~/.codex/config.toml` sets only `windows.sandbox = "unelevated"` (last changed 2026-11-12) and no `sandbox_workspace_write` table, so the probe set the option for its own run. What remains: (1) the GitHub ruleset is the only server-side control for `main`; (2) the database default, a read-only builder role and a `127.0.0.1` bind are the controls for `cip`. A TCP connection being accepted is not proof that a login or write would succeed; the `cip` password in `.env.example` means it would. |
 | **TRIGGER** | Before the next Astra builder lane, or before any builder is given database or push work. |
 
-## BACKLOG-241 — W1-A replenishment semantics still open after the supplier/delivery fix
 ---
 
 ## BACKLOG-242 — Aged-stock rule consistency: what is left after 2026-11-18
@@ -3765,7 +3764,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Done in the meantime** | 2026-11-18 (`fix/w1b-discovery-pacing-20261118`): discovery now sends every request through the shared per-site fetch policy (`site_fetch.py`): site spacing, 403/429 pause, time budget. The autoconfigure reader probe uses the same policy, spacing is per site across customers, and the steward POST has a 45 s budget per phase. Codex review fixes: the shared budget rotates round one fixed cycle of (customer, site) pairs per tenant (`discovery:<tenant>:rotation`): when the budget cuts a pair short, the next run starts at that pair and carries on round the cycle, so neither an earlier customer nor a customer with several sites can starve the pairs after it. A scheduled run over every tenant rotates tenants (`discovery:tenant-rotation`): the next run starts at the first tenant after this run's starting tenant that the budget cut short, and if only the starting tenant was cut short it still moves on one tenant, so a tenant interrupted on every run cannot keep the first place (third review round, approved by Warren 15:03). A single-tenant (steward) run leaves the tenant rotation alone. |
 | **TRIGGER** | Warren approves the reader-profile migration, or a second structured-API site is onboarded. |
 
-## BACKLOG-240 — Remaining tenant-specific defaults in application code
+## BACKLOG-241 — W1-A replenishment semantics still open after the supplier/delivery fix
 
 | Field | Detail |
 |-------|--------|
