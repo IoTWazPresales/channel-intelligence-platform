@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, joinedload, load_only
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.cpor import CporCase, CporCaseLine
+from app.models.customer_report_config import CustomerReportConfig
 from app.models.derived import WeeksOfCoverObservation
 from app.models.dimensions import DimCompetitorBrand, DimCompetitorProduct, DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
@@ -27,6 +28,7 @@ from app.services.store_dc.rules import (
     is_slow,
     is_weekly,
     norm_label,
+    slow_multiple as configured_slow_multiple,
     weekly_rate,
     weeks_of_cover,
 )
@@ -643,6 +645,13 @@ def _approved_competitor_prices(session: Session, product_id: int) -> list[dict[
     return prices
 
 
+def _customer_slow_multiple(session: Session, customer_id: int) -> float:
+    cfg = session.scalar(
+        select(CustomerReportConfig).where(CustomerReportConfig.customer_id == int(customer_id))
+    )
+    return configured_slow_multiple(cfg)
+
+
 def load_promotion_line_evidence(
     session: Session,
     *,
@@ -651,9 +660,13 @@ def load_promotion_line_evidence(
     distributor_id: int | None,
     target_weeks: float | None = None,
     tenant_id: str = "default",
-    slow_multiple: float = DEFAULT_SLOW_COVER_MULTIPLE,
+    slow_multiple: float | None = None,
 ) -> dict[str, Any]:
-    """Listing, approved competitor prices, and customer × product cover for one plan line."""
+    """Listing, approved competitor prices, and customer × product cover for one plan line.
+
+    ``slow_multiple`` defaults to the customer's configured slow-cover multiple, the same
+    setting the store and DC board uses, and the shared fallback when none is stored.
+    """
     listing: dict[str, Any] = {
         "listed": False,
         "listing_count": 0,
@@ -720,6 +733,10 @@ def load_promotion_line_evidence(
                     "Competitor prices are stored, and none are on an approved map for this product."
                 )
         if customer_id is not None:
+            multiple = slow_multiple
+            if multiple is None:
+                multiple = _customer_slow_multiple(session, int(customer_id))
+            cover["slow_multiple"] = float(multiple)
             sellthrough_rows = session.execute(
                 select(
                     FactCustomerSellthrough.period_start_date,
@@ -738,7 +755,7 @@ def load_promotion_line_evidence(
                 customer_sku_cover_from_rows(
                     sellthrough_rows,
                     target_weeks=target_weeks,
-                    multiple=slow_multiple,
+                    multiple=multiple,
                 )
             )
         woc_stmt = select(WeeksOfCoverObservation.weeks_of_cover).where(

@@ -25,6 +25,12 @@ SEEDED_INTELLIGENCE_EXCLUDE_CODES = frozenset(
 )
 
 
+# Move and Return stock actions are logistics, not a support claim. They are created with
+# the flag set, and the exclusion endpoint refuses to clear it, so the flag alone keeps them
+# out of commercial intelligence (query model rules reuse this predicate as is).
+STOCK_ACTION_ORIGIN = "stock_action"
+
+
 def where_commercial_intelligence() -> ColumnElement[bool]:
     return CporCase.intelligence_exclude.is_(False)
 
