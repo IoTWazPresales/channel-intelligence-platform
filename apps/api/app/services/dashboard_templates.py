@@ -212,7 +212,11 @@ TEMPLATES: tuple[Template, ...] = (
                 ("customer",),
                 layout=(0, 13, 12, 8), sort=(f"{CST}.units", "desc"),
             ),
-            TemplateWidget("Sell-through units by week", "line", (f"{CST}.units",), ("period",), "week", (0, 21, 12, 8)),
+            # Monthly: an assigned book can mix weekly and monthly reporters, and sell-through is
+            # never split finer than it was reported (W-ONE-STORED-PERIOD). BACKLOG-229.
+            TemplateWidget(
+                "Sell-through units by month", "line", (f"{CST}.units",), ("period",), "month", (0, 21, 12, 8),
+            ),
         ),
         left_out=(
             LeftOut("Restock flags", pending=f"{CST}.restock_flag"),

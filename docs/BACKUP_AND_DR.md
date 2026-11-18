@@ -110,10 +110,7 @@ If the API does not run as the same Windows user, set `CIP_OPS_STATE_DIR` to the
   every native step without restoring anything.
 - Pytest: `tests/unit/test_ops_health.py` covers missing, pending, untracked and stale/future
   receipts, the exact window boundary, and the endpoint with a mocked session.
-- Round 1 preparation ran seven report-health cases against an in-memory candidate with
-  pytest capture/cache/conftest loading disabled. The normal API environment is absent here;
-  endpoint tests and the repository suites were not run. PowerShell parser checks were blocked
-  by Constrained Language mode; Pester remains for the orchestrator.
+- Fix round 1 results: Pester nightly_backup_cip.Tests.ps1 37 passed and restore_cip_smoke.Tests.ps1 17 passed; cip_test 73 passed (ops logs/overview health/unit ops health and config tests); web tsc 0 and vitest administration 18 passed. No real backup, restore, scheduler registration or service restart was run.
 - Scheduler installation, authorized real backup/restore proof, database-backed endpoint tests
   on `cip_test`, and browser verification remain required (BACKLOG-247).
 
