@@ -56,4 +56,56 @@ describe('CaseSidePanel', () => {
     fireEvent.click(screen.getByTestId('planner-side-open'));
     expect(onOpen).toHaveBeenCalledWith(41);
   });
+  describe('evidence and next actions (mock-up alignment)', () => {
+    it('shows the evidence basis and the number of claim files applied when the row carries them', () => {
+      renderWithProviders(
+        <CaseSidePanel
+          row={{
+            ...row,
+            status: 'ended',
+            evidence_basis: 'claim_evidenced',
+            settle_readiness: { fx_declared: true, roe_snapshot: 18, open_assumption_count: 0, claim_evidence_count: 2 },
+          }}
+          onOpen={vi.fn()}
+          onClear={vi.fn()}
+        />,
+      );
+      const evidence = screen.getByTestId('planner-side-evidence');
+      expect(evidence).toHaveTextContent(/claim files applied2/i);
+      expect(evidence).toHaveTextContent(/claim/i);
+    });
+    it('says no claim file is applied when the count is zero, and omits the line when the row has no readiness data', () => {
+      const { unmount } = renderWithProviders(
+        <CaseSidePanel
+          row={{ ...row, settle_readiness: { fx_declared: true, roe_snapshot: 18, open_assumption_count: 0, claim_evidence_count: 0 } }}
+          onOpen={vi.fn()}
+          onClear={vi.fn()}
+        />,
+      );
+      expect(screen.getByTestId('planner-side-evidence')).toHaveTextContent(/claim files applied0/i);
+      unmount();
+      renderWithProviders(<CaseSidePanel row={row} onOpen={vi.fn()} onClear={vi.fn()} />);
+      expect(screen.queryByTestId('planner-side-evidence')).toBeNull();
+    });
+    it('lists what is waiting on this case from the action queue, and says so when nothing is', () => {
+      const { unmount } = renderWithProviders(
+        <CaseSidePanel
+          row={row}
+          actions={[
+            { key: 'awaiting-41', kind: 'awaiting_approval', caseId: 41, caseCode: 'CPR-41', label: 'CPR-41 · awaiting approval · overdue', hint: 'The window started 2026-11-10: approve or reject it now.', tone: 'warning', overdue: true },
+          ]}
+          onOpen={vi.fn()}
+          onClear={vi.fn()}
+        />,
+      );
+      expect(screen.getByTestId('planner-side-next-actions')).toHaveTextContent('approve or reject it now');
+      unmount();
+      renderWithProviders(<CaseSidePanel row={row} actions={[]} onOpen={vi.fn()} onClear={vi.fn()} />);
+      expect(screen.getByTestId('planner-side-next-actions')).toHaveTextContent(/nothing waiting on this case/i);
+    });
+    it('does not claim nothing is waiting when the queue is not known', () => {
+      renderWithProviders(<CaseSidePanel row={row} onOpen={vi.fn()} onClear={vi.fn()} />);
+      expect(screen.queryByTestId('planner-side-next-actions')).toBeNull();
+    });
+  });
 });

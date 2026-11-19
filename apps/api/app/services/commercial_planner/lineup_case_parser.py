@@ -43,6 +43,10 @@ from app.services.commercial_planner.lineup_pricing_resolution import (
     resolve_lineup_pricing,
     sanitize_pct_evidence,
 )
+from app.services.commercial_planner.lineup_case_supersession import (
+    decide_replacement_supersession,
+    soft_supersede_lineup_case,
+)
 from app.services.lineup.new_customer_proposal import reporting_customer_ids
 from app.services.lineup.reporting_gate import (
     cap_refused_rows,
@@ -820,6 +824,41 @@ async def parse_current_lineup_file(
                     warnings.append(flag)
             meta = dict(job.staged_metadata) if isinstance(job.staged_metadata, dict) else {}
             meta["lineup_bu_resolution"] = bu_report.to_dict()
+            job.staged_metadata = meta
+
+        # An import that replaces an existing case (bulk backfill) retires it here, in the same
+        # transaction as the lines, and only when this parse kept at least one row. A replacement
+        # whose rows were all refused (or that is empty) leaves the existing case and its PO
+        # links untouched, and says why (PR #122 round 1, B1).
+        replaces_raw = parse_opts.get("replaces_case_id")
+        if replaces_raw is not None:
+            replaces_id = int(replaces_raw)
+            decision = decide_replacement_supersession(
+                eligible_line_count=len(lines_to_add), refused_count=len(refused_all)
+            )
+            superseded = bool(decision["supersede"])
+            reason = decision["reason"]
+            if superseded:
+                try:
+                    await db.run_sync(
+                        lambda s: soft_supersede_lineup_case(
+                            s, loser_case_id=replaces_id, winner_case_id=int(case_id)
+                        )
+                    )
+                except ValueError:
+                    superseded, reason = False, "existing_case_not_found"
+            if not superseded:
+                warnings.append(
+                    f"existing case #{replaces_id} was kept: {reason} "
+                    f"({len(refused_all)} row(s) refused, {len(lines_to_add)} kept)"
+                )
+            meta = dict(job.staged_metadata) if isinstance(job.staged_metadata, dict) else {}
+            meta["lineup_replacement"] = {
+                "existing_case_id": replaces_id,
+                "superseded": superseded,
+                "reason": reason,
+                "refused_count": len(refused_all),
+            }
             job.staged_metadata = meta
 
         job.status = "completed"

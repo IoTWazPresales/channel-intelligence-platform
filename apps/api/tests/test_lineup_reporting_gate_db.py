@@ -131,3 +131,32 @@ async def test_parse_preview_counts_the_rows_an_apply_would_refuse(session):
         r for r in preview.rows if "customer_not_reporting" in (r.get("diagnostic_codes") or [])
     ]
     assert [r["customer_id"] for r in flagged] == [silent.id]
+
+
+@pytest.mark.anyio
+async def test_a_merged_away_customer_is_not_reporting_anywhere(session):
+    """Fix round 1, item 3: one definition (reports expected AND not merged) for every check."""
+    from app.services.lineup.new_customer_proposal import (
+        ProposalError,
+        ensure_reporting_customer,
+        list_reporting_customers,
+        reporting_customer_ids,
+    )
+
+    tag = secrets.token_hex(3)
+    reporting, silent, _no_config, _product = await _world(session, tag)
+    assert reporting.id in await reporting_customer_ids(session)
+
+    reporting.merged_into_customer_id = silent.id  # merged away, flag still ticked
+    await session.flush()
+
+    assert reporting.id not in await reporting_customer_ids(session)
+    listed = await session.run_sync(lambda s: {c["id"] for c in list_reporting_customers(s)})
+    assert reporting.id not in listed
+
+    def _check(sync_session):
+        with pytest.raises(ProposalError) as err:
+            ensure_reporting_customer(sync_session, reporting.id)
+        return err.value.code
+
+    assert await session.run_sync(_check) == "customer_not_reporting"

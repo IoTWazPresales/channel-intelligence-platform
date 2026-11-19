@@ -46,6 +46,7 @@ import {
   countPlanning,
   LIFECYCLE_STAGES,
   ORIGIN_LABEL,
+  PLANNING_STAGES,
   STAGE_LABEL,
   stageTone,
   type PlanStage,
@@ -65,11 +66,12 @@ import {
   type CalendarClashSummary,
   type CaseCounts,
 } from '@/features/promotions-funding/plannerCards';
-import { ActionQueuePanel } from '@/features/promotions-funding/plannerLayout/ActionQueuePanel';
-import { buildActionQueue } from '@/features/promotions-funding/plannerLayout/actionQueue';
+import { ActionQueuePanel, type QueueCard } from '@/features/promotions-funding/plannerLayout/ActionQueuePanel';
+import { buildActionQueue, queueSummary } from '@/features/promotions-funding/plannerLayout/actionQueue';
 import { CaseSidePanel } from '@/features/promotions-funding/plannerLayout/CaseSidePanel';
 import { PlannerTimeline } from '@/features/promotions-funding/plannerLayout/PlannerTimeline';
 import type { CporCaseListRow, CporCasesPage } from '@/features/promotions-funding/types';
+import { clashSummaryKey, invalidateClashSummary } from '@/features/promotions-funding/calendarClashKeys';
 import { apiGet, apiPost } from '@/lib/api';
 import { CapabilityLedger } from '@/features/workbench-ui/CapabilityLedger';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
@@ -239,7 +241,7 @@ function PlannerList({
     isError: clashError,
     refetch: refetchClash,
   } = useQuery({
-    queryKey: ['customer-calendar', 'clash-summary', today],
+    queryKey: [...clashSummaryKey(today)],
     queryFn: ({ signal }) => apiGet<CalendarClashSummary>(calendarClashUrl(today), { signal }),
   });
 
@@ -282,6 +284,11 @@ function PlannerList({
     (data != null && !pageIsComplete(data)) ||
     (proposedPage != null && !pageIsComplete(proposedPage)) ||
     (endedPage != null && !pageIsComplete(endedPage));
+  const retryQueue = () => {
+    if (isError) void refetch();
+    if (proposedError) void refetchProposed();
+    if (endedError) void refetchEnded();
+  };
   const agedUnplanned = unplannedAgedStock(aged.data);
   const queue = useMemo(
     () =>
@@ -289,9 +296,64 @@ function PlannerList({
         cases: data?.items ?? [],
         proposed: proposedPage?.items ?? [],
         ended: endedPage?.items ?? [],
+        today,
       }),
-    [data?.items, proposedPage?.items, endedPage?.items],
+    [data?.items, proposedPage?.items, endedPage?.items, today],
   );
+  const queueTotals = queueSummary(queue);
+  const queueLoading = isLoading || proposedLoading || endedLoading;
+  // A queue figure is only a figure when every source loaded; a partial queue says so in the caption.
+  const queueFigureState: 'loading' | 'empty' | 'ready' = queueLoading
+    ? 'loading'
+    : queueUnavailable.length > 0
+      ? 'empty'
+      : 'ready';
+  const queueCaptionNote = queueIncomplete ? ' (first 500 cases of each list)' : '';
+  // In planning / Live promotions read the exact current-case counts, like the cards beside them.
+  const planningCount =
+    baseCounts == null
+      ? null
+      : PLANNING_STAGES.reduce((n, st) => n + (statusCount(baseCounts, st) ?? 0), 0);
+  const liveCount = statusCount(baseCounts, 'active');
+  const queueCards: QueueCard[] = [
+    {
+      key: 'overdue',
+      label: 'Overdue approvals',
+      value: queueFigureState === 'ready' ? queueTotals.overdueApprovals : null,
+      state: queueFigureState,
+      tone: 'warning',
+      caption:
+        queueFigureState === 'empty'
+          ? 'Could not be loaded. Click to retry.'
+          : `Awaiting approval with the window already started${queueCaptionNote}`,
+      onClick: queueFigureState === 'empty' ? retryQueue : () => setParam('stage', 'proposed'),
+    },
+    {
+      key: 'evidence',
+      label: 'Evidence outstanding',
+      value: queueFigureState === 'ready' ? queueTotals.evidenceOutstanding : null,
+      state: queueFigureState,
+      tone: 'warning',
+      caption:
+        queueFigureState === 'empty'
+          ? 'Could not be loaded. Click to retry.'
+          : `Ended with no claim file applied${queueCaptionNote}`,
+      onClick: queueFigureState === 'empty' ? retryQueue : () => setParam('stage', 'ended'),
+    },
+    {
+      key: 'conflicts',
+      label: 'Conflicting windows',
+      value: clash?.kind === 'count' ? clash.count : null,
+      state: clashState === 'ready' && clash?.kind === 'unavailable' ? 'empty' : clashState,
+      tone: 'warning',
+      caption: clashError
+        ? 'Could not be loaded. Click to retry.'
+        : clash?.kind === 'unavailable'
+          ? 'Customer calendar is not set up yet'
+          : 'Promotions overlapping a customer calendar event',
+      onClick: clashError ? () => void refetchClash() : () => router.push('/promotions/timeline'),
+    },
+  ];
   const selectedRow: CporCaseListRow | null = useMemo(() => {
     if (selectedId == null) return null;
     const pools = [data?.items, proposedPage?.items, endedPage?.items];
@@ -328,7 +390,46 @@ function PlannerList({
           </Stack>
         </Alert>
 
-        <HeadlineStrip columns={6}>
+        <HeadlineStrip columns={5}>
+          <HeadlineFigure
+            label="In planning"
+            value={planningCount ?? '—'}
+            unit="plans"
+            compact
+            testId="planner-card-planning"
+            state={countsState}
+            stateNote={baseCountsError ? 'Could not be loaded. Click to retry.' : undefined}
+            caption="Draft, proposed, approved and rejected; replaced cases left out"
+            onClick={baseCountsError ? () => void refetchBaseCounts() : () => setParam('stage', null)}
+          />
+          <HeadlineFigure
+            label="Live promotions"
+            value={liveCount ?? '—'}
+            unit="live"
+            compact
+            testId="planner-card-live"
+            state={countsState}
+            stateNote={baseCountsError ? 'Could not be loaded. Click to retry.' : undefined}
+            severity={countsState === 'ready' && (liveCount ?? 0) > 0 ? 'good' : 'neutral'}
+            caption="Cases running now; replaced cases left out"
+            onClick={baseCountsError ? () => void refetchBaseCounts() : () => setParam('stage', 'active')}
+          />
+          <HeadlineFigure
+            label="At-risk actions"
+            value={queueFigureState === 'ready' ? queueTotals.total : '—'}
+            unit="waiting"
+            compact
+            testId="planner-card-at-risk"
+            state={queueFigureState}
+            stateNote={queueFigureState === 'empty' ? 'Could not be loaded. Click to retry.' : undefined}
+            severity={queueFigureState === 'ready' && queueTotals.total > 0 ? 'warn' : 'neutral'}
+            caption={`Reapproval, awaiting approval and evidence outstanding${queueCaptionNote}`}
+            onClick={
+              queueFigureState === 'empty'
+                ? retryQueue
+                : () => document.getElementById('planner-action-queue')?.scrollIntoView?.({ behavior: 'smooth' })
+            }
+          />
           <HeadlineFigure
             label="Drafts to finish"
             value={draftsN ?? '—'}
@@ -463,7 +564,14 @@ function PlannerList({
               }
               onClear={() => setParams({ stage: null, test_data: null, ...caseScopeClearPatch() })}
               clearAvailable={caseScopeIsActive(scope) || testDataOnly}
-              filters={<CaseScopeFilters scope={scope} onPatch={setParams} />}
+              filters={
+                <CaseScopeFilters
+                  scope={scope}
+                  onPatch={setParams}
+                  stage={stageFilter}
+                  onStageChange={(next) => setParam('stage', next)}
+                />
+              }
               trailing={
                 <Stack direction="row" spacing={1}>
                   <Tooltip title="Propose lines from a customer and period. Uses that customer’s lineup or their own history — never other customers." arrow>
@@ -556,21 +664,25 @@ function PlannerList({
             <CaseSidePanel
               row={selectedRow}
               unavailableId={selectedId != null && !selectedRow ? selectedId : null}
+              actions={
+                selectedRow && queueFigureState === 'ready' && !queueIncomplete
+                  ? queue.filter((a) => a.caseId === selectedRow.id)
+                  : undefined
+              }
               onOpen={onOpen}
               onClear={() => setSelectedId(null)}
             />
+            <Box id="planner-action-queue">
             <ActionQueuePanel
               items={queue}
-              loading={isLoading || proposedLoading || endedLoading}
+              loading={queueLoading}
               unavailable={queueUnavailable}
               incomplete={queueIncomplete}
-              onRetry={() => {
-                if (isError) void refetch();
-                if (proposedError) void refetchProposed();
-                if (endedError) void refetchEnded();
-              }}
+              cards={queueCards}
+              onRetry={retryQueue}
               onSelect={setSelectedId}
             />
+            </Box>
             <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
               The queue does not flag a live listing that is off the promo price. Listing, competitor price and
               observed cover are on the Evidence column when you create a promotion plan.
@@ -619,6 +731,7 @@ function PlannerList({
         onCreated={(id) => {
           setCreateOpen(false);
           void qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+          void invalidateClashSummary(qc);
           onOpen(id);
         }}
         onError={(m) => setToast(m)}

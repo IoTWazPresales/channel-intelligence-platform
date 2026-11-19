@@ -53,6 +53,11 @@ from app.services.commercial_planner.lineup_period_canonical import (
     display_period_label_from_period_start,
     quarter_bounds_from_period_start,
 )
+from app.services.customer_reporting import (
+    WHERE_THE_FLAG_IS_SET,
+    reporting_customer_clauses,
+    reporting_customer_ids_select,
+)
 
 SOURCE_PM_BOTTOM_COST = "pm_bottom_cost"
 SOURCE_PREVIOUS_LINEUPS = "previous_lineups"
@@ -244,28 +249,22 @@ def validate_selection(proposed_ids: Iterable[int], selected_ids: Iterable[int])
 
 
 def ensure_reporting_customer(db: Session, customer_id: int) -> None:
-    """Same meaning as listing discovery: ``customer_report_config.reports_expected`` is true."""
-    flag = db.scalar(
-        select(CustomerReportConfig.reports_expected).where(
-            CustomerReportConfig.customer_id == customer_id
-        )
+    """The shared definition (``customer_reporting``): reports expected on, not merged away."""
+    found = db.scalar(
+        reporting_customer_ids_select().where(DimCustomer.id == customer_id)
     )
-    if not flag:
+    if not found:
         raise ProposalError(
             409,
             "customer_not_reporting",
-            "Line-ups are only built for reporting customers (reports expected). "
-            "Mark this customer as reporting first.",
+            "Line-ups are only built for reporting customers. Mark this customer as reporting "
+            f"first ({WHERE_THE_FLAG_IS_SET}).",
         )
 
 
 async def reporting_customer_ids(db: AsyncSession) -> set[int]:
-    """Customers whose reports are expected (the reporting-only gate for line-up pulls)."""
-    rows = await db.execute(
-        select(CustomerReportConfig.customer_id).where(
-            CustomerReportConfig.reports_expected.is_(True)
-        )
-    )
+    """Reporting customers (the shared definition): the reporting-only gate for line-up writes."""
+    rows = await db.execute(reporting_customer_ids_select())
     return {int(r) for r in rows.scalars().all()}
 
 
@@ -274,10 +273,7 @@ def list_reporting_customers(db: Session) -> list[dict[str, Any]]:
     rows = db.execute(
         select(DimCustomer.id, DimCustomer.name)
         .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
-        .where(
-            CustomerReportConfig.reports_expected.is_(True),
-            DimCustomer.merged_into_customer_id.is_(None),
-        )
+        .where(*reporting_customer_clauses())
         .order_by(func.lower(DimCustomer.name), DimCustomer.id)
     ).all()
     return [{"id": int(cid), "name": name} for cid, name in rows]

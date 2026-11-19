@@ -366,4 +366,75 @@ describe('PromotionPlannerSurface', () => {
     expect(screen.getByTestId('planner-card-ended')).toHaveAttribute('data-state', 'empty');
     expect(screen.getByTestId('planner-card-drafts')).toHaveTextContent(/could not be loaded/i);
   });
+
+  describe('mock-up alignment (fix round 1)', () => {
+    const quietLists = (url: string) =>
+      url.includes('status=ended') ? { ...listPayload, items: [], total: 0 } : undefined;
+
+    it('shows In planning, Live promotions and At-risk actions cards from the exact counts and the action queue', async () => {
+      countsOverride = (url) =>
+        url.includes('window_from=') || url.includes('status=proposed')
+          ? undefined
+          : { total_current: 20, status_counts_current: { draft: 3, proposed: 1, approved: 2, rejected: 1, active: 5, ended: 4 } };
+      casesOverride = quietLists;
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-card-planning')).toHaveTextContent(/In planning7/));
+      expect(screen.getByTestId('planner-card-live')).toHaveTextContent(/Live promotions5/);
+      // The one proposed case (window 2026-09-07) is awaiting approval and its window has started.
+      await waitFor(() => expect(screen.getByTestId('planner-card-at-risk')).toHaveTextContent(/At-risk actions1/));
+    });
+
+    it('shows In planning / Live promotions as failed, not zero, when the count request fails', async () => {
+      countsOverride = (url) =>
+        url.includes('window_from=') || url.includes('status=proposed') ? undefined : new Error('boom');
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-card-planning')).toHaveAttribute('data-state', 'empty'));
+      expect(screen.getByTestId('planner-card-live')).toHaveAttribute('data-state', 'empty');
+      expect(screen.getByTestId('planner-card-planning')).not.toHaveTextContent(/In planning0/);
+    });
+
+    it('shows At-risk actions as failed, not zero, when a queue source failed', async () => {
+      casesOverride = (url) => (url.includes('status=ended') ? new Error('boom') : undefined);
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-card-at-risk')).toHaveAttribute('data-state', 'empty'));
+      expect(screen.getByTestId('planner-card-at-risk')).not.toHaveTextContent(/At-risk actions0/);
+    });
+
+    it('shows Overdue approvals and Evidence outstanding queue cards from the queue', async () => {
+      casesOverride = (url) =>
+        url.includes('status=ended')
+          ? {
+              ...listPayload,
+              items: [{ ...listPayload.items[0], id: 52, case_code: 'CPR-ENDED', status: 'ended', window_start: '2026-08-01', window_end: '2026-08-10' }],
+              total: 1,
+            }
+          : undefined;
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-queue-card-overdue')).toHaveTextContent(/Overdue approvals1/));
+      expect(screen.getByTestId('planner-queue-card-evidence')).toHaveTextContent(/Evidence outstanding1/);
+      expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-26-1204 · awaiting approval · overdue');
+    });
+
+    it('shows a Conflicting windows queue card from the clash summary and opens the timeline', async () => {
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-queue-card-conflicts')).toHaveTextContent(/Conflicting windows4/));
+      fireEvent.click(screen.getByTestId('planner-queue-card-conflicts'));
+      expect(pushMock).toHaveBeenCalledWith('/promotions/timeline');
+    });
+
+    it('shows the Conflicting windows card as failed, not zero, when the clash request fails', async () => {
+      clashOverride = () => new Error('boom');
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-queue-card-conflicts')).toHaveAttribute('data-state', 'empty'));
+      expect(screen.getByTestId('planner-queue-card-conflicts')).not.toHaveTextContent(/Conflicting windows0/);
+    });
+
+    it('has a Status filter in the filter row that sets the same stage as the chips', async () => {
+      renderPlanner();
+      const status = (await screen.findByLabelText('Status')) as HTMLSelectElement;
+      expect(status.value).toBe('');
+      fireEvent.change(status, { target: { value: 'active' } });
+      expect(replaceMock).toHaveBeenCalledWith('/promotions?stage=active', { scroll: false });
+    });
+  });
 });

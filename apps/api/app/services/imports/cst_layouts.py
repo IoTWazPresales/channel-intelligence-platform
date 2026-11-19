@@ -23,6 +23,7 @@ from app.models.dimensions import DimCustomer
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.customer_sellthrough_layout import CustomerSellthroughLayout
 from app.models.ingestion import ImportTemplate, SourceDefinition
+from app.services.customer_reporting import reporting_customer_clauses
 from app.services.imports.parsers.customer_sell_through_flat import (
     CANONICAL_FIELDS,
     IDENTIFIER_SLOT_FIELDS,
@@ -273,10 +274,7 @@ def list_reporting_customers(db: Session) -> list[dict[str, Any]]:
     rows = db.execute(
         select(DimCustomer.id, DimCustomer.name, DimCustomer.is_key_account, CustomerReportConfig.expected_cadence)
         .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
-        .where(
-            CustomerReportConfig.reports_expected.is_(True),
-            DimCustomer.merged_into_customer_id.is_(None),
-        )
+        .where(*reporting_customer_clauses())
         .order_by(DimCustomer.name)
     ).all()
     counts: dict[int, int] = {}

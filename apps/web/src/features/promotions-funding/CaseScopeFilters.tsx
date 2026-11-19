@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import type { CaseScope } from '@/features/promotions-funding/caseScope';
+import { LIFECYCLE_STAGES, STAGE_LABEL } from '@/features/promotions-funding/lifecycle';
 import { apiGet } from '@/lib/api';
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
@@ -15,11 +16,14 @@ type ProductPick = { id: number; sku: string; name: string };
 type Props = {
   scope: CaseScope;
   onPatch: (patch: Record<string, string | null>) => void;
+  /** When `onStageChange` is given, a Status filter is shown; it sets the same stage as the stage chips. */
+  stage?: string | null;
+  onStageChange?: (stage: string | null) => void;
 };
 
 const fieldSx = { minWidth: 148, maxWidth: 200 };
 
-export function CaseScopeFilters({ scope, onPatch }: Props) {
+export function CaseScopeFilters({ scope, onPatch, stage = null, onStageChange }: Props) {
   const [qDraft, setQDraft] = useState(scope.q);
   const [buDraft, setBuDraft] = useState(scope.bu);
   useEffect(() => setQDraft(scope.q), [scope.q]);
@@ -107,6 +111,26 @@ export function CaseScopeFilters({ scope, onPatch }: Props) {
         sx={fieldSx}
         inputProps={{ 'data-testid': 'case-scope-q' }}
       />
+      {onStageChange ? (
+        <TextField
+          select
+          size="small"
+          label="Status"
+          value={stage ?? ''}
+          onChange={(e) => onStageChange(e.target.value || null)}
+          SelectProps={{ native: true }}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 120, maxWidth: 160 }}
+          inputProps={{ 'data-testid': 'case-scope-status' }}
+        >
+          <option value="">All</option>
+          {LIFECYCLE_STAGES.map((st) => (
+            <option key={st} value={st}>
+              {STAGE_LABEL[st]}
+            </option>
+          ))}
+        </TextField>
+      ) : null}
       <Box sx={fieldSx}>
         <EntitySearchAutocomplete<CustomerPick>
           label="Customer"

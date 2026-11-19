@@ -98,3 +98,69 @@ export function buildTimeline<T extends TimelineCase>(cases: readonly T[], today
     })),
   };
 }
+
+/** One tick per Monday on the axis (the week view); the label is the day and month, e.g. "2 Nov". */
+export function weekTicks(axisStart: string, axisEnd: string): { label: string; leftPct: number }[] {
+  const total = daysBetween(axisStart, axisEnd) + 1;
+  const out: { label: string; leftPct: number }[] = [];
+  // getUTCDay: 0 = Sunday ... 1 = Monday. Move forward to the first Monday on or after the axis start.
+  const dow = new Date(ms(axisStart)).getUTCDay();
+  let cur = addDaysIso(axisStart, (8 - dow) % 7);
+  while (cur <= axisEnd) {
+    const label = new Date(ms(cur)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    out.push({ label, leftPct: (daysBetween(axisStart, cur) / total) * 100 });
+    cur = addDaysIso(cur, 7);
+  }
+  return out;
+}
+
+export type StatusLane = {
+  key: 'live' | 'approved' | 'planned' | 'ended' | 'cancelled' | 'other';
+  label: string;
+};
+
+/**
+ * The bar colour lanes of the planner timeline: Live, Approved, Planned, Ended (plus Cancelled).
+ * Planned covers draft, proposed and rejected (a plan still being worked); Ended covers ended and settled.
+ * An unknown status keeps its own name instead of being folded into a lane.
+ */
+export function statusLane(status: string): StatusLane {
+  switch (status) {
+    case 'active':
+      return { key: 'live', label: 'Live' };
+    case 'approved':
+      return { key: 'approved', label: 'Approved' };
+    case 'draft':
+    case 'proposed':
+    case 'rejected':
+      return { key: 'planned', label: 'Planned' };
+    case 'ended':
+    case 'settled':
+      return { key: 'ended', label: 'Ended' };
+    case 'cancelled':
+      return { key: 'cancelled', label: 'Cancelled' };
+    default:
+      return { key: 'other', label: status };
+  }
+}
+
+/**
+ * Bars grouped by customer name (case-insensitive, earliest start first inside a group), with the first row
+ * of each customer marked so the label is drawn once. A case with no customer name is its own group, last.
+ */
+export function orderByCustomer<T extends TimelineCase>(
+  bars: readonly TimelineBar<T>[],
+): { bar: TimelineBar<T>; firstOfCustomer: boolean }[] {
+  const name = (b: TimelineBar<T>) => (b.row.customer_name ?? '').trim().toLowerCase();
+  const sorted = [...bars].sort((a, b) => {
+    const an = name(a);
+    const bn = name(b);
+    if (an !== bn) return an === '' ? 1 : bn === '' ? -1 : an < bn ? -1 : 1;
+    if (a.start !== b.start) return a.start < b.start ? -1 : 1;
+    return a.id - b.id;
+  });
+  return sorted.map((bar, i) => ({
+    bar,
+    firstOfCustomer: i === 0 || name(bar) === '' || name(sorted[i - 1]) !== name(bar),
+  }));
+}

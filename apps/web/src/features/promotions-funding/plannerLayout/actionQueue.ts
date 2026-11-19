@@ -22,6 +22,8 @@ export type ActionItem = {
   label: string;
   hint: string;
   tone: 'warning' | 'info';
+  /** Awaiting approval and the case window has already started (needs `today`). */
+  overdue: boolean;
 };
 
 /**
@@ -33,10 +35,13 @@ export function buildActionQueue({
   cases,
   proposed,
   ended,
+  today,
 }: {
   cases: readonly QueueCase[];
   proposed: readonly QueueCase[];
   ended: readonly QueueCase[];
+  /** Local calendar day (YYYY-MM-DD). Without it no approval is called overdue. */
+  today?: string;
 }): ActionItem[] {
   const current = <T extends QueueCase>(rows: readonly T[]) => rows.filter((r) => r.superseded_by_case_id == null);
   cases = current(cases);
@@ -55,20 +60,27 @@ export function buildActionQueue({
       label: `${p.case_code} · reapproval required`,
       hint: 'Money-ceiling reapproval — not the same as Proposed, and not claim evidence.',
       tone: 'warning',
+      overdue: false,
     });
   }
   const seenProposed = new Set<number>();
   for (const p of proposed) {
     if (seenProposed.has(p.id)) continue;
     seenProposed.add(p.id);
+    // Overdue = still awaiting approval although the promotion window has started (a stated rule, no new data).
+    const start = p.window_start ? String(p.window_start).slice(0, 10) : null;
+    const overdue = Boolean(today && start && start < today);
     items.push({
       key: `awaiting-${p.id}`,
       kind: 'awaiting_approval',
       caseId: p.id,
       caseCode: p.case_code,
-      label: `${p.case_code} · awaiting approval`,
-      hint: 'In Proposed: review the lines, then approve or reject.',
+      label: `${p.case_code} · awaiting approval${overdue ? ' · overdue' : ''}`,
+      hint: overdue
+        ? `The window started ${start}: approve or reject it now.`
+        : 'In Proposed: review the lines, then approve or reject.',
       tone: 'warning',
+      overdue,
     });
   }
   const seenEnded = new Set<number>();
@@ -83,7 +95,28 @@ export function buildActionQueue({
       label: `${p.case_code} · claim evidence pending`,
       hint: 'The window ended and no claim file is applied.',
       tone: 'info',
+      overdue: false,
     });
   }
   return items;
+}
+
+export type QueueSummary = {
+  total: number;
+  reapproval: number;
+  awaitingApproval: number;
+  /** Subset of `awaitingApproval` whose window has already started. */
+  overdueApprovals: number;
+  evidenceOutstanding: number;
+};
+
+/** Counts of the queue by kind, for the queue cards. */
+export function queueSummary(items: readonly ActionItem[]): QueueSummary {
+  return {
+    total: items.length,
+    reapproval: items.filter((i) => i.kind === 'reapproval').length,
+    awaitingApproval: items.filter((i) => i.kind === 'awaiting_approval').length,
+    overdueApprovals: items.filter((i) => i.overdue).length,
+    evidenceOutstanding: items.filter((i) => i.kind === 'claim_evidence_pending').length,
+  };
 }

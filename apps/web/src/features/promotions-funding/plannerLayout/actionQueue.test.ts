@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildActionQueue } from './actionQueue';
+import { buildActionQueue, queueSummary } from './actionQueue';
 
 const base = { customer_name: 'N', window_start: '2026-11-01', window_end: '2026-11-10' };
 
@@ -46,5 +46,54 @@ describe('buildActionQueue', () => {
     const [i] = buildActionQueue({ cases: [], proposed: [{ id: 3, case_code: 'C', status: 'proposed', ...base }], ended: [] });
     expect(i.label).toContain('C');
     expect(i.hint.length).toBeGreaterThan(0);
+  });
+});
+
+describe('overdue approvals', () => {
+  const proposed = (id: number, start: string | null) => ({ id, case_code: `P${id}`, status: 'proposed', customer_name: 'N', window_start: start, window_end: '2026-12-31' });
+  it('flags a proposed case whose window has started as an overdue approval', () => {
+    const q = buildActionQueue({
+      cases: [],
+      proposed: [proposed(1, '2026-11-10'), proposed(2, '2026-11-19'), proposed(3, '2026-12-01'), proposed(4, null)],
+      ended: [],
+      today: '2026-11-19',
+    });
+    expect(q.map((i) => [i.caseId, i.overdue])).toEqual([
+      [1, true],
+      [2, false],
+      [3, false],
+      [4, false],
+    ]);
+    expect(q[0].label).toContain('overdue');
+    expect(q[0].hint).toContain('2026-11-10');
+    expect(q[1].label).not.toContain('overdue');
+  });
+  it('flags nothing as overdue when no day is given', () => {
+    const q = buildActionQueue({ cases: [], proposed: [proposed(1, '2020-01-01')], ended: [] });
+    expect(q[0].overdue).toBe(false);
+  });
+});
+
+describe('queueSummary', () => {
+  it('counts the queue by kind for the queue cards', () => {
+    const q = buildActionQueue({
+      cases: [{ id: 1, case_code: 'A', status: 'approved', needs_reapproval: true, customer_name: 'N', window_start: '2026-11-01', window_end: '2026-11-10' }],
+      proposed: [
+        { id: 2, case_code: 'B', status: 'proposed', customer_name: 'N', window_start: '2026-11-01', window_end: '2026-11-10' },
+        { id: 3, case_code: 'C', status: 'proposed', customer_name: 'N', window_start: '2026-12-01', window_end: '2026-12-10' },
+      ],
+      ended: [{ id: 4, case_code: 'D', status: 'ended', customer_name: 'N', window_start: '2026-10-01', window_end: '2026-10-10' }],
+      today: '2026-11-19',
+    });
+    expect(queueSummary(q)).toEqual({
+      total: 4,
+      reapproval: 1,
+      awaitingApproval: 2,
+      overdueApprovals: 1,
+      evidenceOutstanding: 1,
+    });
+  });
+  it('is all zero for an empty queue', () => {
+    expect(queueSummary([])).toEqual({ total: 0, reapproval: 0, awaitingApproval: 0, overdueApprovals: 0, evidenceOutstanding: 0 });
   });
 });

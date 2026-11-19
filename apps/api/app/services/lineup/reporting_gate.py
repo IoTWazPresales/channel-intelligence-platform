@@ -3,7 +3,7 @@
 Warren 2026-11-19: the line-up upload/import paths refuse rows for customers that are not reporting
 (``customer_report_config.reports_expected`` true), the same meaning as listing discovery, the CST
 upload, the new-customer proposal and the automatic per-customer pull. The set of reporting
-customers comes from ``new_customer_proposal.reporting_customer_ids`` (the single reader).
+customers comes from ``customer_reporting`` (the single definition: reports expected, not merged).
 
 Refused rows are reported back with a reason; they are never dropped silently. A row whose customer
 could not be resolved at all is not a customer row and keeps its existing handling (an
@@ -17,10 +17,13 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from app.services.customer_reporting import WHERE_THE_FLAG_IS_SET
+
 REASON_NOT_REPORTING = "customer_not_reporting"
 REFUSAL_MESSAGE = (
     "This customer is not reporting (reports expected is off), so line-up rows are not "
-    "accepted for it. Mark the customer as reporting first."
+    "accepted for it. Mark the customer as reporting first "
+    f"({WHERE_THE_FLAG_IS_SET})."
 )
 # The count is always exact; only the listed rows are capped (keeps job results small).
 MAX_REFUSED_ROWS_REPORTED = 200

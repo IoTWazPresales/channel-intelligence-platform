@@ -4,12 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import { ActionQueuePanel } from './ActionQueuePanel';
+import { ActionQueuePanel, type QueueCard } from './ActionQueuePanel';
 import type { ActionItem } from './actionQueue';
 
 const items: ActionItem[] = [
-  { key: 'awaiting-3', kind: 'awaiting_approval', caseId: 3, caseCode: 'CPR-3', label: 'CPR-3 · awaiting approval', hint: 'In Proposed.', tone: 'warning' },
-  { key: 'claim-4', kind: 'claim_evidence_pending', caseId: 4, caseCode: 'CPR-4', label: 'CPR-4 · claim evidence pending', hint: 'Window ended.', tone: 'info' },
+  { key: 'awaiting-3', kind: 'awaiting_approval', caseId: 3, caseCode: 'CPR-3', label: 'CPR-3 · awaiting approval', hint: 'In Proposed.', tone: 'warning', overdue: false },
+  { key: 'claim-4', kind: 'claim_evidence_pending', caseId: 4, caseCode: 'CPR-4', label: 'CPR-4 · claim evidence pending', hint: 'Window ended.', tone: 'info', overdue: false },
 ];
 
 describe('ActionQueuePanel', () => {
@@ -56,5 +56,35 @@ describe('ActionQueuePanel', () => {
     renderWithProviders(<ActionQueuePanel items={items} incomplete onSelect={vi.fn()} />);
     expect(screen.getByTestId('planner-action-queue-partial')).toBeInTheDocument();
     expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-3 · awaiting approval');
+  });
+  describe('queue cards', () => {
+    const cards: QueueCard[] = [
+      { key: 'overdue', label: 'Overdue approvals', value: 2, state: 'ready', caption: 'Window already started', tone: 'warning' },
+      { key: 'evidence', label: 'Evidence outstanding', value: 0, state: 'ready' },
+      { key: 'conflicts', label: 'Conflicting windows', value: null, state: 'empty', caption: 'Could not be loaded. Click to retry.' },
+      { key: 'loading', label: 'Loading one', value: null, state: 'loading' },
+    ];
+    it('shows each card with its figure, and a card that did not load as a dash, never zero', () => {
+      renderWithProviders(<ActionQueuePanel items={items} cards={cards} onSelect={vi.fn()} />);
+      expect(screen.getByTestId('planner-queue-card-overdue')).toHaveTextContent('Overdue approvals2');
+      expect(screen.getByTestId('planner-queue-card-evidence')).toHaveTextContent('Evidence outstanding0');
+      const failed = screen.getByTestId('planner-queue-card-conflicts');
+      expect(failed).toHaveTextContent('—');
+      expect(failed).not.toHaveTextContent('0');
+      expect(failed).toHaveAttribute('data-state', 'empty');
+      expect(screen.getByTestId('planner-queue-card-loading')).toHaveAttribute('data-state', 'loading');
+    });
+    it('runs the card action on click', () => {
+      const onClick = vi.fn();
+      renderWithProviders(
+        <ActionQueuePanel items={items} cards={[{ ...cards[0], onClick }]} onSelect={vi.fn()} />,
+      );
+      fireEvent.click(screen.getByTestId('planner-queue-card-overdue'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+    it('draws no card strip when there are no cards', () => {
+      renderWithProviders(<ActionQueuePanel items={items} onSelect={vi.fn()} />);
+      expect(screen.queryByTestId('planner-queue-cards')).toBeNull();
+    });
   });
 });

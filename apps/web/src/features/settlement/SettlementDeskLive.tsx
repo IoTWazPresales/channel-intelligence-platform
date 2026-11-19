@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { CporCaseSupersedeDialog } from '@/features/cpor/CporCaseSupersedeDialog';
+import { invalidateClashSummary } from '@/features/promotions-funding/calendarClashKeys';
 import { SettlementConfirmDialog } from '@/features/settlement/SettlementConfirmDialog';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
@@ -94,6 +95,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await invalidateClashSummary(qc);
     },
   });
 
@@ -123,6 +125,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await invalidateClashSummary(qc);
     },
   });
 
@@ -132,6 +135,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await invalidateClashSummary(qc);
     },
   });
 

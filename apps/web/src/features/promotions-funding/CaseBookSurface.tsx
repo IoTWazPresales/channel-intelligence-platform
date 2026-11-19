@@ -27,6 +27,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { DualMoney } from '@/features/cpor/DualMoney';
 import { formatDualMoneyLine } from '@/features/cpor/fxDisplay';
+import { invalidateClashSummary } from '@/features/promotions-funding/calendarClashKeys';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
 import { PaymentEvidenceOverlayPanel } from '@/features/promotions-funding/PaymentEvidenceOverlay';
 import { PortfolioReadPanel } from '@/features/promotions-funding/PortfolioReadPanel';
@@ -304,6 +305,7 @@ export function CaseBookSurface() {
       setToastAction(`${vars.action} recorded`);
       setParams({ case: null });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await invalidateClashSummary(qc);
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
     },
   });
