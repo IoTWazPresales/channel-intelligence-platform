@@ -4,16 +4,24 @@ import {
   CALENDAR_CLASH_CARD,
   addDaysIso,
   awaitingApproval,
+  isCurrentCase,
+  pageIsComplete,
   startingNext4Weeks,
   unplannedAgedStockValue,
   type PlannerCardCase,
 } from './plannerCards';
 
-const c = (id: number, status: string, window_start: string | null): PlannerCardCase => ({
+const c = (
+  id: number,
+  status: string,
+  window_start: string | null,
+  superseded_by_case_id: number | null = null,
+): PlannerCardCase => ({
   id,
   case_code: `C-${id}`,
   status,
   window_start,
+  superseded_by_case_id,
 });
 
 describe('addDaysIso', () => {
@@ -23,10 +31,37 @@ describe('addDaysIso', () => {
   });
 });
 
+describe('isCurrentCase', () => {
+  it('is false when the case points at a replacement, whatever its status', () => {
+    expect(isCurrentCase(c(1, 'proposed', null, 9))).toBe(false);
+    expect(isCurrentCase(c(2, 'approved', null, 9))).toBe(false);
+  });
+  it('is true with no replacement pointer (null or absent)', () => {
+    expect(isCurrentCase(c(3, 'approved', null, null))).toBe(true);
+    const noPointer: PlannerCardCase = { id: 4, case_code: 'C-4', status: 'approved' };
+    expect(isCurrentCase(noPointer)).toBe(true);
+  });
+});
+
+describe('pageIsComplete', () => {
+  it('is complete only when the response carries every matching row', () => {
+    expect(pageIsComplete({ items: [{}, {}] as never[], total: 2 })).toBe(true);
+    expect(pageIsComplete({ items: [{}, {}] as never[], total: 501 })).toBe(false);
+  });
+  it('is not complete when there is no response or no total', () => {
+    expect(pageIsComplete(undefined)).toBe(false);
+    expect(pageIsComplete({ items: [] as never[] } as never)).toBe(false);
+  });
+});
+
 describe('awaitingApproval', () => {
   it('counts only proposed cases and returns their ids', () => {
     const r = awaitingApproval([c(1, 'proposed', null), c(2, 'draft', null), c(3, 'proposed', null), c(4, 'approved', null)]);
     expect(r).toEqual({ count: 2, ids: [1, 3] });
+  });
+  it('leaves out a proposed case that has been replaced (superseded_by_case_id set, status unchanged)', () => {
+    const r = awaitingApproval([c(1, 'proposed', null, 7), c(2, 'proposed', null), c(7, 'proposed', null)]);
+    expect(r).toEqual({ count: 2, ids: [2, 7] });
   });
   it('is zero for an empty list', () => {
     expect(awaitingApproval([])).toEqual({ count: 0, ids: [] });
@@ -45,13 +80,11 @@ describe('startingNext4Weeks', () => {
     expect(r.from).toBe('2026-11-18');
     expect(r.to).toBe('2026-12-16');
   });
-  it('drops cancelled, rejected, voided and superseded cases and cases with no start', () => {
+  it('drops cancelled and rejected cases and cases with no start', () => {
     const r = startingNext4Weeks(
       [
         c(1, 'cancelled', '2026-11-20'),
         c(2, 'rejected', '2026-11-20'),
-        c(3, 'voided', '2026-11-20'),
-        c(4, 'superseded', '2026-11-20'),
         c(5, 'approved', null),
         c(6, 'draft', '2026-11-20'),
         c(7, 'active', '2026-11-20'),
@@ -59,6 +92,14 @@ describe('startingNext4Weeks', () => {
       today,
     );
     expect(r.ids).toEqual([6, 7]);
+  });
+  it('counts a replaced approved case once: the old one points at its replacement and is left out', () => {
+    const r = startingNext4Weeks(
+      [c(10, 'approved', '2026-11-20', 11), c(11, 'approved', '2026-11-22'), c(12, 'proposed', '2026-11-25', 13)],
+      today,
+    );
+    expect(r.ids).toEqual([11]);
+    expect(r.count).toBe(1);
   });
   it('accepts a Date for today', () => {
     const r = startingNext4Weeks([c(1, 'approved', '2026-11-19')], new Date(Date.UTC(2026, 10, 18, 22, 0, 0)));

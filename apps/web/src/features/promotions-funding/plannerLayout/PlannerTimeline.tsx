@@ -18,11 +18,14 @@ export function PlannerTimeline<T extends TimelineCase>({
   today,
   selectedId,
   onSelect,
+  status = 'ready',
 }: {
   cases: readonly T[];
   today: string;
   selectedId: number | null;
   onSelect: (id: number) => void;
+  /** Request state of the case list: an empty list is only "no cases" when it actually loaded. */
+  status?: 'ready' | 'loading' | 'error';
 }) {
   const theme = useTheme();
   const model = useMemo(() => buildTimeline(cases, today), [cases, today]);
@@ -49,7 +52,16 @@ export function PlannerTimeline<T extends TimelineCase>({
       }
     >
       <Box data-testid="planner-timeline">
-        {model.bars.length === 0 ? (
+        {status === 'error' ? (
+          <Typography variant="body2" color="error" role="alert" data-testid="planner-timeline-error" sx={{ mb: model.bars.length ? 1 : 0 }}>
+            The case windows could not be loaded{model.bars.length > 0 ? '; what is drawn may be out of date' : ''}.
+          </Typography>
+        ) : null}
+        {model.bars.length === 0 && status === 'loading' ? (
+          <Typography variant="body2" color="text.secondary" data-testid="planner-timeline-loading">
+            Loading case windows…
+          </Typography>
+        ) : model.bars.length === 0 && status === 'error' ? null : model.bars.length === 0 ? (
           <Typography variant="body2" color="text.secondary" data-testid="planner-timeline-empty">
             No dated cases in this scope.
           </Typography>

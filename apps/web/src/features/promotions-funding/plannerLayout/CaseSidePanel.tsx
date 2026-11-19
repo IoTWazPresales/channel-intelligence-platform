@@ -29,13 +29,35 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
  */
 export function CaseSidePanel({
   row,
+  unavailableId = null,
   onOpen,
   onClear,
 }: {
   row: CporCaseListRow | null;
+  /** A case is selected but none of the loaded lists holds its row (a list failed or has moved on). */
+  unavailableId?: number | null;
   onOpen: (id: number) => void;
   onClear: () => void;
 }) {
+  if (!row && unavailableId != null) {
+    return (
+      <Panel title="Case">
+        <Stack spacing={1} data-testid="planner-side-panel-unavailable">
+          <Typography variant="body2" color="error">
+            The summary for this case could not be loaded. The plan workspace still opens it.
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            <Button size="small" variant="contained" onClick={() => onOpen(unavailableId)} data-testid="planner-side-open">
+              Open plan
+            </Button>
+            <Button size="small" onClick={onClear} data-testid="planner-side-clear">
+              Clear
+            </Button>
+          </Stack>
+        </Stack>
+      </Panel>
+    );
+  }
   if (!row) {
     return (
       <Panel title="Case">

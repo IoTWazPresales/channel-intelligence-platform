@@ -25,4 +25,26 @@ describe('ActionQueuePanel', () => {
     renderWithProviders(<ActionQueuePanel items={[]} onSelect={vi.fn()} />);
     expect(screen.getByTestId('planner-action-queue-empty')).toBeInTheDocument();
   });
+  it('does not say nothing is waiting while a source is still loading', () => {
+    renderWithProviders(<ActionQueuePanel items={[]} loading onSelect={vi.fn()} />);
+    expect(screen.queryByTestId('planner-action-queue-empty')).toBeNull();
+    expect(screen.getByTestId('planner-action-queue-loading')).toBeInTheDocument();
+  });
+  it('shows an error instead of "nothing waiting" when a source failed, and names what is missing', () => {
+    const onRetry = vi.fn();
+    renderWithProviders(
+      <ActionQueuePanel items={[]} unavailable={['Awaiting approval', 'Ended cases']} onRetry={onRetry} onSelect={vi.fn()} />,
+    );
+    expect(screen.queryByTestId('planner-action-queue-empty')).toBeNull();
+    const err = screen.getByTestId('planner-action-queue-error');
+    expect(err).toHaveTextContent('Awaiting approval');
+    expect(err).toHaveTextContent('Ended cases');
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(onRetry).toHaveBeenCalled();
+  });
+  it('keeps the rows it has and flags that the queue may be incomplete when a source failed', () => {
+    renderWithProviders(<ActionQueuePanel items={items} unavailable={['Awaiting approval']} onSelect={vi.fn()} />);
+    expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-4 · claim evidence pending');
+    expect(screen.getByTestId('planner-action-queue-error')).toHaveTextContent(/incomplete/i);
+  });
 });

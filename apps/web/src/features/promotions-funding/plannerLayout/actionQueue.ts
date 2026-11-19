@@ -7,6 +7,8 @@ export type QueueCase = {
   window_start?: string | null;
   window_end?: string | null;
   needs_reapproval?: boolean;
+  /** Set when another case replaced this one (soft supersede); a replaced case waits on nobody. */
+  superseded_by_case_id?: number | null;
   settle_readiness?: { claim_evidence_count?: number | null } | null;
 };
 
@@ -36,6 +38,10 @@ export function buildActionQueue({
   proposed: readonly QueueCase[];
   ended: readonly QueueCase[];
 }): ActionItem[] {
+  const current = <T extends QueueCase>(rows: readonly T[]) => rows.filter((r) => r.superseded_by_case_id == null);
+  cases = current(cases);
+  proposed = current(proposed);
+  ended = current(ended);
   const items: ActionItem[] = [];
   const seenReapproval = new Set<number>();
   for (const p of [...cases, ...ended, ...proposed]) {

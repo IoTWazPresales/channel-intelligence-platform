@@ -8,10 +8,28 @@ export type PlannerCardCase = {
   case_code: string;
   status: string;
   window_start?: string | null;
+  /** Set when another case replaced this one (soft supersede: the status is left as it was). */
+  superseded_by_case_id?: number | null;
 };
 
 /** Statuses that are not a live commitment: never counted as "starting". */
-const NOT_STARTING = new Set(['cancelled', 'rejected', 'voided', 'superseded']);
+const NOT_STARTING = new Set(['cancelled', 'rejected']);
+
+/**
+ * A case that has not been replaced. CIP supersedes softly: `superseded_by_case_id` points at the replacement and
+ * the status is untouched, so the pointer (not a status) is what marks a retired case.
+ */
+export function isCurrentCase(c: { superseded_by_case_id?: number | null }): boolean {
+  return c.superseded_by_case_id == null;
+}
+
+/**
+ * True when a paged response carries every row the filter matched (`total` <= rows returned). The list's `total`
+ * counts replaced and cancelled cases too, so it is a completeness test, not the figure to show.
+ */
+export function pageIsComplete(page: { items: readonly unknown[]; total?: number | null } | undefined | null): boolean {
+  return page != null && typeof page.total === 'number' && page.total <= page.items.length;
+}
 
 export const STARTING_WINDOW_DAYS = 28;
 
@@ -39,21 +57,21 @@ export function addDaysIso(iso: string, days: number): string {
 
 export type CaseCardResult = { count: number; ids: number[] };
 
-/** Cases in the existing proposed (awaiting approval) status. */
+/** Cases in the existing proposed (awaiting approval) status that have not been replaced. */
 export function awaitingApproval(cases: readonly PlannerCardCase[]): CaseCardResult {
-  const ids = cases.filter((c) => c.status === 'proposed').map((c) => c.id);
+  const ids = cases.filter((c) => c.status === 'proposed' && isCurrentCase(c)).map((c) => c.id);
   return { count: ids.length, ids };
 }
 
 export type StartingResult = CaseCardResult & { from: string; to: string };
 
-/** Cases whose window_start is in [today, today + 28 days], excluding non-commitments. */
+/** Cases whose window_start is in [today, today + 28 days], excluding replaced cases and non-commitments. */
 export function startingNext4Weeks(cases: readonly PlannerCardCase[], today: Date | string = new Date()): StartingResult {
   const from = todayIso(today);
   const to = addDaysIso(from, STARTING_WINDOW_DAYS);
   const ids = cases
     .filter((c) => {
-      if (!c.window_start || NOT_STARTING.has(c.status)) return false;
+      if (!c.window_start || NOT_STARTING.has(c.status) || !isCurrentCase(c)) return false;
       const s = c.window_start.slice(0, 10);
       return s >= from && s <= to;
     })

@@ -58,8 +58,15 @@ const listPayload = {
   review_queue_count: 1,
 };
 
+/** Per-test override of a /cpor/cases response, chosen by URL; return undefined to use the default payload. */
+let casesOverride: ((url: string) => unknown) | null = null;
+
 const apiGetMock = vi.fn(async (url: string) => {
-  if (url.includes('/cpor/cases')) return listPayload;
+  if (url.includes('/cpor/cases')) {
+    const o = casesOverride?.(url);
+    if (o instanceof Error) throw o;
+    return o ?? listPayload;
+  }
   if (url.includes('/aged-stock')) {
     return {
       lines: [
@@ -85,6 +92,7 @@ describe('PromotionPlannerSurface', () => {
   beforeEach(() => {
     apiGetMock.mockClear();
     replaceMock.mockClear();
+    casesOverride = null;
   });
 
   const renderPlanner = () => {
@@ -160,5 +168,72 @@ describe('PromotionPlannerSurface', () => {
     expect(screen.getByRole('button', { name: /Create promotion plan/i })).toBeInTheDocument();
     expect(screen.getByTestId('planner-new')).toBeInTheDocument();
     expect(screen.getByText(/Test data · 7/)).toBeInTheDocument();
+  });
+
+  const proposedRow = (id: number, extra: Record<string, unknown> = {}) => ({
+    ...listPayload.items[0],
+    id,
+    case_code: `CPR-${id}`,
+    window_start: '2099-01-01',
+    window_end: '2099-01-10',
+    ...extra,
+  });
+
+  it('does not count a replaced proposed case: the replacement pointer, not the status, retires it', async () => {
+    casesOverride = (url) =>
+      url.includes('status=proposed')
+        ? {
+            ...listPayload,
+            items: [proposedRow(51, { superseded_by_case_id: 52 }), proposedRow(52)],
+            total: 2,
+          }
+        : undefined;
+    renderPlanner();
+    await waitFor(() => expect(screen.getByTestId('planner-card-awaiting')).toHaveTextContent(/Awaiting approval1cases/i));
+    expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-52 · awaiting approval');
+    expect(screen.getByTestId('planner-action-queue')).not.toHaveTextContent('CPR-51');
+  });
+
+  it('shows a floor, never a capped number as exact, when the list holds more cases than one page', async () => {
+    casesOverride = (url) =>
+      url.includes('status=proposed') ? { ...listPayload, items: [proposedRow(61), proposedRow(62)], total: 640 } : undefined;
+    renderPlanner();
+    await waitFor(() => expect(screen.getByTestId('planner-card-awaiting')).toHaveTextContent('2+'));
+    expect(screen.getByTestId('planner-card-awaiting')).toHaveTextContent(/at least/i);
+  });
+
+  it('shows a floor on the starting card when the window query returned only part of its matches', async () => {
+    casesOverride = (url) =>
+      url.includes('window_from=') ? { ...listPayload, items: [proposedRow(71, { window_start: new Date().toISOString().slice(0, 10) })], total: 900 } : undefined;
+    renderPlanner();
+    await waitFor(() => expect(screen.getByTestId('planner-card-starting')).toHaveTextContent('1+'));
+    expect(screen.getByTestId('planner-card-starting')).toHaveTextContent(/at least/i);
+  });
+
+  it('shows the awaiting card and the queue as failed, not as zero / nothing waiting, when the proposed request fails', async () => {
+    casesOverride = (url) => (url.includes('status=proposed') ? new Error('boom') : undefined);
+    renderPlanner();
+    await waitFor(() => expect(screen.getByTestId('planner-card-awaiting')).toHaveAttribute('data-state', 'empty'));
+    expect(screen.getByTestId('planner-card-awaiting')).toHaveTextContent(/could not be loaded/i);
+    expect(screen.getByTestId('planner-card-awaiting')).not.toHaveTextContent(/Awaiting approval0/);
+    expect(screen.getByTestId('planner-action-queue-error')).toHaveTextContent('Awaiting approval');
+    expect(screen.queryByTestId('planner-action-queue-empty')).toBeNull();
+  });
+
+  it('shows the starting card as failed, not zero, when the window request fails', async () => {
+    casesOverride = (url) => (url.includes('window_from=') ? new Error('boom') : undefined);
+    renderPlanner();
+    await waitFor(() => expect(screen.getByTestId('planner-card-starting')).toHaveAttribute('data-state', 'empty'));
+    expect(screen.getByTestId('planner-card-starting')).toHaveTextContent(/could not be loaded/i);
+  });
+
+  it('shows errors, not empty results, on the cards, timeline and queue when the main case list fails', async () => {
+    casesOverride = () => new Error('boom');
+    renderPlanner();
+    expect(await screen.findByTestId('planner-timeline-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-timeline-empty')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('planner-action-queue-error')).toHaveTextContent('Case list'));
+    expect(screen.queryByTestId('planner-action-queue-empty')).toBeNull();
+    expect(screen.getByText('Drafts to finish').closest('[data-state]')).toHaveAttribute('data-state', 'empty');
   });
 });

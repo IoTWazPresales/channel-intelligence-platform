@@ -33,4 +33,18 @@ describe('PlannerTimeline', () => {
     renderWithProviders(<PlannerTimeline cases={[]} today="2026-11-18" selectedId={null} onSelect={vi.fn()} />);
     expect(screen.getByTestId('planner-timeline-empty')).toBeInTheDocument();
   });
+  it('shows an error, not "no dated cases", when the case list failed', () => {
+    renderWithProviders(
+      <PlannerTimeline cases={[]} today="2026-11-18" selectedId={null} onSelect={vi.fn()} status="error" />,
+    );
+    expect(screen.getByTestId('planner-timeline-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-timeline-empty')).toBeNull();
+  });
+  it('shows loading, not an empty result, while the case list loads', () => {
+    renderWithProviders(
+      <PlannerTimeline cases={[]} today="2026-11-18" selectedId={null} onSelect={vi.fn()} status="loading" />,
+    );
+    expect(screen.getByTestId('planner-timeline-loading')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-timeline-empty')).toBeNull();
+  });
 });

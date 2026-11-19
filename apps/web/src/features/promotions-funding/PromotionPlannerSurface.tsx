@@ -53,6 +53,7 @@ import {
 import { PlanWorkspace } from '@/features/promotions-funding/PlanWorkspace';
 import {
   awaitingApproval,
+  pageIsComplete,
   startingNext4Weeks,
   todayIso,
   unplannedAgedStockValue,
@@ -164,13 +165,23 @@ function PlannerList({
     },
   });
 
-  const { data: proposedPage } = useQuery({
+  const {
+    data: proposedPage,
+    isLoading: proposedLoading,
+    isError: proposedError,
+    refetch: refetchProposed,
+  } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'proposed'],
     queryFn: ({ signal }) =>
       apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&status=proposed', { signal }),
   });
 
-  const { data: endedPage } = useQuery({
+  const {
+    data: endedPage,
+    isLoading: endedLoading,
+    isError: endedError,
+    refetch: refetchEnded,
+  } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'ended'],
     queryFn: ({ signal }) =>
       apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&status=ended', { signal }),
@@ -180,7 +191,12 @@ function PlannerList({
   // (both filter on window_start), independent of the stage chips so the card does not move with them.
   const today = useMemo(() => todayIso(), []);
   const startingTo = addDaysIso(today, STARTING_WINDOW_DAYS);
-  const { data: startingPage } = useQuery({
+  const {
+    data: startingPage,
+    isLoading: startingLoading,
+    isError: startingError,
+    refetch: refetchStarting,
+  } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'starting', today],
     queryFn: ({ signal }) =>
       apiGet<CporCasesPage>(
@@ -209,6 +225,21 @@ function PlannerList({
 
   const awaiting = awaitingApproval(proposedPage?.items ?? []);
   const starting = startingNext4Weeks(startingPage?.items ?? [], today);
+  // Each request fetches the first 500 rows. The list's `total` (which still counts replaced and cancelled cases) says
+  // whether that was every matching row; when it was not, the figure is a floor and is shown as one ("N+").
+  const awaitingComplete = pageIsComplete(proposedPage);
+  const startingComplete = pageIsComplete(startingPage);
+  // A figure is only a figure once its request succeeded: loading and failed requests never read as zero.
+  const figureState = (loading: boolean, failed: boolean): 'loading' | 'empty' | 'ready' =>
+    loading ? 'loading' : failed ? 'empty' : 'ready';
+  const awaitingState = figureState(proposedLoading, proposedError);
+  const startingState = figureState(startingLoading, startingError);
+  const mainState = figureState(isLoading, isError);
+  const queueUnavailable = [
+    ...(isError ? ['Case list'] : []),
+    ...(proposedError ? ['Awaiting approval'] : []),
+    ...(endedError ? ['Ended cases'] : []),
+  ];
   const agedUnplanned = unplannedAgedStockValue(aged.data);
   const queue = useMemo(
     () =>
@@ -261,35 +292,51 @@ function PlannerList({
             value={draftsN}
             unit="plans"
             compact
+            state={mainState}
+            stateNote={isError ? 'Could not be loaded. Click to retry.' : undefined}
             caption={`${fmtCompact(inPlanningSupport)} support in draft / proposed / approved / rejected`}
-            onClick={() => setParam('stage', 'draft')}
+            onClick={isError ? () => void refetch() : () => setParam('stage', 'draft')}
           />
           <HeadlineFigure
             label="Ended"
             value={endedN}
             unit="cases"
             compact
+            state={mainState}
+            stateNote={isError ? 'Could not be loaded. Click to retry.' : undefined}
             caption="In the book — settle from the case desk, not from this strip"
-            onClick={() => setParam('stage', 'ended')}
+            onClick={isError ? () => void refetch() : () => setParam('stage', 'ended')}
           />
           <HeadlineFigure
             label="Awaiting approval"
-            value={awaiting.count}
+            value={awaitingComplete ? awaiting.count : `${awaiting.count}+`}
             unit="cases"
             compact
             testId="planner-card-awaiting"
-            severity={awaiting.count > 0 ? 'warn' : 'neutral'}
-            caption="Proposed cases waiting for a decision"
-            onClick={() => setParam('stage', 'proposed')}
+            state={awaitingState}
+            stateNote={proposedError ? 'Could not be loaded. Click to retry.' : undefined}
+            severity={awaitingState === 'ready' && awaiting.count > 0 ? 'warn' : 'neutral'}
+            caption={`Proposed cases waiting for a decision${
+              awaitingComplete ? '' : '. At least this many: the list returned only part of the proposed cases'
+            }`}
+            onClick={proposedError ? () => void refetchProposed() : () => setParam('stage', 'proposed')}
           />
           <HeadlineFigure
             label="Starting in 4 weeks"
-            value={starting.count}
+            value={startingComplete ? starting.count : `${starting.count}+`}
             unit="campaigns"
             compact
             testId="planner-card-starting"
-            caption={`Window starts ${starting.from} to ${starting.to}; cancelled and rejected left out`}
-            onClick={() => setParams({ stage: null, window_from: starting.from, window_to: starting.to })}
+            state={startingState}
+            stateNote={startingError ? 'Could not be loaded. Click to retry.' : undefined}
+            caption={`Window starts ${starting.from} to ${starting.to}; replaced, cancelled and rejected left out${
+              startingComplete ? '' : '. At least this many: the list returned only part of the matching cases'
+            }`}
+            onClick={
+              startingError
+                ? () => void refetchStarting()
+                : () => setParams({ stage: null, window_from: starting.from, window_to: starting.to })
+            }
           />
           <HeadlineFigure
             label="Unplanned aged stock"
@@ -369,7 +416,13 @@ function PlannerList({
                 </Stack>
               }
             />
-            <PlannerTimeline cases={rows} today={today} selectedId={selectedId} onSelect={setSelectedId} />
+            <PlannerTimeline
+              cases={rows}
+              today={today}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              status={isLoading ? 'loading' : isError ? 'error' : 'ready'}
+            />
             <ModuleDataSection
               isLoading={isLoading}
               isError={isError}
@@ -431,8 +484,23 @@ function PlannerList({
           </Stack>
 
           <Stack spacing={2}>
-            <CaseSidePanel row={selectedRow} onOpen={onOpen} onClear={() => setSelectedId(null)} />
-            <ActionQueuePanel items={queue} onSelect={setSelectedId} />
+            <CaseSidePanel
+              row={selectedRow}
+              unavailableId={selectedId != null && !selectedRow ? selectedId : null}
+              onOpen={onOpen}
+              onClear={() => setSelectedId(null)}
+            />
+            <ActionQueuePanel
+              items={queue}
+              loading={isLoading || proposedLoading || endedLoading}
+              unavailable={queueUnavailable}
+              onRetry={() => {
+                if (isError) void refetch();
+                if (proposedError) void refetchProposed();
+                if (endedError) void refetchEnded();
+              }}
+              onSelect={setSelectedId}
+            />
             <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
               The queue does not flag a live listing that is off the promo price. Listing, competitor price and
               observed cover are on the Evidence column when you create a promotion plan.

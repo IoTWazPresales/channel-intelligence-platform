@@ -48,4 +48,12 @@ describe('CaseSidePanel', () => {
     fireEvent.click(screen.getByTestId('planner-side-clear'));
     expect(onClear).toHaveBeenCalled();
   });
+  it('says the summary could not be loaded when a case is selected but its row is not available, and still offers the workspace', () => {
+    const onOpen = vi.fn();
+    renderWithProviders(<CaseSidePanel row={null} unavailableId={41} onOpen={onOpen} onClear={vi.fn()} />);
+    expect(screen.queryByTestId('planner-side-panel-empty')).toBeNull();
+    expect(screen.getByTestId('planner-side-panel-unavailable')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('planner-side-open'));
+    expect(onOpen).toHaveBeenCalledWith(41);
+  });
 });

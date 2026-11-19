@@ -28,6 +28,17 @@ describe('buildActionQueue', () => {
     const q = buildActionQueue({ cases: [], proposed: [], ended: [{ id: 9, case_code: 'Z', status: 'ended', ...base }] });
     expect(q.map((i) => i.kind)).toEqual(['claim_evidence_pending']);
   });
+  it('leaves out replaced cases (superseded_by_case_id set), in every condition', () => {
+    const q = buildActionQueue({
+      cases: [{ id: 1, case_code: 'A', status: 'approved', needs_reapproval: true, superseded_by_case_id: 8, ...base }],
+      proposed: [
+        { id: 2, case_code: 'B', status: 'proposed', superseded_by_case_id: 8, ...base },
+        { id: 3, case_code: 'C', status: 'proposed', superseded_by_case_id: null, ...base },
+      ],
+      ended: [{ id: 4, case_code: 'D', status: 'ended', superseded_by_case_id: 8, ...base }],
+    });
+    expect(q.map((i) => [i.kind, i.caseId])).toEqual([['awaiting_approval', 3]]);
+  });
   it('is empty when nothing waits', () => {
     expect(buildActionQueue({ cases: [], proposed: [], ended: [] })).toEqual([]);
   });
