@@ -6,6 +6,20 @@
 
 **PR #111 fix round 2 (same branch, 2026-11-19):** the Codex review B2 fix. The dashboards editor, Overview and Reports now read one identity-scoped list key (`dashboardListKey` / `useDashboardList` in `apps/web/src/features/dashboards/dashboardList.ts`), so deleting or changing a widget in the editor shows on Overview and in the Reports pinned counts straight away, not after the 60-second freshness window. The round-1 identity guarantees are unchanged. New `dashboardList.crossScreen.test.tsx` checks both screens on one retained QueryClient and fails if the old shared key is put back. The earlier broad-run failure was a test matcher (ASCII hyphen vs the rendered em dash), now fixed. Results: web tsc 0; vitest dashboards/overview/reports/login 36 files / 249 tests passed; `src/features src/app` 227 files / 1254 tests passed; ESLint clean on changed files. No API change. Browser check at 1280x800 and 390x844 is still to do.
 
+**W1-B activation timing (2026-11-19, PR #106 fix round 1):** branch `feat/w1b-activation-timing-20261118`, stacked on #105 and #104. It adds late-activation and early-deactivation alerts to listing intelligence and the Market activation lens.
+
+- **Threshold:** Warren decided 3 days (13:27 SAST). It is set by `CIP_LISTING_ACTIVATION_ALERT_DAYS` (default 3), not hard-coded.
+
+- **Evidence / B2:** timing uses only stored `price_basis="promo"` checks. Distributor sell-in (`sell_out`), missing and unknown bases cannot establish promotion timing; point-in-time activation remains unchanged.
+
+- **B1:** transitions and recoveries keep the query's `fetched_at, id` order, including same-day checks and equal timestamps. Calendar dates still determine lateness/earliness at the configured threshold.
+
+- **Tests:** expanded timing pytest and Vitest regressions; new `test_listing_activation_timing_db.py` uses the existing `cip_test` identity-checking rollback fixture and the canonical activation evaluator.
+
+- **Validation:** 2026-11-19: `cip_test` listing pytest 317 passed (includes the new rollback-only `test_listing_activation_timing_db.py` and expanded timing unit tests); web `tsc` clean, Vitest `src/features/market-listings` 7 files / 34 passed. Running-app evidence not yet collected.
+
+- No migration, no deploy.
+
 **W1-B worklist (2026-11-19, PR #105 Round 1):** branch `feat/w1b-stock-not-listed-20261118`. #104 is already merged into integration. The PR adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
 
 - the offer/competitor comparison needs data;
