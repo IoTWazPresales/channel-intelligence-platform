@@ -6,7 +6,7 @@ import asyncio
 from datetime import date, datetime, timezone
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.feature_flags import commercial_planner_enabled
@@ -18,11 +18,12 @@ from app.models.iam import Tenant
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.facts import FactInboundShipment, FactInventoryReconciliation
 from app.models.ingestion import ImportJob
+from app.services.brief_swr_cache import StaleWhileRevalidate
 from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import replenishment_flag_v1, weeks_of_cover_or_none
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET
-from app.services.cpor.settle_readiness import case_missing_roe, fx_declared, fx_mode_valid
+from app.services.cpor.settle_readiness import FX_MODES
 from app.services.imports.shipment_open_book import exclude_closed_inbound
 from app.services.shipment_strict_pair import keep_counted_line
 from app.services.woc_observation_read import latest_woc_stock_velocity
@@ -34,6 +35,12 @@ FAILED_IMPORTS_HREF = "/admin/imports?jobStatus=failed"
 CST_STEWARD_SLOTS_HREF = "/admin/cst-steward?tab=slots"
 PROMO_NOT_ACTIVATED_HREF = "/listing-capture?tab=intelligence&activation=not_activated&worklist=1"
 _OPEN_CPOR_STATUSES = tuple(s for s in CPOR_CASE_STATUS_SET if s not in {"settled", "cancelled", "rejected"})
+
+# The sell-through and listing counts take seconds to build and move with imports, not clicks.
+# Every page asks for the badge, so they are shared between requests: fresh for five minutes,
+# served for up to thirty while one background load replaces them.
+_ATTENTION_CACHE = StaleWhileRevalidate(fresh_seconds=300, stale_seconds=1800)
+_PROMO_CACHE = StaleWhileRevalidate(fresh_seconds=300, stale_seconds=1800)
 
 
 def inbound_not_received_count_stmt(user: dict | None) -> Select[Any]:
@@ -247,17 +254,24 @@ async def _sell_through_attention(user: dict | None) -> dict[str, Any] | None:
     from app.services.channel_intelligence.sell_through_overview import sell_through_attention
     from app.services.commercial_tenant_profile import reporting_today
 
+    from app.core.my_accounts import request_my_account_ids
+
     tid = tenant_id_from_user(user)
+    raw_ids = request_my_account_ids.get()
+    key = (tid, tuple(sorted(raw_ids)) if raw_ids else ())
 
     def _work() -> dict[str, Any]:
         with SessionLocal() as session:
             return sell_through_attention(session, tid, reporting_today(tid))
 
-    try:
-        return await asyncio.to_thread(_work)
-    except Exception:  # noqa: BLE001 - FLAG != BLOCK: Attention still loads without these rows
-        logging.getLogger(__name__).exception("sell-through attention counts failed")
-        return None
+    async def _load() -> dict[str, Any] | None:
+        try:
+            return await asyncio.to_thread(_work)
+        except Exception:  # noqa: BLE001 - FLAG != BLOCK: Attention still loads without these rows
+            logging.getLogger(__name__).exception("sell-through attention counts failed")
+            return None
+
+    return await _ATTENTION_CACHE.get(key, _load)
 
 
 async def _dsi_freshness(db: AsyncSession, user: dict | None) -> dict[str, Any] | None:
@@ -306,6 +320,33 @@ async def _cover_summary(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     }
 
 
+def open_case_fx_counts_stmt(user: dict | None) -> Select[Any]:
+    """Open cases, open cases with a rate but no FX mode, and open cases with no rate.
+
+    Same rules as ``fx_declared`` / ``fx_mode_valid`` / ``case_missing_roe``: a rate counts
+    when it is present and above zero; a mode counts when it is one of ``FX_MODES``.
+    """
+    declared = and_(CporCase.roe_snapshot.is_not(None), CporCase.roe_snapshot > 0)
+    mode_invalid = or_(CporCase.fx_mode.is_(None), CporCase.fx_mode.not_in(sorted(FX_MODES)))
+    stmt = (
+        select(
+            func.count(),
+            func.count().filter(and_(declared, mode_invalid)),
+            func.count().filter(~declared),
+        )
+        .select_from(CporCase)
+        .where(CporCase.status.in_(_OPEN_CPOR_STATUSES))
+        .where(where_tenant(CporCase.tenant_id, user))
+        .where(where_commercial_intelligence())
+    )
+    return apply_account_predicate(stmt, CporCase.customer_id)
+
+
+def recon_rows_exist_stmt() -> Select[Any]:
+    """Has any reconciliation row been written. An existence probe, not a table count."""
+    return select(exists().where(FactInventoryReconciliation.id.is_not(None)))
+
+
 async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     if not commercial_planner_enabled():
         return {
@@ -317,18 +358,10 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
             "data_unavailable": True,
         }
 
-    open_q = apply_account_predicate(
-        select(CporCase)
-        .where(CporCase.status.in_(_OPEN_CPOR_STATUSES))
-        .where(where_tenant(CporCase.tenant_id, user))
-        .where(where_commercial_intelligence()),
-        CporCase.customer_id,
-    )
-    cases = (await db.execute(open_q)).scalars().all()
     # N-0083: "FX blocked" means the case has a rate but no booked/floating mode.
-    # A case with no rate is a different gap and is counted on its own.
-    fx_blocked = [c for c in cases if fx_declared(c) and not fx_mode_valid(c)]
-    fx_rate_missing = [c for c in cases if case_missing_roe(c)]
+    # A case with no rate is a different gap and is counted on its own. Both are counted in
+    # the database; open cases are never loaded.
+    open_n, fx_blocked_n, fx_rate_missing_n = (await db.execute(open_case_fx_counts_stmt(user))).one()
     fx_blocked_zar = 0.0  # placeholder — owed amount needs recon batch; count is primary signal
 
     assumption_lines = (
@@ -346,10 +379,10 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
     ).scalar()
 
     return {
-        "open_cases": len(cases),
-        "fx_blocked_cases": len(fx_blocked),
-        "fx_rate_missing_cases": len(fx_rate_missing),
-        "fx_blocked_zar": fx_blocked_zar if fx_blocked else None,
+        "open_cases": int(open_n or 0),
+        "fx_blocked_cases": int(fx_blocked_n or 0),
+        "fx_rate_missing_cases": int(fx_rate_missing_n or 0),
+        "fx_blocked_zar": fx_blocked_zar if fx_blocked_n else None,
         "missing_assumption_skus": int(assumption_lines or 0),
         "data_unavailable": False,
     }
@@ -381,7 +414,7 @@ async def _needs_look_summary(db: AsyncSession, user: dict | None) -> dict[str, 
     return {"lines": int(row[0] or 0), "units": float(row[1] or 0), "days": days}
 
 
-async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int, int, dict[str, Any] | None, tuple[int, int]]:
+async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int, bool, dict[str, Any] | None, tuple[int, int]]:
     failed_open = int(
         await db.scalar(
             select(func.count())
@@ -392,10 +425,10 @@ async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int,
         )
         or 0
     )
-    recon_rows = int(await db.scalar(select(func.count()).select_from(FactInventoryReconciliation)) or 0)
+    recon_any = bool(await db.scalar(recon_rows_exist_stmt()))
     dsi = await _dsi_freshness(db, user)
     cst_counts = await _cst_late_missing_counts(db)
-    return failed_open, recon_rows, dsi, cst_counts
+    return failed_open, recon_any, dsi, cst_counts
 
 
 
@@ -500,11 +533,15 @@ async def _promo_not_activated_count(user: dict | None) -> int | None:
                 session, tenant_id=tid, account_ids=account_ids
             )
 
-    try:
-        return await asyncio.to_thread(_work)
-    except Exception:  # noqa: BLE001 - FLAG != BLOCK: Attention still loads without this row
-        logging.getLogger(__name__).exception("promo_not_activated attention count failed")
-        return None
+    async def _load() -> int | None:
+        try:
+            return await asyncio.to_thread(_work)
+        except Exception:  # noqa: BLE001 - FLAG != BLOCK: Attention still loads without this row
+            logging.getLogger(__name__).exception("promo_not_activated attention count failed")
+            return None
+
+    key = (tid, tuple(sorted(account_ids)) if account_ids else ())
+    return await _PROMO_CACHE.get(key, _load)
 
 async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
@@ -526,8 +563,8 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         _promo_not_activated_count(user),
     )
     small, cover, settlement, inbound_raw, needs_look = parts
-    failed_open, recon_rows, dsi, (cst_late, cst_missing) = small
-    soh_recon_not_run = recon_rows == 0
+    failed_open, recon_any, dsi, (cst_late, cst_missing) = small
+    soh_recon_not_run = not recon_any
     inbound_open = int(inbound_raw or 0)
 
     signals: list[dict[str, Any]] = []

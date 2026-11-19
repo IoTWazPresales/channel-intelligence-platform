@@ -4,17 +4,19 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import distinct, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant_scope import tenant_id_from_user
+from app.db.parallel_reads import gather_reads
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimDistributor
+from app.models.facts import FactInboundShipment
+from app.services.shipment_live_line import live_line
 from app.services.commercial_planner.lineup_period_canonical import (
     active_lineup_case_filters,
     active_lineup_line_filters,
 )
-from app.services.commercial_planner.po_management import coverage as po_coverage
 
 logger = logging.getLogger(__name__)
 
@@ -156,97 +158,136 @@ async def plan_unit_po_coverage_by_distributor(db: AsyncSession) -> list[dict[st
     return shape_plan_unit_po_coverage(rows)
 
 
+def po_totals_stmt():
+    """Purchase orders seen on live shipment lines, and how many of them an active case links.
+
+    The same two numbers ``po_management.coverage`` totals (every PO with a live, product-bearing
+    shipment line; those also linked to an active lineup case), as two distinct counts instead of a
+    load of every (PO, product) group.
+    """
+    po = FactInboundShipment.purchase_order_id
+    linked = (
+        select(CommercialLineupCasePo.purchase_order_id)
+        .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupCasePo.case_id)
+        .where(*active_lineup_case_filters())
+    )
+    return select(
+        func.count(distinct(po)),
+        func.count(distinct(po)).filter(po.in_(linked)),
+    ).where(
+        po.isnot(None),
+        FactInboundShipment.product_id.isnot(None),
+        live_line(FactInboundShipment.line_state),
+    )
+
+
 async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     tenant = tenant_id_from_user(user)
     dbname = (await db.execute(text("SELECT current_database()"))).scalar()
-    try:
-        row = (
-            await db.execute(
-                text(_headline_sql(_TODAY_SAST, _ISO_WEEK_START_SAST)),
-                {"tenant": tenant},
-            )
-        ).mappings().one()
-    except Exception:
-        logger.exception("supply overview read failed tenant_id=%s", tenant)
+    # The five reads do not depend on each other: they overlap (one pooled session each) instead
+    # of queuing on one. Each keeps its own failure handling.
+    async def _headline(s: AsyncSession) -> Any:
+        try:
+            return (
+                await s.execute(
+                    text(_headline_sql(_TODAY_SAST, _ISO_WEEK_START_SAST)),
+                    {"tenant": tenant},
+                )
+            ).mappings().one()
+        except Exception:
+            logger.exception("supply overview read failed tenant_id=%s", tenant)
+            return None
+
+    async def _last_job(s: AsyncSession) -> Any:
+        try:
+            return (
+                await s.execute(
+                    text(
+                        """
+                        SELECT file_name, created_at, status, stage
+                        FROM import_job
+                        WHERE template_slug = 'inbound_shipments'
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+            ).mappings().first()
+        except Exception:
+            logger.exception("supply overview last-import read failed")
+            return None
+
+    async def _po_by_distributor(s: AsyncSession) -> list[dict[str, Any]]:
+        try:
+            dist_rows = (
+                await s.execute(
+                    text(
+                        """
+                        SELECT coalesce(d.name, 'Unmapped distributor') AS distributor,
+                               count(*)::int AS observed_pos,
+                               count(*) FILTER (WHERE linked.purchase_order_id IS NOT NULL)::int AS linked_pos
+                        FROM purchase_order po
+                        LEFT JOIN dim_distributor d ON d.id = po.distributor_id
+                        LEFT JOIN (
+                          SELECT DISTINCT cl.purchase_order_id
+                          FROM commercial_lineup_case_po cl
+                          JOIN commercial_lineup_case c ON c.id = cl.case_id
+                          WHERE c.superseded_by_case_id IS NULL
+                            AND c.commercial_status NOT IN ('cancelled', 'superseded')
+                        ) linked ON linked.purchase_order_id = po.id
+                        GROUP BY 1
+                        ORDER BY observed_pos DESC
+                        LIMIT 12
+                        """
+                    )
+                )
+            ).mappings().all()
+            return [
+                {
+                    "distributor": r["distributor"],
+                    "observed_pos": int(r["observed_pos"] or 0),
+                    "linked_pos": int(r["linked_pos"] or 0),
+                    "covered": (
+                        float(r["linked_pos"] or 0) / float(r["observed_pos"])
+                        if int(r["observed_pos"] or 0)
+                        else 0.0
+                    ),
+                }
+                for r in dist_rows
+            ]
+        except Exception:
+            logger.exception("supply overview purchase-order coverage read failed")
+            return []
+
+    async def _plan_unit(s: AsyncSession) -> list[dict[str, Any]]:
+        try:
+            return await plan_unit_po_coverage_by_distributor(s)
+        except Exception:
+            logger.exception("supply overview plan-unit coverage read failed")
+            return []
+
+    async def _po_totals(s: AsyncSession) -> dict[str, Any]:
+        try:
+            observed_n, linked_n = (await s.execute(po_totals_stmt())).one()
+            return {
+                "total_pos_observed": int(observed_n or 0),
+                "total_pos_linked": int(linked_n or 0),
+                "data_unavailable": False,
+            }
+        except Exception:
+            logger.exception("supply overview purchase-order total read failed")
+            return {"total_pos_observed": 0, "total_pos_linked": 0, "data_unavailable": True}
+
+    row, last_job, po_by_distributor, plan_unit_po_by_distributor, po = await gather_reads(
+        db, _headline, _last_job, _po_by_distributor, _plan_unit, _po_totals
+    )
+    if row is None:
         return {
             "database": dbname,
             "tenant_id": tenant,
             "data_unavailable": True,
             "labels": {},
             "captions": {},
-        }
-
-    last_job = (
-        await db.execute(
-            text(
-                """
-                SELECT file_name, created_at, status, stage
-                FROM import_job
-                WHERE template_slug = 'inbound_shipments'
-                ORDER BY created_at DESC
-                LIMIT 1
-                """
-            )
-        )
-    ).mappings().first()
-
-    po_by_distributor: list[dict[str, Any]] = []
-    try:
-        dist_rows = (
-            await db.execute(
-                text(
-                    """
-                    SELECT coalesce(d.name, 'Unmapped distributor') AS distributor,
-                           count(*)::int AS observed_pos,
-                           count(*) FILTER (WHERE linked.purchase_order_id IS NOT NULL)::int AS linked_pos
-                    FROM purchase_order po
-                    LEFT JOIN dim_distributor d ON d.id = po.distributor_id
-                    LEFT JOIN (
-                      SELECT DISTINCT cl.purchase_order_id
-                      FROM commercial_lineup_case_po cl
-                      JOIN commercial_lineup_case c ON c.id = cl.case_id
-                      WHERE c.superseded_by_case_id IS NULL
-                        AND c.commercial_status NOT IN ('cancelled', 'superseded')
-                    ) linked ON linked.purchase_order_id = po.id
-                    GROUP BY 1
-                    ORDER BY observed_pos DESC
-                    LIMIT 12
-                    """
-                )
-            )
-        ).mappings().all()
-        po_by_distributor = [
-            {
-                "distributor": r["distributor"],
-                "observed_pos": int(r["observed_pos"] or 0),
-                "linked_pos": int(r["linked_pos"] or 0),
-                "covered": (
-                    float(r["linked_pos"] or 0) / float(r["observed_pos"])
-                    if int(r["observed_pos"] or 0)
-                    else 0.0
-                ),
-            }
-            for r in dist_rows
-        ]
-    except Exception:
-        logger.exception("supply overview purchase-order coverage read failed")
-        po_by_distributor = []
-
-    plan_unit_po_by_distributor: list[dict[str, Any]] = []
-    try:
-        plan_unit_po_by_distributor = await plan_unit_po_coverage_by_distributor(db)
-    except Exception:
-        logger.exception("supply overview plan-unit coverage read failed")
-        plan_unit_po_by_distributor = []
-
-    try:
-        po = await po_coverage(db)
-    except Exception:
-        logger.exception("supply overview purchase-order total read failed")
-        po = {
-            "total_pos_observed": 0,
-            "total_pos_linked": 0,
-            "data_unavailable": True,
         }
 
     observed = int(po.get("total_pos_observed") or 0)

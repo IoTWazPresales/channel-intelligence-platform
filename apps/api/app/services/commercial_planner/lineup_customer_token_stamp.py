@@ -820,16 +820,27 @@ async def list_customer_token_worklist(
 
     W10: SQL filter + preload — zero per-token queries in the loop.
     W9: exclude_prefix applied before grouping.
+
+    Speed (T1b): every read is a column read (no full ORM rows with their JSON payloads); the
+    isolation preload is narrowed to the lines isolation can use; shipment rows are indexed by PO
+    once; the confirmer offers and the customer labels are built only for the returned page. The
+    buckets, totals and counts still cover every token.
     """
     oc_id = await get_open_channel_customer_id(db)
 
-    # SQL-filter unresolved lines (customer_id IS NULL)
+    # SQL-filter unresolved lines (customer_id IS NULL); only the columns the grouping reads
     lines = list(
         (
             await db.execute(
-                select(CommercialLineupLine).where(CommercialLineupLine.customer_id.is_(None))
+                select(
+                    CommercialLineupLine.id,
+                    CommercialLineupLine.case_id,
+                    CommercialLineupLine.customer_token,
+                    CommercialLineupLine.customer_id,
+                    CommercialLineupLine.product_id,
+                ).where(CommercialLineupLine.customer_id.is_(None))
             )
-        ).scalars().all()
+        ).all()
     )
 
     # Preload: all approved aliases
@@ -855,16 +866,26 @@ async def list_customer_token_worklist(
     case_ids = {int(ln.case_id) for tlines in by_token.values() for ln in tlines}
     case_ids |= {int(ln.case_id) for ln in empty_lines}
 
-    # Preload case lines (for W6 isolation) — only cases we need
-    case_lines_by_case: dict[int, list[CommercialLineupLine]] = defaultdict(list)
+    # Preload case lines (for W6 isolation) — only cases we need, and only the lines that can
+    # isolate a product: resolved to a customer, with a token and a product (the other lines are
+    # skipped by _isolated_product_ids).
+    case_lines_by_case: dict[int, list[Any]] = defaultdict(list)
     if case_ids:
         for ln in (
             await db.execute(
-                select(CommercialLineupLine).where(
+                select(
+                    CommercialLineupLine.case_id,
+                    CommercialLineupLine.customer_token,
+                    CommercialLineupLine.customer_id,
+                    CommercialLineupLine.product_id,
+                ).where(
                     CommercialLineupLine.case_id.in_(list(case_ids)),
+                    CommercialLineupLine.customer_id.is_not(None),
+                    CommercialLineupLine.customer_token.is_not(None),
+                    CommercialLineupLine.product_id.is_not(None),
                 )
             )
-        ).scalars().all():
+        ).all():
             case_lines_by_case[int(ln.case_id)].append(ln)
 
     # Preload case→PO
@@ -886,10 +907,19 @@ async def list_customer_token_worklist(
     ship_rows_all: list[Any] = []
     if all_po_ids:
         ship_rows_all = await _live_ship_rows_for_pos(db, list(all_po_ids))
+    # One pass: shipment rows by PO, each keeping its place in the original order, so a token
+    # reads only the rows of its own POs (not every row once per token) in the same order as before.
+    ship_by_po: dict[int, list[tuple[int, Any]]] = defaultdict(list)
+    for idx, srow in enumerate(ship_rows_all):
+        ship_by_po[int(srow[0])].append((idx, srow))
+
+    def _ship_rows_of(pos: set[int]) -> list[Any]:
+        picked = [pair for po in pos for pair in ship_by_po.get(po, ())]
+        picked.sort(key=lambda pair: pair[0])
+        return [srow for _idx, srow in picked]
 
     name_map, alias_map_dist = await _load_distributor_match_maps(db)
 
-    cust_ids_needed: set[int] = set()
     items: list[dict[str, Any]] = []
 
     for nt, token_lines in sorted(by_token.items(), key=lambda x: (-len(x[1]), x[0])):
@@ -901,9 +931,7 @@ async def list_customer_token_worklist(
         ship_cids: set[int] = set()
         ship_prov: list[dict[str, Any]] = []
         seen: set[tuple[int, int, int]] = set()
-        for po_id, product_id, resolved_cid, po_dist in ship_rows_all:
-            if int(po_id) not in t_pos:
-                continue
+        for po_id, product_id, resolved_cid, po_dist in _ship_rows_of(t_pos):
             if product_id is None or int(product_id) not in product_ids:
                 continue
             rc = int(resolved_cid)
@@ -966,11 +994,6 @@ async def list_customer_token_worklist(
         cand_ids = set(all_cands)
         if bucket == "distributor_token" and oc_id is not None:
             cand_ids.add(int(oc_id))
-        cust_ids_needed.update(cand_ids)
-        if preferred is not None:
-            cust_ids_needed.add(preferred)
-        if oc_id is not None:
-            cust_ids_needed.add(int(oc_id))
 
         items.append(
             {
@@ -1020,9 +1043,7 @@ async def list_customer_token_worklist(
             seen: set[tuple[int, int, int]] = set()
             sole_po_customers: dict[int, int] = {}
             po_cust_sets: dict[int, set[int]] = defaultdict(set)
-            for po_id, product_id, resolved_cid, po_dist in ship_rows_all:
-                if int(po_id) not in t_pos:
-                    continue
+            for po_id, product_id, resolved_cid, po_dist in _ship_rows_of(t_pos):
                 if product_ids and (product_id is None or int(product_id) not in product_ids):
                     continue
                 rc = int(resolved_cid)
@@ -1057,7 +1078,6 @@ async def list_customer_token_worklist(
             cand_ids = set(hint_ids)
             if oc_id is not None:
                 cand_ids.add(int(oc_id))
-            cust_ids_needed.update(cand_ids)
 
             line_ids = [int(ln.id) for ln in case_empty]
             items.append(
@@ -1086,29 +1106,47 @@ async def list_customer_token_worklist(
                 }
             )
 
-    # D-040: attach sole-exact ship corroboration offers for free-pick / clean tokens
-    offer_tokens = [
-        it["norm_token"]
-        for it in items
-        if it["bucket"] not in {"distributor_token", "empty_token", "genuine_conflict"}
-        and it.get("free_target_allowed")
-        and it.get("norm_token")
-    ]
-    if offer_tokens:
+    counts: dict[str, int] = defaultdict(int)
+    for it in items:
+        counts[it["bucket"]] += 1
+        counts["all"] += 1
+
+    # BACKLOG-124: empty_token first so default limit does not starve the bucket
+    empty_first = [it for it in items if it["bucket"] == "empty_token"]
+    rest = [it for it in items if it["bucket"] != "empty_token"]
+    ordered = empty_first + rest
+    page = ordered[: max(1, min(int(limit), 500))]
+
+    # D-040: attach sole-exact ship corroboration offers for free-pick / clean tokens.
+    # The confirmer preview only ever reads the first 500 of these tokens in token order, so a
+    # token past that cap has no offer; keep that rule, but ask only for the tokens on the page.
+    def _offer_token(it: dict[str, Any]) -> bool:
+        return bool(
+            it["bucket"] not in {"distributor_token", "empty_token", "genuine_conflict"}
+            and it.get("free_target_allowed")
+            and it.get("norm_token")
+        )
+
+    offer_tokens = [it["norm_token"] for it in items if _offer_token(it)]
+    offer_cap = set(sorted(offer_tokens)[: max(1, min(len(offer_tokens), 500))])
+    page_offer_tokens = [it["norm_token"] for it in page if _offer_token(it) and it["norm_token"] in offer_cap]
+    if page_offer_tokens:
         from app.services.commercial_planner.lineup_distributor_attribution import (
             preview_distributor_confirmer,
         )
 
         offer_preview = await preview_distributor_confirmer(
-            db, norm_tokens=offer_tokens, limit_tokens=len(offer_tokens)
+            db, norm_tokens=page_offer_tokens, limit_tokens=len(page_offer_tokens)
         )
         offer_by_token = {
             it["norm_token"]: it.get("ship_corroboration_offer") for it in offer_preview["items"]
         }
-        for it in items:
+        for it in page:
             if it["norm_token"] in offer_by_token:
                 it["ship_corroboration_offer"] = offer_by_token[it["norm_token"]]
 
+    # Labels only for the customers the page's candidates name.
+    cust_ids_needed = {int(cid) for it in page for cid in it["alias_candidate_ids"]}
     labels: dict[int, str] = {}
     if cust_ids_needed:
         for c in (
@@ -1116,7 +1154,7 @@ async def list_customer_token_worklist(
         ).scalars().all():
             labels[int(c.id)] = f"{c.name or c.code or c.id} (id {c.id})"
 
-    for it in items:
+    for it in page:
         cands = []
         sole_hint = it.get("sole_ship_hint_customer_id")
         for cid in it["alias_candidate_ids"]:
@@ -1146,18 +1184,8 @@ async def list_customer_token_worklist(
         cands.sort(key=lambda x: (0 if x["meta"].get("preferred") else 1, x["label"]))
         it["alias_candidates"] = cands
 
-    counts: dict[str, int] = defaultdict(int)
-    for it in items:
-        counts[it["bucket"]] += 1
-        counts["all"] += 1
-
-    # BACKLOG-124: empty_token first so default limit does not starve the bucket
-    empty_first = [it for it in items if it["bucket"] == "empty_token"]
-    rest = [it for it in items if it["bucket"] != "empty_token"]
-    ordered = empty_first + rest
-
     return {
-        "items": ordered[: max(1, min(int(limit), 500))],
+        "items": page,
         "total": len(ordered),
         "bucket_counts": dict(counts),
         "open_channel_customer_id": oc_id,

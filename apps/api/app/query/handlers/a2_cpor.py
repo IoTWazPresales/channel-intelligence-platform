@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.query.shared_reads import shared_read
 from app.query.types import HandlerResult, QueryRequest
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 
@@ -87,9 +88,15 @@ async def handle_a2(
             message="Would execute build_portfolio_intelligence (no DB run).",
         )
 
-    payload = await db.run_sync(
-        build_portfolio_intelligence, tenant_id=req.tenant_id, customer_id=cust_id,
-        bu=bu, include_incremental=False,
+    async def _roll_up() -> dict[str, Any]:
+        return await db.run_sync(
+            build_portfolio_intelligence, tenant_id=req.tenant_id, customer_id=cust_id,
+            bu=bu, include_incremental=False,
+        )
+
+    # support_spend, delivery_rate and support_cost_per_unit_sold read the same roll-up: share one load.
+    payload = await shared_read(
+        "a2_portfolio_intelligence", {"customer_id": cust_id, "bu": bu}, req.tenant_id, _roll_up
     )
 
     totals = payload.get("totals") or {}
