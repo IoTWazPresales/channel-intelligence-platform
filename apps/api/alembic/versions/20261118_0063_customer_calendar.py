@@ -12,8 +12,10 @@ events per customer, so apply is idempotent.
 
 Row security is enabled and forced, with transaction-local tenant context bound by the calendar
 service. Unset context denies access. Grants follow the listing-site pattern. The profile may be
-edited and deleted; events are inserted and deleted (replace), never updated. The app role
-``cip`` is granted the same commands and the id sequences, only when that role exists.
+edited and deleted; events are inserted and deleted (an upload replaces its own), and updated only
+by a customer merge, which repoints ``customer_id`` from the losing customer to the keeper under
+the merge's tenant (tenant-bound UPDATE policy, same USING and WITH CHECK as the other policies).
+The app role ``cip`` is granted the same commands and the id sequences, only when that role exists.
 
 Idempotent: tables, indexes and policies are created only when missing. Downgrade drops both
 tables (events first). Needs the table owner; on ``cip`` run it with DATABASE_URL_SYNC_MIGRATE
@@ -127,7 +129,7 @@ def upgrade() -> None:
         f"CREATE INDEX IF NOT EXISTS ix_{EVENT}_tenant_upload "
         f"ON {EVENT} (tenant_id, upload_id, customer_id)"
     )
-    _policies(EVENT, ("SELECT", "INSERT", "DELETE"))
+    _policies(EVENT, ("SELECT", "INSERT", "UPDATE", "DELETE"))
 
 
 def downgrade() -> None:

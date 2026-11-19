@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db
+from app.core.security import get_current_user
 from app.models.dimensions import DimChannel, DimCustomer, DimProduct
 from app.models.lineup import FactLineupPlanItem, LineupPlanItemEvent
 from app.services.lineup.audit import record_lineup_approval_event
@@ -231,16 +232,22 @@ async def bulk_import_lineup_items(body: LineupBulkBody, db: AsyncSession = Depe
 async def group_approve_lineup_items(
     body: LineupGroupApprovalBody,
     db: AsyncSession = Depends(get_db),
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
     """Approve or reject a customer's line-up for a period in one step (Final wave b).
 
     Each item changes exactly as ``PATCH /items/{id}`` would: the budget ledger reserve is
     applied or reversed and one approval event is written per item. All or nothing: one
     transaction.
+
+    The items are locked (``FOR UPDATE``) and read fresh, and their status is checked after
+    the lock is held, so two concurrent approvals (or an approval racing ``PATCH /items/{id}``,
+    which takes the same lock) cannot both write a ledger reserve for one item. The actor is
+    the authenticated user, never the client's ``X-User-Id`` header.
     """
     from app.services.budget_ledger import apply_lineup_approval
 
+    actor = str(user["id"])
     res = await db.execute(
         select(FactLineupPlanItem)
         .where(
@@ -248,6 +255,8 @@ async def group_approve_lineup_items(
             FactLineupPlanItem.period_start == body.period_start,
         )
         .order_by(FactLineupPlanItem.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     rows = list(res.scalars().all())
     if not rows:
@@ -268,7 +277,7 @@ async def group_approve_lineup_items(
                 sync.get(FactLineupPlanItem, iid),
                 prev,
                 new_status,
-                actor=x_user_id,
+                actor=actor,
             )
         )
         await record_lineup_approval_event(
@@ -277,7 +286,7 @@ async def group_approve_lineup_items(
             old_status=old,
             new_status=new_status,
             notes=notes,
-            actor=x_user_id,
+            actor=actor,
         )
         changed.append(item_id)
     await db.commit()
@@ -296,10 +305,15 @@ async def patch_lineup_item(
     item_id: int,
     body: LineupItemPatch,
     db: AsyncSession = Depends(get_db),
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
-    """Update approval workflow fields; logs an audit row when approval_status changes."""
-    row = await db.get(FactLineupPlanItem, item_id)
+    """Update approval workflow fields; logs an audit row when approval_status changes.
+
+    The actor is the authenticated user, never the client's ``X-User-Id`` header.
+    """
+    actor = str(user["id"])
+    # Row lock: serializes with group approval so one item cannot get two ledger reserves.
+    row = await db.get(FactLineupPlanItem, item_id, with_for_update=True)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
     data = body.model_dump(exclude_unset=True)
@@ -334,7 +348,7 @@ async def patch_lineup_item(
                 sync.get(FactLineupPlanItem, item_id),
                 old_approval,
                 new_status,
-                actor=x_user_id,
+                actor=actor,
             )
         )
         await record_lineup_approval_event(
@@ -343,7 +357,7 @@ async def patch_lineup_item(
             old_status=old_approval,
             new_status=row.approval_status,
             notes=note_snap,
-            actor=x_user_id,
+            actor=actor,
         )
     await db.commit()
     await db.refresh(row)
