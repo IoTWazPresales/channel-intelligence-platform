@@ -3800,6 +3800,24 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **(c) Older observations** | Observations written before this change with a non-200 status now read as failing. No data is rewritten. The count of listings that move from Watched to Failing on `cip` was not measured in this lane. |
 | **TRIGGER** | Before listing coverage goes to account managers. |
 
+---
+
+## BACKLOG-244 — W1-B commercial worklists: what shipped and what each remaining part needs
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Partly shipped**, on `feat/w1b-stock-not-listed-20261118` (PR #105; #104 is merged into integration). Round 1 review fixes (B1 account scope, B2 shared stock reader) applied 2026-11-19. |
+| **Source** | `cip-requirements-alignment-20261118.md` Section D item 7: "Latest-stock/no-listing suggestions, own-versus-other-offer/competitor comparisons, competitor-page monitoring and the remaining price/activation alerts. Reuse existing proposal, offer and competitor-price writers." |
+| **Shipped: in stock, not watched** | `GET /api/v1/listing-capture/stock-not-listed` (`listing_capture/stock_not_listed.py`). Read-only, tenant from the caller, optional `customer_id`, `limit` up to 2,000 with `truncated`. For each reporting customer it takes the products with stock above zero on the latest stock report, summed over sites. It drops the ones coverage counts as watched (`coverage.product_buckets`, the same rules as the Coverage tab). It lists the rest with stock, date, coverage reason and a worded next step. Shown under the Coverage tab (`StockNotListedWorklist.tsx`) with loading, error and empty states. |
+| **Round 1 B1: account scope** | Wire the existing searchable account picker to the API's `customer_id` filter and the query key. Search is independent of the capped worklist, so a later account remains reachable. Clearing restores the tenant view; the truncation message states customer-name ordering before stock. Empty scope wording also covers accounts with no reported stock. Vitest covers search, selection, clearing, distinct caches and scoped pending/error/unavailable/empty states; pytest covers route forwarding and a later account hidden by the tenant limit. |
+| **Round 1 B2: shared stock reader** | Replace the duplicate latest-date/aggregation query with `channel_intelligence.sell_through_overview.load_stock_positions`, unchanged for all existing callers. The worklist adapter passes explicit tenant/accounts, keeps the latest report without an age cutoff, and retains positive net stock only after the shared site aggregation. Empty eligible accounts return before the helper's empty-filter-means-all convention can broaden scope. Unit cases cover delegation, filtering and failure; cip_test cases cover per-account dates, sales-only periods, zero-stock reports, signed site totals and tenant boundaries. |
+| **Round 1 validation** | 2026-11-19: `cip_test` listing/stock pytest 307 passed (includes new unit and DB regressions); web `tsc` clean, Vitest `src/features/market-listings` 6 files / 29 passed. Browser smoke not yet run. |
+| **(a) Own vs other offer / competitor comparison** | Code-only to build. It needs no migration: `listing_offer`, `buy_box_own` and approved `fact_competitor_price` exist. It is useful only with data: seller identities per customer site (seed or steward), and approved competitor maps and prices. Today `fact_competitor_price` holds only imported prices. Not built in this lane. |
+| **(b) Competitor-page monitoring** | **Needs a migration.** `customer_listing` requires a customer, and `dim_competitor_product` / `fact_competitor_price` have no page URL or reader fields. Watching competitor pages needs a competitor-page table, or a nullable link from listings to `dim_competitor_product`. It also needs competitor page URLs (data). |
+| **(c) Late activation / early deactivation alerts** | **Decided by Warren:** alerts trigger at 3 days (`CIP_LISTING_ACTIVATION_ALERT_DAYS`). Built on the stacked branch `feat/w1b-activation-timing-20261118` (PR #106), outside PR #105's first worklist. |
+| **Round 1 files** | `apps/api/app/services/listing_capture/stock_not_listed.py`; `apps/api/tests/test_listing_stock_not_listed.py`; new `apps/api/tests/unit/test_listing_stock_not_listed_review.py`; `apps/web/src/features/market-listings/StockNotListedWorklist.tsx`; `apps/web/src/features/market-listings/StockNotListedWorklist.test.tsx`; `docs/BACKLOG.md`; `docs/memory/CURRENT.md`; `CONTEXT.md`. |
+| **TRIGGER** | Before W1-B is reported complete. |
+
 ## BACKLOG-245 — Wave 3 B2: first authorized run of the batch deploy script
 
 | Field | Detail |
