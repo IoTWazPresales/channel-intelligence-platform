@@ -135,14 +135,15 @@ def _seed(conn, session: Session, tag: str):
         session.flush()
         return case
 
-    def commit_row(case_id, line, product_key, amount, name):
+    def ledger_row(entry_type, case_id, line, product_key, amount, name):
         conn.execute(
             text(
                 "insert into budget_ledger_entry (entry_type, product_line, product_id, "
                 "landed_quarter, amount_usd, case_id, source_event_id) "
-                "values ('commit', :l, :p, '2026Q4', :a, :c, :e)"
+                "values (:t, :l, :p, '2026Q4', :a, :c, :e)"
             ),
             {
+                "t": entry_type,
                 "l": line,
                 "p": product_ids[product_key],
                 "a": amount,
@@ -151,11 +152,18 @@ def _seed(conn, session: Session, tag: str):
             },
         )
 
+    def commit_row(case_id, line, product_key, amount, name):
+        ledger_row("commit", case_id, line, product_key, amount, name)
+
+    def consume_row(case_id, line, product_key, amount, name):
+        ledger_row("consume", case_id, line, product_key, amount, name)
+
     return {
         "line_a": line_a,
         "line_b": line_b,
         "make_case": make_case,
         "commit_row": commit_row,
+        "consume_row": consume_row,
     }
 
 
@@ -231,5 +239,79 @@ def test_case_with_commit_rows_is_not_double_counted(conn, monkeypatch: pytest.M
         position = evaluate_money_position(session, case_id=approved.id, include_this_case=True)
         assert position["portfolio_committed_usd"] == 900.0
         assert position["money_over"] is False
+    finally:
+        session.close()
+
+
+def test_consume_only_case_is_not_double_counted_and_export_is_not_refused(
+    conn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A settled case in the draw through consume rows only (no commit) is not counted twice.
+
+    The case has 500 of planned support and 900 consumed on line A, and nothing else is
+    drawn. Ceiling 1000: the draw is 900. Adding the case's support again would make 1400
+    and falsely refuse the export.
+    """
+    from app.api.v1.endpoints import cpor_exports
+    from app.services.budget_ledger import case_has_draw_rows, used_usd
+    from app.services.cpor.budget_reapproval import (
+        evaluate_money_position,
+        portfolio_committed_usd,
+        should_require_reapproval,
+    )
+
+    tag = uuid.uuid4().hex[:8]
+    session = Session(bind=conn, join_transaction_mode="create_savepoint")
+    try:
+        seed = _seed(conn, session, tag)
+        settled = seed["make_case"]("settled")
+        seed["consume_row"](settled.id, seed["line_a"], "A", 900, "own-consume")
+        # A planner scoped to line B only still sees the draw and the case's consume rows.
+        conn.execute(
+            text("select set_config('cip.product_lines', :v, true)"), {"v": seed["line_b"]}
+        )
+        _gate(monkeypatch, 1000.0)
+
+        assert case_has_draw_rows(session, settled.id) is True
+        assert used_usd(session) == 900.0
+        assert portfolio_committed_usd(session, include_case_id=None) == 900.0
+        assert portfolio_committed_usd(session, include_case_id=settled.id) == 900.0
+        position = evaluate_money_position(session, case_id=settled.id, include_this_case=True)
+        assert position["portfolio_committed_usd"] == 900.0
+        assert position["money_over"] is False
+        assert should_require_reapproval(position) is False
+
+        # The export gate (cpor_exports) must let the case through. The workbook builder is
+        # stubbed to stop right after the gate (no file is written): a 400 from it proves the
+        # gate did not refuse with a 409 over the ceiling.
+        def _stop_after_gate(_session, _case_id):
+            raise ValueError("no_exportable_lines")
+
+        monkeypatch.setattr(cpor_exports, "SessionLocal", lambda: _OpenSession(session))
+        monkeypatch.setattr(cpor_exports, "build_cpor_case_workbook_bytes", _stop_after_gate)
+        with pytest.raises(HTTPException) as caught:
+            cpor_exports.generate_export(settled.id, {"id": "b1-planner"})
+        assert caught.value.status_code == 400, caught.value.detail
+    finally:
+        session.close()
+
+
+def test_case_with_commit_and_consume_rows_is_not_double_counted(
+    conn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services.cpor.budget_reapproval import portfolio_committed_usd
+
+    tag = uuid.uuid4().hex[:8]
+    session = Session(bind=conn, join_transaction_mode="create_savepoint")
+    try:
+        seed = _seed(conn, session, tag)
+        case = seed["make_case"]("part-settled")
+        seed["commit_row"](case.id, seed["line_a"], "A", 900, "own-commit")
+        seed["consume_row"](case.id, seed["line_a"], "A", 900, "own-consume")
+        _gate(monkeypatch, 1000.0)
+
+        # Commit 900 less consume 900 leaves no open commitment; the draw is the 900 consumed.
+        assert portfolio_committed_usd(session, include_case_id=None) == 900.0
+        assert portfolio_committed_usd(session, include_case_id=case.id) == 900.0
     finally:
         session.close()

@@ -1,9 +1,10 @@
-"""B-1: the money ceiling counts the case being checked when the ledger has no commit for it.
+"""B-1: the money ceiling counts the case being checked when the ledger has no draw row for it.
 
 The ledger only holds ``commit`` rows once a case is approved. A draft or proposed case
 checked at the export gate, the propose/resend flag or the budget_gate has none, so its
-own support must be added. A case that already has commit rows is in the ledger draw
-and must not be counted twice. Fakes only; the DB twin is
+own support must be added. A case with any row the draw sums (commit, commit_adjust,
+release, consume), including a settled case with consume rows and no commit, is in the
+ledger draw and must not be counted twice. Fakes only; the DB twin is
 ``tests/test_budget_ledger_ceiling_include_case_db.py``.
 """
 
@@ -20,9 +21,9 @@ from app.services.cpor import budget_reapproval as mod
 @pytest.fixture
 def ledger(monkeypatch):
     """Ledger draw 900. The case under test has 500 of support."""
-    state = {"draw": 900.0, "has_commit": False}
+    state = {"draw": 900.0, "in_draw": False}
     monkeypatch.setattr(budget_ledger, "used_usd", lambda _s, landed_quarter=None: state["draw"])
-    monkeypatch.setattr(budget_ledger, "case_has_commit_rows", lambda _s, _cid: state["has_commit"])
+    monkeypatch.setattr(budget_ledger, "case_has_draw_rows", lambda _s, _cid: state["in_draw"])
     monkeypatch.setattr(mod, "case_support_usd", lambda _s, _cid: 500.0)
     return state
 
@@ -36,8 +37,77 @@ def test_case_not_included_is_not_added(ledger):
 
 
 def test_case_with_commit_rows_is_not_double_counted(ledger):
-    ledger["has_commit"] = True
+    ledger["in_draw"] = True
     assert mod.portfolio_committed_usd(MagicMock(), include_case_id=7) == 900.0
+
+
+def _ledger_holding(monkeypatch, *kinds: str) -> None:
+    """Fake ledger that holds one row of each given kind for the case.
+
+    The real statement is compiled, so the fake returns a row only when the query
+    asks for that kind.
+    """
+
+    def fake_select(_session, stmt):
+        sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        return [(i,) for i, kind in enumerate(kinds) if f"'{kind}'" in sql]
+
+    monkeypatch.setattr(budget_ledger, "_select_across_product_lines", fake_select)
+
+
+def test_consume_only_case_is_not_double_counted(monkeypatch):
+    """Settled case: planned support 900, one consume of 900, no commit. Draw is 900."""
+    monkeypatch.setattr(budget_ledger, "used_usd", lambda _s, landed_quarter=None: 900.0)
+    monkeypatch.setattr(mod, "case_support_usd", lambda _s, _cid: 900.0)
+    _ledger_holding(monkeypatch, "consume")
+    monkeypatch.setattr(mod.tenant_profile, "CONSTRAINT_AXIS", "money")
+    monkeypatch.setattr(mod.tenant_profile, "OVER_BUDGET_ACTION", "require_reapproval")
+    monkeypatch.setattr(mod.tenant_profile, "HARD_ENFORCE_BUDGET", True)
+    monkeypatch.setattr(mod, "money_ceiling_usd", lambda: 1000.0)
+    session = MagicMock()
+    session.get.return_value = SimpleNamespace(id=7, status="settled", needs_reapproval=False)
+
+    assert mod.portfolio_committed_usd(session, include_case_id=7) == 900.0
+    position = mod.evaluate_money_position(session, case_id=7, include_this_case=True)
+    assert position["portfolio_committed_usd"] == 900.0
+    assert position["money_over"] is False
+    assert mod.should_require_reapproval(position) is False
+
+
+def test_commit_and_consume_case_is_not_double_counted(monkeypatch):
+    """Commit 900 then consume 900: draw 900 (open commit is netted). Support is not added."""
+    monkeypatch.setattr(budget_ledger, "used_usd", lambda _s, landed_quarter=None: 900.0)
+    monkeypatch.setattr(mod, "case_support_usd", lambda _s, _cid: 900.0)
+    _ledger_holding(monkeypatch, "commit", "consume")
+
+    assert mod.portfolio_committed_usd(MagicMock(), include_case_id=7) == 900.0
+
+
+@pytest.mark.parametrize("kind", ["commit_adjust", "release"])
+def test_other_draw_kinds_mean_the_case_is_in_the_draw(monkeypatch, kind):
+    monkeypatch.setattr(budget_ledger, "used_usd", lambda _s, landed_quarter=None: 900.0)
+    monkeypatch.setattr(mod, "case_support_usd", lambda _s, _cid: 500.0)
+    _ledger_holding(monkeypatch, kind)
+
+    assert mod.portfolio_committed_usd(MagicMock(), include_case_id=7) == 900.0
+
+
+@pytest.mark.parametrize("kind", ["reserve", "transfer", "paid", "cap"])
+def test_non_draw_kinds_do_not_mean_the_case_is_in_the_draw(monkeypatch, kind):
+    """Rows the draw does not sum cannot stand in for the case's own support."""
+    monkeypatch.setattr(budget_ledger, "used_usd", lambda _s, landed_quarter=None: 900.0)
+    monkeypatch.setattr(mod, "case_support_usd", lambda _s, _cid: 500.0)
+    _ledger_holding(monkeypatch, kind)
+
+    assert mod.portfolio_committed_usd(MagicMock(), include_case_id=7) == 1400.0
+
+
+def test_case_with_no_draw_rows_is_still_counted(monkeypatch):
+    monkeypatch.setattr(budget_ledger, "used_usd", lambda _s, landed_quarter=None: 900.0)
+    monkeypatch.setattr(mod, "case_support_usd", lambda _s, _cid: 500.0)
+    _ledger_holding(monkeypatch)
+
+    assert mod.portfolio_committed_usd(MagicMock(), include_case_id=7) == 1400.0
 
 
 def test_no_ledger_table_keeps_pre_ledger_path(monkeypatch):
@@ -98,8 +168,8 @@ def test_export_gate_returns_409_for_draft_over_ceiling(ledger, monkeypatch):
     assert caught.value.detail["budget"]["portfolio_committed_usd"] == 1400.0
 
 
-def test_case_has_commit_rows_reads_across_product_lines(monkeypatch):
-    """The commit check must see every product line, like the draw itself."""
+def test_case_has_draw_rows_reads_across_product_lines(monkeypatch):
+    """The check must see every product line, like the draw itself."""
     calls = []
 
     def fake_select(_session, stmt):
@@ -107,9 +177,20 @@ def test_case_has_commit_rows_reads_across_product_lines(monkeypatch):
         return [(1,)]
 
     monkeypatch.setattr(budget_ledger, "_select_across_product_lines", fake_select)
-    assert budget_ledger.case_has_commit_rows(MagicMock(), 7) is True
+    assert budget_ledger.case_has_draw_rows(MagicMock(), 7) is True
     assert len(calls) == 1
     monkeypatch.setattr(budget_ledger, "_select_across_product_lines", lambda _s, _stmt: [])
-    assert budget_ledger.case_has_commit_rows(MagicMock(), 7) is False
+    assert budget_ledger.case_has_draw_rows(MagicMock(), 7) is False
     monkeypatch.setattr(budget_ledger, "_select_across_product_lines", lambda _s, _stmt: None)
-    assert budget_ledger.case_has_commit_rows(MagicMock(), 7) is False
+    assert budget_ledger.case_has_draw_rows(MagicMock(), 7) is False
+
+
+def test_draw_row_kinds_match_what_the_draw_sums():
+    """The check looks at the same row kinds used_usd() sums; the other kinds add no draw."""
+    assert budget_ledger.DRAW_ENTRY_TYPES == frozenset(
+        {"commit", "commit_adjust", "release", "consume"}
+    )
+    for kind in sorted(budget_ledger.ENTRY_TYPES - budget_ledger.DRAW_ENTRY_TYPES):
+        assert budget_ledger.headroom_used_from_tagged([(kind, 100.0, None)]) == 0.0, kind
+    for kind in ("commit", "commit_adjust", "consume"):
+        assert budget_ledger.headroom_used_from_tagged([(kind, 100.0, None)]) != 0.0, kind

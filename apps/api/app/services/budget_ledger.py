@@ -21,6 +21,10 @@ from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
 from app.services.cpor.lifecycle import assert_support_step_allowed
 
+# Row kinds that ``balances_from_amounts`` turns into draw (open commitment + consumed).
+# Reserve, transfer and paid rows add no draw; cap rows are filtered out before the sum.
+DRAW_ENTRY_TYPES = frozenset({"commit", "commit_adjust", "release", "consume"})
+
 
 def balances_from_amounts(rows: list[tuple[str, float]]) -> dict[str, float]:
     """Sum rows of (entry_type, amount_usd). Remaining is reserve minus what is still drawn."""
@@ -136,17 +140,24 @@ def used_usd(session: Session, *, landed_quarter: str | None = None) -> float | 
     return headroom_used_from_tagged(tagged)
 
 
-def case_has_commit_rows(session: Session, case_id: int) -> bool:
-    """True when the ledger already holds a commit row for this case, on any product line.
+def case_has_draw_rows(session: Session, case_id: int) -> bool:
+    """True when the ledger already holds a row the draw sums for this case, on any product line.
 
-    A case with commit rows is already in the ledger draw. Reads every product line,
-    like the draw. False when the table is not there yet.
+    The draw (``used_usd``) sums commit, commit_adjust, release and consume rows and leaves
+    out caps and non-campaign rows. A case with any such row is already represented in the
+    draw, whether it was committed or only consumed (settled history), so its planned
+    support must not be added again. Reads every product line, like the draw. False when
+    the table is not there yet.
     """
     stmt = (
         select(BudgetLedgerEntry.id)
         .where(
             BudgetLedgerEntry.case_id == int(case_id),
-            BudgetLedgerEntry.entry_type == "commit",
+            BudgetLedgerEntry.entry_type.in_(sorted(DRAW_ENTRY_TYPES)),
+            or_(
+                BudgetLedgerEntry.source_tag.is_(None),
+                BudgetLedgerEntry.source_tag != "non_campaign",
+            ),
         )
         .limit(1)
     )
