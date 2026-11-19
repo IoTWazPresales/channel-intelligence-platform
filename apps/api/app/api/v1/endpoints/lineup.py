@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
@@ -67,6 +68,22 @@ class ClearConfirmBody(BaseModel):
 
 
 _LINEUP_APPROVAL_STATUSES = frozenset({"draft", "pending_approval", "submitted", "approved", "rejected"})
+
+
+_LINEUP_PENDING_STATUSES = frozenset({"draft", "pending_approval", "submitted"})
+
+
+class LineupGroupApprovalBody(BaseModel):
+    """Final wave (b): approve or reject one customer's line-up for one period."""
+
+    customer_id: int
+    period_start: date
+    approval_status: Literal["approved", "rejected"]
+    only_pending: bool = Field(
+        default=True,
+        description="Only change items still awaiting approval; decided items stay as they are.",
+    )
+    notes: str | None = None
 
 
 class LineupItemPatch(BaseModel):
@@ -142,6 +159,7 @@ async def list_lineup_items(
         out.append(
             {
                 "id": r.id,
+                "customer_id": int(r.customer_id),
                 "customer_code": cust.code if cust else None,
                 "customer_name": cust.name if cust else None,
                 "channel_code": ch.code if ch else None,
@@ -207,6 +225,70 @@ async def bulk_import_lineup_items(body: LineupBulkBody, db: AsyncSession = Depe
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return out
+
+
+@router.post("/items/group-approval")
+async def group_approve_lineup_items(
+    body: LineupGroupApprovalBody,
+    db: AsyncSession = Depends(get_db),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Approve or reject a customer's line-up for a period in one step (Final wave b).
+
+    Each item changes exactly as ``PATCH /items/{id}`` would: the budget ledger reserve is
+    applied or reversed and one approval event is written per item. All or nothing: one
+    transaction.
+    """
+    from app.services.budget_ledger import apply_lineup_approval
+
+    res = await db.execute(
+        select(FactLineupPlanItem)
+        .where(
+            FactLineupPlanItem.customer_id == body.customer_id,
+            FactLineupPlanItem.period_start == body.period_start,
+        )
+        .order_by(FactLineupPlanItem.id)
+    )
+    rows = list(res.scalars().all())
+    if not rows:
+        raise HTTPException(status_code=404, detail="No line-up items for this customer and period")
+    new_status = body.approval_status
+    notes = (body.notes or "").strip() or None
+    changed: list[int] = []
+    for row in rows:
+        old = row.approval_status
+        if old == new_status or (body.only_pending and old not in _LINEUP_PENDING_STATUSES):
+            continue
+        row.approval_status = new_status
+        await db.flush()
+        item_id = int(row.id)
+        await db.run_sync(
+            lambda sync, iid=item_id, prev=old: apply_lineup_approval(
+                sync,
+                sync.get(FactLineupPlanItem, iid),
+                prev,
+                new_status,
+                actor=x_user_id,
+            )
+        )
+        await record_lineup_approval_event(
+            db,
+            lineup_item_id=item_id,
+            old_status=old,
+            new_status=new_status,
+            notes=notes,
+            actor=x_user_id,
+        )
+        changed.append(item_id)
+    await db.commit()
+    return {
+        "customer_id": body.customer_id,
+        "period_start": body.period_start.isoformat(),
+        "approval_status": new_status,
+        "changed": len(changed),
+        "changed_ids": changed,
+        "unchanged": len(rows) - len(changed),
+    }
 
 
 @router.patch("/items/{item_id}")
