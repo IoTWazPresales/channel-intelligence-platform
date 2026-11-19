@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-19 - **PR #116 final wave (d) customer promotion calendar, fix round 1:** `feat/fwd-promo-calendar-20261118`. Saved calendar column mappings match headers case- and spacing-insensitively through one shared normaliser (duplicate-named mapped columns refused); `GET /customer-calendar/profiles` returns a computed default and writes nothing. Migration 0063 proven on `cip_test` only, not applied on `cip`. Open items: BACKLOG-253.
+
 - 2026-11-19 - **PR #111 D-0141 starting screen, fix round 2:** `feat/d0141-starting-screen-20261118`. Built behind `CIP_STARTING_SCREEN_POLICY` (default unchanged). R1: dashboard list scoped by tenant and user. R2: the editor, Overview and Reports share that one list key (`features/dashboards/dashboardList.ts`), so an edit no longer leaves Overview or the Reports pinned counts stale; cross-screen regression tests added. Rollout and per-job access matrix: BACKLOG-248.
 
 - 2026-11-19 - **PR #106 fix round 1:** activation timing keeps within-day check order (fetched_at, id) for transitions and recoveries (B1), and only promo-basis checks count (B2). Pytest, rollback-only cip_test and Vitest regressions added.
