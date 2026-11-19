@@ -60,6 +60,16 @@ class Settings(BaseSettings):
     # When true, exposes POST /api/v1/dev/database-wipe (Settings UI). Never enable in shared/prod.
     allow_db_wipe: bool = False
 
+    # W1-B activation timing alerts (Warren, 2026-11-18): a promotion that is still not at its
+    # price this many days after its window starts is a late activation; one that leaves its
+    # price this many days or more before its window ends is an early deactivation.
+    cip_listing_activation_alert_days: int = Field(
+        default=3,
+        ge=0,
+        description="Days late or early that raise an activation timing alert "
+        "(env CIP_LISTING_ACTIVATION_ALERT_DAYS).",
+    )
+
     # Gates all AI-assisted import resolution / column mapping API calls platform-wide.
     ai_assist_enabled: bool = Field(
         default=False,
