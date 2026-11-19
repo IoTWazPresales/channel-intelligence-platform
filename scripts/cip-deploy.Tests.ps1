@@ -113,3 +113,110 @@ Describe 'native calls (review fix: stderr must not stop the deploy under PS 5.1
     }
 }
 
+Describe 'missing program (review r2 item 1: must never look like success)' {
+    It 'fails with a clear message when the program is not found' {
+        $r = Invoke-NativeCaptured -FilePath 'cip-no-such-program-xyz' -ArgumentList @('--version')
+        $r.ExitCode | Should Not Be 0
+        $r.ExitCode | Should Not BeNullOrEmpty
+        $r.Output | Should Match 'cip-no-such-program-xyz'
+        $r.Output | Should Match 'not found'
+    }
+    It 'does not reuse a stale zero exit code from an earlier successful command' {
+        $ok = Invoke-NativeCaptured -FilePath 'cmd.exe' -ArgumentList @('/c', 'exit /b 0')
+        $ok.ExitCode | Should Be 0
+        $r = Invoke-NativeCaptured -FilePath 'cip-no-such-program-xyz'
+        $r.ExitCode | Should Not Be 0
+    }
+    It 'fails the same way for a path that does not exist, even under Stop' {
+        $ErrorActionPreference = 'Stop'
+        $r = Invoke-NativeCaptured -FilePath (Join-Path $env:TEMP 'cip-missing-dir\python.exe')
+        $r.ExitCode | Should Not Be 0
+        $r.Output | Should Match 'not found'
+    }
+}
+
+Describe 'Invoke-NativeStep (review r2 item 2: pnpm failures must stop the deploy clearly)' {
+    It 'returns the output of a step that succeeds, even when it writes to stderr under Stop' {
+        $ErrorActionPreference = 'Stop'
+        $out = Invoke-NativeStep -Description 'demo step' -FilePath 'cmd.exe' -ArgumentList @('/c', 'echo warn 1>&2 & echo fine & exit /b 0') 6>$null
+        $out | Should Match 'warn'
+        $out | Should Match 'fine'
+    }
+    It 'throws a message naming the step, the exit code and the output when it fails' {
+        $ErrorActionPreference = 'Stop'
+        $msg = $null
+        try { Invoke-NativeStep -Description 'demo build' -FilePath 'cmd.exe' -ArgumentList @('/c', 'echo compile error 1>&2 & exit /b 7') 6>$null }
+        catch { $msg = "$($_.Exception.Message)" }
+        $msg | Should Match 'demo build failed'
+        $msg | Should Match 'exit 7'
+        $msg | Should Match 'compile error'
+    }
+    It 'throws a clear message when the program is not installed' {
+        $msg = $null
+        try { Invoke-NativeStep -Description 'demo install' -FilePath 'cip-no-such-program-xyz' -ArgumentList @('install') 6>$null }
+        catch { $msg = "$($_.Exception.Message)" }
+        $msg | Should Match 'demo install failed'
+        $msg | Should Match 'not found'
+    }
+}
+
+Describe 'failed step still saves the record (review r2 item 3)' {
+    It 'saves a record naming the failure and the step when a step throws' {
+        $script:saved = $null
+        $r = New-DeployRecord -Mode 'execute' -Branch 'trunk'
+        $ok = Invoke-DeployGuarded -Record $r -Save { $script:saved = @{ result = $r.result; failure = $r.failure; failed_step = $r.failed_step } } -Body {
+            Set-DeployStep $r 'restart worker'
+            throw 'something odd happened'
+        } 6>$null
+        $ok | Should Be $false
+        $script:saved | Should Not BeNullOrEmpty
+        $script:saved.result | Should Be 'FAILED'
+        $script:saved.failure | Should Match 'something odd happened'
+        $script:saved.failed_step | Should Be 'restart worker'
+    }
+    It 'keeps the failure a step recorded itself and still saves' {
+        $script:saved = $null
+        $r = New-DeployRecord -Mode 'execute' -Branch 'trunk'
+        $ok = Invoke-DeployGuarded -Record $r -Save { $script:saved = @{ result = $r.result; failure = $r.failure; failed_step = $r.failed_step } } -Body {
+            Set-DeployStep $r 'web build'
+            Set-DeployFailure $r 'BUILD_ID did not change after the build'
+            throw 'BUILD_ID did not change after the build'
+        } 6>$null
+        $ok | Should Be $false
+        $script:saved.failure | Should Be 'BUILD_ID did not change after the build'
+        $script:saved.failed_step | Should Be 'web build'
+    }
+    It 'stops on a failing native step run through Invoke-NativeStep and records it' {
+        $script:saved = $null
+        $r = New-DeployRecord -Mode 'execute' -Branch 'trunk'
+        $ok = Invoke-DeployGuarded -Record $r -Save { $script:saved = @{ result = $r.result; failure = $r.failure; failed_step = $r.failed_step } } -Body {
+            Set-DeployStep $r 'pnpm install'
+            Invoke-NativeStep -Description 'pnpm install' -FilePath 'cmd.exe' -ArgumentList @('/c', 'exit /b 1') 6>$null
+            $r.result = 'OK'
+        } 6>$null
+        $ok | Should Be $false
+        $script:saved.result | Should Be 'FAILED'
+        $script:saved.failure | Should Match 'pnpm install failed'
+        $script:saved.failed_step | Should Be 'pnpm install'
+    }
+    It 'saves on success too, and reports true' {
+        $script:saved = $null
+        $r = New-DeployRecord -Mode 'execute' -Branch 'trunk'
+        $ok = Invoke-DeployGuarded -Record $r -Save { $script:saved = @{ result = $r.result; failure = $r.failure; failed_step = $r.failed_step } } -Body { $r.result = 'OK' } 6>$null
+        $ok | Should Be $true
+        $script:saved.result | Should Be 'OK'
+    }
+    It 'does not let a failing save hide the original failure' {
+        $r = New-DeployRecord -Mode 'execute' -Branch 'trunk'
+        $ok = Invoke-DeployGuarded -Record $r -Save { throw 'disk full' } -Body { throw 'step broke' } 6>$null
+        $ok | Should Be $false
+        $r.failure | Should Match 'step broke'
+    }
+    It 'shows the failed step in the CURRENT.md block' {
+        $r = New-DeployRecord -Mode 'execute' -Branch 'trunk'
+        Set-DeployStep $r 'restart web'
+        Set-DeployFailure $r 'web was not healthy within 240 s'
+        (Format-DeployRecord $r) | Should Match 'Stopped at restart web: web was not healthy within 240 s'
+    }
+}
+

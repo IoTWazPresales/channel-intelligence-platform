@@ -70,7 +70,7 @@ function New-DeployRecord {
         build = 'not run'; build_id_before = $null; build_id_after = $null
         restarts = @(); api_ready = $null; celery_ping = $null
         web_checks = @(); launches_first = $null; launches_second = $null; launch_problems = @()
-        result = 'incomplete'; failure = $null; finished = $null
+        result = 'incomplete'; failure = $null; current_step = $null; failed_step = $null; finished = $null
     }
 }
 
@@ -84,7 +84,9 @@ function Format-DeployRecord {
     $lines += "- /health/ready: $($Record.api_ready); Celery ping: $($Record.celery_ping)."
     foreach ($w in @($Record.web_checks)) { $lines += "- web 3000 at $($w.at): HTTP $($w.code)." }
     $lines += "- Launch counts: first $(($Record.launches_first | ConvertTo-Json -Compress)), second $(($Record.launches_second | ConvertTo-Json -Compress)); problems: $(@($Record.launch_problems).Count)."
-    if ($Record.failure) { $lines += "- Stopped: $($Record.failure)" }
+    if ($Record.failure) {
+        if ($Record.failed_step) { $lines += "- Stopped at $($Record.failed_step): $($Record.failure)" } else { $lines += "- Stopped: $($Record.failure)" }
+    }
     return ($lines -join "`n")
 }
 
@@ -93,15 +95,82 @@ function Invoke-NativeCaptured {
     # become a terminating error. Under Windows PowerShell 5.1, `& exe 2>&1` with
     # $ErrorActionPreference = 'Stop' throws on the first stderr line (git pull writes progress
     # there), so the caller would stop half-way. Success is decided by the exit code only.
+    #
+    # A program that is not found never looks like success: it returns ExitCode 127 and an
+    # Output saying so (a missing program leaves $LASTEXITCODE null or stale, so it is never
+    # trusted). Any other failure to start the program is also a non-zero exit code.
     param([Parameter(Mandatory)][string]$FilePath, [string[]]$ArgumentList = @())
+    $found = Get-Command -Name $FilePath -CommandType Application, ExternalScript -ErrorAction SilentlyContinue
+    if (-not $found) {
+        return [pscustomobject]@{ ExitCode = 127; Output = "program not found: $FilePath" }
+    }
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    $global:LASTEXITCODE = $null
+    $lines = @()
+    $code = $null
     try {
         $lines = & $FilePath @ArgumentList 2>&1 | ForEach-Object { "$_" }
         $code = $LASTEXITCODE
+    } catch {
+        $code = 126
+        $lines = @("could not run ${FilePath}: $($_.Exception.Message)")
     } finally {
         $ErrorActionPreference = $previous
     }
+    if ($null -eq $code) {
+        # The program ran but reported no exit code; do not call that success.
+        $code = 125
+        $lines = @($lines) + "no exit code was reported by $FilePath"
+    }
     return [pscustomobject]@{ ExitCode = $code; Output = (($lines | Out-String).Trim()) }
+}
+
+function Invoke-NativeStep {
+    # One native step of the deploy (pnpm install, pnpm build): run through Invoke-NativeCaptured,
+    # print what it said, and throw a clear message when it failed or the program is missing.
+    # Output is shown when the step ends (it is captured, not streamed).
+    param(
+        [Parameter(Mandatory)][string]$Description,
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$ArgumentList = @()
+    )
+    $r = Invoke-NativeCaptured -FilePath $FilePath -ArgumentList $ArgumentList
+    if ($r.Output) { Write-Host $r.Output }
+    if ($r.ExitCode -ne 0) {
+        $tail = (@($r.Output -split "`r?`n") | Select-Object -Last 20) -join "`n"
+        throw "$Description failed (exit $($r.ExitCode)): $tail"
+    }
+    return $r.Output
+}
+
+function Set-DeployStep {
+    # Name the step now running, so a failure can say where it stopped.
+    param($Record, [string]$Name)
+    $Record.current_step = $Name
+}
+
+function Set-DeployFailure {
+    param($Record, [string]$Why)
+    $Record.result = 'FAILED'
+    $Record.failure = $Why
+    $Record.failed_step = $Record.current_step
+}
+
+function Invoke-DeployGuarded {
+    # Run the execute path so that any terminating error still ends with the failure recorded and the
+    # record saved (the Save block runs in finally). Returns $true only when Body completed.
+    param([Parameter(Mandatory)]$Record, [Parameter(Mandatory)][scriptblock]$Body, [Parameter(Mandatory)][scriptblock]$Save)
+    $ok = $false
+    try {
+        $null = & $Body
+        $ok = $true
+    } catch {
+        if ($Record.result -ne 'FAILED') { Set-DeployFailure $Record "$($_.Exception.Message)" }
+        Write-Host "DEPLOY STOPPED$(if ($Record.failed_step) { " at $($Record.failed_step)" }): $($Record.failure)"
+    } finally {
+        try { $null = & $Save } catch { Write-Host "COULD NOT SAVE THE DEPLOY RECORD: $($_.Exception.Message)" }
+    }
+    return $ok
 }
 
