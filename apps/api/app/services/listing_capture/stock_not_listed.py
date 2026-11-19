@@ -1,8 +1,8 @@
 """In stock, not watched: a worklist of reported products with no watched listing (W1-B).
 
 For each reporting customer, the products with stock on hand above zero on that customer's
-latest stock report (the same product set discovery searches), less those that coverage
-counts as watched. Each row says why it is not watched, using the coverage buckets:
+latest stock report, summed over sites by the shared stock-position helper, less those
+that coverage counts as watched. Each row says why it is not watched, using the coverage buckets:
 awaiting steward, failing, not found, or not searched. Read-only; nothing is written.
 """
 
@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from datetime import date
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
-from app.models.fact_customer_sellthrough import FactCustomerSellthrough
+from app.services.channel_intelligence.sell_through_overview import OverviewFilters, load_stock_positions
 from app.services.listing_capture.coverage import product_buckets
 
 logger = logging.getLogger(__name__)
@@ -68,49 +69,24 @@ def _reporting_customers(
 
 def _latest_stock(
     session: Session, tenant_id: str, customer_ids: list[int]
-) -> dict[tuple[int, int], tuple[Any, float]]:
-    """(customer, product) -> (latest stock date, units on hand that day, summed over sites)."""
+) -> dict[tuple[int, int], tuple[date, float]]:
+    """Adapt the shared latest-stock positions to positive account totals."""
+    # An empty filter means all accounts to the shared helper, not no accounts.
     if not customer_ids:
         return {}
-    latest = (
-        select(
-            FactCustomerSellthrough.customer_id.label("customer_id"),
-            func.max(FactCustomerSellthrough.period_start_date).label("as_of"),
-        )
-        .where(
-            FactCustomerSellthrough.tenant_id == tenant_id,
-            FactCustomerSellthrough.customer_id.in_(customer_ids),
-            FactCustomerSellthrough.reported_soh.is_not(None),
-        )
-        .group_by(FactCustomerSellthrough.customer_id)
-        .subquery()
+    filters = OverviewFilters(
+        date_from=date.min,
+        date_to=date.max,
+        customer_ids=customer_ids,
+        tenant_id=tenant_id,
     )
-    rows = session.execute(
-        select(
-            FactCustomerSellthrough.customer_id,
-            FactCustomerSellthrough.product_id,
-            latest.c.as_of,
-            func.sum(FactCustomerSellthrough.reported_soh),
-        )
-        .join(
-            latest,
-            (latest.c.customer_id == FactCustomerSellthrough.customer_id)
-            & (latest.c.as_of == FactCustomerSellthrough.period_start_date),
-        )
-        .where(
-            FactCustomerSellthrough.tenant_id == tenant_id,
-            FactCustomerSellthrough.product_id.is_not(None),
-            FactCustomerSellthrough.reported_soh.is_not(None),
-        )
-        .group_by(
-            FactCustomerSellthrough.customer_id, FactCustomerSellthrough.product_id, latest.c.as_of
-        )
-    ).all()
-    out: dict[tuple[int, int], tuple[Any, float]] = {}
-    for cid, pid, as_of, units in rows:
-        if units is not None and float(units) > 0:
-            out[(int(cid), int(pid))] = (as_of, float(units))
-    return out
+    # Keep the worklist's latest-report semantics, including future-dated reports.
+    positions, _report_dates = load_stock_positions(session, filters, date.max)
+    return {
+        key: (position["date"], float(position["soh"]))
+        for key, position in positions.items()
+        if float(position["soh"]) > 0
+    }
 
 
 def _worklist(

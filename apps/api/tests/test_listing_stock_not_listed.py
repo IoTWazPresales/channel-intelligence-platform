@@ -226,3 +226,91 @@ def test_the_worklist_route_is_a_read_for_any_signed_in_user() -> None:
     assert len(routes) == 1
     assert routes[0].methods == {"GET"}
     assert routes[0].endpoint is get_stock_not_listed
+
+
+def test_shared_stock_positions_preserve_latest_dates_and_net_site_totals(db_session: Session) -> None:
+    """B2: use the overview's stock reader with each account's own latest stock date."""
+    from app.services.channel_intelligence.sell_through_overview import (
+        OverviewFilters,
+        load_stock_positions,
+    )
+    from app.services.listing_capture.stock_not_listed import _latest_stock
+
+    tenant = f"t-snl-{uuid.uuid4().hex[:6]}"
+    current = _customer(db_session, tenant)
+    older = _customer(db_session, tenant)
+    zero_only = _customer(db_session, tenant)
+    products = {
+        name: _product(db_session, tenant)
+        for name in ("positive", "net_zero", "negative", "old_only")
+    }
+    _stock(db_session, tenant, current, products["positive"], 4, site="site-one")
+    _stock(db_session, tenant, current, products["positive"], -1, site="site-two")
+    _stock(db_session, tenant, current, products["net_zero"], 4, site="site-one")
+    _stock(db_session, tenant, current, products["net_zero"], -4, site="site-two")
+    _stock(db_session, tenant, current, products["negative"], -2)
+    _stock(db_session, tenant, current, products["old_only"], 50, when=OLDER)
+    # A newer sales-only row must not move this account's stock date.
+    _stock(db_session, tenant, current, products["positive"], None, when=date(2026, 11, 16))
+    _stock(db_session, tenant, older, products["positive"], 7, when=OLDER)
+    _stock(db_session, tenant, zero_only, products["positive"], 20, when=OLDER)
+    _stock(db_session, tenant, zero_only, products["positive"], 0)
+    foreign_tenant = f"t-snl-{uuid.uuid4().hex[:6]}"
+    foreign = _customer(db_session, foreign_tenant)
+    _stock(db_session, foreign_tenant, foreign, _product(db_session, foreign_tenant), 100)
+
+    customer_ids = [int(current.id), int(older.id), int(zero_only.id)]
+    filters = OverviewFilters(
+        date_from=date.min, date_to=date.max, customer_ids=customer_ids, tenant_id=tenant
+    )
+    positions, dates = load_stock_positions(db_session, filters, date.max)
+    expected = {
+        (int(current.id), int(products["positive"].id)): (LATEST, 3.0),
+        (int(older.id), int(products["positive"].id)): (OLDER, 7.0),
+    }
+    assert dates == {current.id: LATEST, older.id: OLDER, zero_only.id: LATEST}
+    assert positions[(current.id, products["net_zero"].id)]["soh"] == 0
+    assert positions[(current.id, products["negative"].id)]["soh"] == -2
+    assert _latest_stock(db_session, tenant, customer_ids) == expected
+
+    out = stock_not_listed(db_session, tenant)
+    assert out["data_unavailable"] is False and out["total"] == 2
+    assert {
+        (row["customer_id"], row["product_id"]): (row["stock_as_of"], row["stock_on_hand"])
+        for row in out["rows"]
+    } == {key: (when.isoformat(), units) for key, (when, units) in expected.items()}
+    for excluded in (zero_only, foreign):
+        scoped = stock_not_listed(db_session, tenant, customer_id=int(excluded.id))
+        assert scoped["data_unavailable"] is False
+        assert scoped["rows"] == [] and scoped["total"] == 0
+
+
+def test_account_filter_reaches_an_account_omitted_by_the_tenant_limit(db_session: Session) -> None:
+    """B1: an earlier account can fill the tenant page without hiding later accounts."""
+    tenant, first, products = _setup(db_session)
+    first.name = "A first account"
+    later = _customer(db_session, tenant)
+    later.name = "Z later account"
+    # This product is watched for the first account, but not for the later account.
+    _stock(db_session, tenant, later, products["watched"], 99)
+    db_session.flush()
+
+    all_accounts = stock_not_listed(db_session, tenant, limit=4)
+    assert all_accounts["total"] == 5 and all_accounts["truncated"] is True
+    assert {row["customer_id"] for row in all_accounts["rows"]} == {first.id}
+
+    scoped = stock_not_listed(db_session, tenant, customer_id=int(later.id), limit=4)
+    assert scoped["data_unavailable"] is False
+    assert scoped["total"] == 1 and scoped["truncated"] is False
+    assert scoped["watched_excluded"] == 0
+    assert scoped["by_coverage"] == {"not_searched": 1}
+    row = scoped["rows"][0]
+    assert row["customer_id"] == later.id and row["product_id"] == products["watched"].id
+    assert row["stock_on_hand"] == 99.0 and row["stock_as_of"] == LATEST.isoformat()
+
+    foreign_tenant = f"t-snl-{uuid.uuid4().hex[:6]}"
+    foreign = _customer(db_session, foreign_tenant)
+    _stock(db_session, foreign_tenant, foreign, _product(db_session, foreign_tenant), 100)
+    refused = stock_not_listed(db_session, tenant, customer_id=int(foreign.id))
+    assert refused["data_unavailable"] is False
+    assert refused["rows"] == [] and refused["total"] == 0

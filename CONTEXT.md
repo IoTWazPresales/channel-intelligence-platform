@@ -19,9 +19,12 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 - 2026-11-19 - **PR #106 fix round 1:** read-only patch prepared for B1 (same-day transitions/recoveries in fetch/ID order) and B2 (promotion-basis evidence only), with pytest, rollback-only cip_test and Vitest regressions. Exploratory in-memory timing tests: 29 passed; full applied-tree API/web/browser gates pending, BACKLOG-244.
 
 - 2026-11-18 - **W1-B activation timing:** `feat/w1b-activation-timing-20261118`. Late activation / early deactivation alerts at `CIP_LISTING_ACTIVATION_ALERT_DAYS` (default 3; Warren's decision 13:27 SAST), recorded in BACKLOG-244.
+- 2026-11-19 - **PR #105 Round 1:** `feat/w1b-stock-not-listed-20261118`. B1: searchable account filter in request/cache and honest truncation/empty copy. B2: reuse unchanged `load_stock_positions`. Unit/cip_test/vitest regressions added. BACKLOG-244 keeps the remaining W1-B work.
 
 - 2026-11-18 - **W1-B in stock, not watched:** `feat/w1b-stock-not-listed-20261118`, read-only worklist endpoint and Coverage-tab table. Remaining worklists and what each needs: BACKLOG-244.
 
+- 2026-11-19 - **PR #115 final wave (b) fix round 1:** line-up headline and scope counts follow the selected customer/period/product slice; net requirement and plan coverage labelled master scope; group-approval DB tests on `cip_test`. Economics scope (b2) and approval roles stay PARTIAL-DEFERRED in BACKLOG-251.
+- 2026-11-19 - **PR #112 BACKLOG-046 Fix Round 1:** an empty shipment-sheet scope yields no mapping or samples and every skipped sheet is reported; the broader detector guard and optional BOM planning scope stay PARTIAL-DEFERRED in BACKLOG-046.
 - 2026-11-18 - **Listing coverage (BACKLOG-226):** `fix/listing-coverage-226-20261118`. HTTP failures, seller-only changes, seed/listing reconciliation, bounded latest reads, delisted and product-less listings, and honest loading/error UI. Review points: BACKLOG-243.
 - 2026-11-18 - **W1-A supplier selection (alignment D4):** distinct-delivery lead-time samples; per-SKU DC supplier by SKU stock then learned lead time; BACKLOG-241 holds the delivery-identity decision and remaining gaps. `cip_test` only.
 - 2026-11-18 - **Aged-stock consistency:** `fix/aged-stock-consistency-20261118`. Planner observed cover uses the customer's slow multiple; Move/Return cases cannot have their intelligence exclusion cleared. BACKLOG-227 status updated; what is left (migration for price-free Move/Return, two decisions) is BACKLOG-242.
