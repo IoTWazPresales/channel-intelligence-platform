@@ -57,6 +57,7 @@ from app.services.cpor.norms_and_comparable import (
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
 from app.services.lineup.cover_policy import resolve_target_cover_weeks_sync
 from app.services.lineup.profit_reservation import compute_profit_with_reservation
+from app.services.lineup.reporting_gate import reporting_plan_items_clause
 
 EDITABLE_PLANNER_FIELDS = (
     "estimate_qty",
@@ -369,7 +370,10 @@ def derive_planned_reservation_sync(
     limit: int = 5000,
 ) -> dict[str, Any]:
     """B2 money-track planned reservation (sync) for B4 budget check — never fabricate SRP."""
-    items = list(session.scalars(select(FactLineupPlanItem).limit(limit)).all())
+    # Line-ups exist only for reporting customers: drafts of other customers are not reserved.
+    items = list(
+        session.scalars(select(FactLineupPlanItem).where(reporting_plan_items_clause()).limit(limit)).all()
+    )
     if period_label:
         want = normalize_period_label(period_label)
         items = [i for i in items if period_labels_equivalent(i.period_label, want)]

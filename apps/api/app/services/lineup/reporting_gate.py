@@ -17,7 +17,20 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from app.services.customer_reporting import WHERE_THE_FLAG_IS_SET
+from sqlalchemy import ColumnElement
+
+from app.models.lineup import FactLineupPlanItem
+from app.services.customer_reporting import WHERE_THE_FLAG_IS_SET, reporting_customer_ids_select
+
+def reporting_plan_items_clause() -> ColumnElement[bool]:
+    """WHERE clause for READS of ``fact_lineup_plan_item``: the row's customer is reporting.
+
+    Line-ups exist only for reporting customers, so every list, count and planned-reservation read
+    carries this. The definition is the shared one (``reporting_customer_ids_select``: reports
+    expected true and not merged away); nothing here re-implements it.
+    """
+    return FactLineupPlanItem.customer_id.in_(reporting_customer_ids_select())
+
 
 REASON_NOT_REPORTING = "customer_not_reporting"
 REFUSAL_MESSAGE = (
