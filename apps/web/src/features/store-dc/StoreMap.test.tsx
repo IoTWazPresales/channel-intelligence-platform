@@ -13,17 +13,55 @@ const hoisted = vi.hoisted(() => ({
   payload: null as StoreMapPayload | null,
   posted: [] as unknown[],
   postError: null as Error | null,
+  confirmed: [] as { url: string; body: unknown }[],
+  rejectLabels: [] as string[],
 }));
+
+type PinBody = { customer_id: number; site_label: string; latitude?: number; longitude?: number };
+
+// What the server does for a confirm: no coordinates = the proposal, coordinates = the edit.
+function applyConfirm(body: PinBody) {
+  const store = hoisted.payload!.stores.find((item) => item.customer_id === body.customer_id
+    && item.site_label === body.site_label);
+  const suggestion = store?.location_suggestion;
+  if (!store) throw new Error('Store not found for this customer');
+  const latitude = body.latitude ?? (suggestion?.outcome === 'suggest' ? suggestion.latitude : null);
+  const longitude = body.longitude ?? (suggestion?.outcome === 'suggest' ? suggestion.longitude : null);
+  if (latitude == null || longitude == null) return null;
+  const saved = { ...store, latitude, longitude, pinned: true, location_suggestion: null };
+  hoisted.payload = { ...hoisted.payload!, stores: hoisted.payload!.stores.map((item) => item === store ? saved : item) };
+  return saved;
+}
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async () => hoisted.payload),
-  apiPost: vi.fn(async (_url: string, body: { customer_id: number; site_label: string; latitude: number; longitude: number }) => {
-    hoisted.posted.push(body);
+  apiPost: vi.fn(async (url: string, body: PinBody | { pins: PinBody[] }) => {
+    if (url.endsWith('/pins/confirm')) {
+      hoisted.confirmed.push({ url, body });
+      if (hoisted.postError) throw hoisted.postError;
+      const saved = applyConfirm(body as PinBody);
+      if (!saved) throw new Error('No proposal for this store; send coordinates');
+      return saved;
+    }
+    if (url.endsWith('/pins/confirm-bulk')) {
+      hoisted.confirmed.push({ url, body });
+      if (hoisted.postError) throw hoisted.postError;
+      const saved = [] as unknown[];
+      const failed = [] as { customer_id: number; site_label: string; error: string }[];
+      for (const pin of (body as { pins: PinBody[] }).pins) {
+        const result = hoisted.rejectLabels.includes(pin.site_label) ? null : applyConfirm(pin);
+        if (result) saved.push(result);
+        else failed.push({ customer_id: pin.customer_id, site_label: pin.site_label, error: 'No proposal for this store; send coordinates' });
+      }
+      return { saved, failed };
+    }
+    const pin = body as Required<PinBody>;
+    hoisted.posted.push(pin);
     if (hoisted.postError) throw hoisted.postError;
-    const saved = { ...hoisted.payload!.stores.find((store) => store.customer_id === body.customer_id
-      && store.site_label === body.site_label)!, ...body, pinned: true, location_suggestion: null };
+    const saved = { ...hoisted.payload!.stores.find((store) => store.customer_id === pin.customer_id
+      && store.site_label === pin.site_label)!, ...pin, pinned: true, location_suggestion: null };
     hoisted.payload = { ...hoisted.payload!, stores: hoisted.payload!.stores.map((store) =>
-      store.customer_id === body.customer_id && store.site_label === body.site_label ? saved : store) };
+      store.customer_id === pin.customer_id && store.site_label === pin.site_label ? saved : store) };
     return saved;
   }),
   safeDisplayError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
@@ -100,6 +138,8 @@ function suggestedPayload(): StoreMapPayload {
 describe('StoreMap', () => {
   beforeEach(() => {
     hoisted.posted = [];
+    hoisted.confirmed = [];
+    hoisted.rejectLabels = [];
     hoisted.postError = null;
     vi.clearAllMocks();
     // jsdom lacks PointerEvent; preserve real pointer coordinates for fireEvent.
@@ -419,6 +459,130 @@ describe('StoreMap', () => {
       { customer_id: 1, site_label: 'SDC-SITE-B', latitude, longitude },
     ]));
     expect(apiPost).toHaveBeenCalledTimes(1);
+  });
+
+  describe('proposed pins review', () => {
+    function manyProposals(): StoreMapPayload {
+      const base = suggestedPayload();
+      const proposal = (label: string, confidence: number, place: string, over = {}) => ({
+        ...base.stores[2],
+        site_label: label,
+        location_suggestion: {
+          outcome: 'suggest' as const, reason: 'match' as const, place, latitude: -30, longitude: 25,
+          licence: 'GeoNames CC BY 4.0', method: 'contained' as const, confidence, ambiguous: false,
+          alternatives: [], ...over,
+        },
+      });
+      return {
+        ...base,
+        stores: [
+          ...base.stores.filter((store) => store.pinned),
+          proposal('Label One', 0.9, 'Placeone'),
+          proposal('Label Two', 0.85, 'Placetwo'),
+          proposal('Label Three', 0.5, 'Placethree', { method: 'fuzzy' }),
+        ],
+      };
+    }
+
+    it('shows a legend with filled confirmed and hollow proposed dots', async () => {
+      hoisted.payload = suggestedPayload();
+      wrap(<StoreMap />);
+      await screen.findByTestId('store-dot-unconfirmed');
+      const legend = screen.getByTestId('store-pin-legend');
+      expect(legend).toHaveTextContent('Confirmed pin');
+      expect(legend).toHaveTextContent('Proposed pin');
+      expect(getComputedStyle(within(legend).getByTestId('legend-proposed-dot')).borderStyle).toBe('dashed');
+      expect(getComputedStyle(within(legend).getByTestId('legend-confirmed-dot')).borderStyle).toBe('solid');
+      // the dot on the map matches the legend: hollow when proposed
+      const dot = screen.getByTestId('store-dot-unconfirmed');
+      expect(getComputedStyle(dot).backgroundColor).toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+    });
+
+    it('lists the proposals with a Confirm that uses the confirm route and saves one pin', async () => {
+      hoisted.payload = manyProposals();
+      wrap(<StoreMap />);
+      await screen.findAllByTestId('proposed-pin-row');
+      expect(screen.getByTestId('proposed-pins')).toHaveTextContent('Proposed pins (3)');
+      const rows = screen.getAllByTestId('proposed-pin-row');
+      expect(rows[0]).toHaveTextContent('Label One');
+      expect(rows[0]).toHaveTextContent('Placeone');
+      expect(apiPost).not.toHaveBeenCalled();
+      fireEvent.click(within(rows[0]).getByTestId('proposal-confirm'));
+      await waitFor(() => expect(hoisted.confirmed).toEqual([
+        { url: '/api/v1/store-dc/pins/confirm', body: { customer_id: 1, site_label: 'Label One' } },
+      ]));
+      await waitFor(() => expect(screen.getAllByTestId('proposed-pin-row')).toHaveLength(2));
+      expect(screen.getAllByTestId('store-dot')).toHaveLength(3);
+      expect(screen.getAllByTestId('store-dot-unconfirmed')).toHaveLength(2);
+    });
+
+    it('confirms the selected rows in one bulk request', async () => {
+      hoisted.payload = manyProposals();
+      wrap(<StoreMap />);
+      await screen.findAllByTestId('proposed-pin-row');
+      fireEvent.click(screen.getByTestId('proposal-select-high'));
+      expect(screen.getByTestId('proposal-confirm-selected')).toHaveTextContent('Confirm selected (2)');
+      fireEvent.click(screen.getByTestId('proposal-confirm-selected'));
+      await waitFor(() => expect(hoisted.confirmed).toEqual([
+        {
+          url: '/api/v1/store-dc/pins/confirm-bulk',
+          body: { pins: [{ customer_id: 1, site_label: 'Label One' }, { customer_id: 1, site_label: 'Label Two' }] },
+        },
+      ]));
+      await waitFor(() => expect(screen.getAllByTestId('proposed-pin-row')).toHaveLength(1));
+      expect(screen.getByTestId('proposed-pin-row')).toHaveTextContent('Label Three');
+    });
+
+    it('keeps a row the server could not save and shows why beside that row', async () => {
+      hoisted.payload = manyProposals();
+      hoisted.rejectLabels = ['Label Two'];
+      wrap(<StoreMap />);
+      await screen.findAllByTestId('proposed-pin-row');
+      fireEvent.click(screen.getByTestId('proposal-select-high'));
+      fireEvent.click(screen.getByTestId('proposal-confirm-selected'));
+      await waitFor(() => expect(screen.getAllByTestId('proposed-pin-row')).toHaveLength(2));
+      const rows = screen.getAllByTestId('proposed-pin-row');
+      expect(rows[0]).toHaveTextContent('Label Two');
+      expect(within(rows[0]).getByTestId('proposal-error')).toHaveTextContent('No proposal');
+      expect(within(rows[1]).queryByTestId('proposal-error')).toBeNull();
+    });
+
+    it('Edit saves the typed coordinates through the confirm route', async () => {
+      hoisted.payload = manyProposals();
+      wrap(<StoreMap />);
+      const rows = await screen.findAllByTestId('proposed-pin-row');
+      fireEvent.click(within(rows[0]).getByTestId('proposal-edit'));
+      fireEvent.change(within(screen.getByTestId('proposal-lat')).getByRole('textbox'), { target: { value: '-26.2' } });
+      fireEvent.change(within(screen.getByTestId('proposal-lon')).getByRole('textbox'), { target: { value: '28.1' } });
+      fireEvent.click(screen.getByTestId('proposal-save'));
+      await waitFor(() => expect(hoisted.confirmed).toEqual([
+        {
+          url: '/api/v1/store-dc/pins/confirm',
+          body: { customer_id: 1, site_label: 'Label One', latitude: -26.2, longitude: 28.1 },
+        },
+      ]));
+    });
+
+    it('Skip moves the store to the manual list without saving, and a failed confirm shows an error', async () => {
+      hoisted.payload = manyProposals();
+      wrap(<StoreMap />);
+      const rows = await screen.findAllByTestId('proposed-pin-row');
+      fireEvent.click(within(rows[2]).getByTestId('proposal-skip'));
+      expect(screen.getAllByTestId('proposed-pin-row')).toHaveLength(2);
+      expect(screen.getByTestId('store-map-unpinned')).toHaveTextContent('Label Three');
+      expect(apiPost).not.toHaveBeenCalled();
+      hoisted.postError = new Error('confirm refused');
+      fireEvent.click(within(screen.getAllByTestId('proposed-pin-row')[0]).getByTestId('proposal-confirm'));
+      expect(await screen.findByTestId('proposal-error')).toHaveTextContent('confirm refused');
+      expect(screen.getAllByTestId('proposed-pin-row')).toHaveLength(2);
+    });
+
+    it('says so when no store has a proposal', async () => {
+      hoisted.payload = payload();
+      wrap(<StoreMap />);
+      await screen.findByTestId('store-map-canvas');
+      expect(screen.getByTestId('proposed-pins')).toHaveTextContent('No proposed pins');
+    });
   });
 
   it('can drag a lone suggestion without confirmed pins', async () => {

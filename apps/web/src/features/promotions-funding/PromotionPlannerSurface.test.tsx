@@ -138,13 +138,13 @@ describe('PromotionPlannerSurface', () => {
     );
   };
 
-  it('shows the planner cards and no longer repeats the Budget ledger figures', async () => {
+  it('shows the planner cards; Planned reserve and Actual support are "Not available yet", never a repeated Budget ledger figure', async () => {
     renderPlanner();
     await waitFor(() => expect(screen.getByTestId('planner-card-awaiting')).toHaveTextContent(/Awaiting approval1/i));
     await waitFor(() => expect(screen.getByTestId('planner-card-starting')).toHaveTextContent(/Starting in 4 weeks2/i));
     expect(screen.getByText('Drafts to finish')).toBeInTheDocument();
-    expect(screen.queryByText(/Planned reserve/i)).toBeNull();
-    expect(screen.queryByText(/Actual support/i)).toBeNull();
+    expect(screen.getByTestId('planner-kpi-reserve')).toHaveAttribute('data-state', 'unavailable');
+    expect(screen.getByTestId('planner-kpi-support')).toHaveAttribute('data-state', 'unavailable');
     expect(screen.queryByText(/Settled book/i)).toBeNull();
     expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/support-bias'))).toBe(false);
   });
@@ -204,9 +204,9 @@ describe('PromotionPlannerSurface', () => {
 
   it('selecting a case on the timeline fills the side panel, which opens the plan workspace', async () => {
     renderPlanner();
-    expect(await screen.findByTestId('planner-side-panel-empty')).toBeInTheDocument();
+    expect(await screen.findByTestId('planner-detail-empty')).toBeInTheDocument();
     fireEvent.click(await screen.findByTestId('planner-timeline-bar-41'));
-    expect(screen.getByTestId('planner-side-panel')).toHaveTextContent('CPR-26-1204');
+    expect(screen.getByTestId('planner-detail')).toHaveTextContent('CPR-26-1204');
     fireEvent.click(screen.getByTestId('planner-side-open'));
     expect(replaceMock).toHaveBeenCalledWith('/promotions?plan=41', { scroll: false });
   });
@@ -227,7 +227,7 @@ describe('PromotionPlannerSurface', () => {
     );
 
     expect(await screen.findByTestId('promotion-planner')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Promotions & Funding/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Promotion planner' })).toBeInTheDocument();
     expect(screen.getByTestId('lifecycle-rail')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByTestId('planner-grid')).toHaveTextContent('CPR-26-1204');
@@ -378,26 +378,26 @@ describe('PromotionPlannerSurface', () => {
           : { total_current: 20, status_counts_current: { draft: 3, proposed: 1, approved: 2, rejected: 1, active: 5, ended: 4 } };
       casesOverride = quietLists;
       renderPlanner();
-      await waitFor(() => expect(screen.getByTestId('planner-card-planning')).toHaveTextContent(/In planning7/));
-      expect(screen.getByTestId('planner-card-live')).toHaveTextContent(/Live promotions5/);
+      await waitFor(() => expect(screen.getByTestId('planner-kpi-planning')).toHaveTextContent(/In planning7/));
+      expect(screen.getByTestId('planner-kpi-live')).toHaveTextContent(/Live promotions5/);
       // The one proposed case (window 2026-09-07) is awaiting approval and its window has started.
-      await waitFor(() => expect(screen.getByTestId('planner-card-at-risk')).toHaveTextContent(/At-risk actions1/));
+      await waitFor(() => expect(screen.getByTestId('planner-kpi-at-risk')).toHaveTextContent(/At-risk actions1/));
     });
 
     it('shows In planning / Live promotions as failed, not zero, when the count request fails', async () => {
       countsOverride = (url) =>
         url.includes('window_from=') || url.includes('status=proposed') ? undefined : new Error('boom');
       renderPlanner();
-      await waitFor(() => expect(screen.getByTestId('planner-card-planning')).toHaveAttribute('data-state', 'empty'));
-      expect(screen.getByTestId('planner-card-live')).toHaveAttribute('data-state', 'empty');
-      expect(screen.getByTestId('planner-card-planning')).not.toHaveTextContent(/In planning0/);
+      await waitFor(() => expect(screen.getByTestId('planner-kpi-planning')).toHaveAttribute('data-state', 'empty'));
+      expect(screen.getByTestId('planner-kpi-live')).toHaveAttribute('data-state', 'empty');
+      expect(screen.getByTestId('planner-kpi-planning')).not.toHaveTextContent(/In planning0/);
     });
 
     it('shows At-risk actions as failed, not zero, when a queue source failed', async () => {
       casesOverride = (url) => (url.includes('status=ended') ? new Error('boom') : undefined);
       renderPlanner();
-      await waitFor(() => expect(screen.getByTestId('planner-card-at-risk')).toHaveAttribute('data-state', 'empty'));
-      expect(screen.getByTestId('planner-card-at-risk')).not.toHaveTextContent(/At-risk actions0/);
+      await waitFor(() => expect(screen.getByTestId('planner-kpi-at-risk')).toHaveAttribute('data-state', 'empty'));
+      expect(screen.getByTestId('planner-kpi-at-risk')).not.toHaveTextContent(/At-risk actions0/);
     });
 
     it('shows Overdue approvals and Evidence outstanding queue cards from the queue', async () => {

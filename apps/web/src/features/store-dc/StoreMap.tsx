@@ -9,6 +9,10 @@ import type { PointerEvent } from 'react';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
+import { PinLegend } from './pins/PinLegend';
+import { proposedStores } from './pins/pinProposals';
+import { ProposedPinsPanel } from './pins/ProposedPinsPanel';
+import { useProposalConfirm } from './pins/useProposalConfirm';
 import { projectStores, sellThroughColor, spreadOverlaps, storeMapBounds, storeMapPanelHeight, unprojectStore } from './storeMapLayout';
 import type { StoreMapPayload, StoreMapStore } from './types';
 
@@ -33,6 +37,7 @@ export function StoreMap() {
   const theme = useTheme();
   const tokens = tokensFor(theme.palette.mode);
   const queryClient = useQueryClient();
+  const proposalConfirm = useProposalConfirm();
   const [customerId, setCustomerId] = useState<number | 'all'>('all');
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -74,6 +79,7 @@ export function StoreMap() {
     && store.location_suggestion?.outcome === 'suggest'
     && store.location_suggestion.latitude != null && store.location_suggestion.longitude != null);
   const suggestedKeys = new Set(suggestions.map(storeKey));
+  const proposalList = proposedStores(visible, rejected);
   const unpinned = visible.filter((store) => !store.pinned && !suggestedKeys.has(storeKey(store)));
   const mapStores = [...pinned, ...suggestions];
   const points = mapStores.map((store) => ({
@@ -142,6 +148,7 @@ export function StoreMap() {
   function rejectSuggestion(store: StoreMapStore) {
     const key = storeKey(store);
     setRejected((current) => new Set(current).add(key));
+    proposalConfirm.clearError(key);
     setActivePinKey(null);
     setHoverKey(null);
     setPinError(null);
@@ -225,6 +232,7 @@ export function StoreMap() {
       <Typography variant="caption" sx={{ display: 'block', color: tokens.text.muted, mb: 1 }}>
         {mapQuery.data?.legend?.formula ?? "last week's units / (last week's units + stock on hand)"}
       </Typography>
+      <PinLegend />
       {mapQuery.isLoading ? (
         <Typography variant="body2" sx={{ color: tokens.text.secondary }} data-testid="store-map-loading">
           Loading stores.
@@ -304,7 +312,8 @@ export function StoreMap() {
                   transform: `translate(calc(-50% + ${pin.dx}px), calc(-50% + ${pin.dy}px))`,
                   borderRadius: '50%',
                   border: unconfirmed ? `2px dashed ${tokens.text.primary}` : `2px solid ${tokens.bg.surface}`,
-                  bgcolor: unconfirmed ? tokens.bg.surfaceMuted : color,
+                  // hollow = proposed, filled = a pin a steward saved (see PinLegend)
+                  bgcolor: unconfirmed ? 'transparent' : color,
                   p: 0,
                   cursor: unconfirmed ? 'grab' : 'pointer',
                   touchAction: unconfirmed ? 'none' : 'auto',
@@ -452,6 +461,13 @@ export function StoreMap() {
           </Box>
         </Box>
       </Box>
+      <ProposedPinsPanel
+        stores={proposalList}
+        saving={saving || proposalConfirm.saving}
+        errors={proposalConfirm.errors}
+        onConfirm={proposalConfirm.confirm}
+        onSkip={rejectSuggestion}
+      />
       {selected ? (
         <Box data-testid="store-map-lines" sx={{ mt: 1.5 }}>
           <Typography variant="subtitle2">
