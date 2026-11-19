@@ -22,18 +22,11 @@ def _session(cfg, scalar_calls):
     # 40 units on hand, 1 sold a week: 40 weeks of cover against a 6 week target.
     class Session:
         def __init__(self):
+            # Sell-through only: the window cutoff, then the window rows.
+            weeks = [date(2026, 10, 5), date(2026, 10, 12), date(2026, 10, 19), date(2026, 10, 26)]
             self.plan = [
-                _Result(rows=[]),
-                _Result(scalar=0),
-                _Result(
-                    rows=[
-                        (date(2026, 10, 5), "week", "weekly", 1, 40, "North"),
-                        (date(2026, 10, 12), "week", "weekly", 1, 40, "North"),
-                        (date(2026, 10, 19), "week", "weekly", 1, 40, "North"),
-                        (date(2026, 10, 26), "week", "weekly", 1, 40, "North"),
-                    ]
-                ),
-                _Result(rows=[]),
+                _Result(rows=[(d,) for d in reversed(weeks)]),
+                _Result(rows=[(81, d, "week", "weekly", 1, 40, "North") for d in weeks]),
             ]
 
         def scalar(self, stmt):

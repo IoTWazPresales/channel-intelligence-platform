@@ -30,7 +30,7 @@ from app.services.cpor.cost_suggestion import (
     suggest_cost_basis,
 )
 from app.services.cpor.customer_soh_check import customer_soh_check, resolve_stored_mac_vat
-from app.services.cpor.intake_weighted_mac import suggest_intake_weighted_mac
+from app.services.cpor.intake_weighted_mac import suggest_sellthrough_mac
 from app.services.cpor.lifecycle import (
     EDITABLE_STATUSES,
     LIFECYCLE_ACTIONS,
@@ -1332,7 +1332,7 @@ def patch_line(
 
 @router.get("/cases/{case_id}/cip-quantities")
 def get_cip_quantities(case_id: int, user: dict = Depends(get_current_user)) -> dict[str, Any]:
-    """Suggested line quantities from cover, forecast and this customer's history. No write."""
+    """Suggested line quantities from the customer's sell-through run rate and cover. No write."""
     with SessionLocal() as session:
         case = _load_case(session, case_id, user)
         try:
@@ -1497,22 +1497,11 @@ def cost_suggest(case_id: int, line_id: int):
         if not line or line.case_id != case.id:
             raise HTTPException(status_code=404, detail="Line not found")
         as_of = case.created_at.date() if case.created_at else date.today()
-        sug = suggest_cost_basis(
+        sug = suggest_sellthrough_mac(
             session,
             customer_id=case.customer_id,
             product_id=line.product_id,
-            as_of=as_of,
-            exclude_case_id=case.id,
-        )
-        intake = suggest_intake_weighted_mac(
-            session,
-            customer_id=case.customer_id,
-            product_id=line.product_id,
-            distributor_id=line.distributor_id,
-            window_start=case.window_start,
-            window_end=case.window_end,
-            as_of=as_of,
-            exclude_case_id=case.id,
+            tenant_id=case.tenant_id or "default",
         )
         apply_mac_vat, mac_vat = resolve_stored_mac_vat(
             session,
@@ -1533,8 +1522,8 @@ def cost_suggest(case_id: int, line_id: int):
             "flags": sug.flags,
             "stored_cost_basis": float(line.cost_basis) if line.cost_basis is not None else None,
             "drift": detect_cost_basis_drift(line.cost_basis, sug),
-            "intake_weighted": _cost_suggestion_json(intake),
-            "intake_weighted_drift": detect_cost_basis_drift(line.cost_basis, intake),
+            "intake_weighted": _cost_suggestion_json(sug),
+            "intake_weighted_drift": detect_cost_basis_drift(line.cost_basis, sug),
             # D-062 check on stored cost: customer SOH from CST (BACKLOG-135), never an input.
             "soh_check": customer_soh_check(
                 session,
@@ -1860,7 +1849,12 @@ def cpor_promo_plan_draft(
     comparable_limit: int = Query(default=10, ge=1, le=50),
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Compose a promo plan: seed case (B4) or customer_id + period_label."""
+    """Compose a promo plan: seed case (B4) or customer_id + period_label.
+
+    Sell-through only: price, cost, stock and expected units come from the customer's own
+    sell-through. A figure it does not carry is ``null`` with a reason in each line's ``missing``.
+    ``comparable_limit`` is accepted and unused (earlier cases are not a planner source).
+    """
     with SessionLocal() as session:
         try:
             return build_promo_plan_draft(

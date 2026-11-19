@@ -4020,6 +4020,14 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **N-0089 (current-stage scope only)** | Worker liveness, masked SSE logs and the ops overview exist. Remaining: stage-specific independent review. The wider freshness, flapping and backup work is Wave 3 (BACKLOG-247). |
 | **TRIGGER** | Warren schedules the independent review for a node, or before any of these nodes is reported accepted. |
 
+## BACKLOG-265 — Planner: strict sell-through for every figure (live screen audit 2026-11-19, item 1.4)
+
+Status: Done in code (branch `feat/l4-planner-sellthrough-20261119`); live proof by screenshot after restart.
+
+Warren 2026-11-19 16:39: the planner uses customer sell-through only, drop everything else, including the PR #96 item 6 price rule. New `services/cpor/planner_sellthrough.py` is the single reader. Products, price (latest reported week with a positive sell price), cost (latest weekly MAC, else unit cost), expected units (weekly run rate x horizon; window `PLANNER_SELLTHROUGH_RUN_RATE_WEEKS`, default 8) and customer cover (reported stock / run rate) come from `fact_customer_sellthrough` only. Listing prices, competitor prices, distributor cover, intake buckets, earlier-case fallbacks and payload/seed prices are no longer planner evidence. A missing value is shown as unavailable with a reason, never 0. Planned reservation is unavailable until it is rebuilt on sell-through. Aged-stock Promote uses the sell-through price and makes no draft without one.
+
+Open: planned reservation / actual support / funding gaps rebuilt on sell-through; `promoPlanDraftMerge.ts` still normalises missing quantities to 0 internally; `PlanWorkspace.tsx` still has Forecast/History labels and the historical support-bias request.
+
 ## BACKLOG-256 — Wave 3 B3: release evidence and the independent second look (N-0099)
 
 | Field | Detail |
