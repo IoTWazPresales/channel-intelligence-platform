@@ -10,9 +10,9 @@ import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 
-import { apiPost, apiUrl, safeDisplayError } from '@/lib/api';
+import { apiGet, apiPost, apiUrl, safeDisplayError } from '@/lib/api';
 import { setAuthToken } from '@/lib/authSession';
-import { AUTH_ME_QUERY_KEY } from '@/features/shell/useCurrentUser';
+import { AUTH_ME_QUERY_KEY, startingPath, type CurrentUser } from '@/features/shell/useCurrentUser';
 import { useQueryClient } from '@tanstack/react-query';
 
 type LoginResponse = {
@@ -46,7 +46,16 @@ export default function LoginPage() {
         display_name: res.user.display_name,
         auth_mode: 'session',
       });
-      router.replace('/brief');
+      // D-0141: the starting screen comes from /auth/me (job and assigned accounts).
+      let landing = '/brief';
+      try {
+        const me = await apiGet<CurrentUser>('/api/v1/auth/me');
+        qc.setQueryData(AUTH_ME_QUERY_KEY, me);
+        landing = startingPath(me);
+      } catch {
+        /* keep the login payload above and land on Brief */
+      }
+      router.replace(landing);
     } catch (err) {
       setError(safeDisplayError(err));
     } finally {
