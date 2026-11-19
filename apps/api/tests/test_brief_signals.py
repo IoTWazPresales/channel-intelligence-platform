@@ -42,22 +42,23 @@ def test_cst_late_missing_signal_links_to_the_steward_worklist() -> None:
 
 
 def test_fx_blocked_means_the_mode_is_missing_not_the_rate() -> None:
-    """N-0083: a case with a rate and no mode is FX blocked; a case with no rate is counted apart."""
+    """N-0083: a case with a rate and no mode is FX blocked; a case with no rate is counted apart.
+
+    The per-case rules now run inside one SQL aggregate (T1b); the rows-vs-rules check against real
+    data is tests/test_t1b_brief_fx_counts_db.py. Here: the statement carries both rules, and the
+    counts it returns are passed through unchanged.
+    """
     import asyncio
-    from types import SimpleNamespace
     from unittest.mock import MagicMock, patch
 
     from app.services import brief_signals
 
-    cases = [
-        SimpleNamespace(roe_snapshot=18.2, fx_mode=None),  # rate, no mode -> FX blocked
-        SimpleNamespace(roe_snapshot=18.2, fx_mode="booked"),  # fine
-        SimpleNamespace(roe_snapshot=18.2, fx_mode="floating"),  # fine
-        SimpleNamespace(roe_snapshot=None, fx_mode="booked"),  # no rate -> not FX blocked
-        SimpleNamespace(roe_snapshot=None, fx_mode=None),  # no rate -> not FX blocked
-    ]
+    sql = str(brief_signals.open_case_fx_counts_stmt(None).compile(compile_kwargs={"literal_binds": True})).lower()
+    assert "roe_snapshot > 0" in sql  # a rate counts only above zero
+    assert "fx_mode is null" in sql and "fx_mode not in ('booked', 'floating')" in sql
+
     first = MagicMock()
-    first.scalars.return_value.all.return_value = cases
+    first.one.return_value = (5, 1, 2)
     second = MagicMock()
     second.scalar.return_value = 0
 

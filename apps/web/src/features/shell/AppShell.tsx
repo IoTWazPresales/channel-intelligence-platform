@@ -26,7 +26,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { GlobalBackgroundTasksIndicator } from '@/features/background-tasks/GlobalBackgroundTasksIndicator';
 import { LogDock } from '@/features/ops-logs/LogDock';
@@ -36,18 +36,11 @@ import { CapabilityRail, DOMAIN_ICONS, RAIL_WIDTH, domainBadgesFromSpine } from 
 import { CommandPalette } from '@/features/shell/CommandPalette';
 import { railNavGroups, roleMayAccess } from '@/features/shell/navConfig';
 import { activeNavGroup } from '@/features/shell/navPageChrome';
+import { useBriefSignals } from '@/features/shell/useBriefSignals';
 import { useCurrentUser, useInvalidateCurrentUser, AUTH_ME_QUERY_KEY } from '@/features/shell/useCurrentUser';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiPost } from '@/lib/api';
 import { clearAuthToken } from '@/lib/authSession';
 import { useUiStore } from '@/stores/uiStore';
-
-type BriefSignalsMeta = {
-  tenant_stamp?: string;
-  tenant_name?: string;
-  tenant_period?: string;
-  signal_count?: number;
-  spine_badges?: Partial<Record<string, number | null>>;
-};
 
 function roleLabel(role: string | undefined | null): string {
   if (!role) return 'guest';
@@ -81,12 +74,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
     (me?.email && me.email.trim()) ||
     (meError ? 'Signed out' : '…');
 
-  const { data: briefMeta } = useQuery({
-    queryKey: ['brief', 'signals-meta'],
-    queryFn: ({ signal }) => apiGet<BriefSignalsMeta>('/api/v1/brief/signals', { signal }),
-    staleTime: 60_000,
-    retry: 1,
-  });
+  const { data: briefMeta } = useBriefSignals();
   const badges = useMemo(() => domainBadgesFromSpine(briefMeta?.spine_badges), [briefMeta?.spine_badges]);
   const attention = briefMeta?.signal_count ?? briefMeta?.spine_badges?.brief ?? 0;
 

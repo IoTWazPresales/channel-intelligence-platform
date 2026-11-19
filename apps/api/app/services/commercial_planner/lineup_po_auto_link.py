@@ -14,12 +14,13 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine, CommercialLineupPoAutoLinkDismiss
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
+from app.services.commercial_planner.lineup_open_channel import STAGING_OPEN_CHANNEL_KEY
 from app.services.shipment_strict_pair import outerjoin_twin_remainder
 from app.models.purchase_order import PurchaseOrder
 
@@ -124,6 +125,39 @@ def classify_match_confidence(
     if customer_align == "unresolved":
         return "medium", "product_period_customer_unresolved"
     return None, None
+
+
+class _LineLite:
+    """The columns of a lineup line that matching reads, without its JSON payloads.
+
+    ``raw_row_payload`` carries only the staging flag, which is all the open-channel check reads.
+    """
+
+    __slots__ = ("case_id", "product_id", "customer_id", "distributor_id", "quantity_units", "raw_row_payload")
+
+    def __init__(self, row: Any) -> None:
+        self.case_id = row.case_id
+        self.product_id = row.product_id
+        self.customer_id = row.customer_id
+        self.distributor_id = row.distributor_id
+        self.quantity_units = row.quantity_units
+        self.raw_row_payload = {STAGING_OPEN_CHANNEL_KEY: True} if row.staging_open_channel is True else {}
+
+
+def _case_period_window(cases: list[CommercialLineupCase]) -> tuple[date, date] | None:
+    """Earliest quarter start and latest quarter end over the cases that have a period.
+
+    A shipment whose evidence date is outside this window is outside every case's quarter, so it
+    can match no case (``date_in_case_period``).
+    """
+    bounds = [
+        quarter_bounds_from_period_start(c.inferred_period_start)
+        for c in cases
+        if c.inferred_period_start is not None
+    ]
+    if not bounds:
+        return None
+    return min(b[0] for b in bounds), max(b[1] for b in bounds)
 
 
 @dataclass
@@ -394,6 +428,93 @@ async def po_auto_link_proposals(
         return {"proposals": [], "total": 0, "data_unavailable": True, "dismissed": [], "group_coverage": [], "group_coverage_by_key": {}}
 
 
+def _ship_columns():
+    return select(
+        FactInboundShipment.id,
+        FactInboundShipment.purchase_order_id,
+        FactInboundShipment.product_id,
+        FactInboundShipment.resolved_customer_id,
+        FactInboundShipment.resolved_distributor_id,
+        FactInboundShipment.line_state,
+        FactInboundShipment.quantity,
+        FactInboundShipment.crad_date,
+        FactInboundShipment.schedule_ship_date,
+        FactInboundShipment.ship_confirm_date,
+    )
+
+
+def _scope_to_request_tenant(stmt):
+    """Column selects name the tenant explicitly (the ORM tenant scope is per entity load)."""
+    from app.core.tenant_scope import request_tenant_id
+
+    tid = request_tenant_id.get()
+    return stmt.where(FactInboundShipment.tenant_id == tid) if tid else stmt
+
+
+async def _ship_products_for_claimed_po_norms(
+    db: AsyncSession, proposals: list[dict[str, Any]]
+) -> dict[str, dict[int, str]]:
+    """product_id -> product-line BU of the kept shipment lines, for each PO number two or more cases claim.
+
+    The competition classifier only looks up PO numbers that two or more cases claim, so the read
+    is bounded to those numbers (any date: the evidence is the PO's whole shipment, not one quarter).
+    """
+    cases_by_norm: dict[str, set[int]] = defaultdict(set)
+    for p in proposals:
+        norm = (p.get("po_number_norm") or "").strip()
+        if norm:
+            cases_by_norm[norm].add(int(p["case_id"]))
+    claimed = {norm for norm, case_ids in cases_by_norm.items() if len(case_ids) >= 2}
+    if not claimed:
+        return {}
+
+    norm_by_po: dict[int, str] = {}
+    for pid, norm_col, raw_col in (
+        await db.execute(
+            select(PurchaseOrder.id, PurchaseOrder.po_number_norm, PurchaseOrder.po_number_raw).where(
+                or_(PurchaseOrder.po_number_norm.in_(claimed), PurchaseOrder.po_number_raw.in_(claimed))
+            )
+        )
+    ).all():
+        norm = (norm_col or raw_col or str(pid)).strip()
+        if norm in claimed:
+            norm_by_po[int(pid)] = norm
+    if not norm_by_po:
+        return {}
+
+    pair_stmt, _twin = outerjoin_twin_remainder(
+        select(FactInboundShipment.purchase_order_id, FactInboundShipment.product_id).distinct(),
+        FactInboundShipment,
+    )
+    pair_stmt = _scope_to_request_tenant(
+        pair_stmt.where(
+            FactInboundShipment.purchase_order_id.in_(sorted(norm_by_po)),
+            FactInboundShipment.product_id.isnot(None),
+        )
+    )
+    pairs = [(int(po), int(prod)) for po, prod in (await db.execute(pair_stmt)).all()]
+    if not pairs:
+        return {}
+
+    product_line_by_id: dict[int, str] = {}
+    for pid, pline in (
+        await db.execute(
+            select(DimProduct.id, DimProduct.product_line).where(
+                DimProduct.id.in_(sorted({prod for _po, prod in pairs}))
+            )
+        )
+    ).all():
+        if pline is not None and str(pline).strip():
+            product_line_by_id[int(pid)] = str(pline).strip().upper()
+
+    out: dict[str, dict[int, str]] = defaultdict(dict)
+    for po, prod in pairs:
+        bu = product_line_by_id.get(prod)
+        if bu:
+            out[norm_by_po[po]][prod] = bu
+    return dict(out)
+
+
 async def _po_auto_link_proposals_inner(
     db: AsyncSession,
     *,
@@ -450,14 +571,25 @@ async def _po_auto_link_proposals_inner(
             alias_ids=open_channel_alias_ids,
         )
 
-    lineup_rows = (
-        await db.execute(
-            select(CommercialLineupLine).where(
-                CommercialLineupLine.case_id.in_(case_ids),
-                CommercialLineupLine.product_id.isnot(None),
+    lineup_rows = [
+        _LineLite(r)
+        for r in (
+            await db.execute(
+                select(
+                    CommercialLineupLine.case_id,
+                    CommercialLineupLine.product_id,
+                    CommercialLineupLine.customer_id,
+                    CommercialLineupLine.distributor_id,
+                    CommercialLineupLine.quantity_units,
+                    # one JSON value, not the payload: ``is True`` below matches ``payload.get(KEY) is True``
+                    CommercialLineupLine.raw_row_payload[STAGING_OPEN_CHANNEL_KEY].label("staging_open_channel"),
+                ).where(
+                    CommercialLineupLine.case_id.in_(case_ids),
+                    CommercialLineupLine.product_id.isnot(None),
+                )
             )
-        )
-    ).scalars().all()
+        ).all()
+    ]
 
     linked_pairs: set[tuple[int, int]] = set()
     for case_id, po_id in (
@@ -473,28 +605,49 @@ async def _po_auto_link_proposals_inner(
     # must not be summed for shipped totals — see ``shipment_inbound_facts.upsert_inbound_shipment_facts_for_job``.
     # An open line covered by its strict shipped twins is skipped; a partly shipped one
     # counts its remainder (D-0065). Rows stay as stored; only the counted quantity differs.
-    ship_stmt, twin = outerjoin_twin_remainder(select(FactInboundShipment), FactInboundShipment)
-    ship_result = (
-        await db.execute(
-            ship_stmt.add_columns(twin.counted_quantity).where(
-                FactInboundShipment.purchase_order_id.isnot(None),
-                FactInboundShipment.product_id.isnot(None),
-            )
+    # Columns only (never ``raw_source_row``), and only facts dated inside the case quarters.
+    window = _case_period_window(cases)
+    shipment_rows: list[Any] = []
+    if window is not None:
+        ev_date = func.coalesce(
+            FactInboundShipment.crad_date,
+            FactInboundShipment.schedule_ship_date,
+            FactInboundShipment.ship_confirm_date,
         )
-    ).all()
-    shipment_rows = [r[0] for r in ship_result]
-    counted_qty_by_fact = {int(r[0].id): float(r[1] or 0) for r in ship_result}
+        ship_stmt, twin = outerjoin_twin_remainder(_ship_columns(), FactInboundShipment)
+        ship_stmt = ship_stmt.add_columns(twin.counted_quantity.label("counted_quantity")).where(
+            FactInboundShipment.purchase_order_id.isnot(None),
+            FactInboundShipment.product_id.isnot(None),
+            ev_date >= window[0],
+            ev_date < window[1],
+        )
+        ship_stmt = _scope_to_request_tenant(ship_stmt)
+        shipment_rows = list((await db.execute(ship_stmt)).all())
 
     ship_po_ids = sorted({int(s.purchase_order_id) for s in shipment_rows if s.purchase_order_id is not None})
     linked_po_ids = sorted({po_id for _cid, po_id in linked_pairs})
     all_po_ids = sorted(set(ship_po_ids) | set(linked_po_ids))
-    po_meta: dict[int, PurchaseOrder] = {}
+    po_meta: dict[int, Any] = {}
     po_norm_by_id: dict[int, str] = {}
     if all_po_ids:
-        for po in (await db.execute(select(PurchaseOrder).where(PurchaseOrder.id.in_(all_po_ids)))).scalars().all():
+        for po in (
+            await db.execute(
+                select(
+                    PurchaseOrder.id,
+                    PurchaseOrder.distributor_id,
+                    PurchaseOrder.po_number_raw,
+                    PurchaseOrder.po_number_norm,
+                ).where(PurchaseOrder.id.in_(all_po_ids))
+            )
+        ).all():
             pid = int(po.id)
             po_meta[pid] = po
             po_norm_by_id[pid] = (po.po_number_norm or po.po_number_raw or str(pid)).strip()
+    # Looked up once per shipment / proposal: the PO norms linked to any case, and to each case.
+    linked_norms = {po_norm_by_id[po_id] for _cid, po_id in linked_pairs if po_id in po_norm_by_id}
+    linked_case_norms = {
+        (case_id_, po_norm_by_id[po_id]) for case_id_, po_id in linked_pairs if po_id in po_norm_by_id
+    }
 
     # Lineup index: case_id -> list of lines; product_id -> lines on case
     lineup_by_case: dict[int, list[CommercialLineupLine]] = defaultdict(list)
@@ -522,7 +675,7 @@ async def _po_auto_link_proposals_inner(
         product_id = int(ship.product_id)  # type: ignore[arg-type]
         ship_cust = int(ship.resolved_customer_id) if ship.resolved_customer_id is not None else None
         ship_dist = int(ship.resolved_distributor_id) if ship.resolved_distributor_id is not None else None
-        ship_qty = counted_qty_by_fact[int(ship.id)]
+        ship_qty = float(ship.counted_quantity or 0)
         line_state = (ship.line_state or "").strip().lower()
         ev_date, date_src = evidence_date_for_period_match(
             crad_date=ship.crad_date,
@@ -530,7 +683,7 @@ async def _po_auto_link_proposals_inner(
             ship_confirm_date=ship.ship_confirm_date,
         )
 
-        if _po_norm_already_linked_anywhere(po_number_norm, linked_pairs, po_norm_by_id):
+        if po_number_norm in linked_norms:
             continue
 
         for case_id, case_lines in lineup_by_case.items():
@@ -610,23 +763,16 @@ async def _po_auto_link_proposals_inner(
             preferred_distributor_id=acc.distributor_id,
         )
 
-    product_ids = sorted({m.product_id for acc in proposals_map.values() for m in acc.products.values()})
-    # Also need product_line for every shipped product (competition classifier BU grain).
-    ship_product_ids = sorted(
-        {int(s.product_id) for s in shipment_rows if s.product_id is not None}
-    )
-    product_lookup_ids = sorted(set(product_ids) | set(ship_product_ids))
+    product_lookup_ids = sorted({m.product_id for acc in proposals_map.values() for m in acc.products.values()})
     prod_meta: dict[int, dict[str, str | None]] = {}
-    product_line_by_id: dict[int, str] = {}
     if product_lookup_ids:
-        for pid, sku, smn, mname, pline in (
+        for pid, sku, smn, mname in (
             await db.execute(
                 select(
                     DimProduct.id,
                     DimProduct.sku,
                     DimProduct.sales_model_name,
                     DimProduct.marketing_name,
-                    DimProduct.product_line,
                 ).where(DimProduct.id.in_(product_lookup_ids))
             )
         ).all():
@@ -635,8 +781,6 @@ async def _po_auto_link_proposals_inner(
                 "sales_model_name": str(smn) if smn is not None else None,
                 "marketing_name": str(mname) if mname is not None else None,
             }
-            if pline is not None and str(pline).strip():
-                product_line_by_id[int(pid)] = str(pline).strip().upper()
 
     cust_ids = sorted({p.customer_id for p in proposals_map.values() if p.customer_id is not None})
     dist_ids = sorted({p.distributor_id for p in proposals_map.values() if p.distributor_id is not None})
@@ -698,9 +842,7 @@ async def _po_auto_link_proposals_inner(
                 "confidence": acc.confidence,
                 "reason": acc.reason,
                 "date_source": acc.date_source,
-                "already_linked": _case_norm_already_linked(
-                    acc.case_id, acc.po_number_norm, linked_pairs, po_norm_by_id
-                ),
+                "already_linked": (acc.case_id, acc.po_number_norm) in linked_case_norms,
                 "alternate_purchase_order_ids": sorted(acc.po_ids_seen - {acc.purchase_order_id}),
                 "dismissed": acc.proposal_key() in dismissed_keys,
                 "matched_products": [
@@ -737,23 +879,12 @@ async def _po_auto_link_proposals_inner(
         cid: {int(ln.product_id) for ln in lines if ln.product_id is not None}
         for cid, lines in lineup_by_case.items()
     }
-    ship_products_by_po_norm: dict[str, dict[int, str]] = defaultdict(dict)
-    for ship in shipment_rows:
-        if ship.purchase_order_id is None or ship.product_id is None:
-            continue
-        po_id = int(ship.purchase_order_id)
-        norm = po_norm_by_id.get(po_id)
-        if not norm:
-            continue
-        pid = int(ship.product_id)
-        bu = product_line_by_id.get(pid)
-        if bu:
-            ship_products_by_po_norm[norm][pid] = bu
+    ship_products_by_po_norm = await _ship_products_for_claimed_po_norms(db, out)
     competition_map = classify_proposals_competition(
         out,
         case_meta=case_meta,
         case_product_ids=case_product_ids,
-        ship_products_by_po_norm=dict(ship_products_by_po_norm),
+        ship_products_by_po_norm=ship_products_by_po_norm,
     )
     annotate_proposals_with_competition(out, competition_map)
     # BACKLOG-110/115 — property-based bulk protection annotation (selection + service).

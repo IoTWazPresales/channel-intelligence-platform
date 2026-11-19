@@ -155,6 +155,9 @@ def clear_query_cache() -> None:
     """Test helper."""
     with _lock:
         _store.clear()
+    from app.query.shared_reads import clear_shared_reads
+
+    clear_shared_reads()
     global _redis_checked, _redis_client
     _redis_checked = False
     _redis_client = None

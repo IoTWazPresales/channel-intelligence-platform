@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.query.shared_reads import shared_read
 from app.query.types import HandlerResult, QueryRequest
 from app.services.commercial_planner.plan_vs_executed import plan_vs_executed_read_model
 
@@ -69,12 +70,18 @@ async def handle_a1(
         bu = str(bu).strip() or None
 
     # Grain includes period → require period context (default resolved inside read model).
-    payload = await plan_vs_executed_read_model(
-        db,
-        period_from=str(period_from).strip() if period_from else None,
-        period_to=str(period_to).strip() if period_to else None,
-        product_line=bu,
-        drill_bu=bu,
+    pf = str(period_from).strip() if period_from else None
+    pt = str(period_to).strip() if period_to else None
+
+    async def _read() -> dict[str, Any]:
+        return await plan_vs_executed_read_model(db, period_from=pf, period_to=pt, product_line=bu, drill_bu=bu)
+
+    # Every A1 widget on a dashboard needs this same read model: share one load between them.
+    payload = await shared_read(
+        "a1_plan_vs_executed",
+        {"period_from": pf, "period_to": pt, "bu": bu},
+        req.tenant_id,
+        _read,
     )
     if payload.get("data_unavailable"):
         return HandlerResult(
