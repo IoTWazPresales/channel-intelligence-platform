@@ -17,7 +17,6 @@ from collections import defaultdict
 from typing import Any
 
 from sqlalchemy import delete, func, insert, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.customer_calendar import CustomerCalendarEvent, CustomerCalendarMappingProfile
@@ -61,49 +60,33 @@ def profile_to_dict(row: CustomerCalendarMappingProfile) -> dict[str, Any]:
     }
 
 
-def ensure_default_profile(db: Session, tenant_id: str) -> CustomerCalendarMappingProfile:
+def list_profiles(db: Session, tenant_id: str) -> list[dict[str, Any]]:
+    """Saved profiles plus, when the tenant has no row for it, the computed generic default.
+
+    Read only: the default is never inserted here (a read must not write). The computed entry has
+    ``id`` None, is listed first and is ``is_default`` only when no saved profile is the default;
+    to change the mapping a user saves a named profile, which goes through the audited write route.
+    """
     bind_calendar_tenant(db, tenant_id)
-    row = db.scalar(
-        select(CustomerCalendarMappingProfile).where(
-            CustomerCalendarMappingProfile.tenant_id == tenant_id,
-            CustomerCalendarMappingProfile.profile_code == DEFAULT_PROFILE_CODE,
-        )
-    )
-    if row is not None:
-        return row
-    d = default_calendar_profile()
-    db.execute(
-        pg_insert(CustomerCalendarMappingProfile)
-        .values(
-            tenant_id=tenant_id,
-            profile_code=d["profile_code"],
-            display_name=d["display_name"],
-            header_row_index=d["header_row_index"],
-            sheet_name=d["sheet_name"],
-            column_map_json=d["column_map_json"],
-            value_maps_json=d["value_maps_json"],
-            is_default=True,
-            notes=d["notes"],
-        )
-        .on_conflict_do_nothing(index_elements=["tenant_id", "profile_code"])
-    )
-    return db.scalar(
-        select(CustomerCalendarMappingProfile).where(
-            CustomerCalendarMappingProfile.tenant_id == tenant_id,
-            CustomerCalendarMappingProfile.profile_code == DEFAULT_PROFILE_CODE,
-        )
-    )
-
-
-def list_profiles(db: Session, tenant_id: str) -> list[CustomerCalendarMappingProfile]:
-    ensure_default_profile(db, tenant_id)
-    return list(
+    rows = list(
         db.scalars(
             select(CustomerCalendarMappingProfile)
             .where(CustomerCalendarMappingProfile.tenant_id == tenant_id)
             .order_by(CustomerCalendarMappingProfile.id)
         ).all()
     )
+    out = [profile_to_dict(r) for r in rows]
+    if not any(p["profile_code"] == DEFAULT_PROFILE_CODE for p in out):
+        virtual = default_calendar_profile()
+        out.insert(
+            0,
+            {
+                **virtual,
+                "id": None,
+                "is_default": not any(p["is_default"] for p in out),
+            },
+        )
+    return out
 
 
 def _profile_or_404(db: Session, tenant_id: str, profile_id: int) -> CustomerCalendarMappingProfile:

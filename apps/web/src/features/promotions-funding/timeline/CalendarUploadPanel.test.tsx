@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CalendarUploadPanel } from './CalendarUploadPanel';
 
@@ -59,4 +59,59 @@ it('invalidates preview when upload identity or mapping changes', async () => {
   fireEvent.change(screen.getByLabelText('Upload reference'), { target: { value: 'revised' } });
   expect(screen.getByRole('button', { name: 'Apply calendar' })).toBeDisabled();
   expect(mocks.form).toHaveBeenCalledTimes(1);
+});
+
+async function previewWith(headers: string[], container: HTMLElement) {
+  mocks.form.mockImplementation((path: string) => Promise.resolve(path.endsWith('preview') ? { ...preview, headers } : { inserted: 1, replaced: 0 }));
+  fireEvent.change(container.querySelector('input[type=file]')!, { target: { files: [new File(['csv'], 'calendar.csv')] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Preview calendar' }));
+  await screen.findByText('Mapping summary');
+}
+
+async function choose(header: string, label: string) {
+  const input = screen.getByTestId(`calendar-map-map-${header}`);
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: new RegExp(label) }));
+}
+
+it('replaces a saved alias that differs only by case when another column is selected (review B1)', async () => {
+  mocks.get.mockResolvedValue({ profiles: [{ ...profile, column_map_json: { name: ['Name'], start_date: ['Start'] } }] });
+  mocks.put.mockImplementation((_path: string, body: typeof profile) => Promise.resolve({ ...profile, ...body }));
+  const { container } = mount();
+  await screen.findByText('Generic calendar');
+  await previewWith(['Name', 'start', 'New Start'], container);
+  // the saved alias "Start" is the column "start": the editor must show it as the start date
+  expect(within(screen.getByTestId('calendar-map-map-start').closest('tr')!).getByText('Start date')).toBeInTheDocument();
+  await choose('New Start', 'Start date');
+  fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+  await waitFor(() => expect(mocks.put).toHaveBeenCalledOnce());
+  const [path, body] = mocks.put.mock.calls[0];
+  expect(path).toMatch(/profiles\/1$/);
+  expect(body.column_map_json.start_date).toEqual(['New Start']);
+  expect(body.column_map_json.name).toEqual(['Name']);
+});
+
+it('blocks saving while two columns share a name that the mapping uses', async () => {
+  const { container } = mount();
+  await screen.findByText('Generic calendar');
+  await previewWith(['Name', 'Start', 'start'], container);
+  expect(screen.getByText(/have the same name/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('New profile code'), { target: { value: 'mine' } });
+  expect(screen.getByRole('button', { name: 'Create profile' })).toBeDisabled();
+});
+
+it('shows the computed default without an id as read-only and saves changes as a new profile', async () => {
+  mocks.get.mockResolvedValue({ profiles: [{ ...profile, id: null, profile_code: 'customer_calendar_default_v1' }] });
+  mocks.post.mockImplementation((_path: string, body: typeof profile) => Promise.resolve({ ...profile, ...body, id: 9 }));
+  const { container } = mount();
+  await screen.findByText(/built-in generic mapping/);
+  expect(screen.getByRole('button', { name: 'Delete profile' })).toBeDisabled();
+  await previewWith(['Name', 'Begins'], container);
+  await choose('Begins', 'Start date');
+  expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('New profile code'), { target: { value: 'mine' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create profile' }));
+  await waitFor(() => expect(mocks.post).toHaveBeenCalledOnce());
+  expect(mocks.put).not.toHaveBeenCalled();
+  expect(mocks.post.mock.calls[0][1].profile_code).toBe('mine');
 });

@@ -308,16 +308,19 @@ def test_profile_crud_is_tenant_scoped(conn, migrated) -> None:
     t_a, t_b = f"cal-a-{tag}", f"cal-b-{tag}"
     session = Session(bind=conn, join_transaction_mode="create_savepoint")
     try:
-        assert [p.profile_code for p in list_profiles(session, t_a)] == [
-            "customer_calendar_default_v1"
-        ]
+        # Listing returns the computed generic default and writes nothing (id None, no row).
+        listed = list_profiles(session, t_a)
+        assert [p["profile_code"] for p in listed] == ["customer_calendar_default_v1"]
+        assert listed[0]["id"] is None and listed[0]["is_default"] is True
         body = default_calendar_profile()
         body.update(
             profile_code="custom", display_name="Custom", header_row_index=2, is_default=True
         )
         row = save_profile(session, t_a, body, actor="tester")
         assert row.is_default is True and row.header_row_index == 2
-        assert len(list_profiles(session, t_a)) == 2
+        listed = list_profiles(session, t_a)
+        assert [p["profile_code"] for p in listed] == ["customer_calendar_default_v1", "custom"]
+        assert [p["is_default"] for p in listed] == [False, True]
         # same code is allowed in another tenant, not twice in one
         save_profile(session, t_b, body, actor="tester")
         with pytest.raises(CalendarUploadError) as dup:
@@ -542,9 +545,55 @@ def test_endpoints_preview_apply_and_timeline(conn, migrated) -> None:
         assert r.status_code == 422
         r = client.get("/api/v1/customer-calendar/profiles")
         assert r.status_code == 200
-        assert r.json()["profiles"][0]["profile_code"] == "customer_calendar_default_v1"
+        first = r.json()["profiles"][0]
+        assert first["profile_code"] == "customer_calendar_default_v1"
+        assert first["id"] is None
     finally:
         app.dependency_overrides.pop(ep._sync_db, None)
         app.dependency_overrides.pop(get_current_user, None)
         app.dependency_overrides.pop(ep._require_calendar_writer, None)
+        session.close()
+
+
+def test_get_profiles_by_a_reader_writes_nothing(conn, migrated) -> None:
+    """Review item B2: an authentication-only GET must not create a profile or audit row."""
+    from app.api.v1.endpoints import cpor_customer_calendar as ep
+    from app.core.security import get_current_user
+    from app.main import app
+    from app.services.cpor.customer_calendar.scope import bind_calendar_tenant
+    from fastapi.testclient import TestClient
+
+    tenant = f"cal-g-{uuid.uuid4().hex[:8]}"
+    session = Session(bind=conn, join_transaction_mode="create_savepoint")
+    viewer = {"id": 2, "email": "viewer@example.invalid", "role": "viewer", "tenant_id": tenant}
+
+    def _db():
+        yield session
+
+    def _counts() -> tuple[int, int]:
+        bind_calendar_tenant(session, tenant)
+        profiles = session.execute(
+            text("select count(*) from customer_calendar_mapping_profile where tenant_id = :t"),
+            {"t": tenant},
+        ).scalar_one()
+        audits = session.execute(
+            text("select count(*) from steward_audit_event where tenant_id = :t"), {"t": tenant}
+        ).scalar_one()
+        return int(profiles), int(audits)
+
+    app.dependency_overrides[ep._sync_db] = _db
+    app.dependency_overrides[get_current_user] = lambda: viewer
+    try:
+        assert _counts() == (0, 0)
+        client = TestClient(app)
+        for _ in range(2):
+            r = client.get("/api/v1/customer-calendar/profiles")
+            assert r.status_code == 200, r.text
+            body = r.json()["profiles"]
+            assert [p["profile_code"] for p in body] == ["customer_calendar_default_v1"]
+            assert body[0]["id"] is None and body[0]["is_default"] is True
+        assert _counts() == (0, 0)
+    finally:
+        app.dependency_overrides.pop(ep._sync_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
         session.close()

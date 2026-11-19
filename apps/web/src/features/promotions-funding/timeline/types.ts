@@ -17,7 +17,8 @@ export type Timeline = {
   data_unavailable?: boolean; message?: string;
 };
 export type CalendarProfile = {
-  id: number; profile_code: string; display_name: string; header_row_index: number;
+  /** null for the computed generic default that has not been saved (it cannot be edited or deleted). */
+  id: number | null; profile_code: string; display_name: string; header_row_index: number;
   sheet_name: string | null; column_map_json: Record<string, string[]>;
   value_maps_json: { kind?: Record<string, CalendarKind> }; is_default: boolean; notes: string | null;
 };

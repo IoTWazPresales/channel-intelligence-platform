@@ -61,6 +61,59 @@ def test_apply_uses_bulk_insert_and_leaves_commit_to_audited_endpoint(monkeypatc
     assert all(row["tenant_id"] == "tenant-a" for row in inserts[0].args[1])
 
 
+def test_listing_profiles_returns_a_computed_default_and_writes_nothing():
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = []
+    out = pipeline.list_profiles(db, "tenant-a")
+    assert [p["profile_code"] for p in out] == ["customer_calendar_default_v1"]
+    assert out[0]["id"] is None and out[0]["is_default"] is True
+    db.add.assert_not_called()
+    db.flush.assert_not_called()
+    db.commit.assert_not_called()
+    statements = [call.args[0] for call in db.execute.call_args_list]
+    assert not any(getattr(s, "is_insert", False) for s in statements)
+
+
+def test_listing_profiles_keeps_saved_rows_and_a_saved_default_wins():
+    saved = MagicMock()
+    saved.configure_mock(
+        id=7,
+        profile_code="custom",
+        display_name="Custom",
+        header_row_index=2,
+        sheet_name=None,
+        column_map_json={"name": ["N"], "start_date": ["S"]},
+        value_maps_json={"kind": {}},
+        is_default=True,
+        notes=None,
+    )
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = [saved]
+    out = pipeline.list_profiles(db, "tenant-a")
+    assert [p["profile_code"] for p in out] == ["customer_calendar_default_v1", "custom"]
+    assert [p["is_default"] for p in out] == [False, True]
+    assert [p["id"] for p in out] == [None, 7]
+
+
+def test_a_seeded_default_row_is_not_duplicated_by_the_computed_one():
+    seeded = MagicMock()
+    seeded.configure_mock(
+        id=3,
+        profile_code="customer_calendar_default_v1",
+        display_name="Seeded",
+        header_row_index=1,
+        sheet_name=None,
+        column_map_json={"name": ["N"], "start_date": ["S"]},
+        value_maps_json={"kind": {}},
+        is_default=True,
+        notes=None,
+    )
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = [seeded]
+    out = pipeline.list_profiles(db, "tenant-a")
+    assert [p["id"] for p in out] == [3]
+
+
 def test_named_generic_profile_can_preview_before_it_has_been_seeded(monkeypatch):
     db = MagicMock()
     db.scalar.return_value = None

@@ -95,11 +95,12 @@ def _read_upload(file: UploadFile) -> bytes:
 
 @router.get("/profiles")
 def list_calendar_profiles(_user: _Reader, db: _Db) -> dict[str, Any]:
+    """Saved profiles plus the computed generic default. Read only: nothing is created here."""
     try:
-        rows = list_profiles(db, tenant_id_from_user(_user))
+        profiles = list_profiles(db, tenant_id_from_user(_user))
     except ProgrammingError as exc:
         return {**_calendar_unavailable(exc, db), "profiles": []}
-    return {"profiles": [profile_to_dict(r) for r in rows]}
+    return {"profiles": profiles}
 
 
 @router.post("/profiles", status_code=201)

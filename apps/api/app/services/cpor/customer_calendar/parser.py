@@ -17,28 +17,38 @@ from app.services.cpor.customer_calendar.profiles import (
     CALENDAR_FIELDS,
     CALENDAR_KINDS,
     REQUIRED_FIELDS,
+    normalize_header,
 )
 from app.services.cpor.payment_evidence.parser import _as_date, _cell_str
-from app.services.cpor.payment_evidence.parser import _build_index as payment_header_index
+
+_norm = normalize_header
 
 
-def _norm(value: Any) -> str:
-    return " ".join(str(value or "").replace("\xa0", " ").split()).lower()
+def _build_index(
+    headers: list[Any], column_map: dict[str, list[str]]
+) -> tuple[dict[str, int], dict[str, list[str]]]:
+    """(canonical field -> column index, field -> headers that tie for that match).
 
-
-def _build_index(headers: list[Any], column_map: dict[str, list[str]]) -> dict[str, int]:
-    """canonical field -> column index; the first alias that matches a header wins."""
-    # The payment helper only collapses one run of double spaces; normalise fully first so
-    # "  Event   NAME " matches the alias "Event Name".
-    matched = payment_header_index(
-        [_norm(h) for h in headers],
-        {field: [_norm(a) for a in column_map.get(field) or []] for field in CALENDAR_FIELDS},
-    )
+    The first alias (in the profile's order) that matches a header wins, headers compared with
+    ``normalize_header``. When the matched header text appears in more than one column the match
+    is ambiguous: the field is reported in the second dict instead of silently reading the first.
+    """
+    norm_headers = [normalize_header(h) for h in headers]
     out: dict[str, int] = {}
-    for field, index in matched.items():
-        if index not in out.values():
-            out[field] = index
-    return out
+    ambiguous: dict[str, list[str]] = {}
+    for field in CALENDAR_FIELDS:
+        for alias in column_map.get(field) or []:
+            want = normalize_header(alias)
+            hits = [i for i, h in enumerate(norm_headers) if want and h == want]
+            if not hits:
+                continue
+            if hits[0] in out.values():
+                break
+            out[field] = hits[0]
+            if len(hits) > 1:
+                ambiguous[field] = [str(headers[i]) for i in hits]
+            break
+    return out, ambiguous
 
 
 def _json_safe(value: Any) -> Any:
@@ -104,8 +114,19 @@ def parse_calendar_grid(grid: list[list[Any]], profile: dict[str, Any]) -> dict[
 
     headers = list(grid[header_row_index - 1] or [])
     result["headers"] = [str(h) if h is not None else "" for h in headers]
-    index = _build_index(headers, column_map)
+    index, ambiguous = _build_index(headers, column_map)
     result["mapped_columns"] = {f: result["headers"][i] for f, i in index.items()}
+    for field, tied in ambiguous.items():
+        result["blocking_errors"].append(
+            {
+                "code": f"ambiguous_{field}_column",
+                "message": (
+                    f"More than one column matches the {field.replace('_', ' ')} mapping "
+                    f"({', '.join(repr(h) for h in tied)}); rename or remove the duplicate "
+                    "column so the intended one is read"
+                ),
+            }
+        )
     for field in REQUIRED_FIELDS:
         if field not in index:
             result["blocking_errors"].append(

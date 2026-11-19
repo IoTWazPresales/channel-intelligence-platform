@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ImportFileUploadZone } from '@/app/(app)/admin/imports/ImportFileUploadZone';
 import { CanonicalColumnMappingPanel } from '@/features/import-mapping/CanonicalColumnMappingPanel';
 import { apiDelete, apiGet, apiPost, apiPostFormData, apiPut } from '@/lib/api';
+import { applySelections, selectionProblems, selectionsFor } from './calendarMapping';
 import type { CalendarKind, CalendarPreview, CalendarProfile } from './types';
 
 const ROOT = '/api/v1/customer-calendar';
@@ -18,12 +19,12 @@ const required = [{ id: 'name', label: 'Event name', anyOf: ['name'] }, { id: 's
 type Props = { customerId: number; onApplied: () => void };
 
 export function CalendarUploadPanel(props: Props) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const query = useQuery({ queryKey: PROFILE_KEY,
     queryFn: ({ signal }) => apiGet<{ profiles: CalendarProfile[]; data_unavailable?: boolean; message?: string }>(`${ROOT}/profiles`, { signal }),
   });
   const profiles = query.data?.profiles ?? [];
-  const selected = profiles.find(p => p.id === selectedId) ?? profiles.find(p => p.is_default) ?? profiles[0];
+  const selected = profiles.find(p => p.profile_code === selectedCode) ?? profiles.find(p => p.is_default) ?? profiles[0];
   return <Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={2}>
     <Typography variant="h6">Upload customer calendar</Typography>
     <Typography variant="body2">All events in this upload will be assigned to the selected customer. Reuse a saved column mapping, preview the events, then apply.</Typography>
@@ -31,15 +32,15 @@ export function CalendarUploadPanel(props: Props) {
     {query.data?.data_unavailable && <Alert severity="info">{query.data.message}</Alert>}
     {query.isPending && <Typography>Loading mapping profiles...</Typography>}
     {selected && <>
-      <TextField select label="Mapping profile" value={selected.id} onChange={e => setSelectedId(Number(e.target.value))}>
-        {profiles.map(p => <MenuItem key={p.id} value={p.id}>{p.display_name}</MenuItem>)}
+      <TextField select label="Mapping profile" value={selected.profile_code} onChange={e => setSelectedCode(e.target.value)}>
+        {profiles.map(p => <MenuItem key={p.profile_code} value={p.profile_code}>{p.display_name}</MenuItem>)}
       </TextField>
-      <CalendarUploadEditor key={selected.id} {...props} profile={selected} onSelect={setSelectedId} />
+      <CalendarUploadEditor key={selected.profile_code} {...props} profile={selected} onSelect={setSelectedCode} />
     </>}
   </Stack></Paper>;
 }
 
-function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Props & { profile: CalendarProfile; onSelect: (id: number) => void }) {
+function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Props & { profile: CalendarProfile; onSelect: (code: string) => void }) {
   const qc = useQueryClient();
   const [file, setFile] = useState<File>();
   const [uploadId, setUploadId] = useState('');
@@ -52,6 +53,9 @@ function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Prop
   const [message, setMessage] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [selection, setSelection] = useState<Record<string, string>>({});
+  const builtIn = profile.id === null;
+  const problems = selectionProblems(headers, selection);
 
   function changeProfile(next: CalendarProfile) { setDraft(next); setDirty(true); setPreview(null); }
   async function action(run: () => Promise<void>) {
@@ -77,14 +81,12 @@ function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Prop
         kind[key] = value as CalendarKind;
       }
       const body = { ...draft, profile_code: create ? newCode.trim() : draft.profile_code, value_maps_json: { kind }, is_default: create ? false : draft.is_default };
-      const saved = create ? await apiPost<CalendarProfile>(`${ROOT}/profiles`, body) : await apiPut<CalendarProfile>(`${ROOT}/profiles/${profile.id}`, body);
+      const saved = create || builtIn ? await apiPost<CalendarProfile>(`${ROOT}/profiles`, body) : await apiPut<CalendarProfile>(`${ROOT}/profiles/${profile.id}`, body);
       setDraft(saved); setDirty(false); setPreview(null); setMessage('Mapping profile saved. Preview the file again before applying.');
       await qc.invalidateQueries({ queryKey: PROFILE_KEY });
-      onSelect(saved.id);
+      onSelect(saved.profile_code);
     });
   }
-  const mappingDraft: Record<string, string> = {};
-  for (const [field, aliases] of Object.entries(draft.column_map_json)) for (const h of aliases) mappingDraft[h] = field;
   return <Stack spacing={2}>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
       <TextField label="Profile name" value={draft.display_name} disabled={pending} onChange={e => changeProfile({ ...draft, display_name: e.target.value })} />
@@ -95,10 +97,10 @@ function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Prop
       helperText="One per line: source value=campaign, pillar or other. Unknown kinds become other."
       onChange={e => { setKindAliases(e.target.value); setDirty(true); setPreview(null); }} />
     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-      <Button disabled={pending || !dirty} onClick={() => void save(false)}>Save profile</Button>
+      <Button disabled={pending || !dirty || builtIn || problems.length > 0} onClick={() => void save(false)}>Save profile</Button>
       <TextField size="small" label="New profile code" value={newCode} disabled={pending} onChange={e => setNewCode(e.target.value)} inputProps={{ maxLength: 64 }} />
-      <Button disabled={pending || !newCode.trim()} onClick={() => void save(true)}>Create profile</Button>
-      <Button color="error" disabled={pending || profile.profile_code === 'customer_calendar_default_v1'} onClick={() => void action(async () => {
+      <Button disabled={pending || !newCode.trim() || problems.length > 0} onClick={() => void save(true)}>Create profile</Button>
+      <Button color="error" disabled={pending || builtIn || profile.profile_code === 'customer_calendar_default_v1'} onClick={() => void action(async () => {
         await apiDelete(`${ROOT}/profiles/${profile.id}`); await qc.invalidateQueries({ queryKey: PROFILE_KEY });
       })}>Delete profile</Button>
     </Stack>
@@ -109,6 +111,7 @@ function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Prop
       title="Drop a customer calendar CSV or XLSX here" testIdPrefix="calendar-upload"
       onFile={next => { if (pending) return; setFile(next); setPreview(null); setHeaders([]); setMessage(null); }} />
     {file && <Typography variant="body2">Selected file: {file.name}</Typography>}
+    {builtIn && <Alert severity="info">This is the built-in generic mapping. To change it, enter a new profile code and choose Create profile.</Alert>}
     {dirty && <Alert severity="info">Save the mapping profile before previewing this file.</Alert>}
     {error && <Alert severity="error">{error}</Alert>}
     {message && <Alert severity="success">{message}</Alert>}
@@ -116,7 +119,7 @@ function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Prop
       <Button variant="outlined" disabled={!file || pending || dirty} onClick={() => void action(async () => {
         setPreview(null);
         const out = await apiPostFormData<CalendarPreview>(`${ROOT}/upload/preview`, form());
-        setHeaders(out.headers); setPreview(out);
+        setHeaders(out.headers); setSelection(selectionsFor(draft.column_map_json, out.headers)); setPreview(out);
       })}>Preview calendar</Button>
       <Button variant="contained" disabled={!preview?.ok || pending || dirty} onClick={() => void action(async () => {
         const body = form(); body.set('confirm', 'true');
@@ -125,12 +128,15 @@ function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Prop
         await qc.invalidateQueries({ queryKey: ['customer-calendar', 'timeline'] });
       })}>Apply calendar</Button>
     </Stack>
-    {headers.length > 0 && <CanonicalColumnMappingPanel fileHeaders={headers} draft={mappingDraft} targetOptions={targets}
-      requiredGroups={required} dirty={dirty} disabled={pending} testIdPrefix="calendar-map" onChange={next => {
-        const map: Record<string, string[]> = {};
-        for (const [field, aliases] of Object.entries(draft.column_map_json)) map[field] = aliases.filter(h => !headers.includes(h));
-        for (const [header, field] of Object.entries(next)) if (field && headers.includes(header)) (map[field] ??= []).push(header);
-        changeProfile({ ...draft, column_map_json: map });
+    {problems.map(p => <Alert key={p} severity="error">{p}</Alert>)}
+    {headers.length > 0 && <CanonicalColumnMappingPanel fileHeaders={headers} draft={selection} targetOptions={targets}
+      requiredGroups={required} dirty={dirty} disabled={pending} testIdPrefix="calendar-map" onChange={picked => {
+        // Each calendar field reads one column: choosing a column for a field moves it off the previous one.
+        const next = { ...picked };
+        const chosen = headers.find(h => next[h] && next[h] !== selection[h]);
+        if (chosen) for (const h of headers) if (h !== chosen && next[h] === next[chosen]) delete next[h];
+        setSelection(next);
+        changeProfile({ ...draft, column_map_json: applySelections(draft.column_map_json, headers, next) });
       }} />}
     {preview && <Stack spacing={1}>
       <Typography>{preview.will_insert} events will be applied; {preview.will_replace} existing events will be replaced for this customer and upload.</Typography>

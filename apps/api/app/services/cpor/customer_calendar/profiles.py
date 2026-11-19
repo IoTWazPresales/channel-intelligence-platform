@@ -47,6 +47,16 @@ _DEFAULT_KIND_MAP: dict[str, str] = {
 }
 
 
+def normalize_header(value: Any) -> str:
+    """The one header comparison: case-, spacing- and non-breaking-space-insensitive.
+
+    The parser matches file headers to saved aliases with this, profile validation uses it to
+    reject one header claimed by two fields, and the web mapping editor keeps an identical copy
+    (``calendarMapping.ts``) so what a user selects is what a saved mapping reads.
+    """
+    return " ".join(str(value or "").replace("\xa0", " ").split()).lower()
+
+
 def default_calendar_profile() -> dict[str, Any]:
     """A fresh copy of the generic default profile (callers may mutate it)."""
     return {
@@ -84,6 +94,22 @@ def validate_profile(profile: dict[str, Any]) -> list[str]:
     for field in REQUIRED_FIELDS:
         if not column_map.get(field):
             problems.append(f"column_map_json must map {field}")
+
+    # One header must mean one field: an alias claimed by two fields (compared the way the parser
+    # compares headers) would give one of them a column the user did not select.
+    owner: dict[str, str] = {}
+    for field, aliases in column_map.items():
+        if not isinstance(aliases, list):
+            continue
+        for alias in aliases:
+            key = normalize_header(alias) if isinstance(alias, str) else ""
+            if not key:
+                continue
+            if owner.setdefault(key, field) != field:
+                problems.append(
+                    f"column_map_json maps header {alias.strip()!r} to more than one field "
+                    f"({owner[key]}, {field})"
+                )
 
     value_maps = profile.get("value_maps_json") or {}
     if not isinstance(value_maps, dict):
