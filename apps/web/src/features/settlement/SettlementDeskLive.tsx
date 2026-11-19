@@ -14,6 +14,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { CporCaseSupersedeDialog } from '@/features/cpor/CporCaseSupersedeDialog';
+import {
+  invalidateAfterCaseWrite,
+  invalidateClashSummary,
+} from '@/features/promotions-funding/calendarClashKeys';
 import { SettlementConfirmDialog } from '@/features/settlement/SettlementConfirmDialog';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
@@ -94,6 +98,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await invalidateClashSummary(qc);
     },
   });
 
@@ -110,8 +115,9 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
       apiPost(`/api/v1/cpor/cases/${caseId}/intelligence-exclude`, { exclude, confirm: true }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
-      await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
+      // Excluded cases drop out of the clash summary (commercial-intelligence scope).
+      await invalidateAfterCaseWrite(qc);
     },
   });
 
@@ -123,6 +129,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await invalidateClashSummary(qc);
     },
   });
 
@@ -132,6 +139,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await invalidateClashSummary(qc);
     },
   });
 

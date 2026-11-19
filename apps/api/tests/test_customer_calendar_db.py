@@ -490,6 +490,73 @@ def test_timeline_lists_open_promotions_events_and_clashes_only(conn, migrated) 
         session.close()
 
 
+def test_clash_summary_counts_exactly_across_customers_with_the_timeline_rules(
+    conn, migrated
+) -> None:
+    from app.models.customer_calendar import CustomerCalendarEvent
+    from app.services.cpor.customer_calendar.timeline import build_clash_summary
+
+    tag = uuid.uuid4().hex[:8]
+    tenant = f"cal-s-{tag}"
+    session = Session(bind=conn, join_transaction_mode="create_savepoint")
+    try:
+        a = _customer(session, tenant, tag, "A")
+        b = _customer(session, tenant, tag, "B")
+        live_a = _case(session, tenant, a.id, tag, "la", date(2026, 3, 1), date(2026, 3, 15))
+        _case(session, tenant, b.id, tag, "lb", date(2026, 3, 1), date(2026, 3, 15))
+        _case(
+            session,
+            tenant,
+            a.id,
+            tag,
+            "can",
+            date(2026, 3, 1),
+            date(2026, 3, 15),
+            status="cancelled",
+        )
+        _case(
+            session,
+            tenant,
+            a.id,
+            tag,
+            "fix",
+            date(2026, 3, 1),
+            date(2026, 3, 15),
+            intelligence_exclude=True,
+        )
+        old = _case(session, tenant, a.id, tag, "old", date(2026, 3, 1), date(2026, 3, 15))
+        old.superseded_by_case_id = live_a.id
+        _bind(conn, tenant)
+        for name, start, end, cid in (
+            ("A one", date(2026, 3, 10), date(2026, 3, 20), a.id),
+            ("A two", date(2026, 3, 15), date(2026, 3, 16), a.id),
+            ("B one", date(2026, 3, 2), date(2026, 3, 3), b.id),
+            ("A far", date(2026, 9, 1), date(2026, 9, 5), a.id),
+        ):
+            session.add(
+                CustomerCalendarEvent(
+                    tenant_id=tenant,
+                    customer_id=cid,
+                    name=name,
+                    kind="campaign",
+                    start_date=start,
+                    end_date=end,
+                    upload_id="u1",
+                )
+            )
+        session.flush()
+
+        out = build_clash_summary(session, tenant)
+        # A: one live case x two overlapping events; B: one live case x one event.
+        assert (out["clash_count"], out["promotion_count"], out["customer_count"]) == (3, 2, 2)
+        none = build_clash_summary(session, tenant, date_from=date(2026, 10, 1))
+        assert none["clash_count"] == 0
+        # another tenant sees nothing of this tenant
+        assert build_clash_summary(session, f"cal-x-{tag}")["clash_count"] == 0
+    finally:
+        session.close()
+
+
 # --------------------------------------------------------------------------- endpoints
 
 

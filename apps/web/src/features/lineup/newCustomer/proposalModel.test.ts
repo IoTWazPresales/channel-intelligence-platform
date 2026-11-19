@@ -54,6 +54,9 @@ describe('SOURCE_OPTIONS', () => {
     expect(prev?.explanation).toMatch(/own/i);
     expect(prev?.explanation).toMatch(/master/i);
     expect(prev?.explanation).toMatch(/3 most recent/i);
+    // Warren 2026-11-19: strictly before the requested quarter; the requested quarter never counts.
+    expect(prev?.explanation).toMatch(/before the requested quarter/i);
+    expect(prev?.explanation).toMatch(/requested quarter never counts/i);
     expect(SOURCE_OPTIONS.find((o) => o.value === 'pm_bottom_cost')?.explanation).toMatch(/PM bottom cost/);
   });
 });

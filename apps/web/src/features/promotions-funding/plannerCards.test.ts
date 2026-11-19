@@ -1,28 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  CALENDAR_CLASH_CARD,
+  BASE_COUNTS_URL,
+  STARTING_EXCLUDED_STATUSES,
   addDaysIso,
-  awaitingApproval,
-  isCurrentCase,
+  awaitingCountUrl,
+  calendarClashUrl,
+  clashCardFigure,
   pageIsComplete,
-  startingNext4Weeks,
-  unplannedAgedStockValue,
-  type PlannerCardCase,
+  startingCountUrl,
+  statusCount,
+  unplannedAgedStock,
 } from './plannerCards';
-
-const c = (
-  id: number,
-  status: string,
-  window_start: string | null,
-  superseded_by_case_id: number | null = null,
-): PlannerCardCase => ({
-  id,
-  case_code: `C-${id}`,
-  status,
-  window_start,
-  superseded_by_case_id,
-});
 
 describe('addDaysIso', () => {
   it('adds days across month and year ends', () => {
@@ -31,20 +20,8 @@ describe('addDaysIso', () => {
   });
 });
 
-describe('isCurrentCase', () => {
-  it('is false when the case points at a replacement, whatever its status', () => {
-    expect(isCurrentCase(c(1, 'proposed', null, 9))).toBe(false);
-    expect(isCurrentCase(c(2, 'approved', null, 9))).toBe(false);
-  });
-  it('is true with no replacement pointer (null or absent)', () => {
-    expect(isCurrentCase(c(3, 'approved', null, null))).toBe(true);
-    const noPointer: PlannerCardCase = { id: 4, case_code: 'C-4', status: 'approved' };
-    expect(isCurrentCase(noPointer)).toBe(true);
-  });
-});
-
 describe('pageIsComplete', () => {
-  it('is complete only when the response carries every matching row', () => {
+  it('is complete only when the response carries every matching row (used by the action queue)', () => {
     expect(pageIsComplete({ items: [{}, {}] as never[], total: 2 })).toBe(true);
     expect(pageIsComplete({ items: [{}, {}] as never[], total: 501 })).toBe(false);
   });
@@ -54,92 +31,100 @@ describe('pageIsComplete', () => {
   });
 });
 
-describe('awaitingApproval', () => {
-  it('counts only proposed cases and returns their ids', () => {
-    const r = awaitingApproval([c(1, 'proposed', null), c(2, 'draft', null), c(3, 'proposed', null), c(4, 'approved', null)]);
-    expect(r).toEqual({ count: 2, ids: [1, 3] });
+describe('exact count requests (API counts, not a capped page)', () => {
+  it('awaiting approval asks the count endpoint for Proposed', () => {
+    expect(awaitingCountUrl()).toBe('/api/v1/cpor/cases/counts?status=proposed');
   });
-  it('leaves out a proposed case that has been replaced (superseded_by_case_id set, status unchanged)', () => {
-    const r = awaitingApproval([c(1, 'proposed', null, 7), c(2, 'proposed', null), c(7, 'proposed', null)]);
-    expect(r).toEqual({ count: 2, ids: [2, 7] });
+  it('starting asks for the [today, today+28] window and leaves out cancelled and rejected', () => {
+    const r = startingCountUrl('2026-11-19');
+    expect(r.from).toBe('2026-11-19');
+    expect(r.to).toBe('2026-12-17');
+    expect(r.url).toBe(
+      '/api/v1/cpor/cases/counts?window_from=2026-11-19&window_to=2026-12-17&exclude_status=cancelled&exclude_status=rejected',
+    );
+    expect([...STARTING_EXCLUDED_STATUSES]).toEqual(['cancelled', 'rejected']);
   });
-  it('is zero for an empty list', () => {
-    expect(awaitingApproval([])).toEqual({ count: 0, ids: [] });
+  it('drafts and ended read the per-status split of the unfiltered counts', () => {
+    expect(BASE_COUNTS_URL).toBe('/api/v1/cpor/cases/counts');
+    const counts = { total_current: 9, status_counts_current: { draft: 4, ended: 5 } };
+    expect(statusCount(counts, 'draft')).toBe(4);
+    expect(statusCount(counts, 'ended')).toBe(5);
+    expect(statusCount(counts, 'proposed')).toBe(0);
+  });
+  it('has no figure at all before the response arrives (never zero)', () => {
+    expect(statusCount(undefined, 'draft')).toBeNull();
   });
 });
 
-describe('startingNext4Weeks', () => {
-  const today = '2026-11-18';
-  it('includes both ends of [today, today+28]', () => {
-    const r = startingNext4Weeks(
-      [c(1, 'approved', '2026-11-18'), c(2, 'approved', '2026-12-16'), c(3, 'approved', '2026-12-17'), c(4, 'approved', '2026-11-17')],
-      today,
-    );
-    expect(r.ids).toEqual([1, 2]);
-    expect(r.count).toBe(2);
-    expect(r.from).toBe('2026-11-18');
-    expect(r.to).toBe('2026-12-16');
-  });
-  it('drops cancelled and rejected cases and cases with no start', () => {
-    const r = startingNext4Weeks(
-      [
-        c(1, 'cancelled', '2026-11-20'),
-        c(2, 'rejected', '2026-11-20'),
-        c(5, 'approved', null),
-        c(6, 'draft', '2026-11-20'),
-        c(7, 'active', '2026-11-20'),
-      ],
-      today,
-    );
-    expect(r.ids).toEqual([6, 7]);
-  });
-  it('counts a replaced approved case once: the old one points at its replacement and is left out', () => {
-    const r = startingNext4Weeks(
-      [c(10, 'approved', '2026-11-20', 11), c(11, 'approved', '2026-11-22'), c(12, 'proposed', '2026-11-25', 13)],
-      today,
-    );
-    expect(r.ids).toEqual([11]);
-    expect(r.count).toBe(1);
-  });
-  it('accepts a Date for today', () => {
-    const r = startingNext4Weeks([c(1, 'approved', '2026-11-19')], new Date(Date.UTC(2026, 10, 18, 22, 0, 0)));
-    expect(r.ids).toEqual([1]);
-  });
-});
-
-describe('unplannedAgedStockValue', () => {
-  it('sums stock on hand for lines with no open action, in units (the API returns no money value)', () => {
-    const r = unplannedAgedStockValue({
-      lines: [
-        { customer_id: 1, product_id: 1, stock_on_hand: 10, suggestion_executed: false, executed_actions: [] },
-        { customer_id: 1, product_id: 2, stock_on_hand: 5.5, suggestion_executed: true, executed_actions: ['promote'] },
-        { customer_id: 2, product_id: 3, stock_on_hand: 4 },
-        { customer_id: 2, product_id: 4, stock_on_hand: null },
-      ],
+describe('unplannedAgedStock (value comes from the API, never priced here)', () => {
+  const valuation = {
+    cost_basis: 'customer_reported_unit_mac_else_unit_cost_ex_vat',
+    unplanned: {
+      lines: 3,
+      units: 19,
+      value: 65,
+      lines_with_cost: 2,
+      lines_without_cost: 1,
+      units_without_cost: 5,
+    },
+  };
+  it('reads the unplanned block: value, units and how many lines had no cost', () => {
+    const r = unplannedAgedStock({ lines: [], truncated: false, valuation });
+    expect(r).toMatchObject({
+      valued: true,
+      value: 65,
+      units: 19,
+      lineCount: 3,
+      linesWithCost: 2,
+      linesWithoutCost: 1,
+      unitsWithoutCost: 5,
       truncated: false,
     });
-    expect(r.unit).toBe('units');
-    expect(r.value).toBe(14);
-    expect(r.lineCount).toBe(3);
-    expect(r.truncated).toBe(false);
   });
-  it('treats a line with executed actions but a false flag as having an open action', () => {
-    const r = unplannedAgedStockValue({
-      lines: [{ customer_id: 1, product_id: 1, stock_on_hand: 9, suggestion_executed: false, executed_actions: ['move'] }],
+  it('keeps "no value" as null, not zero, when no line has a cost', () => {
+    const r = unplannedAgedStock({
+      valuation: {
+        ...valuation,
+        unplanned: { ...valuation.unplanned, value: null, lines_with_cost: 0, lines_without_cost: 3, units_without_cost: 19 },
+      },
     });
-    expect(r.value).toBe(0);
-    expect(r.lineCount).toBe(0);
+    expect(r.value).toBeNull();
+    expect(r.linesWithoutCost).toBe(3);
+  });
+  it('without a valuation block it shows units only and says it is not valued', () => {
+    const r = unplannedAgedStock({
+      lines: [
+        { customer_id: 1, product_id: 1, stock_on_hand: 10, suggestion_executed: false, executed_actions: [] },
+        { customer_id: 1, product_id: 2, stock_on_hand: 5, suggestion_executed: true, executed_actions: ['promote'] },
+      ],
+    });
+    expect(r.valued).toBe(false);
+    expect(r.value).toBeNull();
+    expect(r.units).toBe(10);
+    expect(r.lineCount).toBe(1);
   });
   it('carries the truncation flag and handles no data', () => {
-    expect(unplannedAgedStockValue({ lines: [], truncated: true })).toMatchObject({ value: 0, truncated: true });
-    expect(unplannedAgedStockValue(undefined)).toMatchObject({ value: 0, lineCount: 0, truncated: false });
+    expect(unplannedAgedStock({ lines: [], truncated: true, valuation })).toMatchObject({ truncated: true });
+    expect(unplannedAgedStock(undefined)).toMatchObject({ valued: false, value: null, lineCount: 0 });
   });
 });
 
-describe('calendar clash placeholder', () => {
-  it('is named, unrendered and carries no figure', () => {
-    expect(CALENDAR_CLASH_CARD.key).toBe('calendar_clashes');
-    expect(CALENDAR_CLASH_CARD.available).toBe(false);
-    expect(CALENDAR_CLASH_CARD).not.toHaveProperty('value');
+describe('calendar clash card', () => {
+  it('asks for clashes of promotions ending today or later', () => {
+    expect(calendarClashUrl('2026-11-19')).toBe('/api/v1/customer-calendar/clashes/summary?from=2026-11-19');
+  });
+  it('shows the exact clash count with the promotions and customers involved', () => {
+    expect(
+      clashCardFigure({ clash_count: 3, promotion_count: 2, customer_count: 2, from: '2026-11-19', to: null }),
+    ).toEqual({ kind: 'count', count: 3, promotions: 2, customers: 2 });
+  });
+  it('is a real zero when there are no clashes', () => {
+    expect(clashCardFigure({ clash_count: 0, promotion_count: 0, customer_count: 0, from: null, to: null })).toMatchObject({
+      kind: 'count',
+      count: 0,
+    });
+  });
+  it('is unavailable, not zero, when the calendar tables are not set up', () => {
+    expect(clashCardFigure({ data_unavailable: true, message: 'x' })).toEqual({ kind: 'unavailable', message: 'x' });
   });
 });

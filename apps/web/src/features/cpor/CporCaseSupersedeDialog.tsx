@@ -15,6 +15,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
+import { invalidateClashSummary } from '@/features/promotions-funding/calendarClashKeys';
 import { apiGet, apiPost } from '@/lib/api';
 
 type CaseOption = {
@@ -95,6 +96,7 @@ export function CporCaseSupersedeDialog({ open, onClose, caseId, caseCode, custo
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await invalidateClashSummary(qc);
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
       await onSuperseded?.();
       onClose();

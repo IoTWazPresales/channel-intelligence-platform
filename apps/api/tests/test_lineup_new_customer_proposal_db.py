@@ -165,43 +165,47 @@ async def test_customer_with_existing_rows_for_the_period_is_refused_with_409(se
 
 
 @pytest.mark.anyio
-async def test_previous_lineups_falls_back_to_master_three_most_recent_periods_excluding_superseded(
+async def test_previous_lineups_falls_back_to_master_three_quarters_strictly_before_the_requested(
     session,
 ):
     tag = secrets.token_hex(3)
     new = await _customer(session, tag, "new", reports=True)
     other = await _customer(session, tag, "other", reports=True)
-    old, mid, recent, newest, gone, cancelled = [await _product(session, tag, s) for s in "abcdef"]
-    await _case_with_lines(session, Q1, [(old.id, other.id)])  # fourth most recent: dropped
-    await _case_with_lines(session, Q2, [(mid.id, other.id)])
-    await _case_with_lines(session, Q3, [(recent.id, other.id)])
+    oldest, first, second, third, in_target, gone, cancelled = [
+        await _product(session, tag, s) for s in "abcdefg"
+    ]
+    await _case_with_lines(session, date(2025, 10, 1), [(oldest.id, other.id)])  # 4th back: dropped
+    await _case_with_lines(session, Q1, [(first.id, other.id)])
+    await _case_with_lines(session, Q2, [(second.id, other.id)])
+    await _case_with_lines(session, Q3, [(third.id, other.id)])
+    # The requested quarter (TARGET = Q4) never counts, even for other customers.
+    await _case_with_lines(session, Q4, [(in_target.id, other.id)])
+    newer = await _case_with_lines(session, Q3, [(third.id, other.id)])
     await _case_with_lines(
-        session, Q4, [(newest.id, other.id)]
-    )  # other customer, same quarter as the target
-    newer = await _case_with_lines(session, Q4, [(newest.id, other.id)])
-    await _case_with_lines(
-        session, Q4, [(gone.id, other.id)], status="superseded", superseded_by=newer.id
+        session, Q3, [(gone.id, other.id)], status="superseded", superseded_by=newer.id
     )
-    await _case_with_lines(session, Q4, [(cancelled.id, other.id)], status="cancelled")
+    await _case_with_lines(session, Q3, [(cancelled.id, other.id)], status="cancelled")
 
     out = await _proposal(session, new.id, "previous_lineups")
     assert out["fallback"] == "master"
-    assert out["periods_used"] == ["2026-10-01", "2026-07-01", "2026-04-01"]
-    assert {ln["product_id"] for ln in out["lines"]} == {mid.id, recent.id, newest.id}
+    assert out["periods_used"] == ["2026-07-01", "2026-04-01", "2026-01-01"]
+    assert {ln["product_id"] for ln in out["lines"]} == {first.id, second.id, third.id}
     by_id = {ln["product_id"]: ln for ln in out["lines"]}
-    assert by_id[newest.id]["evidence"]["periods"] == ["2026-10-01"]
-    assert by_id[newest.id]["evidence"]["scope"] == "master"
+    assert by_id[third.id]["evidence"]["periods"] == ["2026-07-01"]
+    assert by_id[third.id]["evidence"]["scope"] == "master"
     assert "master" in out["basis"].lower()
 
 
 @pytest.mark.anyio
-async def test_previous_lineups_uses_the_customers_own_periods_when_it_has_rows(session):
+async def test_previous_lineups_uses_the_customers_own_earlier_periods_when_it_has_rows(session):
     tag = secrets.token_hex(3)
     cust = await _customer(session, tag, "own", reports=True)
     other = await _customer(session, tag, "other", reports=True)
-    own_a, own_b, master_only = [await _product(session, tag, s) for s in "xyz"]
+    own_a, own_b, own_later, master_only = [await _product(session, tag, s) for s in "wxyz"]
     await _case_with_lines(session, Q2, [(own_a.id, cust.id)])
     await _case_with_lines(session, Q3, [(own_b.id, cust.id)])
+    # After the requested quarter: never counts (a row in the quarter itself would be refused).
+    await _case_with_lines(session, date(2027, 1, 1), [(own_later.id, cust.id)])
     await _case_with_lines(session, Q3, [(master_only.id, other.id)])
 
     out = await _proposal(session, cust.id, "previous_lineups")
@@ -209,6 +213,20 @@ async def test_previous_lineups_uses_the_customers_own_periods_when_it_has_rows(
     assert out["periods_used"] == ["2026-07-01", "2026-04-01"]
     assert {ln["product_id"] for ln in out["lines"]} == {own_a.id, own_b.id}
     assert "own" in out["basis"].lower()
+
+
+@pytest.mark.anyio
+async def test_customer_whose_only_own_rows_are_not_earlier_falls_back_to_master(session):
+    tag = secrets.token_hex(3)
+    cust = await _customer(session, tag, "later", reports=True)
+    other = await _customer(session, tag, "other", reports=True)
+    later, master_prior = [await _product(session, tag, s) for s in "lm"]
+    await _case_with_lines(session, date(2027, 1, 1), [(later.id, cust.id)])
+    await _case_with_lines(session, Q3, [(master_prior.id, other.id)])
+
+    out = await _proposal(session, cust.id, "previous_lineups")
+    assert out["fallback"] == "master"
+    assert {ln["product_id"] for ln in out["lines"]} == {master_prior.id}
 
 
 @pytest.mark.anyio
@@ -254,6 +272,7 @@ async def test_approve_creates_the_ticked_lines_approved_with_audit_in_one_trans
     assert (
         case.commercial_status == "accepted"
         and case.accepted_by == "tester"
+        and case.accepted_at is not None
         and case.inferred_period_start == TARGET
     )
     lines = (

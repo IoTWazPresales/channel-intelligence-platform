@@ -1,37 +1,23 @@
 /**
- * Planner-specific headline cards (final wave (e)). Pure functions over data the planner already loads.
- * Nothing here invents a price or a cost: a card that has no API value says so (units, not money).
+ * Planner-specific headline cards (final wave (e)). Pure functions over what the API returns.
+ *
+ * Warren 2026-11-19: the cards show EXACT counts. Counts come from `GET /cpor/cases/counts` (current
+ * cases only, no page cap) and the aged-stock money value from the aged-stock API's `valuation`.
+ * Nothing here prices anything or invents a figure: a missing value is `null`, never zero.
  */
 
-export type PlannerCardCase = {
-  id: number;
-  case_code: string;
-  status: string;
-  window_start?: string | null;
-  /** Set when another case replaced this one (soft supersede: the status is left as it was). */
-  superseded_by_case_id?: number | null;
-};
-
-/** Statuses that are not a live commitment: never counted as "starting". */
-const NOT_STARTING = new Set(['cancelled', 'rejected']);
-
 /**
- * A case that has not been replaced. CIP supersedes softly: `superseded_by_case_id` points at the replacement and
- * the status is untouched, so the pointer (not a status) is what marks a retired case.
- */
-export function isCurrentCase(c: { superseded_by_case_id?: number | null }): boolean {
-  return c.superseded_by_case_id == null;
-}
-
-/**
- * True when a paged response carries every row the filter matched (`total` <= rows returned). The list's `total`
- * counts replaced and cancelled cases too, so it is a completeness test, not the figure to show.
+ * True when a paged response carries every row the filter matched (`total` <= rows returned). Used by the
+ * action queue's partial-view wording; the cards no longer read a page, they read the count endpoint.
  */
 export function pageIsComplete(page: { items: readonly unknown[]; total?: number | null } | undefined | null): boolean {
   return page != null && typeof page.total === 'number' && page.total <= page.items.length;
 }
 
 export const STARTING_WINDOW_DAYS = 28;
+
+/** Statuses that are not a live commitment: never counted as "starting". */
+export const STARTING_EXCLUDED_STATUSES = ['cancelled', 'rejected'] as const;
 
 const DAY_MS = 86_400_000;
 
@@ -55,29 +41,36 @@ export function addDaysIso(iso: string, days: number): string {
   return utcMsToIso(isoToUtcMs(iso) + days * DAY_MS);
 }
 
-export type CaseCardResult = { count: number; ids: number[] };
+// --- exact case counts ----------------------------------------------------------------------------
 
-/** Cases in the existing proposed (awaiting approval) status that have not been replaced. */
-export function awaitingApproval(cases: readonly PlannerCardCase[]): CaseCardResult {
-  const ids = cases.filter((c) => c.status === 'proposed' && isCurrentCase(c)).map((c) => c.id);
-  return { count: ids.length, ids };
+/** `GET /cpor/cases/counts`: current cases only (replaced cases left out), not capped by a page size. */
+export type CaseCounts = {
+  total_current: number;
+  status_counts_current: Record<string, number>;
+};
+
+export const BASE_COUNTS_URL = '/api/v1/cpor/cases/counts';
+
+/** Awaiting approval: current cases in Proposed. */
+export function awaitingCountUrl(): string {
+  return `${BASE_COUNTS_URL}?status=proposed`;
 }
 
-export type StartingResult = CaseCardResult & { from: string; to: string };
-
-/** Cases whose window_start is in [today, today + 28 days], excluding replaced cases and non-commitments. */
-export function startingNext4Weeks(cases: readonly PlannerCardCase[], today: Date | string = new Date()): StartingResult {
+/** Starting in 4 weeks: window starts in [today, today + 28 days], cancelled and rejected left out. */
+export function startingCountUrl(today: string): { url: string; from: string; to: string } {
   const from = todayIso(today);
   const to = addDaysIso(from, STARTING_WINDOW_DAYS);
-  const ids = cases
-    .filter((c) => {
-      if (!c.window_start || NOT_STARTING.has(c.status) || !isCurrentCase(c)) return false;
-      const s = c.window_start.slice(0, 10);
-      return s >= from && s <= to;
-    })
-    .map((c) => c.id);
-  return { count: ids.length, ids, from, to };
+  const excluded = STARTING_EXCLUDED_STATUSES.map((s) => `&exclude_status=${s}`).join('');
+  return { url: `${BASE_COUNTS_URL}?window_from=${from}&window_to=${to}${excluded}`, from, to };
 }
+
+/** Count of one status in a counts response; null until the response exists (never a made-up zero). */
+export function statusCount(counts: CaseCounts | undefined | null, status: string): number | null {
+  if (!counts) return null;
+  return counts.status_counts_current?.[status] ?? 0;
+}
+
+// --- aged stock (money value computed on the API) -------------------------------------------------
 
 export type AgedStockLineLike = {
   customer_id?: number;
@@ -87,30 +80,87 @@ export type AgedStockLineLike = {
   executed_actions?: string[];
 };
 
-export type AgedStockResponseLike = { lines?: AgedStockLineLike[]; truncated?: boolean };
+export type AgedValueBlock = {
+  lines: number;
+  units: number;
+  /** null when no listed line has a cost. */
+  value: number | null;
+  lines_with_cost: number;
+  lines_without_cost: number;
+  units_without_cost: number;
+};
+
+export type AgedStockResponseLike = {
+  lines?: AgedStockLineLike[];
+  truncated?: boolean;
+  valuation?: { cost_basis?: string; unplanned: AgedValueBlock; all?: AgedValueBlock };
+};
 
 export type UnplannedAgedStock = {
-  /** The aged-stock API returns stock on hand in units only, no money value. An API value is a follow-up. */
-  unit: 'units';
-  value: number;
+  /** False when the API sent no valuation (units only). */
+  valued: boolean;
+  /** ZAR value of lines that have a cost; null when none has. Computed on the API. */
+  value: number | null;
+  units: number;
   lineCount: number;
+  linesWithCost: number;
+  /** Lines with no cost: counted, never priced at zero. */
+  linesWithoutCost: number;
+  unitsWithoutCost: number;
   truncated: boolean;
 };
 
-/** Slow / unsold stock on lines with no open action (no executed action, flag false). Units, not money. */
-export function unplannedAgedStockValue(aged: AgedStockResponseLike | undefined | null): UnplannedAgedStock {
+/** Slow / unsold stock on lines with no open action. The value is the API's; the client never prices. */
+export function unplannedAgedStock(aged: AgedStockResponseLike | undefined | null): UnplannedAgedStock {
+  const truncated = Boolean(aged?.truncated);
+  const block = aged?.valuation?.unplanned;
+  if (block) {
+    return {
+      valued: true,
+      value: block.value,
+      units: block.units,
+      lineCount: block.lines,
+      linesWithCost: block.lines_with_cost,
+      linesWithoutCost: block.lines_without_cost,
+      unitsWithoutCost: block.units_without_cost,
+      truncated,
+    };
+  }
   const lines = (aged?.lines ?? []).filter((l) => !l.suggestion_executed && !(l.executed_actions?.length ?? 0));
-  const value = lines.reduce((n, l) => n + (Number(l.stock_on_hand) || 0), 0);
-  return { unit: 'units', value, lineCount: lines.length, truncated: Boolean(aged?.truncated) };
+  return {
+    valued: false,
+    value: null,
+    units: lines.reduce((n, l) => n + (Number(l.stock_on_hand) || 0), 0),
+    lineCount: lines.length,
+    linesWithCost: 0,
+    linesWithoutCost: 0,
+    unitsWithoutCost: 0,
+    truncated,
+  };
 }
 
-/**
- * Reserved place for the calendar-clash card. It needs the customer promotion calendar endpoint (lane (d)),
- * which is not merged yet. `available: false` means the surface renders nothing and never a placeholder figure.
- */
-export const CALENDAR_CLASH_CARD = {
-  key: 'calendar_clashes',
-  label: 'Calendar clashes',
-  available: false,
-  blockedBy: 'final-wave (d) customer promotion calendar endpoint',
-} as const;
+// --- calendar clashes -------------------------------------------------------------------------------
+
+/** `GET /customer-calendar/clashes/summary`; `data_unavailable` when the calendar migration is not applied. */
+export type CalendarClashSummary =
+  | { clash_count: number; promotion_count: number; customer_count: number; from: string | null; to: string | null }
+  | { data_unavailable: true; message?: string };
+
+/** Clashes of our open promotions that end today or later. */
+export function calendarClashUrl(today: string): string {
+  return `/api/v1/customer-calendar/clashes/summary?from=${todayIso(today)}`;
+}
+
+export type ClashCardFigure =
+  | { kind: 'count'; count: number; promotions: number; customers: number }
+  | { kind: 'unavailable'; message?: string };
+
+export function clashCardFigure(summary: CalendarClashSummary): ClashCardFigure {
+  if ('data_unavailable' in summary) return { kind: 'unavailable', message: summary.message };
+  return {
+    kind: 'count',
+    count: summary.clash_count,
+    promotions: summary.promotion_count,
+    customers: summary.customer_count,
+  };
+}

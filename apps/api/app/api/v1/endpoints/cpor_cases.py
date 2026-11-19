@@ -564,6 +564,111 @@ class SupersedeRestoreBody(BaseModel):
 # --- case CRUD ---------------------------------------------------------------
 
 
+def _apply_case_filters(
+    session: Session,
+    stmt: Any,
+    *,
+    status: str | None,
+    customer_id: int | None,
+    distributor_id: int | None,
+    product_id: int | None,
+    business_unit: str | None,
+    window_from: date | None,
+    window_to: date | None,
+    test_data: str | None,
+    q: str | None,
+    evidence_basis: str | None,
+) -> Any:
+    """The case-list filters, shared by the list and the exact-count endpoint so they cannot drift.
+
+    ``stmt`` must already join ``DimCustomer`` (the ``q`` filter reads the customer name and code).
+    """
+    mode = (test_data or "commercial").strip().lower()
+    if mode not in {"commercial", "only", "all"}:
+        raise HTTPException(status_code=400, detail="test_data must be commercial, only, or all")
+    if mode == "commercial":
+        stmt = stmt.where(where_commercial_intelligence())
+    elif mode == "only":
+        stmt = stmt.where(where_test_data_only())
+    if status:
+        if status not in CPOR_CASE_STATUS_SET:
+            raise HTTPException(status_code=400, detail=f"Unknown status={status}")
+        stmt = stmt.where(CporCase.status == status)
+    if customer_id is not None:
+        stmt = stmt.where(CporCase.customer_id == customer_id)
+    if distributor_id is not None:
+        stmt = stmt.where(
+            exists(
+                select(CporCaseLine.id).where(
+                    CporCaseLine.case_id == CporCase.id,
+                    CporCaseLine.distributor_id == distributor_id,
+                )
+            )
+        )
+    if product_id is not None:
+        stmt = stmt.where(
+            exists(
+                select(CporCaseLine.id).where(
+                    CporCaseLine.case_id == CporCase.id,
+                    CporCaseLine.product_id == product_id,
+                )
+            )
+        )
+    if business_unit and business_unit.strip():
+        bu_needle = f"%{business_unit.strip()}%"
+        stmt = stmt.where(
+            exists(
+                select(CporCaseLine.id)
+                .join(DimProduct, DimProduct.id == CporCaseLine.product_id)
+                .where(
+                    CporCaseLine.case_id == CporCase.id,
+                    or_(
+                        DimProduct.business_unit.ilike(bu_needle),
+                        DimProduct.product_line.ilike(bu_needle),
+                    ),
+                )
+            )
+        )
+    if window_from is not None:
+        stmt = stmt.where(CporCase.window_start >= window_from)
+    if window_to is not None:
+        stmt = stmt.where(CporCase.window_start <= window_to)
+    if q and q.strip():
+        needle = f"%{q.strip()}%"
+        stmt = stmt.where(
+            (CporCase.case_code.ilike(needle))
+            | (CporCase.case_name.ilike(needle))
+            | (DimCustomer.code.ilike(needle))
+            | (DimCustomer.name.ilike(needle))
+        )
+
+    if evidence_basis:
+        basis = evidence_basis.strip().lower()
+        if basis not in EVIDENCE_BASES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"evidence_basis must be one of: {sorted(EVIDENCE_BASES)}",
+            )
+        claim_sub = select(CporClaimEvidenceLine.case_id).distinct()
+        attested = load_source_attested_case_codes(session)
+        if basis == CLAIM_EVIDENCED:
+            stmt = stmt.where(CporCase.id.in_(claim_sub))
+        elif basis == SOURCE_ATTESTED:
+            if attested:
+                stmt = stmt.where(
+                    CporCase.case_code.in_(sorted(attested)),
+                    ~CporCase.id.in_(claim_sub),
+                )
+            else:
+                stmt = stmt.where(CporCase.id == -1)
+        else:
+            stmt = stmt.where(~CporCase.id.in_(claim_sub))
+            if attested:
+                stmt = stmt.where(~CporCase.case_code.in_(sorted(attested)))
+
+    return stmt
+
+
 @router.get("/cases")
 def list_cases(
     status: str | None = Query(default=None),
@@ -595,88 +700,20 @@ def list_cases(
             .where(where_tenant(CporCase.tenant_id, user))
             .order_by(CporCase.id.desc())
         )
-        mode = (test_data or "commercial").strip().lower()
-        if mode not in {"commercial", "only", "all"}:
-            raise HTTPException(status_code=400, detail="test_data must be commercial, only, or all")
-        if mode == "commercial":
-            stmt = stmt.where(where_commercial_intelligence())
-        elif mode == "only":
-            stmt = stmt.where(where_test_data_only())
-        if status:
-            if status not in CPOR_CASE_STATUS_SET:
-                raise HTTPException(status_code=400, detail=f"Unknown status={status}")
-            stmt = stmt.where(CporCase.status == status)
-        if customer_id is not None:
-            stmt = stmt.where(CporCase.customer_id == customer_id)
-        if distributor_id is not None:
-            stmt = stmt.where(
-                exists(
-                    select(CporCaseLine.id).where(
-                        CporCaseLine.case_id == CporCase.id,
-                        CporCaseLine.distributor_id == distributor_id,
-                    )
-                )
-            )
-        if product_id is not None:
-            stmt = stmt.where(
-                exists(
-                    select(CporCaseLine.id).where(
-                        CporCaseLine.case_id == CporCase.id,
-                        CporCaseLine.product_id == product_id,
-                    )
-                )
-            )
-        if business_unit and business_unit.strip():
-            bu_needle = f"%{business_unit.strip()}%"
-            stmt = stmt.where(
-                exists(
-                    select(CporCaseLine.id)
-                    .join(DimProduct, DimProduct.id == CporCaseLine.product_id)
-                    .where(
-                        CporCaseLine.case_id == CporCase.id,
-                        or_(
-                            DimProduct.business_unit.ilike(bu_needle),
-                            DimProduct.product_line.ilike(bu_needle),
-                        ),
-                    )
-                )
-            )
-        if window_from is not None:
-            stmt = stmt.where(CporCase.window_start >= window_from)
-        if window_to is not None:
-            stmt = stmt.where(CporCase.window_start <= window_to)
-        if q and q.strip():
-            needle = f"%{q.strip()}%"
-            stmt = stmt.where(
-                (CporCase.case_code.ilike(needle))
-                | (CporCase.case_name.ilike(needle))
-                | (DimCustomer.code.ilike(needle))
-                | (DimCustomer.name.ilike(needle))
-            )
-
-        if evidence_basis:
-            basis = evidence_basis.strip().lower()
-            if basis not in EVIDENCE_BASES:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"evidence_basis must be one of: {sorted(EVIDENCE_BASES)}",
-                )
-            claim_sub = select(CporClaimEvidenceLine.case_id).distinct()
-            attested = load_source_attested_case_codes(session)
-            if basis == CLAIM_EVIDENCED:
-                stmt = stmt.where(CporCase.id.in_(claim_sub))
-            elif basis == SOURCE_ATTESTED:
-                if attested:
-                    stmt = stmt.where(
-                        CporCase.case_code.in_(sorted(attested)),
-                        ~CporCase.id.in_(claim_sub),
-                    )
-                else:
-                    stmt = stmt.where(CporCase.id == -1)
-            else:
-                stmt = stmt.where(~CporCase.id.in_(claim_sub))
-                if attested:
-                    stmt = stmt.where(~CporCase.case_code.in_(sorted(attested)))
+        stmt = _apply_case_filters(
+            session,
+            stmt,
+            status=status,
+            customer_id=customer_id,
+            distributor_id=distributor_id,
+            product_id=product_id,
+            business_unit=business_unit,
+            window_from=window_from,
+            window_to=window_to,
+            test_data=test_data,
+            q=q,
+            evidence_basis=evidence_basis,
+        )
 
         paginate = page is not None and page_size is not None
         if paginate:
@@ -744,6 +781,62 @@ def list_cases(
                 "evidence_basis_counts": evidence_basis_counts(basis_by),
             }
         return out
+
+
+@router.get("/cases/counts")
+def count_cases(
+    status: str | None = Query(default=None),
+    exclude_status: list[str] = Query(
+        default=[],
+        description="Statuses to leave out (repeat the parameter), e.g. cancelled, rejected",
+    ),
+    customer_id: int | None = Query(default=None),
+    distributor_id: int | None = Query(default=None),
+    product_id: int | None = Query(default=None),
+    business_unit: str | None = Query(default=None, alias="bu"),
+    window_from: date | None = Query(default=None),
+    window_to: date | None = Query(default=None),
+    test_data: str | None = Query(default=None, description="commercial (default) | only | all"),
+    q: str | None = Query(default=None),
+    evidence_basis: str | None = Query(default=None),
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Exact count of CURRENT cases (``superseded_by_case_id`` null) for the planner cards.
+
+    Same tenant, fixture-case and filter rules as ``GET /cases`` (one shared helper). The list's
+    ``total`` and ``status_counts`` still include replaced cases; this endpoint does not, and it is
+    not capped by a page size. ``status_counts_current`` is the per-status split of the same set.
+    """
+    for excluded in exclude_status:
+        if excluded not in CPOR_CASE_STATUS_SET:
+            raise HTTPException(status_code=400, detail=f"Unknown exclude_status={excluded}")
+    with SessionLocal() as session:
+        stmt = (
+            select(CporCase.status, func.count())
+            .select_from(CporCase)
+            .join(DimCustomer, DimCustomer.id == CporCase.customer_id)
+            .where(where_tenant(CporCase.tenant_id, user))
+            .where(CporCase.superseded_by_case_id.is_(None))
+            .group_by(CporCase.status)
+        )
+        stmt = _apply_case_filters(
+            session,
+            stmt,
+            status=status,
+            customer_id=customer_id,
+            distributor_id=distributor_id,
+            product_id=product_id,
+            business_unit=business_unit,
+            window_from=window_from,
+            window_to=window_to,
+            test_data=test_data,
+            q=q,
+            evidence_basis=evidence_basis,
+        )
+        if exclude_status:
+            stmt = stmt.where(CporCase.status.notin_(exclude_status))
+        by_status = {str(st): int(n) for st, n in session.execute(stmt).all()}
+    return {"total_current": sum(by_status.values()), "status_counts_current": by_status}
 
 
 @router.post("/cases", status_code=201)
@@ -1959,12 +2052,17 @@ def cpor_aged_stock(
     customer_id: int | None = Query(default=None, ge=1),
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Slow and unsold lines. Reading this does not create a case."""
+    """Slow and unsold lines, each with a stock value where a cost exists, plus ``valuation``.
+
+    Value = units on hand x the customer's reported unit MAC (else unit cost), ex-VAT; lines with no
+    cost have no value and are counted in ``lines_without_cost``. Reading does not create a case.
+    """
     with SessionLocal() as session:
         return list_aged_stock(
             session,
             tenant_id=tenant_id_from_user(user),
             customer_id=customer_id,
+            with_value=True,
         )
 
 

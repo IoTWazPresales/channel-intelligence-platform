@@ -55,17 +55,19 @@ def open_case_windows(
     db: Session,
     tenant_id: str,
     *,
-    customer_id: int,
+    customer_id: int | None,
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> list[dict[str, Any]]:
+    """Open case windows; ``customer_id`` None reads every customer of the tenant."""
     stmt = select(CporCase).where(
         CporCase.tenant_id == tenant_id,
-        CporCase.customer_id == int(customer_id),
         CporCase.superseded_by_case_id.is_(None),
         CporCase.status.notin_(EXCLUDED_CASE_STATUSES),
         where_commercial_intelligence(),
     )
+    if customer_id is not None:
+        stmt = stmt.where(CporCase.customer_id == int(customer_id))
     if date_from is not None:
         stmt = stmt.where(CporCase.window_end >= date_from)
     if date_to is not None:
@@ -92,14 +94,14 @@ def calendar_events(
     db: Session,
     tenant_id: str,
     *,
-    customer_id: int,
+    customer_id: int | None,
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> list[dict[str, Any]]:
-    stmt = select(CustomerCalendarEvent).where(
-        CustomerCalendarEvent.tenant_id == tenant_id,
-        CustomerCalendarEvent.customer_id == int(customer_id),
-    )
+    """Calendar events; ``customer_id`` None reads every customer of the tenant."""
+    stmt = select(CustomerCalendarEvent).where(CustomerCalendarEvent.tenant_id == tenant_id)
+    if customer_id is not None:
+        stmt = stmt.where(CustomerCalendarEvent.customer_id == int(customer_id))
     if date_from is not None:
         stmt = stmt.where(CustomerCalendarEvent.end_date >= date_from)
     if date_to is not None:
@@ -177,4 +179,53 @@ def build_timeline(
             }
             for c in clashes
         ],
+    }
+
+
+def build_clash_summary(
+    db: Session,
+    tenant_id: str,
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict[str, Any]:
+    """Exact tenant-wide clash counts for the planner card (same windows, events, maths as above).
+
+    Customers outside the caller's account scope never count, as in the per-customer timeline.
+    ``clash_count`` is promotion/event pairs; ``promotion_count`` and ``customer_count`` are the
+    distinct promotions and customers involved.
+    """
+    bind_calendar_tenant(db, tenant_id)
+    from app.core.my_accounts import apply_account_predicate
+
+    allowed = {
+        int(cid)
+        for cid in db.scalars(
+            apply_account_predicate(
+                select(DimCustomer.id).where(DimCustomer.tenant_id == tenant_id),
+                DimCustomer.id,
+            )
+        ).all()
+    }
+    promos = [
+        p
+        for p in open_case_windows(
+            db, tenant_id, customer_id=None, date_from=date_from, date_to=date_to
+        )
+        if int(p["customer_id"]) in allowed
+    ]
+    events = [
+        e
+        for e in calendar_events(
+            db, tenant_id, customer_id=None, date_from=date_from, date_to=date_to
+        )
+        if int(e["customer_id"]) in allowed
+    ]
+    clashes = compute_clashes(promos, events)
+    return {
+        "from": _iso(date_from),
+        "to": _iso(date_to),
+        "clash_count": len(clashes),
+        "promotion_count": len({c["case_id"] for c in clashes}),
+        "customer_count": len({c["customer_id"] for c in clashes}),
     }

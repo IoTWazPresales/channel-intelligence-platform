@@ -18,6 +18,7 @@ from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
 from app.models.listing_capture import CustomerListing
+from app.services.customer_reporting import reporting_customer_clauses
 from app.services.imports.tenant_mapping_scope import effective_tenant_id, tenant_scope_predicate
 from app.utils.json_safe import to_jsonable
 
@@ -373,7 +374,9 @@ def advance_cst_report_slots(
     as_of: date | None = None,
     now: datetime | None = None,
 ) -> dict[str, int]:
-    """Create/advance due→late→missing slots for key-account customers with reports_expected.
+    """Create/advance due→late→missing slots for key-account reporting customers.
+
+    Reporting = ``reports_expected`` true and not merged away (``app.services.customer_reporting``).
 
     Timing (spec §10.4.4.5): slot for prior Mon–Sun week is due Monday; late Tuesday;
     missing thereafter. Notification wiring is left to callers / activity feed.
@@ -386,7 +389,10 @@ def advance_cst_report_slots(
 
     configs = list(
         session.scalars(
-            select(CustomerReportConfig).where(CustomerReportConfig.reports_expected.is_(True))
+            # Shared definition (flag true, not merged away); the key-account rule below stays.
+            select(CustomerReportConfig)
+            .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
+            .where(*reporting_customer_clauses())
         ).all()
     )
     created = advanced_late = advanced_missing = 0

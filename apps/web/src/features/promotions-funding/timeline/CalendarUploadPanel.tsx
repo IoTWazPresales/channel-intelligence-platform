@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ImportFileUploadZone } from '@/app/(app)/admin/imports/ImportFileUploadZone';
 import { CanonicalColumnMappingPanel } from '@/features/import-mapping/CanonicalColumnMappingPanel';
 import { apiDelete, apiGet, apiPost, apiPostFormData, apiPut } from '@/lib/api';
+import { invalidateClashSummary } from '../calendarClashKeys';
 import { applySelections, selectionProblems, selectionsFor } from './calendarMapping';
 import type { CalendarKind, CalendarPreview, CalendarProfile } from './types';
 
@@ -126,6 +127,7 @@ function CalendarUploadEditor({ customerId, onApplied, profile, onSelect }: Prop
         const out = await apiPostFormData<{ inserted: number; replaced: number }>(`${ROOT}/upload/apply`, body);
         setPreview(null); setMessage(`Applied ${out.inserted} events; replaced ${out.replaced}.`); onApplied();
         await qc.invalidateQueries({ queryKey: ['customer-calendar', 'timeline'] });
+        await invalidateClashSummary(qc);
       })}>Apply calendar</Button>
     </Stack>
     {problems.map(p => <Alert key={p} severity="error">{p}</Alert>)}

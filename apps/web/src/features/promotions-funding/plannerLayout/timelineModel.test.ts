@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { barGeometry, buildTimeline, monthTicks } from './timelineModel';
+import {
+  barGeometry,
+  buildTimeline,
+  monthTicks,
+  orderByCustomer,
+  statusLane,
+  weekTicks,
+} from './timelineModel';
 
 const row = (id: number, s: string | null, e: string | null, status = 'approved') => ({
   id,
@@ -50,5 +57,47 @@ describe('monthTicks', () => {
     expect(ticks.map((t) => t.label)).toEqual(['Nov 2026', 'Dec 2026']);
     expect(ticks[0].leftPct).toBe(0);
     expect(ticks[1].leftPct).toBeCloseTo((30 / 61) * 100, 5);
+  });
+});
+
+describe('weekTicks', () => {
+  it('ticks every Monday on the axis, with the day and month as the label', () => {
+    // 2026-11-01 is a Sunday, so the first Monday is the 2nd.
+    const ticks = weekTicks('2026-11-01', '2026-11-30');
+    expect(ticks.map((t) => t.label)).toEqual(['2 Nov', '9 Nov', '16 Nov', '23 Nov', '30 Nov']);
+    expect(ticks[0].leftPct).toBeCloseTo((1 / 30) * 100, 5);
+    expect(ticks[4].leftPct).toBeCloseTo((29 / 30) * 100, 5);
+  });
+});
+
+describe('statusLane', () => {
+  it('maps case statuses onto the four mock-up lanes (Live, Approved, Planned, Ended)', () => {
+    expect(statusLane('active')).toEqual({ key: 'live', label: 'Live' });
+    expect(statusLane('approved')).toEqual({ key: 'approved', label: 'Approved' });
+    for (const s of ['draft', 'proposed', 'rejected']) expect(statusLane(s)).toEqual({ key: 'planned', label: 'Planned' });
+    for (const s of ['ended', 'settled']) expect(statusLane(s)).toEqual({ key: 'ended', label: 'Ended' });
+    expect(statusLane('cancelled')).toEqual({ key: 'cancelled', label: 'Cancelled' });
+  });
+  it('never hides an unknown status: it keeps its own name', () => {
+    expect(statusLane('on_hold')).toEqual({ key: 'other', label: 'on_hold' });
+  });
+});
+
+describe('orderByCustomer', () => {
+  const r = (id: number, name: string | null, s: string) => ({ ...row(id, s, '2026-12-31'), customer_name: name });
+  it('groups bars by customer (name, case-insensitive), earliest start first, and marks the first row of each', () => {
+    const t = buildTimeline(
+      [r(1, 'beta', '2026-11-20'), r(2, 'Alpha', '2026-12-01'), r(3, 'Beta', '2026-11-05'), r(4, 'Alpha', '2026-11-02')],
+      '2026-11-18',
+    );
+    const ordered = orderByCustomer(t.bars);
+    expect(ordered.map((o) => o.bar.id)).toEqual([4, 2, 3, 1]);
+    expect(ordered.map((o) => o.firstOfCustomer)).toEqual([true, false, true, false]);
+  });
+  it('puts cases without a customer name last, each its own group', () => {
+    const t = buildTimeline([r(1, null, '2026-11-02'), r(2, 'Alpha', '2026-11-09')], '2026-11-18');
+    const ordered = orderByCustomer(t.bars);
+    expect(ordered.map((o) => o.bar.id)).toEqual([2, 1]);
+    expect(ordered[1].firstOfCustomer).toBe(true);
   });
 });

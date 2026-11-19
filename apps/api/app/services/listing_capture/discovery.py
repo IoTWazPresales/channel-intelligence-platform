@@ -1,6 +1,7 @@
 """Find catalogue product pages for reporting customers and propose listings.
 
-A reporting customer is ``customer_report_config.reports_expected``. The site comes from
+A reporting customer is ``customer_report_config.reports_expected`` and not merged away
+(``app.services.customer_reporting``). The site comes from
 that customer's ``feed_profile_json.listing_seed`` (a marketplace key, site patterns, or
 a domain / origin URL). Nothing here names a retailer.
 
@@ -53,6 +54,7 @@ from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing
 from app.models.listing_link import LINK_CONFIRMED, LINK_REJECTED, QUEUE_OPEN, ListingLink, ListingLinkQueue
 from app.models.listing_site import ListingSite
+from app.services.customer_reporting import reporting_customer_clauses
 from app.services.listing_capture.adapters import configured_adapter
 from app.services.listing_capture.adapters.html_page import ADAPTER_KEY as HTML_PAGE_ADAPTER
 from app.services.listing_capture.adapters.html_page import parse as parse_html
@@ -903,7 +905,7 @@ def _reporting_customers(session: Session, tenant_id: str) -> list[tuple[Custome
     rows = session.execute(
         select(CustomerReportConfig, DimCustomer)
         .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
-        .where(CustomerReportConfig.reports_expected.is_(True), DimCustomer.tenant_id == tenant_id)
+        .where(*reporting_customer_clauses(), DimCustomer.tenant_id == tenant_id)
         .order_by(DimCustomer.id)
     ).all()
     return [(cfg, cust) for cfg, cust in rows if isinstance(cust, DimCustomer)]
@@ -915,7 +917,7 @@ def _tenant_ids(session: Session, tenant_id: str | None) -> list[str]:
     rows = session.scalars(
         select(DimCustomer.tenant_id)
         .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
-        .where(CustomerReportConfig.reports_expected.is_(True))
+        .where(*reporting_customer_clauses())
         .distinct()
     ).all()
     return sorted({str(row) for row in rows if row})

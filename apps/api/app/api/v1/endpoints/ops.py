@@ -16,6 +16,7 @@ from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
 from app.models.ingestion import ImportJob
+from app.services.customer_reporting import reporting_customer_clauses
 from app.services.ops_health import (
     REPORT_RECEIPT_WINDOW_DAYS,
     file_health,
@@ -104,12 +105,13 @@ async def ops_overview(
         await db.execute(
             select(CustomerCstReportSlot.status, func.count())
             .join(DimCustomer, DimCustomer.id == CustomerCstReportSlot.customer_id)
-            # Only customers whose reports are expected count, as for the other report figures:
+            # Only reporting customers count (flag true and not merged away, the shared
+            # definition in app.services.customer_reporting), as for the other report figures:
             # a disabled customer's retained slot must not keep the card late or missing
             # (Codex review of PR #110, round 2).
             .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
             .where(where_tenant(DimCustomer.tenant_id, user))
-            .where(CustomerReportConfig.reports_expected.is_(True))
+            .where(*reporting_customer_clauses())
             .where(CustomerCstReportSlot.status.in_(("due", "late", "missing")))
             .group_by(CustomerCstReportSlot.status)
         )
@@ -120,7 +122,7 @@ async def ops_overview(
         .join(DimCustomer, DimCustomer.id == CustomerCstReportSlot.customer_id)
         .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
         .where(where_tenant(DimCustomer.tenant_id, user))
-        .where(CustomerReportConfig.reports_expected.is_(True))
+        .where(*reporting_customer_clauses())
         .where(CustomerCstReportSlot.status == "received")
     )
     expected_customers = await db.scalar(
@@ -128,7 +130,7 @@ async def ops_overview(
         .select_from(CustomerReportConfig)
         .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
         .where(where_tenant(DimCustomer.tenant_id, user))
-        .where(CustomerReportConfig.reports_expected.is_(True))
+        .where(*reporting_customer_clauses())
     ) or 0
     # Match cst_d1.advance_cst_report_slots: the prior Mon-Sun week is due this Monday.
     # A previous week's slot, a future slot, or "received" without a valid receipt cannot prove
@@ -156,7 +158,7 @@ async def ops_overview(
         .select_from(CustomerReportConfig)
         .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
         .where(where_tenant(DimCustomer.tenant_id, user))
-        .where(CustomerReportConfig.reports_expected.is_(True))
+        .where(*reporting_customer_clauses())
         .where(~current_slot)
     ) or 0
     health = file_health(state_root(get_settings().cip_ops_state_dir or None), now=now)

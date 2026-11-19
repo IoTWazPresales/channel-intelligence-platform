@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimChannel, DimCustomer, DimProduct
 from app.models.lineup import FactLineupPlanItem
+from app.services.lineup.new_customer_proposal import reporting_customer_ids
+from app.services.lineup.reporting_gate import REASON_NOT_REPORTING, REFUSAL_MESSAGE
 
 _LINEUP_APPROVAL = frozenset(
     {"draft", "pending_approval", "submitted", "approved", "rejected"},
@@ -90,8 +92,11 @@ async def bulk_upsert_lineup_items(
     prod_res = await db.execute(select(DimProduct))
     products_by_sku = {p.sku.strip().lower(): p for p in prod_res.scalars().all()}
 
+    # One reporting-only rule for every line-up write from a file (Warren 2026-11-19).
+    reporting_ids = await reporting_customer_ids(db)
+
     results: list[dict[str, Any]] = []
-    inserted = updated = skipped = 0
+    inserted = updated = skipped = refused = 0
 
     for row_index, raw in dedupe_lineup_input_rows(rows):
         errs: list[str] = []
@@ -171,6 +176,17 @@ async def bulk_upsert_lineup_items(
             continue
 
         assert cust is not None and prod is not None and period_start is not None
+        if int(cust.id) not in reporting_ids:
+            refused += 1
+            results.append(
+                {
+                    "row_index": row_index,
+                    "status": "refused",
+                    "reason": REASON_NOT_REPORTING,
+                    "errors": [REFUSAL_MESSAGE],
+                }
+            )
+            continue
 
         existing = await _find_existing(
             db,
@@ -253,6 +269,7 @@ async def bulk_upsert_lineup_items(
         "inserted": inserted,
         "updated": updated,
         "skipped": skipped,
+        "refused": refused,
         "errors": sum(1 for r in results if r["status"] == "error"),
         "results": results,
     }

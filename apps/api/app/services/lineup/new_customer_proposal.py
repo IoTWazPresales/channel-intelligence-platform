@@ -10,10 +10,12 @@ Two seed sources (the user picks one, Warren 2026-11-18):
     ``missing_pm_bottom`` flag use).
 
 ``previous_lineups``
-    The distinct SKUs of the 3 most recent line-up periods. If the customer has line-up rows of its
-    own, those are the periods used (``customer_own``). Otherwise the master line-up's 3 most
-    recent periods across all customers are used (``master``). Superseded and cancelled cases and
-    superseded rows are excluded, using the same filters as every other line-up consumer.
+    The distinct SKUs of the 3 most recent line-up quarters strictly BEFORE the requested quarter
+    (Warren 2026-11-19: the requested quarter itself never counts). If the customer has line-up rows
+    of its own before that quarter, those are the periods used (``customer_own``). Otherwise the
+    master line-up's 3 most recent earlier quarters across all customers are used (``master``).
+    Superseded and cancelled cases and superseded rows are excluded, using the same filters as
+    every other line-up consumer.
 
 Only reporting customers qualify. "Reporting" has the same meaning as in listing discovery and the
 CST upload: ``customer_report_config.reports_expected`` is true. A customer with no config row is
@@ -51,6 +53,11 @@ from app.services.commercial_planner.lineup_period_canonical import (
     display_period_label_from_period_start,
     quarter_bounds_from_period_start,
 )
+from app.services.customer_reporting import (
+    WHERE_THE_FLAG_IS_SET,
+    reporting_customer_clauses,
+    reporting_customer_ids_select,
+)
 
 SOURCE_PM_BOTTOM_COST = "pm_bottom_cost"
 SOURCE_PREVIOUS_LINEUPS = "previous_lineups"
@@ -66,13 +73,15 @@ BASIS_TEXT = {
         "Active master-catalogue items that have a PM bottom cost. Each line shows that cost."
     ),
     FALLBACK_CUSTOMER_OWN: (
-        "The distinct SKUs from this customer's own {n} most recent line-up periods "
-        "(superseded and cancelled line-ups excluded)."
+        "The distinct SKUs from this customer's own {n} most recent line-up quarters before the "
+        "requested quarter (the requested quarter never counts; superseded and cancelled "
+        "line-ups excluded)."
     ),
     FALLBACK_MASTER: (
-        "This customer has no line-up rows of its own, so the distinct SKUs from the master "
-        "line-up's {n} most recent periods across all customers are used "
-        "(superseded and cancelled line-ups excluded)."
+        "This customer has no line-up rows of its own before the requested quarter, so the "
+        "distinct SKUs from the master line-up's {n} most recent quarters before it, across all "
+        "customers, are used (the requested quarter never counts; superseded and cancelled "
+        "line-ups excluded)."
     ),
 }
 
@@ -120,12 +129,12 @@ def _quarter_start(d: date) -> date:
 
 
 def pick_recent_quarters(
-    periods: Iterable[date | None], *, up_to: date, n: int = PREVIOUS_PERIOD_COUNT
+    periods: Iterable[date | None], *, before: date, n: int = PREVIOUS_PERIOD_COUNT
 ) -> list[date]:
-    """Distinct calendar-quarter starts, newest first, none later than ``up_to``'s quarter."""
-    ceiling = _quarter_start(up_to)
+    """Distinct calendar-quarter starts, newest first, strictly before ``before``'s quarter."""
+    ceiling = _quarter_start(before)
     quarters = {_quarter_start(p) for p in periods if p is not None}
-    return sorted((q for q in quarters if q <= ceiling), reverse=True)[:n]
+    return sorted((q for q in quarters if q < ceiling), reverse=True)[:n]
 
 
 def _rows_in(
@@ -146,16 +155,16 @@ def choose_previous_lineup_scope(
     own_rows: Iterable[tuple[int, date | None]],
     master_rows: Iterable[tuple[int, date | None]],
     *,
-    up_to: date,
+    before: date,
     n: int = PREVIOUS_PERIOD_COUNT,
 ) -> SeedScope:
-    """Own history when the customer has any (at or before the target period), else master."""
+    """Own history when the customer has any before the requested quarter, else master's."""
     own_rows = list(own_rows)
-    own_periods = pick_recent_quarters((p for _, p in own_rows), up_to=up_to, n=n)
+    own_periods = pick_recent_quarters((p for _, p in own_rows), before=before, n=n)
     if own_periods:
         return SeedScope(FALLBACK_CUSTOMER_OWN, own_periods, _rows_in(own_rows, own_periods))
     master_rows = list(master_rows)
-    master_periods = pick_recent_quarters((p for _, p in master_rows), up_to=up_to, n=n)
+    master_periods = pick_recent_quarters((p for _, p in master_rows), before=before, n=n)
     return SeedScope(FALLBACK_MASTER, master_periods, _rows_in(master_rows, master_periods))
 
 
@@ -240,28 +249,22 @@ def validate_selection(proposed_ids: Iterable[int], selected_ids: Iterable[int])
 
 
 def ensure_reporting_customer(db: Session, customer_id: int) -> None:
-    """Same meaning as listing discovery: ``customer_report_config.reports_expected`` is true."""
-    flag = db.scalar(
-        select(CustomerReportConfig.reports_expected).where(
-            CustomerReportConfig.customer_id == customer_id
-        )
+    """The shared definition (``customer_reporting``): reports expected on, not merged away."""
+    found = db.scalar(
+        reporting_customer_ids_select().where(DimCustomer.id == customer_id)
     )
-    if not flag:
+    if not found:
         raise ProposalError(
             409,
             "customer_not_reporting",
-            "Line-ups are only built for reporting customers (reports expected). "
-            "Mark this customer as reporting first.",
+            "Line-ups are only built for reporting customers. Mark this customer as reporting "
+            f"first ({WHERE_THE_FLAG_IS_SET}).",
         )
 
 
 async def reporting_customer_ids(db: AsyncSession) -> set[int]:
-    """Customers whose reports are expected (the reporting-only gate for line-up pulls)."""
-    rows = await db.execute(
-        select(CustomerReportConfig.customer_id).where(
-            CustomerReportConfig.reports_expected.is_(True)
-        )
-    )
+    """Reporting customers (the shared definition): the reporting-only gate for line-up writes."""
+    rows = await db.execute(reporting_customer_ids_select())
     return {int(r) for r in rows.scalars().all()}
 
 
@@ -270,10 +273,7 @@ def list_reporting_customers(db: Session) -> list[dict[str, Any]]:
     rows = db.execute(
         select(DimCustomer.id, DimCustomer.name)
         .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
-        .where(
-            CustomerReportConfig.reports_expected.is_(True),
-            DimCustomer.merged_into_customer_id.is_(None),
-        )
+        .where(*reporting_customer_clauses())
         .order_by(func.lower(DimCustomer.name), DimCustomer.id)
     ).all()
     return [{"id": int(cid), "name": name} for cid, name in rows]
@@ -371,7 +371,8 @@ def build_proposal(
         lines = pm_bottom_cost_lines((p, cost, cur) for p, cost, cur in rows)
         basis = BASIS_TEXT[SOURCE_PM_BOTTOM_COST]
     else:
-        ceiling_exclusive = quarter_bounds_from_period_start(period_start)[1]
+        # Strictly before the requested quarter: its own rows (and any later ones) never count.
+        ceiling_exclusive = quarter_bounds_from_period_start(period_start)[0]
         own = _lineup_product_periods(
             db, tenant_id=tenant_id, ceiling_exclusive=ceiling_exclusive, customer_id=customer_id
         )
@@ -382,7 +383,7 @@ def build_proposal(
                 db, tenant_id=tenant_id, ceiling_exclusive=ceiling_exclusive, customer_id=None
             )
         )
-        scope = choose_previous_lineup_scope(own, master, up_to=period_start, n=n)
+        scope = choose_previous_lineup_scope(own, master, before=period_start, n=n)
         ids = sorted({pid for pid, _ in scope.rows})
         products: dict[int, Any] = {}
         if ids:

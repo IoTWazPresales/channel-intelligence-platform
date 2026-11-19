@@ -111,6 +111,26 @@ def carry_case_po_links_on_supersession(
     }
 
 
+REASON_REPLACEMENT_HAS_NO_ELIGIBLE_ROWS = "replacement_has_no_eligible_rows"
+
+
+def decide_replacement_supersession(
+    *, eligible_line_count: int, refused_count: int
+) -> dict[str, Any]:
+    """Whether an import that replaces an existing case may retire it (B1, PR #122 round 1).
+
+    The replacement must keep at least one row (not refused by the reporting gate, not empty);
+    otherwise the existing line-up stays current with its PO links and the reason is reported.
+    """
+    if int(eligible_line_count) > 0:
+        return {"supersede": True, "reason": None, "refused_count": int(refused_count)}
+    return {
+        "supersede": False,
+        "reason": REASON_REPLACEMENT_HAS_NO_ELIGIBLE_ROWS,
+        "refused_count": int(refused_count),
+    }
+
+
 def soft_supersede_lineup_case(
     db: Session,
     *,

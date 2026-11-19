@@ -44,6 +44,8 @@ def run_lineup_case_parse_sync(
                 "unresolved_products": result.unresolved_products,
                 "line_count": result.line_count,
                 "warnings": result.warnings,
+                "refused_count": result.refused_count,
+                "refused_rows": result.refused_rows,
             }
 
     return asyncio.run(_run())

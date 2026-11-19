@@ -32,48 +32,61 @@ Q1, Q2, Q3, Q4, Q5 = (
 )
 
 
-# --- period selection -------------------------------------------------------------------------
+# --- period selection (Warren 2026-11-19: strictly BEFORE the requested quarter) -----------------
 
 
-def test_recent_quarters_are_distinct_newest_first_capped_at_three_and_not_after_the_target():
+def test_recent_quarters_are_distinct_newest_first_capped_at_three_and_strictly_before_the_target():
     periods = [date(2026, 1, 15), date(2026, 2, 1), Q2, Q3, Q4, Q5, None]
-    # Dates normalise to their calendar quarter; the target quarter is Q4 2026, so Q5 is later.
-    assert svc.pick_recent_quarters(periods, up_to=date(2026, 11, 20)) == [Q4, Q3, Q2]
+    # Dates normalise to their calendar quarter. The target quarter is Q4 2026: Q4 itself and Q5
+    # are both excluded, so the three newest earlier quarters are Q3, Q2 and Q1.
+    assert svc.pick_recent_quarters(periods, before=date(2026, 11, 20)) == [Q3, Q2, Q1]
+
+
+def test_the_requested_quarter_never_counts():
+    assert svc.pick_recent_quarters([Q4], before=Q4) == []
+    assert svc.pick_recent_quarters([Q4, date(2026, 12, 31)], before=date(2026, 10, 15)) == []
 
 
 def test_recent_quarters_fewer_than_three_returns_what_exists():
-    assert svc.pick_recent_quarters([Q1], up_to=Q4) == [Q1]
-    assert svc.pick_recent_quarters([], up_to=Q4) == []
+    assert svc.pick_recent_quarters([Q1], before=Q4) == [Q1]
+    assert svc.pick_recent_quarters([], before=Q4) == []
 
 
 # --- customer_own vs master fallback ------------------------------------------------------------
 
 
-def test_customer_with_own_rows_uses_only_own_three_most_recent_periods():
-    own = [(1, Q1), (2, Q2), (3, Q3), (4, Q4)]  # four periods: oldest (product 1) drops out
-    master = [(90, Q4), (91, Q3)]
-    scope = svc.choose_previous_lineup_scope(own, master, up_to=Q4)
+def test_customer_with_own_rows_uses_only_own_three_most_recent_earlier_periods():
+    own = [(1, Q1), (2, Q2), (3, Q3), (4, Q4)]  # Q4 is the requested quarter: never counts
+    master = [(90, Q3), (91, Q2)]
+    scope = svc.choose_previous_lineup_scope(own, master, before=Q4)
     assert scope.fallback == FALLBACK_CUSTOMER_OWN
-    assert scope.periods == [Q4, Q3, Q2]
-    assert sorted({pid for pid, _ in scope.rows}) == [2, 3, 4]
+    assert scope.periods == [Q3, Q2, Q1]
+    assert sorted({pid for pid, _ in scope.rows}) == [1, 2, 3]
 
 
-def test_customer_without_own_rows_falls_back_to_master_three_most_recent_periods():
+def test_customer_without_own_rows_falls_back_to_master_three_most_recent_earlier_periods():
     master = [(10, Q1), (11, Q2), (12, Q3), (13, Q4), (13, Q3)]
-    scope = svc.choose_previous_lineup_scope([], master, up_to=Q4)
+    scope = svc.choose_previous_lineup_scope([], master, before=Q5)
     assert scope.fallback == FALLBACK_MASTER
     assert scope.periods == [Q4, Q3, Q2]
     assert sorted({pid for pid, _ in scope.rows}) == [11, 12, 13]
 
 
-def test_own_rows_only_after_the_target_period_do_not_count_as_own_history():
-    scope = svc.choose_previous_lineup_scope([(1, Q5)], [(10, Q3)], up_to=Q4)
+def test_master_rows_in_the_requested_quarter_do_not_count():
+    scope = svc.choose_previous_lineup_scope([], [(10, Q3), (13, Q4)], before=Q4)
+    assert scope.fallback == FALLBACK_MASTER
+    assert scope.periods == [Q3]
+    assert sorted({pid for pid, _ in scope.rows}) == [10]
+
+
+def test_own_rows_only_in_or_after_the_target_period_do_not_count_as_own_history():
+    scope = svc.choose_previous_lineup_scope([(1, Q4), (2, Q5)], [(10, Q3)], before=Q4)
     assert scope.fallback == FALLBACK_MASTER
     assert scope.periods == [Q3]
 
 
 def test_no_rows_anywhere_gives_an_empty_master_scope():
-    scope = svc.choose_previous_lineup_scope([], [], up_to=Q4)
+    scope = svc.choose_previous_lineup_scope([], [], before=Q4)
     assert scope.fallback == FALLBACK_MASTER
     assert scope.periods == []
     assert scope.rows == []
@@ -91,22 +104,22 @@ def _product(
 
 
 def test_previous_lineup_lines_are_distinct_per_product_with_the_periods_as_evidence():
-    scope = svc.choose_previous_lineup_scope([], [(5, Q3), (5, Q4), (6, Q3)], up_to=Q4)
+    scope = svc.choose_previous_lineup_scope([], [(5, Q2), (5, Q3), (6, Q2)], before=Q4)
     lines = svc.previous_lineup_lines(
         scope, {5: _product(5, "S5", marketing="Five"), 6: _product(6, "S6")}
     )
     assert [ln.product_id for ln in lines] == [5, 6] or [ln.product_id for ln in lines] == [6, 5]
     by_id = {ln.product_id: ln for ln in lines}
     assert by_id[5].seed_source == SOURCE_PREVIOUS_LINEUPS
-    assert by_id[5].evidence["periods"] == ["2026-10-01", "2026-07-01"]
-    assert by_id[6].evidence["periods"] == ["2026-07-01"]
+    assert by_id[5].evidence["periods"] == ["2026-07-01", "2026-04-01"]
+    assert by_id[6].evidence["periods"] == ["2026-04-01"]
     assert by_id[5].label == "Five"
     assert by_id[6].label == "Name"  # falls back to the master name
     assert len({ln.product_id for ln in lines}) == len(lines)
 
 
 def test_previous_lineup_lines_drop_products_that_are_not_in_the_catalogue_set():
-    scope = svc.choose_previous_lineup_scope([], [(5, Q4), (404, Q4)], up_to=Q4)
+    scope = svc.choose_previous_lineup_scope([], [(5, Q3), (404, Q3)], before=Q4)
     lines = svc.previous_lineup_lines(scope, {5: _product(5, "S5")})
     assert [ln.product_id for ln in lines] == [5]
 
@@ -241,6 +254,56 @@ def test_write_for_an_unknown_customer_is_refused_before_any_lock(monkeypatch):
             actor=None,
         )
     assert err.value.status_code == 404 and calls == []
+
+
+# --- the approved case starts accepted (Warren 2026-11-19) ---
+
+
+class _CollectingSync(_RecordingSync):
+    def __init__(self, calls: list[Any]) -> None:
+        super().__init__(calls)
+        self.added: list[Any] = []
+        self._next_id = 100
+
+    def add(self, obj: Any) -> None:
+        self.added.append(obj)
+
+    def flush(self) -> None:
+        for obj in self.added:
+            if getattr(obj, "id", None) is None:
+                obj.id = self._next_id
+                self._next_id += 1
+
+
+def test_an_approved_new_customer_lineup_creates_its_master_case_as_accepted(monkeypatch):
+    from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+    from app.services import budget_ledger
+
+    proposal = {
+        "period_label": "26Q4",
+        "fallback": None,
+        "periods_used": [],
+        "lines": [{"product_id": 3, "sku": "S3"}],
+    }
+    monkeypatch.setattr(svc, "build_proposal", lambda _db, **_kw: proposal)
+    monkeypatch.setattr(budget_ledger, "apply_lineup_approval", lambda *_a, **_k: None)
+    sync = _CollectingSync([])
+    out = svc.write_new_customer_lineup(
+        sync,  # type: ignore[arg-type]
+        customer_id=7,
+        source=SOURCE_PM_BOTTOM_COST,
+        period_start=date(2026, 11, 20),
+        product_ids=[3],
+        actor="approver",
+    )
+    [case] = [o for o in sync.added if isinstance(o, CommercialLineupCase)]
+    assert (
+        case.commercial_status == "accepted"
+    )  # never pending_review: the on-screen approval accepts it
+    assert case.accepted_by == "approver" and case.accepted_at is not None
+    assert case.inferred_period_start == Q4
+    assert [ln.product_id for ln in sync.added if isinstance(ln, CommercialLineupLine)] == [3]
+    assert out["commercial_case_id"] == case.id
 
 
 # --- endpoint wiring (service faked)  ---

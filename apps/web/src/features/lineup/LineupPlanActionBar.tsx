@@ -98,6 +98,16 @@ export function LineupPlanActionBar() {
         </Button>
         <Button
           size="small"
+          component="a"
+          href="/lineup/new-customer"
+          data-testid="lineup-new-customer-link"
+          sx={{ textTransform: 'none', borderColor: 'divider', color: 'text.secondary' }}
+          variant="outlined"
+        >
+          New customer line-up
+        </Button>
+        <Button
+          size="small"
           data-testid="lineup-net-export"
           disabled={exporting}
           onClick={() => {

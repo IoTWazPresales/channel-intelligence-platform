@@ -18,7 +18,6 @@ from app.services.commercial_planner.lineup_bulk_backfill_preview import (
     BULK_SOURCE_CODE,
     BULK_TEMPLATE_SLUG,
 )
-from app.services.commercial_planner.lineup_case_supersession import soft_supersede_lineup_case
 from app.services.commercial_planner.lineup_period_canonical import display_period_label_from_period_start
 from app.services.commercial_planner.lineup_parse_dispatch import (
     enqueue_lineup_parse_sync,
@@ -243,6 +242,7 @@ def _create_case_and_maybe_parse(
     commercial_plan_id: int | None,
     superseded_by_case_id: int | None,
     enqueue_parse: bool,
+    replaces_case_id: int | None = None,
 ) -> tuple[int, str]:
     filename = str(prop.get("filename") or "upload")
     sheet_name = str(prop.get("sheet_name") or "") or None
@@ -292,6 +292,9 @@ def _create_case_and_maybe_parse(
             "half_year_allocation_half": half_alloc,
             "period_flags": period_flags,
         }
+        if replaces_case_id is not None:
+            # The parse retires this case (and carries its PO links) only if it keeps a row.
+            parse_opts["replaces_case_id"] = int(replaces_case_id)
         slice_rows = prop.get("slice_source_rows")
         if isinstance(slice_rows, list) and slice_rows:
             parse_opts["slice_source_rows"] = [int(x) for x in slice_rows]
@@ -399,6 +402,8 @@ def apply_bulk_lineup_batch_sync(
                 results.append({"proposal_key": pk, "outcome": "error", "error": "file bytes missing"})
                 continue
 
+            # The existing case is retired by the parse itself, only if the replacement keeps a row.
+            replaces_case_id = existing_supersede.get(pk)
             case_id, outcome = _create_case_and_maybe_parse(
                 db,
                 prop=prop,
@@ -407,16 +412,8 @@ def apply_bulk_lineup_batch_sync(
                 commercial_plan_id=commercial_plan_id,
                 superseded_by_case_id=None,
                 enqueue_parse=True,
+                replaces_case_id=replaces_case_id,
             )
-            if pk in existing_supersede:
-                existing_case = db.get(CommercialLineupCase, existing_supersede[pk])
-                if existing_case is not None:
-                    # Shared soft-supersede + PO-link carry (BACKLOG-118 / D-031).
-                    soft_supersede_lineup_case(
-                        db,
-                        loser_case_id=int(existing_case.id),
-                        winner_case_id=int(case_id),
-                    )
             sgk = str(prop.get("supersession_group_key") or "")
             if sgk:
                 winner_case_by_group[sgk] = case_id
@@ -426,6 +423,7 @@ def apply_bulk_lineup_batch_sync(
                 outcome,
                 sheet_name=prop.get("sheet_name"),
                 supersession_group_key=sgk or None,
+                **({"replaces_case_id": replaces_case_id} if replaces_case_id is not None else {}),
             )
 
         for prop in superseded_props:
