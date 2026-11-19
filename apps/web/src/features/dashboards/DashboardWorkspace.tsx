@@ -35,7 +35,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
-import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPatch, apiPost, safeDisplayError } from '@/lib/api';
 
@@ -58,6 +57,7 @@ import { StarterGallery, TemplateChip, TemplateNote } from './builder/Starters';
 import type { CatalogV2, DashboardFilters } from './builder/types';
 import { useDashboardRun } from './builder/useDashboardRun';
 import { CanvasDropTarget } from './CanvasDropTarget';
+import { useDashboardList } from './dashboardList';
 import { MetricBrowser } from './MetricBrowser';
 import { DashboardWidgetCard } from './DashboardWidgetCard';
 import { WidgetEditorDialog, type WidgetEditorValue } from './WidgetEditorDialog';
@@ -109,14 +109,8 @@ export function myAccountsStarterId(items: Dashboard[], userId: string | number 
 
 export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?: boolean }) {
   const qc = useQueryClient();
-  const { data: me } = useCurrentUser();
-  // The API list depends on identity. Keep public reads and each user's fresh cache separate.
-  const listKey = ['dashboards', me?.tenant_id ?? null, me?.id ?? null] as const;
-  const listQ = useQuery({
-    queryKey: listKey,
-    queryFn: ({ signal }) => apiGet<{ items: Dashboard[] }>('/api/v1/dashboards', { signal }),
-    retry: false,
-  });
+  // The API list depends on identity: one key per tenant and user, shared with Overview and Reports.
+  const { me, queryKey: listKey, query: listQ } = useDashboardList();
   const catalogQ = useQuery({
     queryKey: ['semantics-catalog'],
     queryFn: ({ signal }) => apiGet<CatalogResponse>('/api/v1/semantics/catalog', { signal }),

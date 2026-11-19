@@ -10,7 +10,8 @@ import { useEffect, useState } from 'react';
 import type { BriefSignal } from '@/features/brief/BriefSignalRow';
 import { fetchCatalogV2 } from '@/features/dashboards/builder/api';
 import { DashboardWidgetCard } from '@/features/dashboards/DashboardWidgetCard';
-import type { CatalogResponse, Dashboard } from '@/features/dashboards/types';
+import { useDashboardList } from '@/features/dashboards/dashboardList';
+import type { CatalogResponse } from '@/features/dashboards/types';
 import { StartWorkPanel } from '@/features/overview/StartWorkPanel';
 import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
@@ -94,11 +95,8 @@ export function OverviewHub() {
     queryFn: ({ signal }) => apiGet<BriefSignalsResponse>('/api/v1/brief/signals', { signal }),
     staleTime: 30_000,
   });
-  const dashQ = useQuery({
-    queryKey: ['dashboards'],
-    queryFn: ({ signal }) => apiGet<{ items: Dashboard[] }>('/api/v1/dashboards', { signal }),
-    retry: false,
-  });
+  // The editor's identity-scoped list: an edit there (e.g. deleting a widget) refreshes this view too.
+  const { query: dashQ } = useDashboardList();
   const catalogQ = useQuery({
     queryKey: ['semantics-catalog'],
     queryFn: ({ signal }) => apiGet<CatalogResponse>('/api/v1/semantics/catalog', { signal }),

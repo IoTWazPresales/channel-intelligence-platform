@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_ME_QUERY_KEY, type CurrentUser } from '@/features/shell/useCurrentUser';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
+import { dashboardListKey } from './dashboardList';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import type { Dashboard } from './types';
 
@@ -37,7 +38,7 @@ function board(id: number, owner: CurrentUser, starter = false): Dashboard {
   };
 }
 
-const listKey = (me: CurrentUser) => ['dashboards', me.tenant_id ?? null, me.id] as const;
+const listKey = (me: CurrentUser) => dashboardListKey(me);
 let qc: QueryClient;
 let readList: ReturnType<typeof vi.fn>;
 let me: CurrentUser;
@@ -143,7 +144,9 @@ describe('D-0141 startup with a retained QueryClient (PR #111 B1)', () => {
     window.history.replaceState(null, '', '/dashboards?start=my_accounts');
     renderWithProviders(workspace());
 
-    await screen.findByText(/Dashboards API unavailable . List failed/);
+    // The alert's two text nodes ("…unavailable — " and the error) sit in one element; match its exact text,
+    // em dash included, with headroom for a loaded parallel run.
+    expect(await screen.findByText('Dashboards API unavailable — List failed', undefined, { timeout: 5_000 })).toBeInTheDocument();
     expect(edge.apiPost).not.toHaveBeenCalled();
     expect(window.location.search).toBe('?start=my_accounts');
   });
