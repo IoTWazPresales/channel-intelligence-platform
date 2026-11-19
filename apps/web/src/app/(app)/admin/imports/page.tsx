@@ -101,6 +101,7 @@ import {
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { ImportCenterOverview, ImportStartPanel } from '@/features/data-stewardship/ImportCenterOverview';
+import { ShipmentSkippedSheets, type SkippedSheet } from '@/features/imports/ShipmentSkippedSheets';
 import { ImportJobCards } from '@/features/data-stewardship/ImportJobCards';
 import { StewardWriteFieldset, StewardWriteNotice } from '@/components/StewardWriteGate';
 import { ShowJobLogButton } from '@/features/ops-logs/ShowJobLogButton';
@@ -2136,6 +2137,7 @@ function AdminImportsPageContent() {
     available_sheets?: string[];
     selected_sheets?: string[];
     sheet_selection_confirmed?: boolean;
+    skipped_sheets?: SkippedSheet[];
   };
 
   const {
@@ -3893,6 +3895,10 @@ function AdminImportsPageContent() {
                   </Typography>
                 ))}
               </Alert>
+            ) : null}
+            {shipmentMappingPanelEnabled &&
+            mappingStateMatchesJob(shipmentMappingState?.id, shipmentMappingJobId) ? (
+              <ShipmentSkippedSheets sheets={shipmentMappingState?.skipped_sheets} />
             ) : null}
             {shipmentMappingResetBanner ? (
               <Alert severity="info" data-testid="shipment-mapping-cleared">
