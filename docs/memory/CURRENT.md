@@ -2,6 +2,16 @@
 
 **2026-11-19 - Final wave (d) customer promotion calendar (`feat/fwd-promo-calendar-20261118`, PR #116):** customers' campaign/pillar calendars can be uploaded through a tenant mapping profile (preview, then apply; apply replaces the same upload, so it is idempotent) and shown on `/promotions/timeline` beside our open CPOR case windows, with overlapping days flagged as clashes. New migration `20261118_0063` (two tables, forced tenant row security), models, `services/cpor/customer_calendar/`, API under `/api/v1/customer-calendar`, web page and components. Unmatched customer names are skipped, never created. Open, BACKLOG-253: the migration is not applied on `cip` (needs Warren's approval and a backup); `tests/test_customer_calendar_db.py` is written but not run; real customer calendars are needed for acceptance; the planner clash card is wave (e).
 
+**W1-B worklist (2026-11-19, PR #105 Round 1):** branch `feat/w1b-stock-not-listed-20261118`. #104 is already merged into integration. The PR adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
+
+- the offer/competitor comparison needs data;
+- competitor-page monitoring needs a migration;
+- activation alerts (3 days, decided) are built in stacked PR #106.
+
+**Round 1 fixes:** B1 wires searchable account selection into `customer_id` and the query key, with accurate truncation/empty wording. B2 replaces duplicate stock SQL with the unchanged `sell_through_overview.load_stock_positions` reader; explicit account/tenant filters, latest dates and net site totals are retained. New unit, cip_test and web regression cases cover them.
+
+**Validation (2026-11-19):** `cip_test` 307 passed; `tsc` clean; Vitest market-listings 6 files / 29 passed. Browser smoke not yet run. No migration, no deploy.
+
 **BACKLOG-046 shipment sheet scope (2026-11-19, PR #112 Fix Round 1; branch `feat/b046-sheet-scope-20261118`):** the mapping step no longer falls back to every column when no selected sheet is recognised; headers, samples, `in_scope` and `skipped_sheets` now agree, and every unrecognised sheet is listed as Ignored. An empty scope gives no headers, mappings or samples and stays blocked by the existing mapping gate. Selection and explicit BOM opt-in are unchanged. **PARTIAL-DEFERRED:** the shared detector still accepts exception/summary tabs with operational headers; BACKLOG-046 records the policy decision Warren must make and the strict expected-failure tests. N-0072 is not complete. No migration. Not merged.
 
 **Round 1 verification (2026-11-19):** `cip_test` pytest (scope unit, new DB-backed scope tests and existing shipment mapping/selection tests) 32 passed, 7 xfailed (strict, the deferred detector guard); `tsc` clean; Vitest imports 4 passed. Browser viewport proof not yet run.
