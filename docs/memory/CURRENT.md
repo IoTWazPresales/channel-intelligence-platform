@@ -2,6 +2,16 @@
 
 **Final wave (a) new-customer line-up proposal (2026-11-19):** branch `feat/fwa-newcustomer-lineup-20261118`. A reporting customer (`reports_expected`; 409 otherwise) with no line-up rows for the period gets a proposed line-up the user approves on screen at `/lineup/new-customer`. The user picks one of two seed sources: (1) master-catalogue items with a PM bottom cost (active items, non-null `controlled_cost_amount`), or (2) the distinct SKUs from the 3 most recent line-up periods: the customer's own periods if it has any (`customer_own`), otherwise the master line-up's across all customers (`master`), superseded rows excluded. The response and page state which was used and the periods. Approve creates an accepted master line-up case, per-item `fact_lineup_plan_item` rows (quantity empty/0, approved through `apply_lineup_approval` and the audit event) in one transaction; nothing is invented. The automatic pull `apply_net_requirement_to_lineup` now skips non-reporting customers. Open: coordinator registers `lineup_new_customer.router` under `/lineup` (after final wave (d)); the line-up page needs a link to the new page; DB tests `tests/test_lineup_new_customer_proposal_db.py` are written but not yet run on `cip_test`; four small decisions are listed in BACKLOG-252.
 
+**W1-B worklist (2026-11-19, PR #105 Round 1):** branch `feat/w1b-stock-not-listed-20261118`. #104 is already merged into integration. The PR adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
+
+- the offer/competitor comparison needs data;
+- competitor-page monitoring needs a migration;
+- activation alerts (3 days, decided) are built in stacked PR #106.
+
+**Round 1 fixes:** B1 wires searchable account selection into `customer_id` and the query key, with accurate truncation/empty wording. B2 replaces duplicate stock SQL with the unchanged `sell_through_overview.load_stock_positions` reader; explicit account/tenant filters, latest dates and net site totals are retained. New unit, cip_test and web regression cases cover them.
+
+**Validation (2026-11-19):** `cip_test` 307 passed; `tsc` clean; Vitest market-listings 6 files / 29 passed. Browser smoke not yet run. No migration, no deploy.
+
 **BACKLOG-046 shipment sheet scope (2026-11-19, PR #112 Fix Round 1; branch `feat/b046-sheet-scope-20261118`):** the mapping step no longer falls back to every column when no selected sheet is recognised; headers, samples, `in_scope` and `skipped_sheets` now agree, and every unrecognised sheet is listed as Ignored. An empty scope gives no headers, mappings or samples and stays blocked by the existing mapping gate. Selection and explicit BOM opt-in are unchanged. **PARTIAL-DEFERRED:** the shared detector still accepts exception/summary tabs with operational headers; BACKLOG-046 records the policy decision Warren must make and the strict expected-failure tests. N-0072 is not complete. No migration. Not merged.
 
 **Round 1 verification (2026-11-19):** `cip_test` pytest (scope unit, new DB-backed scope tests and existing shipment mapping/selection tests) 32 passed, 7 xfailed (strict, the deferred detector guard); `tsc` clean; Vitest imports 4 passed. Browser viewport proof not yet run.

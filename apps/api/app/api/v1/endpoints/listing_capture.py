@@ -278,6 +278,21 @@ def get_capture_health(user: dict = Depends(get_current_user)):
             }
 
 
+@router.get("/stock-not-listed")
+def get_stock_not_listed(
+    customer_id: int | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=2000),
+    user: dict = Depends(get_current_user),
+):
+    """Reported products in stock on the latest report with no watched listing. Read-only."""
+    from app.services.listing_capture.stock_not_listed import stock_not_listed
+
+    with SessionLocal() as session:
+        return stock_not_listed(
+            session, tenant_id_from_user(user), customer_id=customer_id, limit=limit
+        )
+
+
 @router.delete("/sites/{site_id}/sellers/{customer_id}")
 def delete_site_seller(site_id: int, customer_id: int, user: dict = Depends(require_roles(Role.STEWARD))):
     with SessionLocal() as session:

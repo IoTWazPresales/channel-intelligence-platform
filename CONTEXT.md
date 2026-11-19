@@ -16,6 +16,10 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-19 - **PR #105 Round 1:** `feat/w1b-stock-not-listed-20261118`. B1: searchable account filter in request/cache and honest truncation/empty copy. B2: reuse unchanged `load_stock_positions`. Unit/cip_test/vitest regressions added. BACKLOG-244 keeps the remaining W1-B work.
+
+- 2026-11-18 - **W1-B in stock, not watched:** `feat/w1b-stock-not-listed-20261118`, read-only worklist endpoint and Coverage-tab table. Remaining worklists and what each needs: BACKLOG-244.
+
 - 2026-11-19 - **PR #115 final wave (b) fix round 1:** line-up headline and scope counts follow the selected customer/period/product slice; net requirement and plan coverage labelled master scope; group-approval DB tests on `cip_test`. Economics scope (b2) and approval roles stay PARTIAL-DEFERRED in BACKLOG-251.
 - 2026-11-19 - **PR #112 BACKLOG-046 Fix Round 1:** an empty shipment-sheet scope yields no mapping or samples and every skipped sheet is reported; the broader detector guard and optional BOM planning scope stay PARTIAL-DEFERRED in BACKLOG-046.
 - 2026-11-18 - **Listing coverage (BACKLOG-226):** `fix/listing-coverage-226-20261118`. HTTP failures, seller-only changes, seed/listing reconciliation, bounded latest reads, delisted and product-less listings, and honest loading/error UI. Review points: BACKLOG-243.
