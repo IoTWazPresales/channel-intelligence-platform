@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-19 - **PR #115 final wave (b) fix round 1:** line-up headline and scope counts follow the selected customer/period/product slice; net requirement and plan coverage labelled master scope; group-approval DB tests on `cip_test`. Economics scope (b2) and approval roles stay PARTIAL-DEFERRED in BACKLOG-251.
 - 2026-11-18 - **Listing coverage (BACKLOG-226):** `fix/listing-coverage-226-20261118`. HTTP failures, seller-only changes, seed/listing reconciliation, bounded latest reads, delisted and product-less listings, and honest loading/error UI. Review points: BACKLOG-243.
 - 2026-11-18 - **W1-A supplier selection (alignment D4):** distinct-delivery lead-time samples; per-SKU DC supplier by SKU stock then learned lead time; BACKLOG-241 holds the delivery-identity decision and remaining gaps. `cip_test` only.
 - 2026-11-18 - **Aged-stock consistency:** `fix/aged-stock-consistency-20261118`. Planner observed cover uses the customer's slow multiple; Move/Return cases cannot have their intelligence exclusion cleared. BACKLOG-227 status updated; what is left (migration for price-free Move/Return, two decisions) is BACKLOG-242.
