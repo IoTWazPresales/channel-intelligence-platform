@@ -18,6 +18,11 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 - 2026-11-19 - **PR #116 final wave (d) customer promotion calendar, fix round 1:** `feat/fwd-promo-calendar-20261118`. Saved calendar column mappings match headers case- and spacing-insensitively through one shared normaliser (duplicate-named mapped columns refused); `GET /customer-calendar/profiles` returns a computed default and writes nothing. Migration 0063 proven on `cip_test` only, not applied on `cip`. Open items: BACKLOG-253.
 
+- 2026-11-19 - **PR #111 D-0141 starting screen, fix round 2:** `feat/d0141-starting-screen-20261118`. Built behind `CIP_STARTING_SCREEN_POLICY` (default unchanged). R1: dashboard list scoped by tenant and user. R2: the editor, Overview and Reports share that one list key (`features/dashboards/dashboardList.ts`), so an edit no longer leaves Overview or the Reports pinned counts stale; cross-screen regression tests added. Rollout and per-job access matrix: BACKLOG-248.
+
+- 2026-11-19 - **PR #106 fix round 1:** activation timing keeps within-day check order (fetched_at, id) for transitions and recoveries (B1), and only promo-basis checks count (B2). Pytest, rollback-only cip_test and Vitest regressions added.
+
+- 2026-11-18 - **W1-B activation timing:** `feat/w1b-activation-timing-20261118`. Late activation / early deactivation alerts at `CIP_LISTING_ACTIVATION_ALERT_DAYS` (default 3; Warren's decision 13:27 SAST), recorded in BACKLOG-244.
 - 2026-11-19 - **PR #105 Round 1:** `feat/w1b-stock-not-listed-20261118`. B1: searchable account filter in request/cache and honest truncation/empty copy. B2: reuse unchanged `load_stock_positions`. Unit/cip_test/vitest regressions added. BACKLOG-244 keeps the remaining W1-B work.
 
 - 2026-11-18 - **W1-B in stock, not watched:** `feat/w1b-stock-not-listed-20261118`, read-only worklist endpoint and Coverage-tab table. Remaining worklists and what each needs: BACKLOG-244.

@@ -1,5 +1,5 @@
 import { clearAuthToken, getAuthToken } from '@/lib/authSession';
-import { myAccountsCleared } from '@/lib/myAccounts';
+import { myAccountsChoice } from '@/lib/myAccounts';
 
 /**
  * API origin for browser `fetch`.
@@ -105,8 +105,9 @@ export function authHeaders(init?: RequestInit, includeJsonContentType = true): 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  if (myAccountsCleared()) {
-    headers['X-Cip-My-Accounts'] = 'off';
+  const accounts = myAccountsChoice();
+  if (accounts) {
+    headers['X-Cip-My-Accounts'] = accounts;
   }
   return {
     ...headers,

@@ -60,6 +60,16 @@ class Settings(BaseSettings):
     # When true, exposes POST /api/v1/dev/database-wipe (Settings UI). Never enable in shared/prod.
     allow_db_wipe: bool = False
 
+    # W1-B activation timing alerts (Warren, 2026-11-18): a promotion that is still not at its
+    # price this many days after its window starts is a late activation; one that leaves its
+    # price this many days or more before its window ends is an early deactivation.
+    cip_listing_activation_alert_days: int = Field(
+        default=3,
+        ge=0,
+        description="Days late or early that raise an activation timing alert "
+        "(env CIP_LISTING_ACTIVATION_ALERT_DAYS).",
+    )
+
     # Gates all AI-assisted import resolution / column mapping API calls platform-wide.
     ai_assist_enabled: bool = Field(
         default=False,
@@ -199,6 +209,13 @@ class Settings(BaseSettings):
     cip_mailbox_graph_client_id: str = ""
     cip_mailbox_graph_client_secret: str = ""
     cip_mailbox_graph_tenant: str = ""
+    # D-0141 starting screen (Warren, accepted). "assigned" keeps today's rule (D-0145 interim):
+    # My accounts starts on for anyone with assigned accounts, and everyone lands on Brief.
+    # "d0141": only an account manager with assigned accounts lands on the My accounts starter
+    # with the filter on; everyone else lands on Brief with the filter off. Switch once jobs are
+    # set (rollout is Warren's).
+    cip_starting_screen_policy: Literal["assigned", "d0141"] = "assigned"
+
     # Wave 3 Phase C: where /ops/overview reads the supervisor status.json (always-on\) and
     # the nightly backup status files (backups\). Empty means %LOCALAPPDATA%\CIP on the API host.
     cip_ops_state_dir: str = ""
