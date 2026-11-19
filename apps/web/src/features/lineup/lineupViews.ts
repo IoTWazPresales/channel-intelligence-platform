@@ -49,6 +49,12 @@ export function parseLineupSlice(customer: string | null | undefined, period: st
   return { customerId, periodStart: p };
 }
 
+/** Link to the workbench (plan lines and economics) scoped to the same customer/period slice. */
+export function workbenchSliceHref(slice: LineupSlice): string {
+  const q = new URLSearchParams({ customer: String(slice.customerId), period: slice.periodStart });
+  return `/commercial-planner?${q.toString()}`;
+}
+
 export function filterLineupRowsBySlice<T extends { customer_id?: number | null; period_start: string }>(
   rows: T[],
   slice: LineupSlice | null,
