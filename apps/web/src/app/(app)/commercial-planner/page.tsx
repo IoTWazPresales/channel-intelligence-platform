@@ -32,7 +32,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CellValueChangedEvent, ColDef, GridOptions, ICellRendererParams } from 'ag-grid-community';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState, type InputHTMLAttributes } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState, type InputHTMLAttributes } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -47,6 +48,13 @@ import { CurrentLineupSection } from '@/features/commercial-planner/CurrentLineu
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { LineEconomicsWaterfall } from '@/features/commercial-planner/LineEconomicsWaterfall';
 import { PlannerDefaultsMaintenance } from '@/features/commercial-planner/PlannerDefaultsMaintenance';
+import {
+  filterPlanLinesBySlice,
+  planCoveringPeriod,
+  sliceChipLabel,
+  summarizeSliceLines,
+} from '@/features/commercial-planner/plannerSlice';
+import { parseLineupSlice } from '@/features/lineup/lineupViews';
 import {
   economicsBlockingTooltip,
   FALLBACK_ECONOMICS_CCY,
@@ -617,8 +625,22 @@ function lineEntitySummary(line: PlanLine | undefined): string {
 }
 
 export default function CommercialPlannerPage() {
+  // useSearchParams (the ?customer=&period= slice) needs a Suspense boundary in the app router.
+  return (
+    <Suspense fallback={null}>
+      <CommercialPlannerPageInner />
+    </Suspense>
+  );
+}
+
+function CommercialPlannerPageInner() {
   const qc = useQueryClient();
   const lineIdent = useLineIdentifierPreference();
+  const searchParams = useSearchParams();
+  const customerParam = searchParams?.get('customer') ?? null;
+  const periodParam = searchParams?.get('period') ?? null;
+  /** Final wave (b): `?customer=&period=` opens one customer/period slice of the plan lines and economics. */
+  const slice = useMemo(() => parseLineupSlice(customerParam, periodParam), [customerParam, periodParam]);
   const [tab, setTab] = useState(0);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [addPlanOpen, setAddPlanOpen] = useState(false);
@@ -836,7 +858,13 @@ export default function CommercialPlannerPage() {
     setCoverageFilter('');
   }, [lineupJobId]);
 
-  const activePlanId = selectedPlanId ?? plans?.[0]?.id ?? null;
+  // A period is tied to the plan whose date window covers it. With a slice and no covering plan the
+  // workbench shows nothing (and says so) rather than another plan's lines.
+  const slicePlan = useMemo(
+    () => (slice && plans ? planCoveringPeriod(plans, slice.periodStart) : null),
+    [slice, plans],
+  );
+  const activePlanId = selectedPlanId ?? (slice ? (slicePlan?.id ?? null) : (plans?.[0]?.id ?? null));
   const activePlan = useMemo(() => plans?.find((p) => p.id === activePlanId) ?? null, [plans, activePlanId]);
   const openPlanSettings = useCallback(() => {
     if (!activePlan) return;
@@ -859,7 +887,7 @@ export default function CommercialPlannerPage() {
   const planCcyIso = useMemo(() => (activePlan?.currency_code ?? '').trim(), [activePlan?.currency_code]);
   const planCurrencyLabel = planCcyIso || 'Plan currency not set';
   const {
-    data: lines,
+    data: planLines,
     isPending: linesPending,
     isError: linesIsError,
     error: linesError,
@@ -872,11 +900,23 @@ export default function CommercialPlannerPage() {
   // isPending (not isLoading) so the enabled:false phase before a plan is picked does not
   // read as loading. Gated on activePlanId so "no plan selected" falls through to the empty state.
   const linesLoading = tab === 0 && activePlanId != null && linesPending;
-  const { data: summary } = useQuery({
+  // The slice is a view of the same plan lines (same rows, same stored economics), never a copy.
+  const lines = useMemo(
+    () => (planLines === undefined ? undefined : filterPlanLinesBySlice(planLines, slice)),
+    [planLines, slice],
+  );
+  const { data: planSummary } = useQuery({
     queryKey: ['commercial-plan-summary', activePlanId],
     queryFn: ({ signal }) => apiGet<Summary>(`/api/v1/commercial-planner/plans/${activePlanId}/summary`, { signal }),
     enabled: tab === 0 && activePlanId != null,
   });
+  // /summary adds up the whole plan and cannot be scoped to a customer, so a slice adds up its own
+  // lines' stored results here; the plan-wide figure is used when there is no slice.
+  const summary = useMemo<Summary | undefined>(
+    () => (slice && lines ? summarizeSliceLines(lines) : planSummary),
+    [slice, lines, planSummary],
+  );
+  const sliceChip = slice ? sliceChipLabel(slice, planLines ?? []) : null;
   const { data: suggestions } = useQuery({
     queryKey: ['commercial-plan-suggestions', activePlanId],
     queryFn: ({ signal }) => apiGet<SuggestionBundle[]>(`/api/v1/commercial-planner/plans/${activePlanId}/suggestions`, { signal }),
@@ -927,6 +967,11 @@ export default function CommercialPlannerPage() {
   });
 
   const lineById = useMemo(() => new Map((lines ?? []).map((l) => [l.id, l])), [lines]);
+  // Suggestions are plan-wide; a slice shows only those for its own visible lines.
+  const visibleSuggestions = useMemo(
+    () => (suggestions ?? []).filter((b) => !slice || lineById.has(b.line_id)),
+    [suggestions, slice, lineById],
+  );
 
   const firstLineEconCcy = useMemo(() => {
     const hit = (lines ?? []).find((l) => (l.economics_calc_currency_code ?? '').trim());
@@ -940,11 +985,12 @@ export default function CommercialPlannerPage() {
 
   const lineupDupKeySet = useMemo(() => {
     const s = new Set<string>();
-    for (const l of lines ?? []) {
+    // Duplicate checks look at the whole plan, not just the slice on screen.
+    for (const l of planLines ?? []) {
       s.add(`${l.customer_id}|${l.distributor_id}|${l.product_id}`);
     }
     return s;
-  }, [lines]);
+  }, [planLines]);
 
   const lineupFilteredRows = useMemo(() => {
     let r = lineupModalLines ?? [];
@@ -1990,6 +2036,54 @@ export default function CommercialPlannerPage() {
     <>
       {/* ─── Single dominant grid Paper ─────────────────────────────────────── */}
       <Paper sx={{ p: 2, mb: 2 }}>
+        {/* Final wave (b): customer/period slice of the master line-up's plan lines and economics */}
+        {slice && sliceChip ? (
+          <Stack spacing={0.75} sx={{ mb: 1.5 }} data-testid="planner-slice-banner">
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Chip size="small" color="primary" label={sliceChip} data-testid="planner-slice-chip" />
+              {activePlan ? (
+                <Typography variant="body2" color="text.secondary">
+                  Plan: {activePlan.plan_name} ({activePlan.period_start} – {activePlan.period_end ?? 'open-ended'})
+                </Typography>
+              ) : null}
+              <Button
+                size="small"
+                component={Link}
+                href="/commercial-planner"
+                // Keep the slice's plan when clearing the customer filter (otherwise the default is plans[0]).
+                onClick={() => {
+                  if (activePlanId != null) setSelectedPlanId(activePlanId);
+                }}
+                data-testid="planner-slice-clear"
+              >
+                All customers
+              </Button>
+              <Button
+                size="small"
+                component={Link}
+                href={`/lineup/cases?customer=${slice.customerId}&period=${encodeURIComponent(slice.periodStart)}`}
+                data-testid="planner-slice-back-to-lineup"
+              >
+                Back to line-up
+              </Button>
+            </Stack>
+            {slicePlan == null && selectedPlanId == null && plans ? (
+              <Alert severity="warning" data-testid="planner-slice-no-plan">
+                No plan&apos;s date window covers {slice.periodStart}. Pick a plan below or create one for this period;
+                nothing is shown from other plans until you do.
+              </Alert>
+            ) : null}
+            {selectedPlanId != null && slicePlan != null && selectedPlanId !== slicePlan.id ? (
+              <Alert severity="info" data-testid="planner-slice-plan-overridden">
+                You picked a plan other than the one covering {slice.periodStart} ({slicePlan.plan_name}).
+              </Alert>
+            ) : null}
+            <Typography variant="caption" color="text.secondary">
+              This is a view of the plan&apos;s lines for this customer. Lines, economics and totals are the stored
+              results, not a separate calculation; Recalculate still runs on the whole plan.
+            </Typography>
+          </Stack>
+        ) : null}
         {/* Plan selector + action bar */}
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
           {isLoading ? (
@@ -2351,9 +2445,10 @@ export default function CommercialPlannerPage() {
                       primary: { label: 'New plan', onClick: () => setAddPlanOpen(true) },
                     }
                   : {
-                      title: 'No lines in this plan',
-                      description:
-                        'Add a line by hand, or pull rows in from a lineup case, then press Recalculate to compute economics.',
+                      title: slice ? 'No plan lines for this customer' : 'No lines in this plan',
+                      description: slice
+                        ? 'This plan has no lines for the customer in this slice. Use All customers to see the whole plan.'
+                        : 'Add a line by hand, or pull rows in from a lineup case, then press Recalculate to compute economics.',
                       primary: { label: 'Add line', onClick: () => setAddLineOpen(true) },
                       secondary: {
                         label: 'Add from lineup',
@@ -2431,8 +2526,10 @@ export default function CommercialPlannerPage() {
           </Stack>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }} data-testid="plan-summary-currency-note">
                 Plan / customer-facing currency: <strong>{planCurrencyLabel}</strong>. Summary reserve and margin totals
-                above use <strong>{economicsSummaryCcy}</strong> from the plan summary API (first line’s economics currency
-                when present). If lines mix output currencies, treat totals as indicative until a multi-currency aggregation
+                above use <strong>{economicsSummaryCcy}</strong>{' '}
+                {slice
+                  ? 'and add up this customer’s lines only (first line’s economics currency).'
+                  : 'from the plan summary API (first line’s economics currency when present).'} If lines mix output currencies, treat totals as indicative until a multi-currency aggregation
                 rule exists.
               </Typography>
             </>
@@ -2463,7 +2560,7 @@ export default function CommercialPlannerPage() {
                 context.
               </Typography>
               <Stack spacing={1}>
-                {(suggestions ?? []).flatMap((bundle) => {
+                {visibleSuggestions.flatMap((bundle) => {
                   const ln = lineById.get(bundle.line_id);
                   const label = lineEntitySummary(ln) || `Line #${bundle.line_id}`;
                   const isLineupBased = bundle._meta?.data_sources.lineup === true;
@@ -2545,7 +2642,7 @@ export default function CommercialPlannerPage() {
                       );
                     });
                 })}
-                {!suggestions?.length ? (
+                {!visibleSuggestions.length ? (
                   <Typography color="text.secondary">No suggestions available yet.</Typography>
                 ) : null}
               </Stack>
@@ -3696,7 +3793,7 @@ export default function CommercialPlannerPage() {
           void qc.invalidateQueries({ queryKey: ['commercial-plan-summary', activePlanId] });
         }}
         activePlanId={activePlanId}
-        existingLines={lines ?? []}
+        existingLines={planLines ?? []}
       />
       <IntelligentAddDialog
         open={intelligentAddOpen}
@@ -3708,7 +3805,7 @@ export default function CommercialPlannerPage() {
           void qc.invalidateQueries({ queryKey: ['commercial-plan-suggestions', activePlanId] });
         }}
         existingLineKeys={
-          new Set((lines ?? []).map((l) => `${l.customer_id}|${l.distributor_id}|${l.product_id}`))
+          new Set((planLines ?? []).map((l) => `${l.customer_id}|${l.distributor_id}|${l.product_id}`))
         }
       />
     </PlanningChrome>

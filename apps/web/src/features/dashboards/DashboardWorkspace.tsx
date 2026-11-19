@@ -31,7 +31,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { MyAccountsBar } from '@/features/shell/MyAccountsBar';
@@ -57,6 +57,7 @@ import { StarterGallery, TemplateChip, TemplateNote } from './builder/Starters';
 import type { CatalogV2, DashboardFilters } from './builder/types';
 import { useDashboardRun } from './builder/useDashboardRun';
 import { CanvasDropTarget } from './CanvasDropTarget';
+import { useDashboardList } from './dashboardList';
 import { MetricBrowser } from './MetricBrowser';
 import { DashboardWidgetCard } from './DashboardWidgetCard';
 import { WidgetEditorDialog, type WidgetEditorValue } from './WidgetEditorDialog';
@@ -95,13 +96,21 @@ export function isBuilderAvailable(catalog: CatalogV2 | null | undefined, dashbo
   return Boolean(catalog) && dashboard != null && dashboard.filters_json !== undefined;
 }
 
+export const MY_ACCOUNTS_TEMPLATE = 'my_accounts';
+
+/** D-0141: the caller's own dashboard made from the My accounts starter (newest first), if any. */
+export function myAccountsStarterId(items: Dashboard[], userId: string | number | null | undefined): number | null {
+  if (userId == null) return null;
+  const own = items.find(
+    (d) => d.template_key === MY_ACCOUNTS_TEMPLATE && d.owner_user_id != null && String(d.owner_user_id) === String(userId),
+  );
+  return own ? own.id : null;
+}
+
 export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?: boolean }) {
   const qc = useQueryClient();
-  const listQ = useQuery({
-    queryKey: ['dashboards'],
-    queryFn: ({ signal }) => apiGet<{ items: Dashboard[] }>('/api/v1/dashboards', { signal }),
-    retry: false,
-  });
+  // The API list depends on identity: one key per tenant and user, shared with Overview and Reports.
+  const { me, queryKey: listKey, query: listQ } = useDashboardList();
   const catalogQ = useQuery({
     queryKey: ['semantics-catalog'],
     queryFn: ({ signal }) => apiGet<CatalogResponse>('/api/v1/semantics/catalog', { signal }),
@@ -175,7 +184,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
   const builderAvailable = isBuilderAvailable(catalogV2, active);
 
   const replaceDashboard = (d: Dashboard) =>
-    qc.setQueryData(['dashboards'], (old: { items: Dashboard[] } | undefined) => {
+    qc.setQueryData(listKey, (old: { items: Dashboard[] } | undefined) => {
       if (!old) return old;
       return { ...old, items: old.items.map((x) => (x.id === d.id ? d : x)) };
     });
@@ -192,7 +201,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
       setCreateOpen(false);
       setName('');
       setActiveId(d.id);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
     },
   });
 
@@ -200,9 +209,23 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     mutationFn: (key: string) => createFromTemplate(key),
     onSuccess: async (d) => {
       setActiveId(d.id);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
     },
   });
+
+  // D-0141: /dashboards?start=my_accounts (the account manager's starting screen) opens the caller's
+  // My accounts starter, creating it from the template once if they have none.
+  const startHandled = useRef(false);
+  const startMyAccounts = fromTemplateMut.mutate;
+  useEffect(() => {
+    if (startHandled.current || !listQ.isSuccess || !me || typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('start') !== MY_ACCOUNTS_TEMPLATE) return;
+    startHandled.current = true;
+    window.history.replaceState(null, '', window.location.pathname);
+    const existing = myAccountsStarterId(listQ.data?.items ?? [], me.id);
+    if (existing != null) setActiveId(existing);
+    else startMyAccounts(MY_ACCOUNTS_TEMPLATE);
+  }, [listQ.isSuccess, listQ.data, me, startMyAccounts]);
 
   const saveWidgetMut = useMutation({
     mutationFn: async (value: WidgetEditorValue) => {
@@ -215,7 +238,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     onSuccess: async () => {
       setEditorOpen(false);
       setEditorError(null);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
     },
     onError: (e) => setEditorError(safeDisplayError(e)),
   });
@@ -230,7 +253,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     onSuccess: async () => {
       setBuilderOpen(false);
       setEditorError(null);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
     },
     onError: (e) => setEditorError(safeDisplayError(e)),
   });
@@ -240,7 +263,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
       if (!active) throw new Error('No dashboard');
       return apiDelete(`/api/v1/dashboards/${active.id}/widgets/${widgetId}`);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboards'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: listKey }),
   });
 
   const duplicateMut = useMutation({
@@ -249,7 +272,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
       return apiPost<Dashboard>(`/api/v1/dashboards/${active.id}/widgets`, duplicateBody(active, w));
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
       // The copy sits below every widget: bring it into view once the list reloads.
       setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 300);
     },
@@ -273,7 +296,7 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     },
     onSuccess: async (message) => {
       setPromoteMessage(message);
-      await qc.invalidateQueries({ queryKey: ['dashboards'] });
+      await qc.invalidateQueries({ queryKey: listKey });
       await qc.invalidateQueries({ queryKey: ['saved-reports'] });
     },
   });

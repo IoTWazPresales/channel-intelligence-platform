@@ -129,6 +129,7 @@ from app.models.cpor_payment import (
     CporPaymentMappingProfile,
     ImportCporPaymentStagingLine,
 )
+from app.models.customer_calendar import CustomerCalendarEvent, CustomerCalendarMappingProfile
 from app.models.commercial_lineup import (
     CommercialLineupCase,
     CommercialLineupCasePo,
@@ -251,6 +252,8 @@ __all__ = [
     "ImportCporHistoricalStagingLine",
     "ImportCporHistoricalTokenSurrogate",
     "CporPaymentEvidence",
+    "CustomerCalendarEvent",
+    "CustomerCalendarMappingProfile",
     "CporPaymentMappingProfile",
     "ImportCporPaymentStagingLine",
     "HistoricalLineupImportHeader",

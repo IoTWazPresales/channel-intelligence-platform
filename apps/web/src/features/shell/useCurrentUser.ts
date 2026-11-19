@@ -18,10 +18,21 @@ export type CurrentUser = {
   my_accounts?: {
     assigned_count: number;
     filter_on: boolean;
+    /** D-0141: whether the filter starts on for this user (older APIs omit it: on with accounts). */
+    filter_default_on?: boolean;
   };
+  /** D-0141: where sign-in lands, e.g. '/brief' or '/dashboards?start=my_accounts'. */
+  starting_screen?: { path: string; policy: string };
 };
 
 export const AUTH_ME_QUERY_KEY = ['auth', 'me'] as const;
+
+/** Where sign-in lands (D-0141). Only an in-app path is followed; anything else is Brief. */
+export function startingPath(me: Pick<CurrentUser, 'starting_screen'> | null | undefined): string {
+  const path = me?.starting_screen?.path;
+  if (typeof path === 'string' && path.startsWith('/') && !path.startsWith('//')) return path;
+  return '/brief';
+}
 
 export function useCurrentUser() {
   return useQuery({

@@ -79,6 +79,7 @@ from app.api.v1.endpoints import (
     commercial_planner,
     case_approval,
     cpor_cases,
+    cpor_customer_calendar,
     cpor_fx,
     cpor_exports,
     cpor_historical_import,
@@ -192,6 +193,7 @@ if commercial_planner_enabled():
     api_router.include_router(cpor_exports.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_historical_import.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_payment_evidence.router, prefix="/cpor", tags=["cpor"])
+    api_router.include_router(cpor_customer_calendar.router, prefix="/customer-calendar", tags=["cpor"])
     api_router.include_router(cst_steward.router, prefix="/cst-steward", tags=["cst-steward"])
 api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])

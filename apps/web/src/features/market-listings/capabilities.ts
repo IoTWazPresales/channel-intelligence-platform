@@ -26,8 +26,8 @@ export const LISTING_CAPABILITIES: CapabilityItem[] = [
   },
   {
     label: 'Late activation / early deactivation',
-    state: 'substrate',
-    note: 'Can be read from the check history and the promotion window. Not calculated yet.',
+    state: 'live',
+    note: 'Flagged when a check shows the promotion still off its price a set number of days (3 by default) after it starts, or off it that many days before it ends.',
   },
   {
     label: 'Product content and specification evidence',

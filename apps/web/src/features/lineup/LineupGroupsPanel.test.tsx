@@ -97,4 +97,17 @@ describe('LineupGroupsPanel (Final wave b)', () => {
       expect.objectContaining({ customerId: 3, periodStart: '2026-01-01' })
     );
   });
+
+  it('links each group to the workbench scoped to that customer and period', () => {
+    renderPanel();
+    expect(screen.getByTestId('lineup-group-workbench-3|2026-01-01')).toHaveAttribute(
+      'href',
+      '/commercial-planner?customer=3&period=2026-01-01'
+    );
+    expect(screen.getByTestId('lineup-group-workbench-4|2026-01-01')).toHaveTextContent('Open in workbench');
+    expect(screen.getByTestId('lineup-group-workbench-4|2026-01-01')).toHaveAttribute(
+      'href',
+      '/commercial-planner?customer=4&period=2026-01-01'
+    );
+  });
 });
