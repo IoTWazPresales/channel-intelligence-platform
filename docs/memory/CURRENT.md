@@ -2,6 +2,30 @@
 
 **2026-11-18 - Final wave (b) part 2, plan lines and economics in the customer/period slice (`feat/fwb2-slice-economics-20261118`, PR #117, stacked on #115 (merged), web only):** each line-up group has Open in workbench to `/commercial-planner?customer=&period=`. The workbench opens the plan whose date window covers the period (Warren's rule), shows only that customer's lines, the existing economics waterfall and slice totals (summed from the stored line results), a `Customer · period` chip, All customers and Back to line-up. Review round 1 (2026-11-19): All customers keeps the slice's plan instead of falling back to the first plan, and Assisted suggestions show only the slice's own lines. No API change. Open, BACKLOG-251: server-side customer scope on `/plans/{id}/lines` and `/summary`, whole-plan Recalculate/Add actions, period label on the chip, and line-up approval roles (item 2, Warren's decision, unchanged).
 
+**W1-B activation timing (2026-11-19, PR #106 fix round 1):** branch `feat/w1b-activation-timing-20261118`, stacked on #105 and #104. It adds late-activation and early-deactivation alerts to listing intelligence and the Market activation lens.
+
+- **Threshold:** Warren decided 3 days (13:27 SAST). It is set by `CIP_LISTING_ACTIVATION_ALERT_DAYS` (default 3), not hard-coded.
+
+- **Evidence / B2:** timing uses only stored `price_basis="promo"` checks. Distributor sell-in (`sell_out`), missing and unknown bases cannot establish promotion timing; point-in-time activation remains unchanged.
+
+- **B1:** transitions and recoveries keep the query's `fetched_at, id` order, including same-day checks and equal timestamps. Calendar dates still determine lateness/earliness at the configured threshold.
+
+- **Tests:** expanded timing pytest and Vitest regressions; new `test_listing_activation_timing_db.py` uses the existing `cip_test` identity-checking rollback fixture and the canonical activation evaluator.
+
+- **Validation:** 2026-11-19: `cip_test` listing pytest 317 passed (includes the new rollback-only `test_listing_activation_timing_db.py` and expanded timing unit tests); web `tsc` clean, Vitest `src/features/market-listings` 7 files / 34 passed. Running-app evidence not yet collected.
+
+- No migration, no deploy.
+
+**W1-B worklist (2026-11-19, PR #105 Round 1):** branch `feat/w1b-stock-not-listed-20261118`. #104 is already merged into integration. The PR adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
+
+- the offer/competitor comparison needs data;
+- competitor-page monitoring needs a migration;
+- activation alerts (3 days, decided) are built in stacked PR #106.
+
+**Round 1 fixes:** B1 wires searchable account selection into `customer_id` and the query key, with accurate truncation/empty wording. B2 replaces duplicate stock SQL with the unchanged `sell_through_overview.load_stock_positions` reader; explicit account/tenant filters, latest dates and net site totals are retained. New unit, cip_test and web regression cases cover them.
+
+**Validation (2026-11-19):** `cip_test` 307 passed; `tsc` clean; Vitest market-listings 6 files / 29 passed. Browser smoke not yet run. No migration, no deploy.
+
 **BACKLOG-046 shipment sheet scope (2026-11-19, PR #112 Fix Round 1; branch `feat/b046-sheet-scope-20261118`):** the mapping step no longer falls back to every column when no selected sheet is recognised; headers, samples, `in_scope` and `skipped_sheets` now agree, and every unrecognised sheet is listed as Ignored. An empty scope gives no headers, mappings or samples and stays blocked by the existing mapping gate. Selection and explicit BOM opt-in are unchanged. **PARTIAL-DEFERRED:** the shared detector still accepts exception/summary tabs with operational headers; BACKLOG-046 records the policy decision Warren must make and the strict expected-failure tests. N-0072 is not complete. No migration. Not merged.
 
 **Round 1 verification (2026-11-19):** `cip_test` pytest (scope unit, new DB-backed scope tests and existing shipment mapping/selection tests) 32 passed, 7 xfailed (strict, the deferred detector guard); `tsc` clean; Vitest imports 4 passed. Browser viewport proof not yet run.

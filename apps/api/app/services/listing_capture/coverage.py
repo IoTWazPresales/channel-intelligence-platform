@@ -96,6 +96,23 @@ def _coverage(session: Session, tenant_id: str) -> dict[str, Any]:
     return {"data_unavailable": sellthrough_down, "customers": rows}
 
 
+def product_buckets(
+    session: Session, tenant_id: str, keys: set[tuple[int, int]]
+) -> dict[tuple[int, int], str]:
+    """Coverage bucket for each (customer, product) in ``keys``, by the rules above.
+
+    Read-only. Used by worklists that start from another product set (latest stock).
+    """
+    tenant = str(tenant_id)
+    names = _customers(session, tenant)
+    listings = _listings(session, tenant)
+    latest = _latest_parse(session, [int(row[0]) for row in listings if row[0] is not None])
+    readable = _readable_site_keys(session, tenant)
+    seeds = _seeds(session, tenant)
+    states = _states(session, tenant, names, set(keys), listings, latest, readable, seeds)
+    return {key: _bucket(state) for key, state in states.items()}
+
+
 def _identity(names: dict[int, tuple[str, str, bool]], customer_id: int) -> tuple[str, str, bool]:
     return names.get(customer_id, ("", "", False))
 

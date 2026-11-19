@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { apiGet } from '@/lib/api';
 
+import { StockNotListedWorklist } from './StockNotListedWorklist';
+
 type CoverageCustomer = {
   customer_id: number;
   customer_code: string;
@@ -84,6 +86,7 @@ export function ListingCoverageLens() {
           </TableBody>
         </Table>
       )}
+      <StockNotListedWorklist />
     </Stack>
   );
 }
