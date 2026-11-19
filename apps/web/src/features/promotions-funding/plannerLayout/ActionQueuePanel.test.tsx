@@ -47,4 +47,14 @@ describe('ActionQueuePanel', () => {
     expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-4 · claim evidence pending');
     expect(screen.getByTestId('planner-action-queue-error')).toHaveTextContent(/incomplete/i);
   });
+  it('does not say nothing is waiting when a source returned only its first page', () => {
+    renderWithProviders(<ActionQueuePanel items={[]} incomplete onSelect={vi.fn()} />);
+    expect(screen.queryByTestId('planner-action-queue-empty')).toBeNull();
+    expect(screen.getByTestId('planner-action-queue-incomplete')).toBeInTheDocument();
+  });
+  it('keeps its rows and notes the partial view when a source has more pages', () => {
+    renderWithProviders(<ActionQueuePanel items={items} incomplete onSelect={vi.fn()} />);
+    expect(screen.getByTestId('planner-action-queue-partial')).toBeInTheDocument();
+    expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-3 · awaiting approval');
+  });
 });

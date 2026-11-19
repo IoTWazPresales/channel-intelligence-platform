@@ -189,7 +189,15 @@ function PlannerList({
 
   // Campaigns starting in the next 4 weeks: the existing case list filtered by the existing window_from / window_to
   // (both filter on window_start), independent of the stage chips so the card does not move with them.
-  const today = useMemo(() => todayIso(), []);
+  // The local calendar day, re-read every minute so the rolling window and today marker follow midnight.
+  const [today, setToday] = useState(() => todayIso());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = todayIso();
+      setToday((prev) => (prev === now ? prev : now));
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const startingTo = addDaysIso(today, STARTING_WINDOW_DAYS);
   const {
     data: startingPage,
@@ -240,6 +248,11 @@ function PlannerList({
     ...(proposedError ? ['Awaiting approval'] : []),
     ...(endedError ? ['Ended cases'] : []),
   ];
+  // Each queue source fetches the first 500 rows; if any source has more, an empty queue is not confirmed.
+  const queueIncomplete =
+    (data != null && !pageIsComplete(data)) ||
+    (proposedPage != null && !pageIsComplete(proposedPage)) ||
+    (endedPage != null && !pageIsComplete(endedPage));
   const agedUnplanned = unplannedAgedStockValue(aged.data);
   const queue = useMemo(
     () =>
@@ -494,6 +507,7 @@ function PlannerList({
               items={queue}
               loading={isLoading || proposedLoading || endedLoading}
               unavailable={queueUnavailable}
+              incomplete={queueIncomplete}
               onRetry={() => {
                 if (isError) void refetch();
                 if (proposedError) void refetchProposed();

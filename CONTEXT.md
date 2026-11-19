@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-19 - **PR #118 final wave (e) part 1, review round 1:** `feat/fwe-planner-cards-20261118`, web only. Planner cards/queue leave out soft-superseded cases by `superseded_by_case_id`; a page-capped count shows "N+" (exact count above 500 is PARTIAL-DEFERRED, needs an API filter); failed requests show error states, not zero/empty. Calendar-clash card, money value on aged stock and the mock-up check stay open in BACKLOG-254.
+- 2026-11-19 - **PR #118 final wave (e) part 1, review round 1:** `feat/fwe-planner-cards-20261118`, web only. Planner cards/queue leave out soft-superseded cases by `superseded_by_case_id`; a page-capped count shows "N+" (exact count above 500 is PARTIAL-DEFERRED, needs an API filter); failed requests show error states, not zero/empty. Calendar-clash card, money value on aged stock and the mock-up check stay open in BACKLOG-254. Review round 2 (2026-11-19): the action queue never says "Nothing waiting" when a source list has more than one page (partial-view wording instead); the rolling 4-week window and the timeline today marker follow the local day across midnight; the starting-card test uses the local date.
 - 2026-11-19 - **PR #105 Round 1:** `feat/w1b-stock-not-listed-20261118`. B1: searchable account filter in request/cache and honest truncation/empty copy. B2: reuse unchanged `load_stock_positions`. Unit/cip_test/vitest regressions added. BACKLOG-244 keeps the remaining W1-B work.
 
 - 2026-11-18 - **W1-B in stock, not watched:** `feat/w1b-stock-not-listed-20261118`, read-only worklist endpoint and Coverage-tab table. Remaining worklists and what each needs: BACKLOG-244.

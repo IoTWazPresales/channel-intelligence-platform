@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { PromotionPlannerSurface } from './PromotionPlannerSurface';
+import { todayIso } from './plannerCards';
 
 const { replaceMock } = vi.hoisted(() => ({ replaceMock: vi.fn() }));
 
@@ -128,6 +129,32 @@ describe('PromotionPlannerSurface', () => {
     });
   });
 
+  it('moves the starting window to the new local day after midnight', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 19, 23, 59, 30));
+      renderPlanner();
+      await waitFor(() =>
+        expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('window_from=2026-11-19&'))).toBe(true),
+      );
+      vi.setSystemTime(new Date(2026, 10, 20, 0, 0, 40));
+      vi.advanceTimersByTime(60_000);
+      await waitFor(() =>
+        expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('window_from=2026-11-20&'))).toBe(true),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not report an empty queue as confirmed when a queue source has more than one page', async () => {
+    casesOverride = (url) =>
+      url.includes('status=proposed') ? { ...listPayload, items: [], total: 700 } : undefined;
+    renderPlanner();
+    await waitFor(() => expect(screen.getByTestId('planner-card-awaiting')).toHaveTextContent('0+'));
+    expect(screen.queryByTestId('planner-action-queue-empty')).toBeNull();
+  });
+
   it('awaiting approval filters the planner to Proposed', async () => {
     renderPlanner();
     fireEvent.click(await screen.findByTestId('planner-card-awaiting'));
@@ -204,7 +231,7 @@ describe('PromotionPlannerSurface', () => {
 
   it('shows a floor on the starting card when the window query returned only part of its matches', async () => {
     casesOverride = (url) =>
-      url.includes('window_from=') ? { ...listPayload, items: [proposedRow(71, { window_start: new Date().toISOString().slice(0, 10) })], total: 900 } : undefined;
+      url.includes('window_from=') ? { ...listPayload, items: [proposedRow(71, { window_start: todayIso() })], total: 900 } : undefined;
     renderPlanner();
     await waitFor(() => expect(screen.getByTestId('planner-card-starting')).toHaveTextContent('1+'));
     expect(screen.getByTestId('planner-card-starting')).toHaveTextContent(/at least/i);
