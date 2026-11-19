@@ -140,5 +140,7 @@ async def execute_lineup_parse_upload(
         "unresolved_products": result.unresolved_products,
         "line_count": result.line_count,
         "warnings": result.warnings,
+        "refused_count": result.refused_count,
+        "refused_rows": result.refused_rows,
         "lineup_parse": {"outcome": "completed", "async_poll": False},
     }

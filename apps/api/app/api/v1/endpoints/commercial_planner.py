@@ -3859,6 +3859,7 @@ async def parse_lineup_case_preview(
         "unresolved_products": preview.unresolved_products,
         "unknown_customer_rows": preview.unknown_customer_rows,
         "unknown_distributor_rows": preview.unknown_distributor_rows,
+        "refused_not_reporting_rows": preview.refused_not_reporting_rows,
         "warnings": preview.warnings,
         "can_apply": preview.can_apply,
         "rows": preview.rows,

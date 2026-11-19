@@ -6,6 +6,7 @@ stock actions: they are excluded from support comparisons and are not claims.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -23,6 +24,7 @@ from app.services.cpor.promo_plan_builder import (
     create_case_from_promo_draft,
     load_promotion_line_evidence,
 )
+from app.services.cpor.customer_soh_check import customer_soh_check
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
 from app.services.store_dc.read_model import build_customer_view, build_lead_index
 from app.services.store_dc.rules import (
@@ -233,20 +235,116 @@ def _collect_aged_stock(
     return lines, truncated
 
 
+# Money value of aged stock (Warren 2026-11-19, BACKLOG-254). Computed here, never on the client.
+# Cost source: the customer's reported unit MAC, else unit cost, ex-VAT (incl-VAT divided by 1.15; a
+# cost with an unknown VAT basis is left out), SOH-weighted over the customer's latest reported
+# stock period for the product. This is the CST cost that the customer SOH check and the CPOR
+# tier-1 cost suggestion already use (`customer_soh_check` -> `soh_unit_cost`). It is not a price
+# and not a PM cost.
+AGED_COST_BASIS = "customer_reported_unit_mac_else_unit_cost_ex_vat"
+
+UnitCostLookup = Callable[[int, int], "tuple[str | None, float | None]"]
+
+
+def _unit_cost_lookup(session: Session, *, tenant_id: str, as_of: date) -> UnitCostLookup:
+    """``(customer_id, product_id) -> (cost field, ex-VAT unit cost)``, or ``(None, None)``."""
+
+    def lookup(customer_id: int, product_id: int) -> tuple[str | None, float | None]:
+        found = customer_soh_check(
+            session,
+            customer_id=int(customer_id),
+            product_id=int(product_id),
+            as_of=as_of,
+            tenant_id=tenant_id,
+        )
+        cost = found.get("soh_unit_cost") if found.get("status") == "available" else None
+        if cost is None:
+            return None, None
+        return found.get("cost_field"), float(cost)
+
+    return lookup
+
+
+def value_aged_lines(lines: list[dict[str, Any]], lookup: UnitCostLookup) -> list[dict[str, Any]]:
+    """Add ``unit_cost``, ``unit_cost_field`` and ``stock_value`` to each line.
+
+    A line with no cost, or with no reported stock, gets ``None``: never zero. One lookup per
+    customer and product.
+    """
+    cache: dict[tuple[int, int], tuple[str | None, float | None]] = {}
+    out: list[dict[str, Any]] = []
+    for line in lines:
+        cid, pid = line.get("customer_id"), line.get("product_id")
+        field_used: str | None = None
+        unit_cost: float | None = None
+        if cid is not None and pid is not None:
+            key = (int(cid), int(pid))
+            if key not in cache:
+                cache[key] = lookup(*key)
+            field_used, unit_cost = cache[key]
+        soh = line.get("stock_on_hand")
+        value = None if unit_cost is None or soh is None else round(float(soh) * unit_cost, 2)
+        out.append(
+            {**line, "unit_cost": unit_cost, "unit_cost_field": field_used, "stock_value": value}
+        )
+    return out
+
+
+def _is_unplanned(line: dict[str, Any]) -> bool:
+    return not line.get("suggestion_executed") and not (line.get("executed_actions") or [])
+
+
+def _value_block(lines: list[dict[str, Any]]) -> dict[str, Any]:
+    priced = [ln for ln in lines if ln.get("stock_value") is not None]
+    unpriced = [ln for ln in lines if ln.get("stock_value") is None]
+    return {
+        "lines": len(lines),
+        "units": round(sum(float(ln.get("stock_on_hand") or 0) for ln in lines), 2),
+        "value": round(sum(float(ln["stock_value"]) for ln in priced), 2) if priced else None,
+        "lines_with_cost": len(priced),
+        "lines_without_cost": len(unpriced),
+        "units_without_cost": round(sum(float(ln.get("stock_on_hand") or 0) for ln in unpriced), 2),
+    }
+
+
+def summarise_aged_value(lines: list[dict[str, Any]]) -> dict[str, Any]:
+    """Totals for the listed lines: ``unplanned`` (no executed action) and ``all``.
+
+    ``value`` covers only lines that have a cost; the lines and units without one are counted
+    separately so the figure is never read as a complete valuation.
+    """
+    return {
+        "cost_basis": AGED_COST_BASIS,
+        "unplanned": _value_block([ln for ln in lines if _is_unplanned(ln)]),
+        "all": _value_block(lines),
+    }
+
+
 def list_aged_stock(
     session: Session,
     *,
     tenant_id: str,
     customer_id: int | None = None,
+    with_value: bool = False,
+    as_of: date | None = None,
 ) -> dict[str, Any]:
-    """Slow and unsold lines for the board. This read does not create a case."""
+    """Slow and unsold lines for the board. This read does not create a case.
+
+    ``with_value`` adds a money value per line and a ``valuation`` summary (``AGED_COST_BASIS``).
+    The summary covers the listed lines only; ``truncated`` says whether the list was capped.
+    """
     lines, truncated = _collect_aged_stock(
         session,
         tenant_id=tenant_id,
         customer_id=customer_id,
         limit=MAX_LISTED_LINES,
     )
-    return {"lines": lines, "truncated": truncated}
+    out: dict[str, Any] = {"lines": lines, "truncated": truncated}
+    if with_value:
+        lookup = _unit_cost_lookup(session, tenant_id=tenant_id, as_of=as_of or date.today())
+        out["lines"] = value_aged_lines(lines, lookup)
+        out["valuation"] = summarise_aged_value(out["lines"])
+    return out
 
 
 def _srp_for_line(session: Session, *, customer_id: int, product_id: int, tenant_id: str) -> float | None:

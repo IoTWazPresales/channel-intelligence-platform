@@ -43,6 +43,12 @@ from app.services.commercial_planner.lineup_pricing_resolution import (
     resolve_lineup_pricing,
     sanitize_pct_evidence,
 )
+from app.services.lineup.new_customer_proposal import reporting_customer_ids
+from app.services.lineup.reporting_gate import (
+    cap_refused_rows,
+    refusal_warning,
+    split_rows_by_reporting,
+)
 
 _PCT_EVIDENCE_FIELDS = (
     "rebate_pct_evidence",
@@ -81,6 +87,10 @@ class ParseResult:
     unresolved_products: int
     line_count: int
     warnings: list[str] = field(default_factory=list)
+    # Rows for customers that are not reporting (reports expected off): refused, never written.
+    # ``refused_rows`` is capped for size; ``refused_count`` is exact.
+    refused_count: int = 0
+    refused_rows: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -95,6 +105,8 @@ class LineupParsePreview:
     warnings: list[str]
     can_apply: bool
     rows: list[dict[str, Any]] = field(default_factory=list)
+    # Rows an apply would refuse because their customer is not reporting.
+    refused_not_reporting_rows: int = 0
 
 
 def _safe_float(val: Any) -> float | None:
@@ -453,6 +465,17 @@ async def preview_current_lineup_file(
             row_limit=sample_limit,
         )
     )
+    refused_n = 0
+    if any(r.get("customer_id") is not None for r in rows):
+        _kept, refused = split_rows_by_reporting(rows, await reporting_customer_ids(db))
+        refused_n = len(refused)
+        refused_numbers = {r["source_row_number"] for r in refused}
+        for r in rows:
+            if r.get("source_row_number") in refused_numbers:
+                codes = list(r.get("diagnostic_codes") or [])
+                r["diagnostic_codes"] = [*codes, "customer_not_reporting"]
+        if refused_n:
+            warnings.append(refusal_warning(refused_n))
     return LineupParsePreview(
         total_rows=total_rows,
         resolved_products=resolved_products,
@@ -462,6 +485,7 @@ async def preview_current_lineup_file(
         warnings=warnings,
         can_apply=total_rows > 0 and resolved_products > 0,
         rows=rows,
+        refused_not_reporting_rows=refused_n,
     )
 
 
@@ -617,6 +641,23 @@ async def parse_current_lineup_file(
         else:
             row_dicts = [attach_month_split_json_to_row_dict(rd) for rd in row_dicts]
 
+        # One reporting-only rule (Warren 2026-11-19): rows for a customer that is not reporting are
+        # refused and reported back, never written and never dropped silently. A row with no
+        # resolved customer keeps its existing handling.
+        refused_all: list[dict[str, Any]] = []
+        if any(rd.get("customer_id") is not None for rd in row_dicts):
+            reporting_ids = await reporting_customer_ids(db)
+            row_dicts, refused_all = split_rows_by_reporting(row_dicts, reporting_ids)
+        if refused_all:
+            warnings.append(refusal_warning(len(refused_all)))
+            meta = dict(job.staged_metadata) if isinstance(job.staged_metadata, dict) else {}
+            meta["lineup_refused_rows"] = {
+                "count": len(refused_all),
+                "reason": refused_all[0]["reason"],
+                "rows": cap_refused_rows(refused_all),
+            }
+            job.staged_metadata = meta
+
         # Idempotent re-parse for draft cases: replace lines only (never touches case_po).
         if getattr(case, "commercial_status", None) == "draft_imported":
             await db.execute(
@@ -682,7 +723,8 @@ async def parse_current_lineup_file(
 
         if isinstance(slice_source_rows, list) and slice_source_rows:
             expected = len(slice_source_rows)
-            actual = len(lines_to_add)
+            # Refused rows are accounted for, not lost.
+            actual = len(lines_to_add) + len(refused_all)
             if actual != expected:
                 raise ValueError(
                     f"lineup slice row count mismatch: slice_source_rows={expected} persisted_lines={actual}"
@@ -796,6 +838,8 @@ async def parse_current_lineup_file(
             unresolved_products=unresolved_products,
             line_count=len(lines_to_add),
             warnings=warnings,
+            refused_count=len(refused_all),
+            refused_rows=cap_refused_rows(refused_all),
         )
 
     except Exception as exc:

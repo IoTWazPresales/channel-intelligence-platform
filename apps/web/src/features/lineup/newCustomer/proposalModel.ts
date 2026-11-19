@@ -11,7 +11,7 @@ export const SOURCE_OPTIONS: { value: SeedSource; label: string; explanation: st
     value: 'previous_lineups',
     label: 'SKUs from the previous line-ups',
     explanation:
-      "The distinct SKUs from this customer's own 3 most recent line-up periods. If the customer has no line-ups of its own, the master line-up's 3 most recent periods (all customers) are used instead. Superseded and cancelled line-ups are ignored.",
+      "The distinct SKUs from this customer's own 3 most recent line-up quarters before the requested quarter (the requested quarter never counts). If the customer has no line-ups of its own before it, the master line-up's 3 most recent quarters before it (all customers) are used instead. Superseded and cancelled line-ups are ignored.",
   },
 ];
 

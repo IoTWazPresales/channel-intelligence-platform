@@ -100,7 +100,7 @@ describe('NewCustomerLineup', () => {
     renderPage();
     expect(await screen.findByText(/Master-catalogue items with a PM bottom cost/)).toBeTruthy();
     expect(screen.getByText(/SKUs from the previous line-ups/)).toBeTruthy();
-    expect(screen.getByText(/own 3 most recent line-up periods/i)).toBeTruthy();
+    expect(screen.getByText(/own 3 most recent line-up quarters before the requested quarter/i)).toBeTruthy();
     expect(screen.getByText(/master line-up/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /approve/i })).toBeNull();
   });
