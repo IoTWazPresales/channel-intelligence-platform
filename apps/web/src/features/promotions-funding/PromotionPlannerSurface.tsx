@@ -23,6 +23,7 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -66,10 +67,11 @@ import {
   type CalendarClashSummary,
   type CaseCounts,
 } from '@/features/promotions-funding/plannerCards';
-import { ActionQueuePanel, type QueueCard } from '@/features/promotions-funding/plannerLayout/ActionQueuePanel';
 import { buildActionQueue, queueSummary } from '@/features/promotions-funding/plannerLayout/actionQueue';
-import { CaseSidePanel } from '@/features/promotions-funding/plannerLayout/CaseSidePanel';
-import { PlannerTimeline } from '@/features/promotions-funding/plannerLayout/PlannerTimeline';
+import { CustomerRowsTimeline } from '@/features/promotions-funding/planner/CustomerRowsTimeline';
+import { PlannerDetailPanel } from '@/features/promotions-funding/planner/PlannerDetailPanel';
+import { PlannerKpiCard } from '@/features/promotions-funding/planner/PlannerKpiCard';
+import { PlannerQueueSection, type PlannerQueueCard } from '@/features/promotions-funding/planner/PlannerQueueSection';
 import type { CporCaseListRow, CporCasesPage } from '@/features/promotions-funding/types';
 import { clashSummaryKey, invalidateClashSummary } from '@/features/promotions-funding/calendarClashKeys';
 import { apiGet, apiPost } from '@/lib/api';
@@ -315,7 +317,7 @@ function PlannerList({
       ? null
       : PLANNING_STAGES.reduce((n, st) => n + (statusCount(baseCounts, st) ?? 0), 0);
   const liveCount = statusCount(baseCounts, 'active');
-  const queueCards: QueueCard[] = [
+  const queueCards: PlannerQueueCard[] = [
     {
       key: 'overdue',
       label: 'Overdue approvals',
@@ -327,6 +329,20 @@ function PlannerList({
           ? 'Could not be loaded. Click to retry.'
           : `Awaiting approval with the window already started${queueCaptionNote}`,
       onClick: queueFigureState === 'empty' ? retryQueue : () => setParam('stage', 'proposed'),
+    },
+    {
+      key: 'low-stock',
+      label: 'Low stock risk',
+      value: null,
+      state: 'unavailable',
+      caption: 'Needs the customer’s sell-through stock cover per promotion line; no source feeds it yet.',
+    },
+    {
+      key: 'funding-gaps',
+      label: 'Funding gaps',
+      value: null,
+      state: 'unavailable',
+      caption: 'Needs the planned reserve, which is being rebuilt on customer sell-through; no gap is computed yet.',
     },
     {
       key: 'evidence',
@@ -344,12 +360,13 @@ function PlannerList({
       key: 'conflicts',
       label: 'Conflicting windows',
       value: clash?.kind === 'count' ? clash.count : null,
-      state: clashState === 'ready' && clash?.kind === 'unavailable' ? 'empty' : clashState,
+      // A calendar that is not set up is "not available", a different thing from a failed request.
+      state: clashState === 'ready' && clash?.kind === 'unavailable' ? 'unavailable' : clashState,
       tone: 'warning',
       caption: clashError
         ? 'Could not be loaded. Click to retry.'
         : clash?.kind === 'unavailable'
-          ? 'Customer calendar is not set up yet'
+          ? 'The customer calendar is not set up yet, so no clash count exists.'
           : 'Promotions overlapping a customer calendar event',
       onClick: clashError ? () => void refetchClash() : () => router.push('/promotions/timeline'),
     },
@@ -370,71 +387,115 @@ function PlannerList({
 
   return (
     <Box data-testid="promotion-planner">
-      <FundingChrome>
-      <Stack spacing={2} sx={{ mt: 2 }}>
-        <Alert severity="info" variant="outlined" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between">
-            <Typography variant="body2">
-              <b>One case, one lifecycle.</b> A promotion plan you author here is the same case the Case book
-              approves, watches live, claims and settles. Nothing is copied between “plan” and “funding”.
-            </Typography>
-            <Box sx={{ minWidth: { md: 520 } }}>
-              <LifecycleRail
-                stages={[...LIFECYCLE_STAGES]}
-                labels={STAGE_LABEL}
-                counts={counts}
-                dense
-                onSelect={(s) => setParam('stage', stageFilter === s ? null : s)}
-              />
+      <FundingChrome hideDomainHeader>
+        <Stack spacing={2} sx={{ mt: 2 }}>
+          {/* 1. Title, subtitle and the primary action */}
+          <Stack
+            data-testid="planner-header"
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={1.5}
+            alignItems={{ xs: 'flex-start', md: 'center' }}
+            justifyContent="space-between"
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h5" component="h1" sx={{ fontWeight: 600, lineHeight: 1.25 }}>
+                Promotion planner
+              </Typography>
+              <Typography variant="body2" color="text.secondary" data-testid="planner-subtitle">
+                Plan, approve and watch promotions by customer, from first draft to settlement.
+              </Typography>
             </Box>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Tooltip title="Propose lines from a customer and period. Uses that customer’s lineup or their own history — never other customers." arrow>
+                <span>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<AutoAwesomeOutlinedIcon />}
+                    onClick={() => setProposeOpen(true)}
+                    data-testid="planner-propose"
+                  >
+                    Create promotion plan
+                  </Button>
+                </span>
+              </Tooltip>
+              <Button size="small" variant="outlined" onClick={() => setCreateOpen(true)} data-testid="planner-new">
+                New plan
+              </Button>
+              <Button size="small" variant="outlined" component={NextLink} href="/reports">
+                Open in Reports
+              </Button>
+              <Button size="small" variant="outlined" component={NextLink} href="/admin/imports">
+                Import claims / payments
+              </Button>
+            </Stack>
           </Stack>
-        </Alert>
 
-        <HeadlineStrip columns={5}>
-          <HeadlineFigure
-            label="In planning"
-            value={planningCount ?? '—'}
-            unit="plans"
-            compact
-            testId="planner-card-planning"
-            state={countsState}
-            stateNote={baseCountsError ? 'Could not be loaded. Click to retry.' : undefined}
-            caption="Draft, proposed, approved and rejected; replaced cases left out"
-            onClick={baseCountsError ? () => void refetchBaseCounts() : () => setParam('stage', null)}
-          />
-          <HeadlineFigure
-            label="Live promotions"
-            value={liveCount ?? '—'}
-            unit="live"
-            compact
-            testId="planner-card-live"
-            state={countsState}
-            stateNote={baseCountsError ? 'Could not be loaded. Click to retry.' : undefined}
-            severity={countsState === 'ready' && (liveCount ?? 0) > 0 ? 'good' : 'neutral'}
-            caption="Cases running now; replaced cases left out"
-            onClick={baseCountsError ? () => void refetchBaseCounts() : () => setParam('stage', 'active')}
-          />
-          <HeadlineFigure
-            label="At-risk actions"
-            value={queueFigureState === 'ready' ? queueTotals.total : '—'}
-            unit="waiting"
-            compact
-            testId="planner-card-at-risk"
-            state={queueFigureState}
-            stateNote={queueFigureState === 'empty' ? 'Could not be loaded. Click to retry.' : undefined}
-            severity={queueFigureState === 'ready' && queueTotals.total > 0 ? 'warn' : 'neutral'}
-            caption={`Reapproval, awaiting approval and evidence outstanding${queueCaptionNote}`}
-            onClick={
-              queueFigureState === 'empty'
-                ? retryQueue
-                : () => document.getElementById('planner-action-queue')?.scrollIntoView?.({ behavior: 'smooth' })
-            }
-          />
+          {/* 2. Exactly five KPI cards, in the mock-up order */}
+          <Box
+            data-testid="planner-kpi-strip"
+            sx={{
+              display: 'grid',
+              gap: 1.5,
+              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(3, minmax(0, 1fr))', lg: 'repeat(5, minmax(0, 1fr))' },
+            }}
+          >
+            <PlannerKpiCard
+              testId="planner-kpi-planning"
+              label="In planning"
+              value={planningCount ?? '—'}
+              unit="plans"
+              state={countsState}
+              caption="Draft, proposed, approved and rejected; replaced cases left out"
+              onClick={baseCountsError ? () => void refetchBaseCounts() : () => setParam('stage', null)}
+            />
+            <PlannerKpiCard
+              testId="planner-kpi-live"
+              label="Live promotions"
+              value={liveCount ?? '—'}
+              unit="live"
+              state={countsState}
+              severity={countsState === 'ready' && (liveCount ?? 0) > 0 ? 'good' : 'neutral'}
+              caption="Cases running now; replaced cases left out"
+              onClick={baseCountsError ? () => void refetchBaseCounts() : () => setParam('stage', 'active')}
+            />
+            <PlannerKpiCard
+              testId="planner-kpi-reserve"
+              label="Planned reserve"
+              state="unavailable"
+              caption="Needs the planned reserve from customer sell-through price, cost and units, which is being rebuilt; no total is shown."
+            />
+            <PlannerKpiCard
+              testId="planner-kpi-support"
+              label="Actual support"
+              state="unavailable"
+              caption="Needs claims and payments tied to customer sell-through; no tenant-wide total exists yet."
+            />
+            <PlannerKpiCard
+              testId="planner-kpi-at-risk"
+              label="At-risk actions"
+              value={queueFigureState === 'ready' ? queueTotals.total : '—'}
+              unit="waiting"
+              state={queueFigureState}
+              severity={queueFigureState === 'ready' && queueTotals.total > 0 ? 'warn' : 'neutral'}
+              caption={`Reapproval, awaiting approval and evidence outstanding${queueCaptionNote}`}
+              onClick={
+                queueFigureState === 'empty'
+                  ? retryQueue
+                  : () => document.getElementById('planner-action-queue')?.scrollIntoView?.({ behavior: 'smooth' })
+              }
+            />
+          </Box>
+
+          {/* Secondary row: the other cards this page already had */}
+          <Box data-testid="planner-secondary-cards">
+            <HeadlineStrip columns={6}>
           <HeadlineFigure
             label="Drafts to finish"
             value={draftsN ?? '—'}
             unit="plans"
             compact
+            dense
             testId="planner-card-drafts"
             state={countsState}
             stateNote={baseCountsError ? 'Could not be loaded. Click to retry.' : undefined}
@@ -446,6 +507,7 @@ function PlannerList({
             value={endedN ?? '—'}
             unit="cases"
             compact
+            dense
             testId="planner-card-ended"
             state={countsState}
             stateNote={baseCountsError ? 'Could not be loaded. Click to retry.' : undefined}
@@ -457,6 +519,7 @@ function PlannerList({
             value={awaitingN ?? '—'}
             unit="cases"
             compact
+            dense
             testId="planner-card-awaiting"
             state={awaitingState}
             stateNote={awaitingError ? 'Could not be loaded. Click to retry.' : undefined}
@@ -469,6 +532,7 @@ function PlannerList({
             value={startingN ?? '—'}
             unit="campaigns"
             compact
+            dense
             testId="planner-card-starting"
             state={startingState}
             stateNote={startingError ? 'Could not be loaded. Click to retry.' : undefined}
@@ -490,6 +554,7 @@ function PlannerList({
             }
             unit={agedUnplanned.valued ? undefined : 'units'}
             compact
+            dense
             testId="planner-card-aged"
             state={aged.isLoading ? 'loading' : aged.isError ? 'empty' : 'ready'}
             stateNote={aged.isError ? 'Aged stock could not be loaded' : undefined}
@@ -501,6 +566,7 @@ function PlannerList({
             value={clash?.kind === 'count' ? clash.count : '—'}
             unit={clash?.kind === 'count' ? 'clashes' : undefined}
             compact
+            dense
             testId="planner-card-clashes"
             state={clashState === 'ready' && clash?.kind === 'unavailable' ? 'empty' : clashState}
             stateNote={
@@ -522,17 +588,11 @@ function PlannerList({
             }
             onClick={clashError ? () => void refetchClash() : () => router.push('/promotions/timeline')}
           />
-        </HeadlineStrip>
+            </HeadlineStrip>
+          </Box>
 
-        <Box
-          sx={{
-            display: 'grid',
-            gap: 2,
-            gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 3fr) minmax(300px, 2fr)' },
-            alignItems: 'start',
-          }}
-        >
-          <Stack spacing={2} sx={{ minWidth: 0 }}>
+          {/* 3. Filter bar: Customer, Status, date range, Distributor, Product */}
+          <Box data-testid="planner-filter-bar">
             <ScopeBar
               chips={[
                 ...LIFECYCLE_STAGES.map((s) => ({
@@ -572,34 +632,26 @@ function PlannerList({
                   onStageChange={(next) => setParam('stage', next)}
                 />
               }
-              trailing={
-                <Stack direction="row" spacing={1}>
-                  <Tooltip title="Propose lines from a customer and period. Uses that customer’s lineup or their own history — never other customers." arrow>
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<AutoAwesomeOutlinedIcon />}
-                        onClick={() => setProposeOpen(true)}
-                        data-testid="planner-propose"
-                      >
-                        Create promotion plan
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Button size="small" variant="contained" onClick={() => setCreateOpen(true)} data-testid="planner-new">
-                    New plan
-                  </Button>
-                </Stack>
-              }
             />
-            <PlannerTimeline
-              cases={rows}
-              today={today}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              status={isLoading ? 'loading' : isError ? 'error' : 'ready'}
-            />
+          </Box>
+
+          {/* 4. Timeline by customer (left) and the detail of the selected promotion (right) */}
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 3fr) minmax(300px, 2fr)' },
+              alignItems: 'start',
+            }}
+          >
+            <Stack spacing={2} sx={{ minWidth: 0 }}>
+              <CustomerRowsTimeline
+                cases={rows}
+                today={today}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                status={isLoading ? 'loading' : isError ? 'error' : 'ready'}
+              />
             <ModuleDataSection
               isLoading={isLoading}
               isError={isError}
@@ -658,10 +710,9 @@ function PlannerList({
                 <PlanGrid rows={rows} onOpen={setSelectedId} />
               )}
             </ModuleDataSection>
-          </Stack>
+            </Stack>
 
-          <Stack spacing={2}>
-            <CaseSidePanel
+            <PlannerDetailPanel
               row={selectedRow}
               unavailableId={selectedId != null && !selectedRow ? selectedId : null}
               actions={
@@ -672,30 +723,57 @@ function PlannerList({
               onOpen={onOpen}
               onClear={() => setSelectedId(null)}
             />
-            <Box id="planner-action-queue">
-            <ActionQueuePanel
-              items={queue}
-              loading={queueLoading}
-              unavailable={queueUnavailable}
-              incomplete={queueIncomplete}
-              cards={queueCards}
-              onRetry={retryQueue}
-              onSelect={setSelectedId}
-            />
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
-              The queue does not flag a live listing that is off the promo price. Listing, competitor price and
-              observed cover are on the Evidence column when you create a promotion plan.
-            </Typography>
+          </Box>
+
+          {/* 5. Action queue */}
+          <PlannerQueueSection
+            cards={queueCards}
+            items={queue}
+            loading={queueLoading}
+            unavailable={queueUnavailable}
+            incomplete={queueIncomplete}
+            onRetry={retryQueue}
+            onSelect={setSelectedId}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
+            The queue does not flag a live listing that is off the promo price. Listing, competitor price and
+            observed cover are on the Evidence column when you create a promotion plan.
+          </Typography>
+
+          <Alert severity="info" variant="outlined" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between">
+              <Typography variant="body2">
+                <b>One case, one lifecycle.</b> A promotion plan you author here is the same case the Case book
+                approves, watches live, claims and settles. Nothing is copied between “plan” and “funding”.
+              </Typography>
+              <Box sx={{ minWidth: { md: 520 } }}>
+                <LifecycleRail
+                  stages={[...LIFECYCLE_STAGES]}
+                  labels={STAGE_LABEL}
+                  counts={counts}
+                  dense
+                  onSelect={(s) => setParam('stage', stageFilter === s ? null : s)}
+                />
+              </Box>
+            </Stack>
+          </Alert>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' },
+              alignItems: 'start',
+            }}
+          >
             <Box id="planner-aged-stock">
               <Panel title="Aged and slow stock" subtitle="One draft per customer, or one action on a line" flush>
                 <AgedStockPanel onOpen={onOpen} />
               </Panel>
             </Box>
             <CapabilityLedger items={PLANNER_CAPABILITIES} />
-          </Stack>
-        </Box>
-      </Stack>
+          </Box>
+        </Stack>
 
       <Dialog
         open={proposeOpen}

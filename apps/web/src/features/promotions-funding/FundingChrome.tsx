@@ -98,18 +98,20 @@ export function FundingChrome({
     staleTime: 60_000,
   });
 
+  // N9 (live audit 2026-11-19): until the counts arrive show a loading marker, never 0.
+  const countsLoaded = listPage?.status_counts != null;
   const statusCounts = listPage?.status_counts ?? {};
-  const planningN = countPlanning(statusCounts);
-  const liveN = statusCounts.active ?? 0;
-  const endedN = statusCounts.ended ?? 0;
+  const planningN = countsLoaded ? countPlanning(statusCounts) : null;
+  const liveN = countsLoaded ? (statusCounts.active ?? 0) : null;
+  const endedN = countsLoaded ? (statusCounts.ended ?? 0) : null;
   const period = briefMeta?.tenant_period || briefMeta?.tenant_stamp || '';
   const bookAmt = settlement?.book_total;
   const delivery = portfolio?.totals?.delivery_rate ?? null;
   const meta = [
     period || null,
-    `${planningN} plans in planning (draft / proposed / approved)`,
-    `${liveN} live`,
-    `${endedN} ended`,
+    countsLoaded ? `${planningN} plans in planning (draft / proposed / approved)` : 'Loading counts…',
+    countsLoaded ? `${liveN} live` : null,
+    countsLoaded ? `${endedN} ended` : null,
     bookAmt != null ? `book ${fmtCompact(bookAmt, settlement?.currency_code)}` : null,
     delivery != null ? `delivery rate ${fmtPct(delivery)} (mixed evidence)` : null,
   ]
@@ -117,7 +119,7 @@ export function FundingChrome({
     .join(' · ');
 
   const tabCounts: Partial<Record<FundingLens, number>> = {
-    planner: planningN,
+    planner: planningN ?? undefined,
     book: settlement?.open_case_count ?? listPage?.total,
     ...counts,
   };
