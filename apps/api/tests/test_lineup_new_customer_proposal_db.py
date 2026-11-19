@@ -285,8 +285,8 @@ async def test_approve_creates_the_ticked_lines_approved_with_audit_in_one_trans
 
 
 @pytest.mark.anyio
-async def test_mid_quarter_date_is_stored_as_the_quarter_start_and_blocks_a_second_approval(session):
-    """Review B3: a mid-quarter date never becomes its own period (no split quarter, no duplicates)."""
+async def test_mid_quarter_date_is_stored_as_the_quarter_start(session):
+    """Review B3: a mid-quarter date never becomes its own period (no split, no duplicates)."""
     tag = secrets.token_hex(3)
     cust = await _customer(session, tag, "mid", reports=True)
     prod = await _product(session, tag, "p", cost=2)
