@@ -2,8 +2,10 @@
 
 An assignment is a row, not a permission. The account predicate is added to a
 query only while this request's filter is on. Clear is a sign-in flag the
-client sends on ``X-Cip-My-Accounts: off``. It is not stored on the user and
-not a row-security policy. Product-line scope is a separate gate and stays on
+client sends on ``X-Cip-My-Accounts: off``; ``on`` turns it on for a user whose
+default is off. Neither is stored on the user, and neither is a row-security
+policy. Whether it starts on is ``filter_default_on`` (D-0141, behind
+``CIP_STARTING_SCREEN_POLICY``). Product-line scope is a separate gate and stays on
 either way. Import steward and import apply do not call this.
 """
 
@@ -27,9 +29,44 @@ ACCOUNT_PREDICATE_BIND = "my_account_customer_ids"
 CLEAR_HEADER = "x-cip-my-accounts"
 
 
-def header_clears_my_accounts(headers: Any) -> bool:
+def header_my_accounts_choice(headers: Any) -> str | None:
+    """``off`` (Clear), ``on`` (Use my accounts) or None (the default for this user)."""
     raw = headers.get(CLEAR_HEADER) if headers is not None else None
-    return str(raw or "").strip().lower() == "off"
+    value = str(raw or "").strip().lower()
+    return value if value in ("off", "on") else None
+
+
+def header_clears_my_accounts(headers: Any) -> bool:
+    return header_my_accounts_choice(headers) == "off"
+
+
+ACCOUNT_MANAGER_JOB = "account_manager"
+MY_ACCOUNTS_STARTER_PATH = "/dashboards?start=my_accounts"
+BRIEF_PATH = "/brief"
+
+
+def filter_default_on(*, policy: str, job: str | None, assigned_count: int) -> bool:
+    """D-0141 option 1 under policy ``d0141``; today's rule (any assignment) under ``assigned``."""
+    if assigned_count <= 0:
+        return False
+    if policy == "d0141":
+        return job == ACCOUNT_MANAGER_JOB
+    return True
+
+
+def filter_on(*, default_on: bool, assigned_count: int, choice: str | None) -> bool:
+    if assigned_count <= 0 or choice == "off":
+        return False
+    return True if choice == "on" else default_on
+
+
+def starting_screen(*, policy: str, job: str | None, assigned_count: int) -> str:
+    """Where sign-in lands. Under ``assigned`` everyone lands on Brief, as today."""
+    if policy == "d0141" and filter_default_on(
+        policy=policy, job=job, assigned_count=assigned_count
+    ):
+        return MY_ACCOUNTS_STARTER_PATH
+    return BRIEF_PATH
 
 
 def account_predicate(column: Any):
@@ -97,16 +134,41 @@ async def load_assigned_customer_ids(db: AsyncSession, *, tenant_id: str, user_i
     return [int(cid) for cid in rows]
 
 
+async def load_user_job(db: AsyncSession, user_id: int) -> str | None:
+    """The user's job (N-0100 part B). An absent column (migration not applied) is no job."""
+    from sqlalchemy import select
+
+    from app.models.iam import AppUser
+
+    try:
+        async with db.begin_nested():
+            row = await db.execute(select(AppUser.job).where(AppUser.id == user_id))
+            return row.scalar_one_or_none()
+    except ProgrammingError:
+        return None
+
+
 async def bind_my_accounts(db: AsyncSession, user: dict | None, headers: Any) -> Token:
-    """Turn the filter on for this request when the user has accounts and has not cleared it."""
-    if user is None or header_clears_my_accounts(headers):
+    """Turn the filter on for this request when the user has accounts, it starts on for them
+    (``filter_default_on``) or they chose it, and they have not cleared it."""
+    choice = header_my_accounts_choice(headers)
+    if user is None or choice == "off":
         return request_my_account_ids.set(None)
     uid = str(user.get("id") or "")
     if not uid.isdigit():
         return request_my_account_ids.set(None)
     tenant_id = str(user.get("tenant_id") or "default").strip() or "default"
     ids = await load_assigned_customer_ids(db, tenant_id=tenant_id, user_id=int(uid))
-    return request_my_account_ids.set(frozenset(ids) if ids else None)
+    if not ids:
+        return request_my_account_ids.set(None)
+    if choice != "on":
+        from app.core.config import get_settings
+
+        policy = get_settings().cip_starting_screen_policy
+        job = await load_user_job(db, int(uid)) if policy == "d0141" else None
+        if not filter_default_on(policy=policy, job=job, assigned_count=len(ids)):
+            return request_my_account_ids.set(None)
+    return request_my_account_ids.set(frozenset(ids))
 
 
 def reset_my_accounts(token: Token) -> None:

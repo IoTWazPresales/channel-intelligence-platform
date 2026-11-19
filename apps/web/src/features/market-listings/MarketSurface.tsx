@@ -30,6 +30,7 @@ import { useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { ActivationTimingAlerts } from '@/features/market-listings/ActivationTimingAlerts';
 import { COMPETITION_CAPABILITIES, LISTING_CAPABILITIES } from '@/features/market-listings/capabilities';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
 import { ListingCaptureHealth } from '@/features/market-listings/ListingCaptureHealth';
@@ -1210,7 +1211,7 @@ export function MarketSurface() {
             <Alert severity="info" variant="outlined">
               Each observation inside a live case window is compared with that case line’s SRP. Three outcomes only:{' '}
               <b>live at price</b>, <b>not at promo price</b>, <b>no promotion covering</b>. Late activation and early
-              deactivation are derivable from the same timeline but are not computed yet (data only).
+              deactivation are read from the same checks, below.
             </Alert>
             <Box
               sx={{
@@ -1309,6 +1310,7 @@ export function MarketSurface() {
                 <CapabilityLedger items={LISTING_CAPABILITIES.slice(2, 5)} title="Activation jobs" />
               </Stack>
             </Box>
+            <ActivationTimingAlerts />
           </Stack>
         ) : null}
 

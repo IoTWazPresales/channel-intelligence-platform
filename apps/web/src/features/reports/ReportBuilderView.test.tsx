@@ -96,6 +96,8 @@ beforeEach(() => {
   api.apiDownloadBlob.mockClear();
   api.apiGet.mockImplementation(async (url: string) => {
     if (url === '/api/v1/semantics/catalog') return fixtureCatalog;
+    // The dashboard list is keyed by the signed-in user (PR #111), so the view reads /auth/me too.
+    if (url === '/api/v1/auth/me') return { id: '1', tenant_id: 'test-tenant-a', role: 'planner' };
     if (url === '/api/v1/saved-reports') return fixtureSavedReports();
     if (url === '/api/v1/reports/schedules') return fixtureSchedules();
     if (url.startsWith('/api/v1/reports/inbox')) return fixtureInbox();
