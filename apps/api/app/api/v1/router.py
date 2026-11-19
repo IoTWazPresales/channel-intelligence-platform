@@ -99,6 +99,7 @@ from app.api.v1.endpoints import (
     inbound_shipments,
     inventory,
     lineup,
+    lineup_new_customer,
     listing_capture,
     planning,
     platform_audit,
@@ -196,6 +197,7 @@ api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
 api_router.include_router(promo_exports.router, prefix="/promotions", tags=["promotions"])
 api_router.include_router(lineup.router, prefix="/lineup", tags=["lineup"])
+api_router.include_router(lineup_new_customer.router, prefix="/lineup", tags=["lineup"])
 api_router.include_router(competition.router, prefix="/competition", tags=["competition"])
 api_router.include_router(roadmap.router, prefix="/roadmap", tags=["roadmap"])
 api_router.include_router(budgets.router, prefix="/budgets", tags=["budgets"])
