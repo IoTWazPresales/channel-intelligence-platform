@@ -46,9 +46,9 @@ class _R:
 
 
 def _db(case, results):
+    """Batched reconcile_cases query order: cases first, then the shared per-batch queries."""
     db = MagicMock()
-    db.get = AsyncMock(return_value=case)
-    db.execute = AsyncMock(side_effect=list(results))
+    db.execute = AsyncMock(side_effect=[_R([], scalar_rows=[case] if case else []), *results])
     return db
 
 
@@ -90,6 +90,7 @@ def _with_product_results(
     resolved_scalar = sorted({int(r[0]) for r in shipped if r[0] is not None})
     lineup_lines = [
         SimpleNamespace(
+            case_id=1,
             product_id=int(product_id),
             customer_id=int(cust_id) if cust_id is not None else None,
             quantity_units=float(units),
@@ -100,14 +101,16 @@ def _with_product_results(
         for cust_id, product_id, units, val in planned
     ]
     return [
-        _R([(500, "PO-1", "1")]),  # po_rows
         _R([], scalar_one=None),  # OPEN_CHANNEL canonical id
         _R([], scalar_rows=[]),  # OPEN_CHANNEL alias ids
+        _R([(1, 500, "PO-1", "1")]),  # po_rows (case_id, po_id, raw, norm)
         _R([], scalar_rows=lineup_lines),  # lineup lines for planned aggregation
-        _R(shipped),  # shipped_rows (resolved_customer_id, product_id, units, value) — line_state='shipped'
-        _R(pipeline or []),  # pipeline_rows (resolved_customer_id, product_id, units) — line_state='open_order'
-        _R([], scalar_rows=resolved_scalar),  # resolved_customers on POs
-        _R([], scalar_rows=([500] if po_shipped else [])),  # po_with_shipments
+        # shipped_rows (case_id, resolved_customer_id, product_id, units, value) — line_state='shipped'
+        _R([(1, *r) for r in shipped]),
+        # pipeline_rows (case_id, resolved_customer_id, product_id, units) — line_state='open_order'
+        _R([(1, *r) for r in (pipeline or [])]),
+        _R([(1, c) for c in resolved_scalar]),  # resolved_customers on POs (case_id, customer_id)
+        _R([(1, 500)] if po_shipped else []),  # po_with_shipments (case_id, po_id)
         _R(meta),  # product meta
         _R([(10, fx)] if fx is not None else []),  # fx
         _R(customers),  # customer names
@@ -225,14 +228,14 @@ def test_unplanned_different_product_line():
 
 def test_po_no_match_no_shipments_anywhere():
     results = [
-        _R([(500, "PO-1", "1")]),
         _R([], scalar_one=None),
         _R([], scalar_rows=[]),
+        _R([(1, 500, "PO-1", "1")]),
         _R([], scalar_rows=[]),
         _R([]),  # shipped_rows
         _R([]),  # pipeline_rows
-        _R([], scalar_rows=[]),
-        _R([], scalar_rows=[]),
+        _R([]),  # resolved customers
+        _R([]),  # po_with_shipments
     ]
     out = asyncio.run(mod.reconcile_case(_db(_case(), results), 1))
     assert out["summary"]["po_no_match"] == 1

@@ -23,6 +23,7 @@ Customer slice flag (not in UNITS_FLAGS rollup):
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import func, select
@@ -105,61 +106,298 @@ def _rollup_summary(slices: list[dict[str, Any]]) -> dict[str, int]:
     return summary
 
 
+def _unavailable_payload(case: CommercialLineupCase) -> dict[str, Any]:
+    return {
+        "case_id": int(case.id),
+        "commercial_status": case.commercial_status,
+        "plan_currency": case.currency_code,
+        "linked_po_count": 0,
+        "products": [],
+        "customers": [],
+        "po_flags": [],
+        "summary": {f: 0 for f in UNITS_FLAGS},
+        "data_unavailable": True,
+    }
+
+
 async def reconcile_case(db: AsyncSession, case_id: int) -> dict[str, Any]:
-    case = await db.get(CommercialLineupCase, case_id)
-    if case is None:
+    """One case: a thin wrapper over :func:`reconcile_cases`."""
+    out = await reconcile_cases(db, [case_id])
+    payload = out.get(int(case_id))
+    if payload is None:
         raise CaseNotFoundError(str(case_id))
+    return payload
+
+
+async def reconcile_cases(db: AsyncSession, case_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
+    """Reconcile many cases in a fixed number of queries (independent of ``len(case_ids)``).
+
+    Returns ``{case_id: payload}`` where each payload is exactly what the old per-case path
+    produced. Unknown case ids are omitted (``reconcile_case`` raises ``CaseNotFoundError``).
+    A query failure (optional table missing, etc.) gives every found case the graceful
+    ``data_unavailable`` payload rather than a 500; a compute failure does so for that case only.
+    """
+    ids = list(dict.fromkeys(int(c) for c in case_ids))
+    if not ids:
+        return {}
+    cases = (
+        await db.execute(select(CommercialLineupCase).where(CommercialLineupCase.id.in_(ids)))
+    ).scalars().all()
+    by_id = {int(c.id): c for c in cases}
+    ordered = [by_id[i] for i in ids if i in by_id]
+    if not ordered:
+        return {}
 
     try:
-        return await _reconcile_case_inner(db, case)
-    except CaseNotFoundError:
-        raise
+        data = await _fetch_batch(db, [int(c.id) for c in ordered])
     except Exception:  # optional-table / query failure -> graceful empty state, not 500
-        logger.exception("po-reconciliation failed for case_id=%s", case_id)
-        return {
-            "case_id": case_id,
-            "commercial_status": case.commercial_status,
-            "plan_currency": case.currency_code,
-            "linked_po_count": 0,
-            "products": [],
-            "customers": [],
-            "po_flags": [],
-            "summary": {f: 0 for f in UNITS_FLAGS},
-            "data_unavailable": True,
-        }
+        logger.exception("po-reconciliation batch failed for %d case(s)", len(ordered))
+        return {int(c.id): _unavailable_payload(c) for c in ordered}
+
+    out: dict[int, dict[str, Any]] = {}
+    for case in ordered:
+        try:
+            out[int(case.id)] = _build_case_payload(case, data)
+        except Exception:
+            logger.exception("po-reconciliation failed for case_id=%s", case.id)
+            out[int(case.id)] = _unavailable_payload(case)
+    return out
 
 
 async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) -> dict[str, Any]:
-    case_id = int(case.id)
+    """Fetch + build for an already-loaded case; errors propagate (no graceful fallback)."""
+    data = await _fetch_batch(db, [int(case.id)])
+    return _build_case_payload(case, data)
+
+
+class _BatchData:
+    """Everything the per-case builder needs, fetched for all cases at once."""
+
+    def __init__(self) -> None:
+        self.open_channel_customer_id: int | None = None
+        self.open_channel_alias_ids: frozenset[int] = frozenset()
+        self.po_rows: dict[int, list[tuple[int, Any, Any]]] = {}
+        self.lines: dict[int, list[Any]] = {}
+        self.shipped_rows: dict[int, list[tuple[Any, Any, Any, Any]]] = {}
+        self.pipeline_rows: dict[int, list[tuple[Any, Any, Any]]] = {}
+        self.resolved_rows: dict[int, list[Any]] = {}
+        self.po_with_shipments: dict[int, set[int]] = {}
+        self.meta: dict[int, dict[str, Any]] = {}
+        self.fx_by_product: dict[int, float] = {}
+        self.customer_names: dict[int, str] = {}
+
+
+async def _fetch_batch(db: AsyncSession, case_ids: list[int]) -> _BatchData:
+    d = _BatchData()
+    d.open_channel_customer_id, d.open_channel_alias_ids = (
+        await get_open_channel_canonical_and_aliases(db)
+    )
 
     po_rows = (
         await db.execute(
-            select(PurchaseOrder.id, PurchaseOrder.po_number_raw, PurchaseOrder.po_number_norm)
-            .join(CommercialLineupCasePo, CommercialLineupCasePo.purchase_order_id == PurchaseOrder.id)
-            .where(CommercialLineupCasePo.case_id == case_id)
+            select(
+                CommercialLineupCasePo.case_id,
+                PurchaseOrder.id,
+                PurchaseOrder.po_number_raw,
+                PurchaseOrder.po_number_norm,
+            )
+            .join(
+                CommercialLineupCasePo,
+                CommercialLineupCasePo.purchase_order_id == PurchaseOrder.id,
+            )
+            .where(CommercialLineupCasePo.case_id.in_(case_ids))
+            .order_by(CommercialLineupCasePo.case_id, CommercialLineupCasePo.id)
         )
     ).all()
-    po_ids = [int(r[0]) for r in po_rows]
-    po_label = {int(r[0]): (r[1] or r[2]) for r in po_rows}
-
-    open_channel_customer_id, open_channel_alias_ids = await get_open_channel_canonical_and_aliases(db)
-
-    def _canon_cust(customer_id: int | None) -> int | None:
-        return canonical_open_channel_customer_id(
-            customer_id,
-            canonical_id=open_channel_customer_id,
-            alias_ids=open_channel_alias_ids,
-        )
+    for case_id, po_id, raw, norm in po_rows:
+        d.po_rows.setdefault(int(case_id), []).append((int(po_id), raw, norm))
 
     lineup_lines = (
         await db.execute(
             select(CommercialLineupLine).where(
-                CommercialLineupLine.case_id == case_id,
+                CommercialLineupLine.case_id.in_(case_ids),
                 CommercialLineupLine.product_id.isnot(None),
                 *active_lineup_line_filters(),
             )
         )
     ).scalars().all()
+    for ln in lineup_lines:
+        d.lines.setdefault(int(ln.case_id), []).append(ln)
+
+    if po_rows:
+        link_on = CommercialLineupCasePo.purchase_order_id == EV.purchase_order_id
+        link_case = CommercialLineupCasePo.case_id
+        link_in = link_case.in_(case_ids)
+        # SHIPPED execution only (line_state='shipped'). Bitemporal read is ON so
+        # apply_active_evidence_filter is a no-op — the line_state gate MUST be explicit
+        # here or open_order (pipeline) inbound leaks into shipped and inflates fill rate.
+        # See docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md.
+        shipped_rows = (
+            await db.execute(
+                apply_active_evidence_filter(
+                    select(
+                        CommercialLineupCasePo.case_id,
+                        EV.resolved_customer_id,
+                        EV.product_id,
+                        func.coalesce(func.sum(EV.quantity), 0),
+                        func.coalesce(
+                            func.sum(
+                                func.coalesce(
+                                    EV.amount,
+                                    func.coalesce(EV.quantity, 0) * func.coalesce(EV.unit_price, 0),
+                                )
+                            ),
+                            0,
+                        ),
+                    )
+                    .select_from(EV)
+                    .join(CommercialLineupCasePo, link_on)
+                    .where(
+                        link_in,
+                        EV.product_id.isnot(None),
+                        EV.line_state == LINE_SHIPPED,
+                    )
+                    .group_by(link_case, EV.resolved_customer_id, EV.product_id),
+                    model=EV,
+                )
+            )
+        ).all()
+        for row in shipped_rows:
+            d.shipped_rows.setdefault(int(row[0]), []).append(tuple(row[1:]))
+
+        # PIPELINE (line_state='open_order'): allocated/inbound, NOT shipped. Surfaced as its
+        # own forward metric; never summed into shipped or fill. An open line covered by its
+        # strict shipped twins is skipped; a partly shipped one counts its remainder (D-0065).
+        # Shipped totals are summed over active evidence rows only (same filter as the reads).
+        # The twin CTE is a whole-table pass, so it MUST run once per batch, not once per case.
+        twin = twin_remainder(EV, row_filter=active_evidence_line_predicate)
+        pipeline_rows = (
+            await db.execute(
+                apply_active_evidence_filter(
+                    select(
+                        CommercialLineupCasePo.case_id,
+                        EV.resolved_customer_id,
+                        EV.product_id,
+                        func.coalesce(func.sum(twin.counted_quantity), 0),
+                    )
+                    .select_from(EV)
+                    .join(CommercialLineupCasePo, link_on)
+                    .outerjoin(twin.subquery, twin.onclause)
+                    .where(
+                        link_in,
+                        EV.product_id.isnot(None),
+                        EV.line_state == LINE_OPEN_ORDER,
+                        twin.kept,
+                    )
+                    .group_by(link_case, EV.resolved_customer_id, EV.product_id),
+                    model=EV,
+                )
+            )
+        ).all()
+        for row in pipeline_rows:
+            d.pipeline_rows.setdefault(int(row[0]), []).append(tuple(row[1:]))
+
+        resolved_rows = (
+            await db.execute(
+                apply_active_evidence_filter(
+                    select(CommercialLineupCasePo.case_id, EV.resolved_customer_id)
+                    .select_from(EV)
+                    .join(CommercialLineupCasePo, link_on)
+                    .where(link_in, EV.resolved_customer_id.isnot(None))
+                    .distinct(),
+                    model=EV,
+                )
+            )
+        ).all()
+        for case_id, cust in resolved_rows:
+            d.resolved_rows.setdefault(int(case_id), []).append(cust)
+
+        shipment_po_rows = (
+            await db.execute(
+                apply_active_evidence_filter(
+                    select(CommercialLineupCasePo.case_id, EV.purchase_order_id)
+                    .select_from(EV)
+                    .join(CommercialLineupCasePo, link_on)
+                    .where(link_in)
+                    .distinct(),
+                    model=EV,
+                )
+            )
+        ).all()
+        for case_id, po_id in shipment_po_rows:
+            if po_id is not None:
+                d.po_with_shipments.setdefault(int(case_id), set()).add(int(po_id))
+
+    # Product / customer lookups for every case at once (one query each).
+    product_ids: set[int] = set()
+    customer_ids: set[int] = set()
+
+    def _canon(customer_id: int | None) -> int | None:
+        return canonical_open_channel_customer_id(
+            customer_id,
+            canonical_id=d.open_channel_customer_id,
+            alias_ids=d.open_channel_alias_ids,
+        )
+
+    for lines in d.lines.values():
+        for ln in lines:
+            product_ids.add(int(ln.product_id))
+            c = _canon(
+                effective_lineup_customer_id(ln, open_channel_customer_id=d.open_channel_customer_id)
+            )
+            if c is not None:
+                customer_ids.add(c)
+    for rows in d.shipped_rows.values():
+        for cust_id, pid, _u, _v in rows:
+            product_ids.add(int(pid))
+            c = _canon(int(cust_id) if cust_id is not None else None)
+            if c is not None:
+                customer_ids.add(c)
+
+    if product_ids:
+        for pid, name, pline, bu in (
+            await db.execute(
+                select(
+                    DimProduct.id, DimProduct.name, DimProduct.product_line, DimProduct.business_unit
+                ).where(DimProduct.id.in_(sorted(product_ids)))
+            )
+        ).all():
+            d.meta[int(pid)] = {"product_name": name, "product_line": pline, "business_unit": bu}
+        for pid, fx in (
+            await db.execute(
+                select(
+                    CommercialSkuAssumption.product_id,
+                    CommercialSkuAssumption.fx_plan_currency_per_cost_currency,
+                ).where(CommercialSkuAssumption.product_id.in_(sorted(product_ids)))
+            )
+        ).all():
+            if fx is not None:
+                d.fx_by_product[int(pid)] = float(fx)
+    if customer_ids:
+        for cid, name in (
+            await db.execute(
+                select(DimCustomer.id, DimCustomer.name).where(DimCustomer.id.in_(sorted(customer_ids)))
+            )
+        ).all():
+            d.customer_names[int(cid)] = str(name)
+    return d
+
+
+def _build_case_payload(case: CommercialLineupCase, d: _BatchData) -> dict[str, Any]:
+    case_id = int(case.id)
+    open_channel_customer_id = d.open_channel_customer_id
+
+    def _canon_cust(customer_id: int | None) -> int | None:
+        return canonical_open_channel_customer_id(
+            customer_id,
+            canonical_id=open_channel_customer_id,
+            alias_ids=d.open_channel_alias_ids,
+        )
+
+    po_rows = d.po_rows.get(case_id, [])
+    po_ids = [r[0] for r in po_rows]
+    po_label = {r[0]: (r[1] or r[2]) for r in po_rows}
+    lineup_lines = d.lines.get(case_id, [])
 
     planned: dict[tuple[int | None, int], dict[str, float]] = {}
     uom_by_product: dict[int, set[str]] = {}
@@ -180,101 +418,19 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
     shipped: dict[tuple[int | None, int], dict[str, float]] = {}
     pipeline: dict[tuple[int | None, int], float] = {}
     resolved_customers_on_pos: set[int] = set()
-    if po_ids:
-        # SHIPPED execution only (line_state='shipped'). Bitemporal read is ON so
-        # apply_active_evidence_filter is a no-op — the line_state gate MUST be explicit
-        # here or open_order (pipeline) inbound leaks into shipped and inflates fill rate.
-        # See docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md.
-        shipped_rows = (
-            await db.execute(
-                apply_active_evidence_filter(
-                    select(
-                        EV.resolved_customer_id,
-                        EV.product_id,
-                        func.coalesce(func.sum(EV.quantity), 0),
-                        func.coalesce(
-                            func.sum(
-                                func.coalesce(
-                                    EV.amount,
-                                    func.coalesce(EV.quantity, 0) * func.coalesce(EV.unit_price, 0),
-                                )
-                            ),
-                            0,
-                        ),
-                    )
-                    .where(
-                        EV.purchase_order_id.in_(po_ids),
-                        EV.product_id.isnot(None),
-                        EV.line_state == LINE_SHIPPED,
-                    )
-                    .group_by(EV.resolved_customer_id, EV.product_id),
-                    model=EV,
-                )
-            )
-        ).all()
-        for cust_id, pid, units, val in shipped_rows:
-            key = (_canon_cust(int(cust_id) if cust_id is not None else None), int(pid))
-            shipped[key] = {"units": float(units), "value_cost": float(val)}
-
-        # PIPELINE (line_state='open_order'): allocated/inbound, NOT shipped. Surfaced as its
-        # own forward metric; never summed into shipped or fill. An open line covered by its
-        # strict shipped twins is skipped; a partly shipped one counts its remainder (D-0065).
-        # Shipped totals are summed over active evidence rows only (same filter as the reads).
-        twin = twin_remainder(EV, row_filter=active_evidence_line_predicate)
-        pipeline_rows = (
-            await db.execute(
-                apply_active_evidence_filter(
-                    select(
-                        EV.resolved_customer_id,
-                        EV.product_id,
-                        func.coalesce(func.sum(twin.counted_quantity), 0),
-                    )
-                    .select_from(EV)
-                    .outerjoin(twin.subquery, twin.onclause)
-                    .where(
-                        EV.purchase_order_id.in_(po_ids),
-                        EV.product_id.isnot(None),
-                        EV.line_state == LINE_OPEN_ORDER,
-                        twin.kept,
-                    )
-                    .group_by(EV.resolved_customer_id, EV.product_id),
-                    model=EV,
-                )
-            )
-        ).all()
-        for cust_id, pid, units in pipeline_rows:
-            key = (_canon_cust(int(cust_id) if cust_id is not None else None), int(pid))
-            pipeline[key] = pipeline.get(key, 0.0) + float(units)
-
-        resolved_rows = (
-            await db.execute(
-                apply_active_evidence_filter(
-                    select(EV.resolved_customer_id)
-                    .where(
-                        EV.purchase_order_id.in_(po_ids),
-                        EV.resolved_customer_id.isnot(None),
-                    )
-                    .distinct(),
-                    model=EV,
-                )
-            )
-        ).scalars().all()
-        resolved_customers_on_pos = {
-            _canon_cust(int(x)) for x in resolved_rows if x is not None
-        }
-        resolved_customers_on_pos.discard(None)
-
     po_with_shipments: set[int] = set()
     if po_ids:
-        rows = (
-            await db.execute(
-                apply_active_evidence_filter(
-                    select(EV.purchase_order_id).where(EV.purchase_order_id.in_(po_ids)).distinct(),
-                    model=EV,
-                )
-            )
-        ).scalars().all()
-        po_with_shipments = {int(x) for x in rows if x is not None}
+        for cust_id, pid, units, val in d.shipped_rows.get(case_id, []):
+            key = (_canon_cust(int(cust_id) if cust_id is not None else None), int(pid))
+            shipped[key] = {"units": float(units), "value_cost": float(val)}
+        for cust_id, pid, units in d.pipeline_rows.get(case_id, []):
+            key = (_canon_cust(int(cust_id) if cust_id is not None else None), int(pid))
+            pipeline[key] = pipeline.get(key, 0.0) + float(units)
+        resolved_customers_on_pos = {
+            _canon_cust(int(x)) for x in d.resolved_rows.get(case_id, []) if x is not None
+        }
+        resolved_customers_on_pos.discard(None)
+        po_with_shipments = d.po_with_shipments.get(case_id, set())
     po_flags = [
         {"purchase_order_id": pid, "po_number_raw": po_label.get(pid), "flag": "po_no_match"}
         for pid in po_ids
@@ -282,32 +438,9 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
     ]
 
     product_ids = sorted({pid for _c, pid in set(planned) | set(shipped)})
-    customer_ids = sorted({c for c, _p in set(planned) | set(shipped) if c is not None})
-
-    meta: dict[int, dict[str, Any]] = {}
-    fx_by_product: dict[int, float] = {}
-    customer_names: dict[int, str] = {}
-    if product_ids:
-        for pid, name, pline, bu in (
-            await db.execute(
-                select(DimProduct.id, DimProduct.name, DimProduct.product_line, DimProduct.business_unit)
-                .where(DimProduct.id.in_(product_ids))
-            )
-        ).all():
-            meta[int(pid)] = {"product_name": name, "product_line": pline, "business_unit": bu}
-        for pid, fx in (
-            await db.execute(
-                select(CommercialSkuAssumption.product_id, CommercialSkuAssumption.fx_plan_currency_per_cost_currency)
-                .where(CommercialSkuAssumption.product_id.in_(product_ids))
-            )
-        ).all():
-            if fx is not None:
-                fx_by_product[int(pid)] = float(fx)
-    if customer_ids:
-        for cid, name in (
-            await db.execute(select(DimCustomer.id, DimCustomer.name).where(DimCustomer.id.in_(customer_ids)))
-        ).all():
-            customer_names[int(cid)] = str(name)
+    meta = d.meta
+    fx_by_product = d.fx_by_product
+    customer_names = d.customer_names
 
     cust_keys: set[int | None] = {c for c, _ in planned} | {c for c, _ in shipped}
     if not cust_keys and lineup_lines:

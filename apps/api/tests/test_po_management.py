@@ -201,6 +201,17 @@ def test_project_reconciliation_uses_business_unit_when_product_line_null():
     assert nv["summary"]["over"] == 0
 
 
+_RECON_TWO_LINES = {
+    "products": [
+        {"customer_id": 1, "product_line": "NV", "business_unit": "NV", "units_flag": "matched", "awaiting_po": False},
+        {"customer_id": 1, "product_line": "NR", "business_unit": "NR", "units_flag": "short", "awaiting_po": True},
+    ],
+    "customers": [{"customer_id": 1, "label": "A", "awaiting_po": True}],
+    "summary": {"matched": 1, "short": 1, "over": 0, "unshipped": 0, "unplanned": 0, "amended": 0, "po_no_match": 0},
+    "po_flags": [],
+}
+
+
 def test_backlog_linked_group_projects_by_product_line(monkeypatch):
     results = [
         _R([
@@ -209,24 +220,15 @@ def test_backlog_linked_group_projects_by_product_line(monkeypatch):
         ]),
         _R([(10, "NV", "NV"), (11, "NR", "NR")]),
         _R([(10, 18.5), (11, 18.5)]),
-        _R([500]),  # linked po ids (scalars)
         _R([]),  # lineup coverage
-        _R([(500, 42)]),  # case links
+        _R([(500, 42)]),  # case links (linked PO ids are derived from these)
     ]
     db = _db(results)
 
-    async def _fake_reconcile(_db, case_id):
-        return {
-            "products": [
-                {"customer_id": 1, "product_line": "NV", "business_unit": "NV", "units_flag": "matched", "awaiting_po": False},
-                {"customer_id": 1, "product_line": "NR", "business_unit": "NR", "units_flag": "short", "awaiting_po": True},
-            ],
-            "customers": [{"customer_id": 1, "label": "A", "awaiting_po": True}],
-            "summary": {"matched": 1, "short": 1, "over": 0, "unshipped": 0, "unplanned": 0, "amended": 0, "po_no_match": 0},
-            "po_flags": [],
-        }
+    async def _fake_reconcile_cases(_db, case_ids):
+        return {int(c): _RECON_TWO_LINES for c in case_ids}
 
-    monkeypatch.setattr(mod, "reconcile_case", _fake_reconcile)
+    monkeypatch.setattr(mod, "reconcile_cases", _fake_reconcile_cases)
     out = asyncio.run(mod.backlog(db))
     linked = [g for g in out["groups"] if g["status"] == "linked"]
     assert len(linked) == 2
@@ -235,3 +237,48 @@ def test_backlog_linked_group_projects_by_product_line(monkeypatch):
     assert by_line["NV"]["reconciliation_summary"]["short"] == 0
     assert by_line["NR"]["reconciliation_summary"]["short"] == 1
     assert by_line["NR"]["reconciliation_summary"]["matched"] == 0
+    assert by_line["NV"]["linked_case_ids"] == [42]
+
+
+def test_backlog_reconciles_every_linked_case_once_in_one_batch(monkeypatch):
+    """Cases shared by several groups are reconciled once, in a single batched call."""
+    results = [
+        _R([
+            (500, 10, 100.0, 1000.0, dt.date(2026, 4, 20)),
+            (501, 11, 50.0, 500.0, dt.date(2026, 4, 20)),
+            (502, 10, 5.0, 50.0, dt.date(2026, 7, 20)),
+        ]),
+        _R([(10, "NV", "NV"), (11, "NR", "NR")]),
+        _R([(10, 18.5), (11, 18.5)]),
+        _R([]),  # lineup coverage
+        _R([(500, 42), (501, 42), (501, 43), (502, 43)]),  # case links
+    ]
+    calls = []
+
+    async def _fake_reconcile_cases(_db, case_ids):
+        calls.append(list(case_ids))
+        return {int(c): _RECON_TWO_LINES for c in case_ids}
+
+    monkeypatch.setattr(mod, "reconcile_cases", _fake_reconcile_cases)
+    out = asyncio.run(mod.backlog(_db(results)))
+    assert calls == [[42, 43]]  # one call, every linked case exactly once
+    assert len([g for g in out["groups"] if g["status"] == "linked"]) == 3
+
+
+def test_backlog_skips_cases_the_batch_did_not_return(monkeypatch):
+    results = [
+        _R([(500, 10, 100.0, 1000.0, dt.date(2026, 4, 20))]),
+        _R([(10, "NV", "NV")]),
+        _R([(10, 18.5)]),
+        _R([]),
+        _R([(500, 42)]),
+    ]
+
+    async def _fake_reconcile_cases(_db, case_ids):
+        return {}
+
+    monkeypatch.setattr(mod, "reconcile_cases", _fake_reconcile_cases)
+    out = asyncio.run(mod.backlog(_db(results)))
+    g = out["groups"][0]
+    assert g["status"] == "linked"
+    assert g["reconciliation_summary"]["matched"] == 0

@@ -14,6 +14,7 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   keepPreviousData: Symbol('keepPreviousData'),
+  useQueryClient: () => ({ setQueryData: vi.fn() }),
   useQuery: () => ({
     isLoading: false,
     isFetching: false,

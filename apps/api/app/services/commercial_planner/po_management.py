@@ -27,7 +27,7 @@ from app.services.commercial_planner.lineup_period_canonical import (
     case_coverage_key,
     quarter_key_from_period_start,
 )
-from app.services.commercial_planner.lineup_po_reconciliation import UNITS_FLAGS, reconcile_case
+from app.services.commercial_planner.lineup_po_reconciliation import UNITS_FLAGS, reconcile_cases
 
 logger = logging.getLogger(__name__)
 
@@ -313,9 +313,10 @@ async def coverage(db: AsyncSession) -> dict[str, Any]:
 async def backlog(db: AsyncSession) -> dict[str, Any]:
     try:
         groups = await _observed_groups(db)
-        linked = await _linked_po_ids(db)
         lineup_coverage, parse_incomplete = await _lineup_coverage_state(db)
-        # PO -> linked active case ids (for reconciliation rollup on linked groups).
+        # PO -> linked active case ids (for reconciliation rollup on linked groups). The set of
+        # linked PO ids is exactly the keys of this map (same active-case filter), so there is no
+        # separate linked-PO query.
         case_links = (
             await db.execute(
                 select(CommercialLineupCasePo.purchase_order_id, CommercialLineupCasePo.case_id)
@@ -329,10 +330,33 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
 
     po_to_cases: dict[int, set[int]] = {}
     for po, case_id in case_links:
+        if po is None:
+            continue
         po_to_cases.setdefault(int(po), set()).add(int(case_id))
+    linked: set[int] = set(po_to_cases)
+
+    # Which cases each linked group needs, then ONE batched reconciliation for the union of
+    # all of them (a case linked to several groups is reconciled once, not once per group).
+    group_cases: dict[int, set[int]] = {}
+    all_case_ids: set[int] = set()
+    for gi, g in enumerate(groups.values()):
+        linked_pos = g["po_ids"] & linked
+        if not linked_pos:
+            continue
+        cids: set[int] = set()
+        for po in linked_pos:
+            cids |= po_to_cases.get(po, set())
+        group_cases[gi] = cids
+        all_case_ids |= cids
+    recon_by_case: dict[int, dict[str, Any]] = {}
+    if all_case_ids:
+        try:
+            recon_by_case = await reconcile_cases(db, sorted(all_case_ids))
+        except Exception:
+            logger.exception("backlog reconcile_cases failed case_ids=%s", sorted(all_case_ids))
 
     out_groups: list[dict[str, Any]] = []
-    for g in groups.values():
+    for gi, g in enumerate(groups.values()):
         po_ids: set[int] = g.pop("po_ids")
         linked_pos = po_ids & linked
         is_linked = bool(linked_pos)
@@ -343,18 +367,14 @@ async def backlog(db: AsyncSession) -> dict[str, Any]:
             "status": "linked" if is_linked else "unlinked",
         }
         if is_linked:
-            case_ids: set[int] = set()
-            for po in linked_pos:
-                case_ids |= po_to_cases.get(po, set())
+            case_ids: set[int] = group_cases.get(gi, set())
             group_product_line = str(g["product_line"])
             summary = {f: 0 for f in UNITS_FLAGS}
             cust_agg: dict[int | None, dict[str, Any]] = {}
             seen_po_no_match: set[int] = set()
-            for cid in case_ids:
-                try:
-                    recon = await reconcile_case(db, cid)
-                except Exception:
-                    logger.exception("backlog reconcile_case failed cid=%s", cid)
+            for cid in sorted(case_ids):
+                recon = recon_by_case.get(cid)
+                if recon is None:  # unknown case / batch failure: skipped, as the per-case path did
                     continue
                 projected = project_reconciliation_for_product_line(
                     recon,

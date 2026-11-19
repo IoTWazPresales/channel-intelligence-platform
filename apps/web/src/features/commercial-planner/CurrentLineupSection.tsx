@@ -55,6 +55,7 @@ import {
   LINE_IDENTIFIER_SKU_COL_ID,
 } from '@/features/tenant/lineIdentifier';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
+import { useCaseReconciliations } from './useCaseReconciliations';
 
 function formatHttpErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail;
@@ -1941,12 +1942,17 @@ type ReconResponse = {
   data_unavailable?: boolean;
 };
 
-function CaseReconciliationInline({ caseId }: { caseId: number }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['lineup-po-reconciliation', caseId],
-    queryFn: ({ signal }) =>
-      apiGet<ReconResponse>(`/api/v1/commercial-planner/lineup/po-reconciliation?case_id=${caseId}`, { signal }),
-  });
+/** Presentational: the payload comes from ONE batched request for all listed cases (see
+ * ``useCaseReconciliations``), not one request per case. */
+function CaseReconciliationInline({
+  caseId,
+  data,
+  isLoading,
+}: {
+  caseId: number;
+  data: ReconResponse | undefined;
+  isLoading: boolean;
+}) {
 
   if (isLoading) {
     return (
@@ -3617,6 +3623,13 @@ export function CurrentLineupSection({
     },
   });
 
+  // One batched reconciliation read for every case that has linked POs (was one request per case).
+  const reconCaseIds = useMemo(
+    () => (cases ?? []).filter((c) => (c.po_count ?? 0) > 0).map((c) => c.id),
+    [cases],
+  );
+  const recon = useCaseReconciliations<ReconResponse>(reconCaseIds);
+
   const count = cases?.length ?? 0;
 
   const caseFileNameById = useMemo(() => {
@@ -3975,7 +3988,11 @@ export function CurrentLineupSection({
                     )}
                     {(c.po_count ?? 0) > 0 && (
                       <Box sx={{ flexBasis: '100%' }}>
-                        <CaseReconciliationInline caseId={c.id} />
+                        <CaseReconciliationInline
+                          caseId={c.id}
+                          data={recon.byCaseId?.[String(c.id)]}
+                          isLoading={recon.isLoading}
+                        />
                       </Box>
                     )}
                   </Box>
