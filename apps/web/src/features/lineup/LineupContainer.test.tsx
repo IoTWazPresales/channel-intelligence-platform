@@ -6,6 +6,7 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { LineupContainer } from './LineupContainer';
 import type { LineupPlanRow } from './lineupTypes';
+import { lineupNetRequirementQueryKey } from './useLineupNetRequirement';
 
 const navigation = vi.hoisted(() => ({
   query: '',
@@ -71,7 +72,7 @@ function renderPage(query = sliceQuery) {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   client.setQueryData(['lineup-items'], rows);
-  client.setQueryData(['lineup-net-requirement', 'headline'], {
+  client.setQueryData(lineupNetRequirementQueryKey(true), {
     data_unavailable: false, rows: [{ net_requirement: 90 }],
   });
   client.setQueryData(['plan-vs-executed', 'lineup-read'], {

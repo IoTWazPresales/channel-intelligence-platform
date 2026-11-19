@@ -5,6 +5,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 
 import { formatUnits, type LineupPlanRow, type NetRequirementResponse } from '@/features/lineup/lineupTypes';
+import { useLineupNetRequirement } from '@/features/lineup/useLineupNetRequirement';
 import { apiGet } from '@/lib/api';
 
 function computeRegime(rows: LineupPlanRow[], netReq: NetRequirementResponse | undefined) {
@@ -28,15 +29,7 @@ export function LineupRegimeStrip() {
     staleTime: 30_000,
   });
 
-  const { data: netReq } = useQuery({
-    queryKey: ['lineup-net-requirement', 'regime'],
-    queryFn: ({ signal }) =>
-      apiGet<NetRequirementResponse>(
-        '/api/v1/lineup/net-requirement?limit=200&include_customer_shares=false&apply_bias=true',
-        { signal },
-      ),
-    staleTime: 60_000,
-  });
+  const { data: netReq } = useLineupNetRequirement(true);
 
   const rows = items ?? [];
   const { plannedUnits, approvalPct, netTotal } = computeRegime(rows, netReq);

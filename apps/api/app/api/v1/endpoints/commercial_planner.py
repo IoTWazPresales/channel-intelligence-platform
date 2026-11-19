@@ -78,6 +78,7 @@ from app.services.commercial_planner.lineup_case_distributor_assign import (
 from app.services.commercial_planner.lineup_po_reconciliation import (
     CaseNotFoundError as ReconCaseNotFoundError,
     reconcile_case,
+    reconcile_cases,
 )
 from app.services.commercial_planner.lineup_po_gap import (
     PurchaseOrderNotFoundError,
@@ -2862,6 +2863,54 @@ async def get_po_reconciliation(
         return await reconcile_case(db, case_id)
     except ReconCaseNotFoundError:
         raise HTTPException(status_code=404, detail="Lineup case not found")
+
+
+PO_RECONCILIATION_BATCH_MAX = 100
+
+
+def _parse_case_id_list(raw: str) -> list[int]:
+    ids: list[int] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            value = int(part)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"case_ids must be integers, got {part!r}")
+        if value < 1:
+            raise HTTPException(status_code=422, detail="case_ids must be positive integers")
+        if value not in ids:
+            ids.append(value)
+    if not ids:
+        raise HTTPException(status_code=422, detail="case_ids must list at least one case id")
+    if len(ids) > PO_RECONCILIATION_BATCH_MAX:
+        raise HTTPException(
+            status_code=422,
+            detail=f"case_ids is capped at {PO_RECONCILIATION_BATCH_MAX} cases per request",
+        )
+    return ids
+
+
+@router.get("/lineup/po-reconciliation/batch")
+async def get_po_reconciliation_batch(
+    case_ids: str = Query(
+        ...,
+        description=f"Comma-separated lineup case ids (max {PO_RECONCILIATION_BATCH_MAX})",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reconcile many cases in one request (same payload per case as ``/lineup/po-reconciliation``).
+
+    ``items`` maps case id (string key) to its reconciliation payload; ids with no matching
+    case are listed in ``missing_case_ids`` (the single-case route answers those with a 404).
+    """
+    ids = _parse_case_id_list(case_ids)
+    payloads = await reconcile_cases(db, ids)
+    return {
+        "items": {str(cid): payloads[cid] for cid in ids if cid in payloads},
+        "missing_case_ids": [cid for cid in ids if cid not in payloads],
+    }
 
 
 class GapDismissBody(BaseModel):

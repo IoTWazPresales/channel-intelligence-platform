@@ -6,6 +6,7 @@ whole-case attribution when a BU filter is applied.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import defaultdict
 from datetime import date
@@ -22,7 +23,7 @@ from app.services.commercial_planner.lineup_period_canonical import (
     quarter_from_period_start,
     quarter_key_from_period_start,
 )
-from app.services.commercial_planner.lineup_po_reconciliation import UNITS_FLAGS, reconcile_case
+from app.services.commercial_planner.lineup_po_reconciliation import UNITS_FLAGS, reconcile_cases
 from app.services.commercial_planner.po_management import (
     canonical_product_line_code,
     coverage,
@@ -817,23 +818,34 @@ async def collect_execution_rows(
     period_to: str | None = None,
     product_line: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Union reconcile_case product rows for linked cases in the period range."""
+    """Union reconcile_case product rows for linked cases in the period range.
+
+    Every in-range case is reconciled in ONE batched call (``reconcile_cases``), not one
+    multi-query reconciliation per case.
+    """
     fy, fq, ty, tq = _parse_period_bounds(period_from, period_to)
     out: list[dict[str, Any]] = []
 
+    in_range: list[tuple[Any, int, int]] = []
     for case in await _linked_cases(db):
         if case.inferred_period_start is None:
             continue
         year, quarter = quarter_from_period_start(case.inferred_period_start)
         if not _period_in_range(year, quarter, from_year=fy, from_quarter=fq, to_year=ty, to_quarter=tq):
             continue
+        in_range.append((case, year, quarter))
+    if not in_range:
+        return out
+    try:
+        recon_by_case = await reconcile_cases(db, [int(case.id) for case, _y, _q in in_range])
+    except Exception:
+        logger.exception("plan_vs_executed reconcile_cases failed")
+        recon_by_case = {}
+
+    for case, year, quarter in in_range:
         quarter_label = quarter_key_from_period_start(case.inferred_period_start)
-        try:
-            recon = await reconcile_case(db, int(case.id))
-        except Exception:
-            logger.exception("plan_vs_executed reconcile_case failed case_id=%s", case.id)
-            continue
-        if recon.get("data_unavailable"):
+        recon = recon_by_case.get(int(case.id))
+        if recon is None or recon.get("data_unavailable"):
             continue
 
         label_by_customer = {cs.get("customer_id"): cs.get("label") for cs in (recon.get("customers") or [])}
@@ -1088,26 +1100,22 @@ async def _load_duplicate_ingestion_samples(db: AsyncSession) -> list[dict[str, 
             result = check_lineup_duplicate_ingestion(sync_db, sample_limit=500)
             return list(result.samples or [])
 
-    import asyncio
-
     return await asyncio.to_thread(_run)
 
 
 async def _compute_trend(
-    db: AsyncSession,
+    rows: list[dict[str, Any]],
     *,
-    product_line: str | None,
     period_slots: list[tuple[int, int, str]],
 ) -> list[dict[str, Any]]:
-    """Per-quarter scorecard series across the selected period range."""
+    """Per-quarter scorecard series across the selected period range.
+
+    ``rows`` are the execution rows already collected for the whole range (same period bounds and
+    product-line filter), so each quarter is a partition of them; nothing is re-reconciled.
+    """
     trend: list[dict[str, Any]] = []
     for year, quarter, label in period_slots:
-        q_rows = await collect_execution_rows(
-            db,
-            period_from=label,
-            period_to=label,
-            product_line=product_line,
-        )
+        q_rows = [r for r in rows if r.get("year") == year and r.get("quarter") == quarter]
         sc = compute_scorecard_from_execution_rows(q_rows)
         trend.append(
             {
@@ -1178,6 +1186,42 @@ async def plan_vs_executed_read_model(
     drill_sales_model: str | None = None,
     drill_bu: str | None = None,
 ) -> dict[str, Any]:
+    # The duplicate-ingestion audit is independent of the period / rows (it reads its own sync
+    # session in a worker thread), so it overlaps with the reconciliation instead of following it.
+    dup_task = asyncio.ensure_future(_load_duplicate_ingestion_samples(db))
+    try:
+        return await _plan_vs_executed_read_model(
+            db,
+            dup_task=dup_task,
+            period_from=period_from,
+            period_to=period_to,
+            product_line=product_line,
+            rank_by=rank_by,
+            product_group_by=product_group_by,
+            drill_customer_id=drill_customer_id,
+            drill_product_id=drill_product_id,
+            drill_sales_model=drill_sales_model,
+            drill_bu=drill_bu,
+        )
+    finally:
+        if not dup_task.done():
+            dup_task.cancel()
+
+
+async def _plan_vs_executed_read_model(
+    db: AsyncSession,
+    *,
+    dup_task: asyncio.Future[list[dict[str, Any]]],
+    period_from: str | None = None,
+    period_to: str | None = None,
+    product_line: str | None = None,
+    rank_by: RankBy = "units",
+    product_group_by: ProductGroupBy = "description",
+    drill_customer_id: int | None = None,
+    drill_product_id: int | None = None,
+    drill_sales_model: str | None = None,
+    drill_bu: str | None = None,
+) -> dict[str, Any]:
     try:
         cov = await coverage(db)
         all_periods = periods_from_coverage(cov)
@@ -1207,21 +1251,17 @@ async def plan_vs_executed_read_model(
     for r in rows:
         by_line[_bias_product_line(r)].append(r)
     scorecard_by_bu = {pl: compute_scorecard_from_execution_rows(group) for pl, group in sorted(by_line.items())}
-    await attach_ship_quarters(db, rows)
-    volume_bias = compute_volume_bias(rows)
-    slip = compute_slip_summary(rows)
-    exceptions = _aggregate_exceptions(rows, rank_by=rank_by, product_group_by=product_group_by)
-
+    # Trend is a partition of the rows already collected (no second collection/reconciliation pass).
     period_slots = _period_slots_in_range(
         all_periods,
         period_from=effective_from,
         period_to=effective_to,
     )
-    trend = await _compute_trend(
-        db,
-        product_line=bu_filter,
-        period_slots=period_slots,
-    )
+    trend = await _compute_trend(rows, period_slots=period_slots)
+    await attach_ship_quarters(db, rows)
+    volume_bias = compute_volume_bias(rows)
+    slip = compute_slip_summary(rows)
+    exceptions = _aggregate_exceptions(rows, rank_by=rank_by, product_group_by=product_group_by)
 
     drill_rows_source = list(rows)
     if drill_customer_id is not None:
@@ -1269,7 +1309,7 @@ async def plan_vs_executed_read_model(
             "label_fallback": drill_rows[0].get("label_fallback"),
         }
 
-    dup_clusters = await _load_duplicate_ingestion_samples(db)
+    dup_clusters = await dup_task
     backlog_066 = _affected_duplicate_ingestion_labels(rows, dup_clusters)
 
     return {

@@ -23,7 +23,7 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import type { ColDef, GridOptions } from 'ag-grid-community';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -235,6 +235,7 @@ export function PlanVsExecutedView() {
   const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const drillRef = useRef<HTMLDivElement | null>(null);
+  const qc = useQueryClient();
   const drillColumns = useFactColumns('pve.drill');
   const gridChrome = useFactGridChrome('pve.drill', { layout: factGridLayout(drillColumns) });
 
@@ -265,16 +266,36 @@ export function PlanVsExecutedView() {
       return apiGet<PlanVsExecutedResponse>(`/api/v1/plan-vs-executed${qs ? `?${qs}` : ''}`, { signal });
     },
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 
   const data = q.data;
 
   useEffect(() => {
-    if (data?.default_period && periodFrom === null && periodTo === null) {
+    if (data?.default_period && periodFrom === null && periodTo === null && !q.isPlaceholderData) {
+      // The server resolves omitted periods to the default period, so this response IS the
+      // response for the explicit default period. Seed that key with it so adopting the default
+      // does not trigger a second (slow) identical request.
+      qc.setQueryData(
+        [
+          'plan-vs-executed',
+          data.default_period,
+          data.default_period,
+          productLine,
+          rankBy,
+          productGroupBy,
+          drillCustomerId,
+          drillProductId,
+          drillSalesModel,
+        ],
+        data,
+      );
       setPeriodFrom(data.default_period);
       setPeriodTo(data.default_period);
     }
-  }, [data?.default_period, periodFrom, periodTo]);
+    // Only the null -> default transition matters; the other inputs are read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.default_period, periodFrom, periodTo, q.isPlaceholderData]);
 
   const periodOptions = useMemo(
     () => (data?.available_periods ?? []).map((p) => p.label),

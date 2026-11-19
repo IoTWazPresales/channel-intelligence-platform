@@ -2,12 +2,13 @@
 
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { nextLineupQuarter } from '@/features/lineup/lineupQuarter';
-import { formatUnits, type ApplyNetRequirementResponse, type NetRequirementResponse } from '@/features/lineup/lineupTypes';
-import { apiDownloadBlob, apiGet, apiPost } from '@/lib/api';
+import { formatUnits, type ApplyNetRequirementResponse } from '@/features/lineup/lineupTypes';
+import { useLineupNetRequirement } from '@/features/lineup/useLineupNetRequirement';
+import { apiDownloadBlob, apiPost } from '@/lib/api';
 
 export function LineupPlanActionBar() {
   const theme = useTheme();
@@ -17,14 +18,7 @@ export function LineupPlanActionBar() {
   const { periodStart: applyPeriodStart, periodLabel: applyPeriodLabel } = nextLineupQuarter();
   const applyBias = true;
 
-  const { data: netReq, refetch: refetchNetReq, isFetching } = useQuery({
-    queryKey: ['lineup-net-requirement', applyBias],
-    queryFn: ({ signal }) =>
-      apiGet<NetRequirementResponse>(
-        `/api/v1/lineup/net-requirement?limit=200&include_customer_shares=false&apply_bias=${applyBias ? 'true' : 'false'}`,
-        { signal },
-      ),
-  });
+  const { data: netReq, refetch: refetchNetReq, isFetching } = useLineupNetRequirement(applyBias);
 
   const netTotal = Math.round((netReq?.rows ?? []).reduce((s, r) => s + (r.net_requirement || 0), 0));
 

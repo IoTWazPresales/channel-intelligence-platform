@@ -1452,3 +1452,76 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
     expect(within(grid).queryByRole('columnheader', { name: 'SKU · Sales model' })).not.toBeInTheDocument();
   });
 });
+
+describe('CurrentLineupSection — PO reconciliation is one batch request', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset();
+    apiPostMock.mockReset();
+  });
+
+  function caseWithPos(id: number) {
+    return {
+      id,
+      import_job_id: null,
+      commercial_plan_id: 5,
+      file_name: `lineup-${id}.xlsx`,
+      period_label: '26Q1',
+      country_code: 'ZA',
+      currency_code: 'ZAR',
+      commercial_status: 'po_issued',
+      notes: null,
+      accepted_at: null,
+      accepted_by: null,
+      line_count: 3,
+      iteration_number: 1,
+      product_line: 'Gaming',
+      linked_pos: [],
+      po_count: 1,
+      created_at: null,
+    };
+  }
+
+  function reconPayload(caseId: number) {
+    return {
+      case_id: caseId,
+      linked_po_count: 1,
+      products: [],
+      customers: [],
+      po_flags: [],
+      summary: { matched: 1, short: 0, over: 0, unshipped: 0, unplanned: 0, amended: 0, po_no_match: 0 },
+      data_unavailable: false,
+    };
+  }
+
+  it('fetches all linked cases with one batch call and none per case', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mockApiGetWithPlanEntity(async (url: string) => {
+      if (url.includes('/lineup-cases?')) return [caseWithPos(21), caseWithPos(22), caseWithPos(23)];
+      if (url.includes('/lineup/po-reconciliation/batch')) {
+        return {
+          items: { '21': reconPayload(21), '22': reconPayload(22), '23': reconPayload(23) },
+          missing_case_ids: [],
+        };
+      }
+      return [];
+    });
+
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CurrentLineupSection activePlanId={5} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByTestId('current-lineup-section-toggle'));
+    expect(await screen.findByTestId('recon-inline-21')).toBeInTheDocument();
+    expect(await screen.findByTestId('recon-inline-22')).toBeInTheDocument();
+    expect(await screen.findByTestId('recon-inline-23')).toBeInTheDocument();
+
+    const urls = apiGetMock.mock.calls.map((c) => String(c[0]));
+    const batchCalls = urls.filter((u) => u.includes('/lineup/po-reconciliation/batch'));
+    expect(batchCalls).toHaveLength(1);
+    expect(batchCalls[0]).toContain('case_ids=21,22,23');
+    expect(urls.filter((u) => u.includes('/lineup/po-reconciliation?case_id='))).toHaveLength(0);
+  });
+});

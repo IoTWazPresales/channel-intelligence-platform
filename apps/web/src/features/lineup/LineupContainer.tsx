@@ -10,8 +10,8 @@ import {
   formatUnits,
   isPendingApproval,
   type LineupPlanRow,
-  type NetRequirementResponse,
 } from '@/features/lineup/lineupTypes';
+import { useLineupNetRequirement } from '@/features/lineup/useLineupNetRequirement';
 import {
   filterLineupRowsByExactProductId,
   filterLineupRowsBySlice,
@@ -35,15 +35,7 @@ function LineupContainerInner() {
     queryFn: ({ signal }) => apiGet<LineupPlanRow[]>('/api/v1/lineup/items', { signal }),
     staleTime: 30_000,
   });
-  const { data: netReq } = useQuery({
-    queryKey: ['lineup-net-requirement', 'headline'],
-    queryFn: ({ signal }) =>
-      apiGet<NetRequirementResponse>(
-        '/api/v1/lineup/net-requirement?limit=200&include_customer_shares=false&apply_bias=true',
-        { signal },
-      ),
-    staleTime: 60_000,
-  });
+  const { data: netReq } = useLineupNetRequirement(true);
   const { data: pve } = useQuery({
     queryKey: ['plan-vs-executed', 'lineup-read'],
     queryFn: ({ signal }) =>

@@ -140,7 +140,14 @@ async def planning_overview(db: AsyncSession, user: dict | None) -> dict[str, An
                       count(*) FILTER (
                         WHERE sa.controlled_cost_amount IS NOT NULL
                           AND sa.controlled_cost_amount > 0
-                      )::int AS cost_ok
+                      )::int AS cost_ok,
+                      count(*) FILTER (
+                        WHERE l.product_id IS NULL OR sa.product_id IS NULL
+                          OR l.customer_id IS NULL OR ct.customer_id IS NULL
+                          OR l.distributor_id IS NULL
+                          OR sa.controlled_cost_amount IS NULL
+                          OR sa.controlled_cost_amount <= 0
+                      )::int AS not_ready
                     FROM commercial_lineup_line l
                     JOIN commercial_lineup_case c ON c.id = l.case_id
                     LEFT JOIN commercial_sku_assumption sa ON sa.product_id = l.product_id
@@ -179,36 +186,7 @@ async def planning_overview(db: AsyncSession, user: dict | None) -> dict[str, An
     terms_ok = int(line_row["terms_ok"] or 0)
     dist_ok = int(line_row["dist_ok"] or 0)
     cost_ok = int(line_row["cost_ok"] or 0)
-    try:
-        not_ready = int(
-            (
-                await db.execute(
-                    text(
-                        f"""
-                        SELECT count(*)::int
-                        FROM commercial_lineup_line l
-                        JOIN commercial_lineup_case c ON c.id = l.case_id
-                        LEFT JOIN commercial_sku_assumption sa ON sa.product_id = l.product_id
-                        LEFT JOIN commercial_customer_term ct ON ct.customer_id = l.customer_id
-                        WHERE c.superseded_by_case_id IS NULL
-                          AND c.commercial_status NOT IN {_ACTIVE_STATUS_SQL}
-                          AND l.row_status IS DISTINCT FROM 'superseded'
-                          AND (
-                            l.product_id IS NULL OR sa.product_id IS NULL
-                            OR l.customer_id IS NULL OR ct.customer_id IS NULL
-                            OR l.distributor_id IS NULL
-                            OR sa.controlled_cost_amount IS NULL
-                            OR sa.controlled_cost_amount <= 0
-                          )
-                        """
-                    )
-                )
-            ).scalar()
-            or 0
-        )
-    except Exception:
-        logger.exception("planning_overview not-ready query failed")
-        return _empty(dbname, tenant)
+    not_ready = int(line_row["not_ready"] or 0)
 
     readiness_ok = max(lines - not_ready, 0)
     plan_lines = int(econ_row["plan_lines"] or 0)
