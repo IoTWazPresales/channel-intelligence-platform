@@ -35,7 +35,7 @@ from app.services.listing_capture.registry import (
     set_listing_status,
 )
 from app.services.grid_fields import customer_labels_sync, fact_row_dict, reference_fields
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 router = APIRouter()
 
@@ -321,6 +321,54 @@ def listing_grid_row_dict(
     }
 
 
+def _listing_conditions(
+    *, customer_id: int | None, marketplace: str | None, status: str | None
+) -> tuple[list, list]:
+    """(conditions without the status filter, the status condition if any)."""
+    base: list = []
+    if customer_id is not None:
+        base.append(CustomerListing.customer_id == customer_id)
+    if marketplace and marketplace.strip():
+        base.append(CustomerListing.marketplace == marketplace.strip().lower())
+    status_cond: list = []
+    if status and status.strip():
+        status_cond.append(CustomerListing.status == status.strip().lower())
+    return base, status_cond
+
+
+def listing_counts(
+    session,
+    *,
+    customer_id: int | None,
+    marketplace: str | None,
+    status: str | None,
+) -> tuple[int, dict[str, int], int]:
+    """Real counts over ALL rows matching the filters, never the page (BACKLOG-226).
+
+    Returns ``(total, status_counts, unlinked)``. ``total`` and ``unlinked`` follow every filter.
+    ``status_counts`` follows the customer and marketplace filters only, so choosing one status
+    still shows how the rest are split.
+    """
+    base, status_cond = _listing_conditions(
+        customer_id=customer_id, marketplace=marketplace, status=status
+    )
+    head = session.execute(
+        select(
+            func.count(CustomerListing.id).label("total"),
+            func.count(CustomerListing.id).filter(CustomerListing.product_id.is_(None)).label("unlinked"),
+        ).where(*base, *status_cond)
+    )
+    row = next(iter(head), None)
+    total = int(row.total) if row is not None else 0
+    unlinked = int(row.unlinked) if row is not None else 0
+    by_status = session.execute(
+        select(CustomerListing.status.label("status"), func.count(CustomerListing.id).label("n"))
+        .where(*base)
+        .group_by(CustomerListing.status)
+    )
+    return total, {str(r.status): int(r.n) for r in by_status}, unlinked
+
+
 @router.get("/listings")
 def list_listings(
     customer_id: int | None = Query(default=None),
@@ -329,21 +377,36 @@ def list_listings(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
 ):
+    """One page of listings plus real counts over every row matching the filters.
+
+    ``total`` counts all matching rows; ``status_counts`` splits the customer/marketplace-filtered
+    set by status; ``unlinked`` counts matching rows with no product.
+    """
     with SessionLocal() as session:
         try:
-            stmt = select(CustomerListing).order_by(CustomerListing.id.desc())
-            if customer_id is not None:
-                stmt = stmt.where(CustomerListing.customer_id == customer_id)
-            if marketplace:
-                stmt = stmt.where(CustomerListing.marketplace == marketplace.strip().lower())
-            if status:
-                stmt = stmt.where(CustomerListing.status == status.strip().lower())
-            rows = list(session.scalars(stmt).all())
+            base, status_cond = _listing_conditions(
+                customer_id=customer_id, marketplace=marketplace, status=status
+            )
+            total, status_counts, unlinked = listing_counts(
+                session, customer_id=customer_id, marketplace=marketplace, status=status
+            )
+            page_rows = list(
+                session.scalars(
+                    select(CustomerListing)
+                    .where(*base, *status_cond)
+                    .order_by(CustomerListing.id.desc())
+                    .limit(page_size)
+                    .offset((page - 1) * page_size)
+                ).all()
+            )
         except Exception:
-            return {"items": [], "total": 0, "data_unavailable": True}
-        total = len(rows)
-        start = (page - 1) * page_size
-        page_rows = rows[start : start + page_size]
+            return {
+                "items": [],
+                "total": 0,
+                "status_counts": {},
+                "unlinked": 0,
+                "data_unavailable": True,
+            }
         products = product_labels(session, [r.product_id for r in page_rows])
         last_ok = last_ok_fetch_by_listing(session, [r.id for r in page_rows])
         customers = customer_labels_sync(session, [r.customer_id for r in page_rows])
@@ -360,6 +423,8 @@ def list_listings(
                 for r in page_rows
             ],
             "total": total,
+            "status_counts": status_counts,
+            "unlinked": unlinked,
             "page": page,
             "page_size": page_size,
             "data_unavailable": False,

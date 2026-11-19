@@ -3818,6 +3818,15 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Not covered** | No push alert (e-mail or chat) on a failed backup or a flapping service. The failure shows in `/admin/ops` and in the Task Scheduler result only. An alert channel would need a recipient decision. |
 | **TRIGGER** | Warren agrees to install the task. |
 
+## BACKLOG-262 — Line-ups: reporting customers only (live screen audit 2026-11-19, item 1.3)
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Built, PR open** (`feat/l2-lineup-reporting-20261119`), 2026-11-19. Done only after merge, live restart and screenshots at 1280x800 and 390x844 (Warren's definition of done, 16:27). |
+| **Source** | Warren 16:21: line-ups showed everyone, not only reporting customers. Audit `docs/audits/LIVE_SCREEN_AUDIT_20261119.md` item 1.3: 1,647 plan rows, 177 for the reporting customers, 1,470 for 598 non-reporting customers; the page and the planner's planned reserve had no reporting filter. |
+| **What shipped** | `reporting_plan_items_clause()` in `services/lineup/reporting_gate.py` (built on the shared `reporting_customer_ids_select()` reader; merged-away customers excluded). Applied to `GET /lineup/items` (list, pending count and headline figures follow it), the budget-position plan-item read, and `derive_planned_reservation_sync` in `promo_plan_builder.py`. The line-up page says "Reporting customers only." No rows are changed or deleted. |
+| **Left open** | (1) Deleting the 1,470 old non-reporting drafts (Warren 16:39: delete) is a separate cip data step after this merges: backup, clone proof, `current_database()`, counts before and after. (2) If a period has no reporting plan items, the reservation still falls back to `CommercialLineupLine`, which is not customer-filtered; the sell-through-only planner work replaces that source. (3) Write endpoints (`group-approval`, `PATCH`/`DELETE /items/{id}`, `clear-all`, `bulk`, `apply-net-requirement`) are not filtered. |
+
 ## BACKLOG-243 — Listing coverage: review points left after the BACKLOG-226 fixes
 
 | Field | Detail |
@@ -3964,6 +3973,16 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **PARTIAL-DEFERRED (browser states)** | (a) **POST-read widgets:** pages that load data through POST (for example dashboard widgets on `POST /query/v2/execute`) are aborted by the write guard in readonly runs, so their loaded data and their empty/loading states cannot be exercised there; the interception covers GET only, and forwarding or simulating POST reads would need a reviewed read-only allowlist or a server-side read endpoint. Their error state is exercised only by the aborted request. Run those widgets in the full run on the test instance (writes still aborted unless `CIP_VERIFY_ALLOW_WRITES=1`). (b) **Interaction:** the spec navigates by URL only; controls, filters, in-page tab clicks, row drawers and click-through are not exercised (Wave 2 step "exercise controls" stays open). (c) **No app to render:** the empty-state and error-indication rules (text patterns, MUI severity classes) are verified in vitest and by `--list`, not against a rendered page; the first real run may need its selectors tuned, and a page that swallows an API failure shows up as a failed `error` case (a finding, not a harness fault). |
 | **Needs** | (1) Deploy merged Wave 1 (brief section 8). (2) Test instance on `cip_test` with the uploaded real files and queued migrations (section 7). (3) A verification user and its credentials for the test instance, and **an existing session for the live readonly run** (`CIP_VERIFY_STORAGE_STATE` or `CIP_VERIFY_SESSION_TOKEN`) issued by the operator: readonly never logs in. (4) Approval of the live read-only run, and of a read-only figure-check session on `cip`. (5) Re-run `apps/api/tests/test_figure_check_db.py` on `cip_test` before the pass. (6) A checks file for the figures each route shows (run data, kept out of the repository if entity-specific). (7) Decide how readonly runs treat pages that read through POST endpoints (see PARTIAL-DEFERRED (a)): the guard aborts them, so those widgets render without data on the live run. |
 | **TRIGGER** | After Wave 1 is merged and deployed, before Wave 3 Phase B. |
+
+## BACKLOG-263 — Listings: intelligence speed and real counts (live screen audit 2026-11-19, item 1.1 and N9)
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Built, PR open** (`feat/l1-listings-speed-20261119`), 2026-11-19. Done only after merge, live restart and a live screenshot. |
+| **Source** | Warren 16:21 "I don't see any listings". Audit item 1.1: 218 listings and 163,716 readings existed, but `GET /listing-capture/intelligence` took 90 s (per-listing N+1 loading `raw_snapshot`), so the Market header showed "0 monitored listings · 0 observations" while it ran (N9), and the header used the page size (200), not the total. |
+| **What shipped** | `build_listing_intelligence` runs 5 set-based statements regardless of listing count and never selects `raw_snapshot`/`meta_json`. `/listings` pages in SQL and returns `total`, `status_counts` (ignores the status filter) and `unlinked`. Web: header and active/problem/unlinked counts come from the API counts; the grid reads past the 200-row page cap; "Loading observations…" / "unavailable" + Retry instead of 0; one shared `useListingIntelligence` hook. |
+| **Evidence** | Live `cip`, read-only transaction (`current_database()=cip`, `transaction_read_only=on`), 218 listings: old 146.98 s, new 3.31 s; outputs identical for all 218 items (only `as_of` differs). |
+| **Left open** | The timing prefilter reads `parse_flags -> 'cpor_activation'` across all readings; add an index only if it becomes slow. Discovery and site coverage are not part of this item. |
 
 ## BACKLOG-250 — Final wave (c): aged/slow stock duplication — confirm on live data
 

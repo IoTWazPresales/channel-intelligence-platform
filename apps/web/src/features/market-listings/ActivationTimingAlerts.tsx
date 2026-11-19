@@ -1,9 +1,7 @@
 'use client';
 
 import { Alert, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
-
-import { apiGet } from '@/lib/api';
+import { useListingIntelligence } from '@/features/market-listings/listingIntelligence';
 
 export type TimingAlert = {
   kind: 'late_activation' | 'early_deactivation';
@@ -26,12 +24,6 @@ export type TimingAlert = {
   days_early_at_least?: number;
 };
 
-type IntelligenceTiming = {
-  activation_alert_days?: number;
-  timing_alerts?: TimingAlert[];
-  data_unavailable?: boolean;
-};
-
 function detail(alert: TimingAlert): string {
   if (alert.kind === 'late_activation') {
     const live = alert.at_price_from ? `at price from ${alert.at_price_from}` : 'not at price yet';
@@ -43,13 +35,10 @@ function detail(alert: TimingAlert): string {
 
 /** Late activation / early deactivation from stored checks (threshold from the API setting). */
 export function ActivationTimingAlerts() {
-  const query = useQuery({
-    queryKey: ['listing-capture', 'intelligence'],
-    queryFn: ({ signal }) => apiGet<IntelligenceTiming>('/api/v1/listing-capture/intelligence', { signal }),
-  });
+  const query = useListingIntelligence();
   const alerts = Array.isArray(query.data?.timing_alerts) ? query.data.timing_alerts : [];
   const days = query.data?.activation_alert_days;
-  const failed = query.isError || Boolean(query.data?.data_unavailable);
+  const failed = query.failed;
 
   return (
     <Stack spacing={1} data-testid="activation-timing">
