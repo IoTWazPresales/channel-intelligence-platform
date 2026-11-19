@@ -7,6 +7,13 @@ export type StoreMapLine = {
   weeks_of_cover: number | null;
 };
 
+export type LocationAlternative = {
+  place: string;
+  latitude: number;
+  longitude: number;
+};
+
+/** Offline pin proposal for an unpinned store. Nothing is saved until a steward confirms it. */
 export type LocationSuggestion = {
   outcome: 'suggest' | 'manual';
   reason: 'match' | 'none' | 'multiple';
@@ -14,7 +21,26 @@ export type LocationSuggestion = {
   latitude: number | null;
   longitude: number | null;
   licence: string;
+  /** How the place was found. Absent on older responses. */
+  method?: 'exact' | 'contained' | 'fuzzy' | null;
+  /** 0 to 1. Lower when the name is fuzzy or the same name exists in several places. */
+  confidence?: number | null;
+  matched_text?: string | null;
+  ambiguous?: boolean;
+  alternatives?: LocationAlternative[];
 };
+
+/** No coordinates: confirm the proposal. Both coordinates: save the steward's edit. */
+export type PinConfirmItem = {
+  customer_id: number;
+  site_label: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+export type PinConfirmFailure = { customer_id: number; site_label: string | null; error: string };
+
+export type PinConfirmBulkResult = { saved: StoreMapStore[]; failed: PinConfirmFailure[] };
 
 export type StoreMapStore = {
   customer_id: number;

@@ -18,7 +18,7 @@ from app.services.store_dc.candidates import (
     tenant_config,
 )
 from app.services.store_dc.level import set_site_level
-from app.services.store_dc.map import build_store_map, drop_pin
+from app.services.store_dc.map import MAX_BULK_CONFIRM, build_store_map, confirm_pins, drop_pin
 from app.services.store_dc.read_model import (
     build_customer_view,
     list_board_customers,
@@ -86,6 +86,19 @@ class PinBody(BaseModel):
     site_label: str
     latitude: float
     longitude: float
+
+
+class PinConfirmBody(BaseModel):
+    """No coordinates: confirm the proposal. Both coordinates: save the steward's edit."""
+
+    customer_id: int
+    site_label: str
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class PinConfirmBulkBody(BaseModel):
+    pins: list[PinConfirmBody] = Field(min_length=1, max_length=MAX_BULK_CONFIRM)
 
 
 def _run(fn):
@@ -241,6 +254,34 @@ def get_map(
     user: dict = Depends(get_current_user),
 ):
     return build_store_map(db, _tenant(user), customer_id or None)
+
+
+@router.post("/pins/confirm")
+def post_pin_confirm(
+    body: PinConfirmBody,
+    db: Session = Depends(_sync_db),
+    user: dict = Depends(require_roles(Role.STEWARD)),
+):
+    """A steward confirms the proposed pin (no coordinates) or an edited one (both coordinates)."""
+    result = _run(lambda: confirm_pins(db, tenant_id=_tenant(user), items=[body.model_dump()], actor=_actor(user)))
+    if result["failed"]:
+        message = result["failed"][0]["error"]
+        raise HTTPException(status_code=404 if "not found" in message.lower() else 400, detail=message)
+    return result["saved"][0]
+
+
+@router.post("/pins/confirm-bulk")
+def post_pin_confirm_bulk(
+    body: PinConfirmBulkBody,
+    db: Session = Depends(_sync_db),
+    user: dict = Depends(require_roles(Role.STEWARD)),
+):
+    """Confirm the selected proposals in one request. Items that cannot be saved come back in ``failed``."""
+    return _run(
+        lambda: confirm_pins(
+            db, tenant_id=_tenant(user), items=[item.model_dump() for item in body.pins], actor=_actor(user)
+        )
+    )
 
 
 @router.post("/pins")

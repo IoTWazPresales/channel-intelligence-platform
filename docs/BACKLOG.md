@@ -3975,6 +3975,16 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Not proven** | That these are the duplicates Warren saw. No read of live `cip` was made. Check the planner on the running app after deploy (Wave 2 harness route `/promotions`), and if a product still repeats within one site, capture the customer and product ids for a trace. |
 | **TRIGGER** | First run of the Wave 2 pass after this merges. |
 
+## BACKLOG-264 — Store pins: offline place matching with steward confirm (live screen audit 2026-11-19, item 1.2)
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Built, PR open** (`feat/l5-store-pins-20261119`), 2026-11-19. Done only after merge, live restart and a live screenshot. |
+| **Source** | Warren 16:21 "where is the map for the stores and the store pins". Audit item 1.2: `customer_location` had 0 rows; pins came only from an exact store-name match to the bundled SA places, so chain-shaped labels never matched. Warren 16:39: smarter offline matching with steward confirmation. |
+| **What shipped** | `place_name.py`: strips the store's own customer name/code words (from data, no brand list), store numbers and generic retail words; longest exact multi-word place, else fuzzy (>= 0.86); confidence, method and alternatives for names in several places. `build_store_map` carries the proposal per unpinned store (never saved). `POST /store-dc/pins/confirm` and `/pins/confirm-bulk` (steward/admin) save through the existing pin write. Web: hollow proposed vs filled confirmed dots, legend, "Proposed pins" list with Confirm / Edit / Skip, alternatives, "Select high confidence" and bulk confirm. |
+| **Evidence** | Live `cip` read-only: map with proposals for 310 stores in 1.47 s; 192 stores get a proposal (84 exact, 94 contained, 14 fuzzy), 118 none. Nothing is written until a steward confirms. |
+| **Left open** | Stores with no proposal (place missing from the bundled list, or outside SA) need a manual pin. Skip is per page load (no stored state). The dot's own "Confirm location" popover still uses the existing `/pins` route. |
+
 ## BACKLOG-255 — Remaining Wave 1-E node reviews: N-0111, N-0112, N-0113, N-0095, N-0082, N-0089
 
 | Field | Detail |
