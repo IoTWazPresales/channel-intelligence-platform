@@ -3817,6 +3817,15 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Not covered** | No push alert (e-mail or chat) on a failed backup or a flapping service. The failure shows in `/admin/ops` and in the Task Scheduler result only. An alert channel would need a recipient decision. |
 | **TRIGGER** | Warren agrees to install the task. |
 
+## BACKLOG-262 — Line-ups: reporting customers only (live screen audit 2026-11-19, item 1.3)
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Built, PR open** (`feat/l2-lineup-reporting-20261119`), 2026-11-19. Done only after merge, live restart and screenshots at 1280x800 and 390x844 (Warren's definition of done, 16:27). |
+| **Source** | Warren 16:21: line-ups showed everyone, not only reporting customers. Audit `docs/audits/LIVE_SCREEN_AUDIT_20261119.md` item 1.3: 1,647 plan rows, 177 for the reporting customers, 1,470 for 598 non-reporting customers; the page and the planner's planned reserve had no reporting filter. |
+| **What shipped** | `reporting_plan_items_clause()` in `services/lineup/reporting_gate.py` (built on the shared `reporting_customer_ids_select()` reader; merged-away customers excluded). Applied to `GET /lineup/items` (list, pending count and headline figures follow it), the budget-position plan-item read, and `derive_planned_reservation_sync` in `promo_plan_builder.py`. The line-up page says "Reporting customers only." No rows are changed or deleted. |
+| **Left open** | (1) Deleting the 1,470 old non-reporting drafts (Warren 16:39: delete) is a separate cip data step after this merges: backup, clone proof, `current_database()`, counts before and after. (2) If a period has no reporting plan items, the reservation still falls back to `CommercialLineupLine`, which is not customer-filtered; the sell-through-only planner work replaces that source. (3) Write endpoints (`group-approval`, `PATCH`/`DELETE /items/{id}`, `clear-all`, `bulk`, `apply-net-requirement`) are not filtered. |
+
 ## BACKLOG-243 — Listing coverage: review points left after the BACKLOG-226 fixes
 
 | Field | Detail |

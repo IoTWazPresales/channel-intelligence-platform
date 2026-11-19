@@ -25,6 +25,7 @@ from app.models.cpor import CporCaseLine
 from app.models.lineup import FactLineupPlanItem
 from app.services import commercial_tenant_profile as tenant_profile
 from app.services.lineup.profit_reservation import compute_profit_with_reservation
+from app.services.lineup.reporting_gate import reporting_plan_items_clause
 
 from app.services.commercial_planner.lineup_period_canonical import (
     normalize_period_label,
@@ -120,7 +121,8 @@ async def derive_planned_reservations_with_diagnostics(
         ),
     }
 
-    stmt = select(FactLineupPlanItem).limit(limit)
+    # Line-ups exist only for reporting customers: drafts of other customers are not reserved.
+    stmt = select(FactLineupPlanItem).where(reporting_plan_items_clause()).limit(limit)
     items = list((await db.scalars(stmt)).all())
     if period_label:
         want = normalize_period_label(period_label)
