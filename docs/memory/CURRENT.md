@@ -8,9 +8,9 @@
 
 - **B1:** transitions and recoveries keep the query's `fetched_at, id` order, including same-day checks and equal timestamps. Calendar dates still determine lateness/earliness at the configured threshold.
 
-- **Tests prepared:** expanded timing pytest and Vitest regressions; new `test_listing_activation_timing_db.py` reuses the existing `cip_test` identity-checking rollback fixture and the canonical activation evaluator.
+- **Tests:** expanded timing pytest and Vitest regressions; new `test_listing_activation_timing_db.py` uses the existing `cip_test` identity-checking rollback fixture and the canonical activation evaluator.
 
-- **Validation limits:** read-only patch delivery, no files applied. Exploratory in-memory pytest (ORM imports omitted): 29 passed, 2 ORM/config tests deselected; nine selected regressions fail against the original service. No saved gate log, database connection, database-suite run, Vitest execution or browser acceptance. The orchestrator must apply the patch, run API tests on `cip_test`, web type/lint/Vitest checks, and inspect 1280x800 / 390x844 browser evidence before acceptance.
+- **Validation:** 2026-11-19: `cip_test` listing pytest 317 passed (includes the new rollback-only `test_listing_activation_timing_db.py` and expanded timing unit tests); web `tsc` clean, Vitest `src/features/market-listings` 7 files / 34 passed. Running-app evidence not yet collected.
 
 - No migration, no deploy.
 

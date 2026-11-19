@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-11-19 - **PR #106 fix round 1:** read-only patch prepared for B1 (same-day transitions/recoveries in fetch/ID order) and B2 (promotion-basis evidence only), with pytest, rollback-only cip_test and Vitest regressions. Exploratory in-memory timing tests: 29 passed; full applied-tree API/web/browser gates pending, BACKLOG-244.
+- 2026-11-19 - **PR #106 fix round 1:** activation timing keeps within-day check order (fetched_at, id) for transitions and recoveries (B1), and only promo-basis checks count (B2). Pytest, rollback-only cip_test and Vitest regressions added.
 
 - 2026-11-18 - **W1-B activation timing:** `feat/w1b-activation-timing-20261118`. Late activation / early deactivation alerts at `CIP_LISTING_ACTIVATION_ALERT_DAYS` (default 3; Warren's decision 13:27 SAST), recorded in BACKLOG-244.
 - 2026-11-19 - **PR #105 Round 1:** `feat/w1b-stock-not-listed-20261118`. B1: searchable account filter in request/cache and honest truncation/empty copy. B2: reuse unchanged `load_stock_positions`. Unit/cip_test/vitest regressions added. BACKLOG-244 keeps the remaining W1-B work.
