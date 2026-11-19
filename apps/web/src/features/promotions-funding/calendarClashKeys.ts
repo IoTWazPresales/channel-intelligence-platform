@@ -14,3 +14,21 @@ export const clashSummaryKey = (today: string) => [...CLASH_SUMMARY_PREFIX, toda
 export function invalidateClashSummary(qc: QueryClient): Promise<void> {
   return qc.invalidateQueries({ queryKey: [...CLASH_SUMMARY_PREFIX] });
 }
+
+/**
+ * Every case query lives under `['cpor', 'cases']`: the case lists and the exact current-case counts
+ * (`GET /cpor/cases/counts`, keys `['cpor', 'cases', 'counts', ...]`) the planner cards read.
+ */
+export const CASES_PREFIX = ['cpor', 'cases'] as const;
+
+/**
+ * After any write that creates, transitions, supersedes, restores, excludes or otherwise changes
+ * which cases are open (or their lines), refresh the case lists, the exact counts and the clash
+ * summary together, so no planner card keeps a stale figure.
+ */
+export async function invalidateAfterCaseWrite(qc: QueryClient): Promise<void> {
+  await Promise.all([
+    qc.invalidateQueries({ queryKey: [...CASES_PREFIX] }),
+    invalidateClashSummary(qc),
+  ]);
+}

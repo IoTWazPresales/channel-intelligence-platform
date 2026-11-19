@@ -37,6 +37,7 @@ from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing, ListingObservation
 from app.models.listing_link import QUEUE_NOT_ON_SITE, QUEUE_OPEN, QUEUE_REJECTED, ListingLinkQueue
 from app.models.listing_site import ListingSite
+from app.services.customer_reporting import reporting_customer_expr
 from app.services.listing_capture.adapters import configured_adapter
 from app.services.listing_capture.sites import site_config_from_row
 
@@ -119,7 +120,8 @@ def _identity(names: dict[int, tuple[str, str, bool]], customer_id: int) -> tupl
 
 def _customers(session: Session, tenant_id: str) -> dict[int, tuple[str, str, bool]]:
     rows = session.execute(
-        select(DimCustomer.id, DimCustomer.code, DimCustomer.name, CustomerReportConfig.reports_expected)
+        # Reporting = the shared definition (flag true and not merged away); no config row reads NULL.
+        select(DimCustomer.id, DimCustomer.code, DimCustomer.name, reporting_customer_expr())
         .outerjoin(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
         .where(DimCustomer.tenant_id == tenant_id)
     ).all()

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
 from app.services.channel_intelligence.sell_through_overview import OverviewFilters, load_stock_positions
+from app.services.customer_reporting import reporting_customer_clauses
 from app.services.listing_capture.coverage import product_buckets
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ def _reporting_customers(
     stmt = (
         select(DimCustomer.id, DimCustomer.code, DimCustomer.name)
         .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
-        .where(DimCustomer.tenant_id == tenant_id, CustomerReportConfig.reports_expected.is_(True))
+        .where(DimCustomer.tenant_id == tenant_id, *reporting_customer_clauses())
     )
     if customer_id is not None:
         stmt = stmt.where(DimCustomer.id == int(customer_id))

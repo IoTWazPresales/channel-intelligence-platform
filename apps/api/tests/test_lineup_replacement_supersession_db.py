@@ -1,9 +1,12 @@
 """PR #122 round 1, B1: a replacement with no eligible rows keeps the existing line-up (cip_test).
 
-Real session, rolled back at the end of each test. The replacement case is parsed by the shared file
-parser with ``replaces_case_id`` in its job's parse options (what the bulk backfill apply now sets).
-When the reporting gate refuses every row the existing case stays current with its PO links; when a
-row is kept the existing case is superseded and its PO links are carried to the replacement.
+Real session inside an outer transaction that is rolled back at the end of each test; the parser's
+own commits only release savepoints (``tests/rolled_back_async_session.py``), and teardown proves in
+a fresh session that none of the test's synthetic rows remain (PR #122 round 2, B3). The replacement
+case is parsed by the shared file parser with ``replaces_case_id`` in its job's parse options (what
+the bulk backfill apply now sets). When the reporting gate refuses every row the existing case stays
+current with its PO links; when a row is kept the existing case is superseded and its PO links are
+carried to the replacement.
 """
 
 from __future__ import annotations
@@ -23,7 +26,8 @@ from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 from app.models.purchase_order import PurchaseOrder
 from app.services.commercial_planner.current_lineup_seed import ensure_lineup_import_seed
 from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from tests.rolled_back_async_session import leftover_counts, rolled_back_async_session
 
 TEMPLATE = "unified_lineup"
 SOURCE = "unified_lineup_system"
@@ -31,16 +35,50 @@ SOURCE = "unified_lineup_system"
 
 @pytest.fixture
 async def session():
-    from app.db.session import AsyncSessionLocal
+    async with rolled_back_async_session() as db:
+        db.info["fixture"] = {"tags": [], "case_ids": [], "job_ids": []}
+        yield db
+        created = dict(db.info["fixture"])
+    await _assert_no_fixture_rows_left(created)
 
-    async with AsyncSessionLocal() as db:
-        try:
-            yield db
-        finally:
-            await db.rollback()
+
+async def _assert_no_fixture_rows_left(created: dict) -> None:
+    """B3: after teardown a fresh session finds none of the test's synthetic rows."""
+    tags = created["tags"] or ["no-fixture"]
+    case_ids = created["case_ids"] or [-1]
+    job_ids = created["job_ids"] or [-1]
+    fixture_customers = select(DimCustomer.id).where(
+        or_(*[DimCustomer.code.like(f"RP-{tag}-%") for tag in tags])
+    )
+    counts = await leftover_counts(
+        {
+            "dim_customer": select(func.count()).where(DimCustomer.id.in_(fixture_customers)),
+            "dim_product": select(func.count()).where(
+                or_(*[DimProduct.sku.like(f"RP-{tag}-%") for tag in tags])
+            ),
+            "customer_report_config": select(func.count()).where(
+                CustomerReportConfig.customer_id.in_(fixture_customers)
+            ),
+            "purchase_order": select(func.count()).where(
+                PurchaseOrder.po_number_norm.in_([f"RP{tag}" for tag in tags])
+            ),
+            "commercial_lineup_case": select(func.count()).where(
+                CommercialLineupCase.id.in_(case_ids)
+            ),
+            "commercial_lineup_line": select(func.count()).where(
+                CommercialLineupLine.case_id.in_(case_ids)
+            ),
+            "commercial_lineup_case_po": select(func.count()).where(
+                CommercialLineupCasePo.case_id.in_(case_ids)
+            ),
+            "import_job": select(func.count()).where(ImportJob.id.in_(job_ids)),
+        }
+    )
+    assert counts == {key: 0 for key in counts}, f"fixture rows left after teardown: {counts}"
 
 
 async def _world(db, tag: str):
+    db.info["fixture"]["tags"].append(tag)
     tenant = f"t-{tag}"
     reporting = DimCustomer(code=f"RP-{tag}-R", name=f"Reporting {tag}", tenant_id=tenant)
     silent = DimCustomer(code=f"RP-{tag}-S", name=f"Silent {tag}", tenant_id=tenant)
@@ -65,6 +103,7 @@ async def _world(db, tag: str):
     )
     db.add_all([existing, replacement])
     await db.flush()
+    db.info["fixture"]["case_ids"].extend([existing.id, replacement.id])
     po = PurchaseOrder(po_number_raw=f"RP{tag}", po_number_norm=f"RP{tag}")
     db.add(po)
     await db.flush()
@@ -91,6 +130,7 @@ async def _replacing_job(db, replaces_case_id: int) -> int:
     )
     db.add(job)
     await db.flush()
+    db.info["fixture"]["job_ids"].append(int(job.id))
     return int(job.id)
 
 

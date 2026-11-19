@@ -1,8 +1,10 @@
 """Warren 2026-11-19: line-up file writes refuse rows for non-reporting customers (cip_test).
 
-Real session, rolled back at the end of each test. Covers the two writers that read customers from a
-file: the bulk ``fact_lineup_plan_item`` upsert and the shared line-up file parser that the unified
-import, the parse-apply route and the bulk backfill all run.
+Real session inside an outer transaction that is rolled back at the end of each test; the services'
+own commits only release savepoints (``tests/rolled_back_async_session.py``), and teardown proves in
+a fresh session that none of the test's synthetic rows remain (PR #122 round 2, B3). Covers the two
+writers that read customers from a file: the bulk ``fact_lineup_plan_item`` upsert and the shared
+line-up file parser that the unified import, the parse-apply route and the bulk backfill all run.
 """
 
 from __future__ import annotations
@@ -14,27 +16,60 @@ import pytest
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
+from app.models.ingestion import ImportJob
 from app.models.lineup import FactLineupPlanItem
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
     preview_current_lineup_file,
 )
 from app.services.lineup.bulk import bulk_upsert_lineup_items
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
+from tests.rolled_back_async_session import leftover_counts, rolled_back_async_session
 
 
 @pytest.fixture
 async def session():
-    from app.db.session import AsyncSessionLocal
+    async with rolled_back_async_session() as db:
+        db.info["fixture"] = {"tags": [], "case_ids": [], "job_ids": []}
+        yield db
+        created = dict(db.info["fixture"])
+    await _assert_no_fixture_rows_left(created)
 
-    async with AsyncSessionLocal() as db:
-        try:
-            yield db
-        finally:
-            await db.rollback()
+
+async def _assert_no_fixture_rows_left(created: dict) -> None:
+    """B3: after teardown a fresh session finds none of the test's synthetic rows."""
+    codes = [f"RG-{tag}-%" for tag in created["tags"]] or ["RG-no-fixture-%"]
+    case_ids = created["case_ids"] or [-1]
+    job_ids = created["job_ids"] or [-1]
+    fixture_customers = select(DimCustomer.id).where(
+        or_(*[DimCustomer.code.like(c) for c in codes])
+    )
+    counts = await leftover_counts(
+        {
+            "dim_customer": select(func.count()).where(DimCustomer.id.in_(fixture_customers)),
+            "dim_product": select(func.count()).where(
+                or_(*[DimProduct.sku.like(c) for c in codes])
+            ),
+            "customer_report_config": select(func.count()).where(
+                CustomerReportConfig.customer_id.in_(fixture_customers)
+            ),
+            "fact_lineup_plan_item": select(func.count()).where(
+                FactLineupPlanItem.customer_id.in_(fixture_customers)
+            ),
+            "commercial_lineup_case": select(func.count()).where(
+                CommercialLineupCase.id.in_(case_ids)
+            ),
+            "commercial_lineup_line": select(func.count()).where(
+                CommercialLineupLine.case_id.in_(case_ids)
+            ),
+            "import_job": select(func.count()).where(ImportJob.id.in_(job_ids)),
+        }
+    )
+    assert counts == {key: 0 for key in counts}, f"fixture rows left after teardown: {counts}"
 
 
 async def _world(db, tag: str):
+    db.info["fixture"]["tags"].append(tag)
     tenant = f"t-{tag}"
     reporting = DimCustomer(code=f"RG-{tag}-R", name=f"Reporting {tag}", tenant_id=tenant)
     silent = DimCustomer(code=f"RG-{tag}-S", name=f"Silent {tag}", tenant_id=tenant)
@@ -86,6 +121,7 @@ async def test_file_parser_writes_reporting_rows_and_reports_refused_rows(sessio
     )
     session.add(case)
     await session.flush()
+    session.info["fixture"]["case_ids"].append(case.id)
     csv = (
         "sku,qty,customer\n"
         f"{product.sku},5,{reporting.code}\n"
@@ -101,6 +137,7 @@ async def test_file_parser_writes_reporting_rows_and_reports_refused_rows(sessio
         template_slug="unified_lineup",
         source_code="unified_lineup_system",
     )
+    session.info["fixture"]["job_ids"].append(result.import_job_id)
     assert result.line_count == 1 and result.refused_count == 2
     assert {r["reason"] for r in result.refused_rows} == {"customer_not_reporting"}
     assert any("2 row(s) refused" in w for w in result.warnings)

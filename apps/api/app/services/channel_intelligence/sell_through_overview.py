@@ -38,6 +38,11 @@ from app.models.customer_report_config import (
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.services.business_calendar import Bucket, BusinessCalendar
+from app.services.customer_reporting import (
+    is_reporting,
+    reporting_customer_expr,
+    reporting_customer_ids_select,
+)
 
 GRAINS = ("day", "week", "month", "quarter")
 COMPARES = ("none", "prior_period", "prior_year")
@@ -393,6 +398,16 @@ def product_label(p: DimProduct | None, product_id: int) -> str:
 # --------------------------------------------------------------------------- overview
 
 
+def in_view_config_rows_select() -> Any:
+    """Config rows of the customers always in view: reporting customers (the shared definition, flag
+    true and not merged away) and key accounts (unchanged rule)."""
+    return (
+        select(CustomerReportConfig, DimCustomer)
+        .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
+        .where(or_(reporting_customer_expr(), DimCustomer.is_key_account.is_(True)))
+    )
+
+
 def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, *, today: date, vat_rate: float) -> dict[str, Any]:
     if f.grain not in GRAINS:
         raise ValueError(f"grain must be one of {list(GRAINS)}")
@@ -414,13 +429,7 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
     obs = load_observations(session, f, load_from, f.date_to, vat_rate=vat_rate)
 
     # Customers in view: the reporting customers plus any customer with figures.
-    cfg_rows = list(
-        session.execute(
-            select(CustomerReportConfig, DimCustomer)
-            .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
-            .where(or_(CustomerReportConfig.reports_expected.is_(True), DimCustomer.is_key_account.is_(True)))
-        )
-    )
+    cfg_rows = list(session.execute(in_view_config_rows_select()))
     cfg_by_customer: dict[int, CustomerReportConfig] = {}
     for cfg, _cust in cfg_rows:
         cfg_by_customer[int(cfg.customer_id)] = cfg
@@ -779,7 +788,8 @@ def _coverage(
     rows = []
     for cid in sorted(customer_ids, key=lambda c: (customers[c].name if c in customers else str(c)).lower()):
         cfg = cfgs.get(cid)
-        expected = bool(cfg and cfg.reports_expected)
+        # The shared definition: the flag is true and the customer is not merged away.
+        expected = is_reporting(cfg, customers.get(cid))
         cadence = (cfg.expected_cadence if cfg else None) or "weekly"
         threshold = int(cfg.overdue_threshold_days) if cfg and cfg.overdue_threshold_days is not None else 10
         cspans = spans.get(cid, [])
@@ -1054,10 +1064,7 @@ def filter_options(session: Session, tenant_id: str) -> dict[str, Any]:
             .group_by(s.customer_id)
         )
     }
-    reporting = {
-        int(cfg.customer_id)
-        for cfg in session.scalars(select(CustomerReportConfig).where(CustomerReportConfig.reports_expected.is_(True)))
-    }
+    reporting = {int(cid) for cid in session.scalars(reporting_customer_ids_select())}
     key_accounts = {int(c) for c in session.scalars(select(DimCustomer.id).where(DimCustomer.is_key_account.is_(True)))}
     ids = set(with_data) | reporting | key_accounts
     custs = list(session.scalars(select(DimCustomer).where(DimCustomer.id.in_(ids or {-1}))))

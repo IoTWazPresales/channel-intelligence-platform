@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState, Suspense } from 'react';
 
 import { PlanTemplatesSurface } from '@/features/promotions-funding/PlanTemplatesSurface';
 
+import { invalidateAfterCaseWrite } from '@/features/promotions-funding/calendarClashKeys';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
@@ -110,6 +111,8 @@ function CporHistoricalImportWizard({ mode }: { mode: 'upload' | 'learn' }) {
       void refetchSummary();
     }
     if (progressPhase === 'failed') return;
+    // An applied job wrote cases: refresh the case lists, exact counts and the clash summary.
+    if (step === 'apply') void invalidateAfterCaseWrite(qc);
     if (step === 'validate') {
       setStep('resolve');
     }
@@ -182,6 +185,7 @@ function CporHistoricalImportWizard({ mode }: { mode: 'upload' | 'learn' }) {
         setPipelineRunning(false);
         setPollProgress(false);
         void refetchSummary();
+        void invalidateAfterCaseWrite(qc);
       }
     },
   });

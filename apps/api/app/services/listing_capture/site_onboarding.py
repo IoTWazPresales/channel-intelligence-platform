@@ -27,6 +27,7 @@ from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
 from app.models.listing_capture import CustomerListing
 from app.models.listing_site import ListingSite
+from app.services.customer_reporting import is_reporting
 from app.services.listing_capture.sites import SITE_KEY_RE, create_site, update_site
 from app.services.listing_capture.url_pattern import derive_listing_url_pattern
 
@@ -87,7 +88,8 @@ def record_customer_site(
     config = session.scalar(
         select(CustomerReportConfig).where(CustomerReportConfig.customer_id == int(customer.id))
     )
-    if not isinstance(config, CustomerReportConfig) or not config.reports_expected:
+    # The shared definition: the flag is true and the customer is not merged into another.
+    if not isinstance(config, CustomerReportConfig) or not is_reporting(config, customer):
         raise SiteOnboardError(
             "not_reporting",
             "This customer is not a reporting customer, so a site is not attached here.",

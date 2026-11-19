@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 
+import { invalidateAfterCaseWrite } from '@/features/promotions-funding/calendarClashKeys';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { fmtCompact } from '@/features/promotions-funding/format';
@@ -167,6 +168,8 @@ function PaymentEvidenceImportWizard() {
     mutationFn: () =>
       apiPost(`/api/v1/cpor/payment-evidence/jobs/${jobId}/apply`, { confirm: true }),
     onSuccess: async () => {
+      // Apply can create draft shell cases, which count and can clash.
+      await invalidateAfterCaseWrite(qc);
       await refetchSummary();
     },
   });

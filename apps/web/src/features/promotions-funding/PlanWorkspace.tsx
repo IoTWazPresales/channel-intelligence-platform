@@ -45,7 +45,10 @@ import {
   type PlanStage,
 } from '@/features/promotions-funding/lifecycle';
 import type { CporCaseDetail, CporCaseLine, SupportBiasRead } from '@/features/promotions-funding/types';
-import { invalidateClashSummary } from '@/features/promotions-funding/calendarClashKeys';
+import {
+  invalidateAfterCaseWrite,
+  invalidateClashSummary,
+} from '@/features/promotions-funding/calendarClashKeys';
 import { apiDownloadBlob, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { CapabilityLedger } from '@/features/workbench-ui/CapabilityLedger';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
@@ -203,6 +206,8 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
       setAddOpen(false);
       setProduct(null);
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      // A live line brings a case whose lines were all voided back into the clash summary.
+      await invalidateAfterCaseWrite(qc);
       await refetch();
     },
     onError: (e) => setToast(e instanceof Error ? e.message : String(e)),

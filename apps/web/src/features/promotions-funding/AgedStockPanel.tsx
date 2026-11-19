@@ -4,7 +4,7 @@ import { Alert, Button, Chip, Stack, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { invalidateClashSummary } from '@/features/promotions-funding/calendarClashKeys';
+import { invalidateAfterCaseWrite } from '@/features/promotions-funding/calendarClashKeys';
 import { apiGet, apiPost } from '@/lib/api';
 
 import { groupAgedLines, lineReasons, type AgedLine, type AgedReason } from './agedStockGroups';
@@ -61,8 +61,7 @@ export function AgedStockPanel({ onOpen }: { onOpen?: (caseId: number) => void }
       }),
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['cpor', 'aged-stock'] });
-      void qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
-      void invalidateClashSummary(qc);
+      void invalidateAfterCaseWrite(qc);
       if (res?.created && res.case_id && onOpen) onOpen(res.case_id);
     },
   });
@@ -71,7 +70,8 @@ export function AgedStockPanel({ onOpen }: { onOpen?: (caseId: number) => void }
       apiPost<ProposeResult>('/api/v1/cpor/intelligence/promo-plan-draft/auto-propose', {}),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['cpor', 'aged-stock'] });
-      void qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      // Raised drafts are open cases for the current period, so the clash summary and counts move.
+      void invalidateAfterCaseWrite(qc);
     },
   });
   const lines = list.data?.lines ?? [];

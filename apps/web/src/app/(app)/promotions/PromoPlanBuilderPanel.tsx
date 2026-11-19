@@ -12,12 +12,13 @@ import {
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { CellValueChangedEvent, ColDef, ICellRendererParams } from 'ag-grid-community';
 import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { invalidateAfterCaseWrite } from '@/features/promotions-funding/calendarClashKeys';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet, apiPost } from '@/lib/api';
 
@@ -101,6 +102,7 @@ function MacExplainCell(params: ICellRendererParams<PlannerRow>) {
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 
 export function PromoPlanBuilderPanel() {
+  const qc = useQueryClient();
   const lineId = useLineIdentifierPreference();
   const [customer, setCustomer] = useState<CustomerPick | null>(null);
   const [seedCaseId, setSeedCaseId] = useState('');
@@ -168,6 +170,8 @@ export function PromoPlanBuilderPanel() {
         lines: toCreateLines(rows),
       }),
     onSuccess: (res) => {
+      // A new draft case: refresh the case lists, the exact counts and the clash summary.
+      void invalidateAfterCaseWrite(qc);
       setCreateIsError(false);
       setCreateMsg(
         `Created draft case #${String(res.case_id)} (${String(res.case_code)}) · ${String((res.line_ids as number[] | undefined)?.length ?? 1)} line(s) · budget ${String(res.budget_status)}${res.over_budget_warn ? ' (over-budget warn)' : ''}`,
