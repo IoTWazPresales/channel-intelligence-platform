@@ -72,10 +72,13 @@ NO_PRODUCT_STEWARD = frozenset(
 APPEND_ONLY = frozenset({"fact_customer_sellthrough_superseded", "fact_distributor_line_superseded"})
 # 20261113_0062: the budget ledger is append-only with no delete path at all (the app role has
 # SELECT and INSERT only, a trigger refuses UPDATE and DELETE), so it has SELECT and INSERT
-# policies and neither an UPDATE nor a DELETE policy. Left out of the measured set like
-# APPEND_ONLY and checked for its own shape below.
+# policies and neither an UPDATE nor a DELETE policy. Left out of the update/delete matrix (those
+# cells do not exist for it), but its row VISIBILITY and INSERT allowance are measured in
+# ``test_budget_ledger_entry_visibility_and_insert_match_the_model`` below, and its policy shape is
+# checked in ``test_append_only_no_delete_tables_have_select_insert_policies_only``.
 APPEND_ONLY_NO_DELETE = frozenset({"budget_ledger_entry"})
 _M62 = "20261113_0062"
+_M62_FILE = "20261113_0062_budget_ledger_entry_rls.py"
 STEWARD = "steward"
 ALL = "ALL"
 NULL_PID = None
@@ -606,7 +609,7 @@ def test_parity_0024_to_0027_every_protected_table() -> None:
                      default=str)[:20000])
     # 45 when written; N-0087 dropped four scaffold tables (20261011_0032), and the append-only
     # superseded table is measured separately (APPEND_ONLY). Still 42 with 20261113_0062
-    # applied: the budget ledger is append-only with no UPDATE/DELETE policy and is checked
+    # applied: the budget ledger is append-only with no UPDATE/DELETE policy and is measured
     # separately (APPEND_ONLY_NO_DELETE). A new protected table must be added here.
     assert r25["n_tables"] == 42 and r26["n_tables"] == 42 and r27["n_tables"] == 42
     assert not s24["mismatches"], s24["mismatches"][:5]
@@ -707,4 +710,158 @@ def test_append_only_no_delete_tables_have_select_insert_policies_only():
                 # measured matrix is deliberate, not an accident of the scan.
                 assert table in scanned, table
     finally:
+        eng.dispose()
+
+
+def test_budget_ledger_entry_visibility_and_insert_match_the_model():
+    """Measured row visibility and INSERT allowance for ``budget_ledger_entry`` (20261113_0062).
+
+    Same independent model (``visible`` / ``editable``) and the same scopes as the matrix above,
+    including '!' (the "no lines" sentinel), a product with no line, a row with no product and an
+    orphan product id. The ledger has no UPDATE or DELETE policy, so only reads and inserts exist.
+
+    0062 may or may not be applied on ``cip_test``. The test applies 0062's own downgrade() and
+    upgrade() inside its rolled-back transaction, so it always measures this file's upgrade() and
+    never depends on (or leaves behind) the state of ``cip_test``. It skips only when the database
+    is not ``cip_test`` or the table is absent. Not vacuous: it also asserts, from the database's
+    own rows, that a named scope sees a strict subset, '!' sees only the no-product row, and an open
+    scope sees everything.
+    """
+    from alembic.operations import Operations
+    from alembic.runtime.migration import MigrationContext
+
+    table, col = "budget_ledger_entry", "product_id"
+    eng = _engine()
+    conn = eng.connect()
+    try:
+        db = conn.execute(text("select current_database()")).scalar_one()
+        if db != "cip_test":
+            pytest.skip(f"ledger parity runs on cip_test only (current_database()={db})")
+        if not conn.execute(text("select to_regclass(:t)"), {"t": f"public.{table}"}).scalar_one():
+            pytest.skip(f"{table} is not on this database")
+        conn.rollback()
+        tx = conn.begin()
+        engaged = False
+        try:
+            m62 = _load(_M62_FILE)
+            with Operations.context(MigrationContext.configure(conn)):
+                m62.downgrade()
+                m62.upgrade()
+            # Fresh backend: the read and edit settings have never been set on this connection.
+            for setting in ("cip.product_lines", "cip.editable_product_lines"):
+                unset = conn.execute(text("select current_setting(:s, true)"), {"s": setting})
+                assert unset.scalar_one() is None, setting
+            rls = conn.execute(
+                text("select relrowsecurity, relforcerowsecurity from pg_class where relname = :t"),
+                {"t": table},
+            ).one()
+            assert tuple(rls) == (True, True)
+
+            tag = uuid.uuid4().hex[:6]
+            names = {"A": f"N0065L-A-{tag}", "B": f"N0065L-B-{tag}", "C": f"N0065L-C-{tag}"}
+            fixture = []
+            fixture_lines = [names["A"], names["A"], names["B"], names["B"], names["C"], None]
+            for i, line in enumerate(fixture_lines):
+                pid = conn.execute(
+                    text(
+                        "insert into dim_product (sku, name, is_active, product_line) "
+                        "values (:s, :n, true, :l) returning id"
+                    ),
+                    {"s": f"N0065L-{tag}-{i}", "n": f"N0065 ledger parity {i}", "l": line},
+                ).scalar_one()
+                fixture.append(int(pid))
+            max_id = conn.execute(text("select coalesce(max(id), 0) from dim_product")).scalar_one()
+            orphan = int(max_id) + 1000000
+            samples = {
+                "A": fixture[0],
+                "B": fixture[2],
+                "C": fixture[4],
+                "NULL_LINE": fixture[5],
+                "NULL_PID": None,
+                "ORPHAN": orphan,
+            }
+
+            # Seed and read the base rows with row security off for the owner (independent of it).
+            meta = _relax(conn, table, col)
+            conn.execute(text(f"ALTER TABLE {_q(table)} NO FORCE ROW LEVEL SECURITY"))
+            seq = [0]
+            for pid in fixture + [orphan, None]:
+                sql, params = _insert_sql(table, col, meta, seq)
+                conn.execute(text(sql), {**params, "pid": pid})
+            product_rows = conn.execute(text("select id, product_line from dim_product")).all()
+            lines = {int(pid): line for pid, line in product_rows}
+            base = Counter(
+                {
+                    (None if p is None else int(p)): int(n)
+                    for p, n in conn.execute(
+                        text(f"select {_q(col)}, count(*) from {_q(table)} group by 1")
+                    ).all()
+                }
+            )
+            conn.execute(text(f"ALTER TABLE {_q(table)} FORCE ROW LEVEL SECURITY"))
+            # six products, the orphan, and the no-product row
+            assert sum(base.values()) >= len(fixture) + 2, base
+            engaged = engage_nonsuperuser_role(conn)
+
+            cells = []
+            # The unset scope first (READ_SCOPES[0] is None): once a backend has set the settings,
+            # even a rolled-back savepoint leaves them defined as ''.
+            for r_raw in READ_SCOPES:
+                r = _expand(r_raw, names)
+
+                def measure(r=r):
+                    _bind(conn, r, None)
+                    return Counter(
+                        {
+                            (None if p is None else int(p)): int(n)
+                            for p, n in conn.execute(
+                                text(f"select {_q(col)}, count(*) from {_q(table)} group by 1")
+                            ).all()
+                        }
+                    )
+
+                ok, got = _sp(conn, measure)
+                assert ok, (r_raw, got)
+                exp = Counter({p: n for p, n in base.items() if visible(p, r, 27, lines, table)})
+                cells.append((f"read {r_raw!r}", got == exp, sum(got.values()), sum(exp.values())))
+            bad = [c for c in cells if not c[1]]
+            assert not bad, bad
+
+            total = sum(base.values())
+            seen = {label: n for label, _ok, n, _exp in cells}
+            for open_label in ("read None", "read '*'", "read ''"):
+                assert seen[open_label] == total, open_label
+            no_product_rows = base[None]
+            assert no_product_rows >= 1
+            assert seen["read '!'"] == no_product_rows, "'!' must see only rows with no product"
+            assert seen["read 'NOPE'"] == no_product_rows, "unknown line: no-product rows only"
+            assert no_product_rows < seen["read 'A'"] < total, "a named line sees a strict subset"
+            assert seen["read 'A'"] < seen["read 'A,B'"] < total
+
+            inserts = []
+            for r_raw, e_raw in EDIT_SCOPES:
+                r, e = _expand(r_raw, names), _expand(e_raw, names)
+                for sname, pid in samples.items():
+                    sql, params = _insert_sql(table, col, meta, [0])
+
+                    def do_ins(sql=sql, params=params, pid=pid, r=r, e=e):
+                        _bind(conn, r, e)
+                        conn.execute(text(sql), {**params, "pid": pid})
+                        return "ok"
+
+                    ok_i, v_i = _sp(conn, do_ins)
+                    allowed_i = ok_i or v_i != "RLS"
+                    exp_i = editable(pid, r, e, 27, lines, False, table, None, check=True)
+                    label = f"insert r={r_raw!r} e={e_raw!r} {sname}"
+                    inserts.append((label, allowed_i, exp_i, v_i))
+            wrong = [c for c in inserts if c[1] != c[2]]
+            assert not wrong, wrong[:10]
+            assert {c[1] for c in inserts} == {True, False}, "need both allowed and denied inserts"
+            assert len(cells) == len(READ_SCOPES)
+            assert len(inserts) == len(EDIT_SCOPES) * len(samples)
+        finally:
+            release_nonsuperuser_role(conn, engaged)
+            tx.rollback()
+    finally:
+        conn.close()
         eng.dispose()

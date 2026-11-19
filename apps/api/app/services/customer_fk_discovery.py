@@ -15,6 +15,14 @@ _EXTRA_CUSTOMER_REFS: tuple[tuple[str, str, str], ...] = (
     ),
 )
 
+# Tables with forced tenant row security that references a customer: table -> the
+# transaction-local setting their policies read. A merge must bind the customers' tenant
+# to this setting before it counts or updates the table, or forced row security hides
+# every row (count 0, silently skipped) and the zero-loser-refs check passes over live refs.
+TENANT_BOUND_TABLE_SETTINGS: dict[str, str] = {
+    "customer_calendar_event": "cip.customer_calendar_tenant_id",
+}
+
 # Self-referential soft redirect — repoint when other rows point at the loser.
 _MERGED_INTO_REF: tuple[str, str] = ("dim_customer", "merged_into_customer_id")
 
