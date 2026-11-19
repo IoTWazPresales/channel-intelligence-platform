@@ -18,6 +18,7 @@ from app.services.export_literal_guard import guard_csv_text
 from app.services.lineup.bias_correction import volume_bias_by_bu
 from app.services.lineup.bulk import bulk_upsert_lineup_items
 from app.services.lineup.net_requirement import build_net_requirement_rows
+from app.services.lineup.new_customer_proposal import reporting_customer_ids
 
 NET_REQUIREMENT_CSV_HEADERS = [
     "distributor_id",
@@ -255,6 +256,10 @@ async def apply_net_requirement_to_lineup(
     prod_by_id = {
         int(r.id): r for r in (await db.execute(select(DimProduct))).scalars().all()
     }
+    # Final wave (a): line-ups are only pulled for reporting customers (reports_expected), the same
+    # meaning as listing discovery. Other customers are counted, never written.
+    reporting_ids = await reporting_customer_ids(db)
+    skipped_not_reporting = 0
 
     label = _normalize_period_label_display(period_label, period_start)
     rows: list[dict[str, Any]] = []
@@ -278,6 +283,9 @@ async def apply_net_requirement_to_lineup(
             cid = int(a["customer_id"])
             cust = cust_by_id.get(cid)
             if not cust or not cust.code:
+                continue
+            if cid not in reporting_ids:
+                skipped_not_reporting += 1
                 continue
             units = float(a.get("suggested_lineup_units") or 0)
             if units <= 0:
@@ -325,6 +333,7 @@ async def apply_net_requirement_to_lineup(
             "results": [],
             "skipped_zero_net": skipped_zero,
             "skipped_no_allocation": skipped_no_alloc,
+            "skipped_not_reporting": skipped_not_reporting,
             "source_row_count": payload.get("row_count", 0),
             "draft_rows_built": 0,
             "apply_bias": bool(apply_bias and bias_by_bu),
@@ -335,6 +344,7 @@ async def apply_net_requirement_to_lineup(
     out = await bulk_upsert_lineup_items(db, rows, replace_matching=replace_matching)
     out["skipped_zero_net"] = skipped_zero
     out["skipped_no_allocation"] = skipped_no_alloc
+    out["skipped_not_reporting"] = skipped_not_reporting
     out["source_row_count"] = payload.get("row_count", 0)
     out["draft_rows_built"] = len(rows)
     out["apply_bias"] = bool(apply_bias and bias_by_bu)
@@ -410,6 +420,7 @@ async def build_tenant_workbook_export(
     }
     start = period_start or date.today().replace(day=1)
     label = _normalize_period_label_display(period_label, start)
+    reporting_ids = await reporting_customer_ids(db)
 
     draft_rows: list[dict[str, Any]] = []
     for nr in payload.get("rows") or []:
@@ -421,6 +432,8 @@ async def build_tenant_workbook_export(
         for a in nr.get("customer_allocation") or []:
             units = float(a.get("suggested_lineup_units") or 0)
             if units <= 0:
+                continue
+            if int(a["customer_id"]) not in reporting_ids:
                 continue
             cust = cust_by_id.get(int(a["customer_id"]))
             draft_rows.append(
