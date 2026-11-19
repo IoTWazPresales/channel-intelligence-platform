@@ -63,8 +63,9 @@ def _failed_read(obs: Any, flags: dict[str, Any]) -> bool:
 def activation_timing(observations: list[Any], *, alert_days: int) -> list[dict[str, Any]]:
     """Late activation / early deactivation per promotion window, from stored check results.
 
-    ``observations`` are in fetch order. Each one's ``parse_flags.cpor_activation`` says
-    whether that check was at the covering line's price and which window covered it.
+    ``observations`` are ordered by fetched_at, then id. Keep that order for transitions,
+    including checks on the same day; calendar dates determine the day thresholds.
+    Only stored ``price_basis="promo"`` results prove customer promotion timing.
     """
     windows: dict[tuple[Any, date, date], list[tuple[date, str]]] = {}
     meta: dict[tuple[Any, date, date], dict[str, Any]] = {}
@@ -74,7 +75,7 @@ def activation_timing(observations: list[Any], *, alert_days: int) -> list[dict[
             continue
         act = flags.get("cpor_activation") if isinstance(flags.get("cpor_activation"), dict) else {}
         status = act.get("status")
-        if status not in (_AT_PRICE, _OFF_PRICE):
+        if act.get("price_basis") != "promo" or status not in (_AT_PRICE, _OFF_PRICE):
             continue
         start = _iso_date(act.get("line_window_start") or act.get("case_window_start"))
         end = _iso_date(act.get("line_window_end") or act.get("case_window_end"))
@@ -87,8 +88,8 @@ def activation_timing(observations: list[Any], *, alert_days: int) -> list[dict[
     alerts: list[dict[str, Any]] = []
     for key, reads in windows.items():
         _case_id, start, end = key
-        reads.sort(key=lambda item: item[0])
-        first_at = next((on for on, st in reads if st == _AT_PRICE), None)
+        first_at_index = next((i for i, (_on, st) in enumerate(reads) if st == _AT_PRICE), None)
+        first_at = reads[first_at_index][0] if first_at_index is not None else None
         base = {
             **meta[key],
             "window_start": start.isoformat(),
@@ -97,10 +98,8 @@ def activation_timing(observations: list[Any], *, alert_days: int) -> list[dict[
         }
         late_proof = [
             on
-            for on, st in reads
-            if st == _OFF_PRICE
-            and (first_at is None or on < first_at)
-            and (on - start).days >= alert_days
+            for on, st in reads[:first_at_index]
+            if st == _OFF_PRICE and (on - start).days >= alert_days
         ]
         if late_proof:
             seen = max(late_proof)
@@ -113,11 +112,17 @@ def activation_timing(observations: list[Any], *, alert_days: int) -> list[dict[
                     "days_late_at_least": (seen - start).days,
                 }
             )
-        if first_at is not None:
-            off = next((on for on, st in reads if st == _OFF_PRICE and on > first_at), None)
-            if off is not None and (end - off).days >= alert_days:
-                last_at = max(on for on, st in reads if st == _AT_PRICE and on < off)
-                back = next((on for on, st in reads if st == _AT_PRICE and on > off), None)
+        if first_at_index is not None:
+            off_index = next(
+                (i for i in range(first_at_index + 1, len(reads)) if reads[i][1] == _OFF_PRICE),
+                None,
+            )
+            if off_index is None:
+                continue
+            off = reads[off_index][0]
+            if (end - off).days >= alert_days:
+                last_at = next(on for on, st in reversed(reads[:off_index]) if st == _AT_PRICE)
+                back = next((on for on, st in reads[off_index + 1 :] if st == _AT_PRICE), None)
                 alerts.append(
                     {
                         **base,

@@ -16,15 +16,18 @@ START = date(2026, 11, 1)
 END = date(2026, 11, 30)
 
 
-def _obs(day: int, status: str, *, start=START, end=END, case_id=7, i=0):
+def _obs(
+    day: int, status: str, *, start=START, end=END, case_id=7, i=0, hour=9, basis="promo"
+):
     on = START + timedelta(days=day)
     return SimpleNamespace(
         id=i or day + 1,
-        fetched_at=datetime(on.year, on.month, on.day, 9, tzinfo=UTC),
+        fetched_at=datetime(on.year, on.month, on.day, hour, tzinfo=UTC),
         extracted_price=999.0,
         parse_flags={
             "cpor_activation": {
                 "status": status,
+                "price_basis": basis,
                 "as_of": on.isoformat(),
                 "case_id": case_id,
                 "case_code": f"CASE-{case_id}",
@@ -124,6 +127,102 @@ def test_a_failed_check_proves_nothing():
     assert [a["kind"] for a in activation_timing([ok], alert_days=3)] == ["late_activation"]
 
 
+def test_late_activation_before_a_same_day_activation():
+    alerts = activation_timing([_obs(3, OFF, hour=9), _obs(3, AT, hour=15)], alert_days=3)
+    assert [a["kind"] for a in alerts] == ["late_activation"]
+    assert alerts[0]["not_at_price_on"] == "2026-11-04"
+    assert alerts[0]["at_price_from"] == "2026-11-04"
+    assert alerts[0]["days_late_at_least"] == 3
+
+
+def test_early_deactivation_on_the_first_activation_day():
+    alerts = activation_timing([_obs(9, AT, hour=9), _obs(9, OFF, hour=15)], alert_days=3)
+    assert [a["kind"] for a in alerts] == ["early_deactivation"]
+    assert alerts[0]["last_at_price_on"] == "2026-11-10"
+    assert alerts[0]["off_price_on"] == "2026-11-10"
+    assert alerts[0]["back_at_price_on"] is None
+    assert alerts[0]["days_early_at_least"] == 20
+
+
+def test_same_day_recovery_is_after_the_off_price_check():
+    reads = [
+        _obs(0, AT),
+        _obs(9, AT, hour=9),
+        _obs(9, OFF, hour=15),
+        _obs(9, AT, hour=18),
+    ]
+    (early,) = activation_timing(reads, alert_days=3)
+    assert early["kind"] == "early_deactivation"
+    assert early["last_at_price_on"] == "2026-11-10"
+    assert early["off_price_on"] == "2026-11-10"
+    assert early["back_at_price_on"] == "2026-11-10"
+
+
+def test_equal_fetch_times_keep_the_callers_id_order():
+    reads = [_obs(3, status, i=i) for i, status in enumerate((OFF, AT, OFF, AT), start=1)]
+    alerts = activation_timing(reads, alert_days=3)
+    assert [a["kind"] for a in alerts] == ["early_deactivation", "late_activation"]
+    early, late = alerts
+    assert early["back_at_price_on"] == late["at_price_from"] == "2026-11-04"
+    assert early["days_early_at_least"] == 26
+    assert late["days_late_at_least"] == 3
+
+
+def test_same_day_check_before_activation_is_not_early_deactivation():
+    # The morning check is below the late threshold and precedes the first activation.
+    assert activation_timing([_obs(2, OFF, hour=9), _obs(2, AT, hour=15)], alert_days=3) == []
+
+
+@pytest.mark.parametrize("day, expected", [(2, []), (3, ["late_activation"])])
+def test_same_day_late_threshold_uses_calendar_days(day, expected):
+    reads = [_obs(day, OFF, hour=9), _obs(day, AT, hour=10)]
+    assert [a["kind"] for a in activation_timing(reads, alert_days=3)] == expected
+
+
+@pytest.mark.parametrize("day, expected", [(26, ["early_deactivation"]), (27, [])])
+def test_same_day_early_threshold_uses_calendar_days(day, expected):
+    reads = [_obs(day, AT, hour=9), _obs(day, OFF, hour=10)]
+    assert [a["kind"] for a in activation_timing(reads, alert_days=3)] == expected
+
+
+def test_zero_day_threshold_keeps_same_day_transitions():
+    reads = [_obs(0, OFF, hour=9), _obs(0, AT, hour=12), _obs(0, OFF, hour=15)]
+    alerts = activation_timing(reads, alert_days=0)
+    assert {a["kind"] for a in alerts} == {"late_activation", "early_deactivation"}
+    assert next(a for a in alerts if a["kind"] == "late_activation")["days_late_at_least"] == 0
+
+
+@pytest.mark.parametrize("basis", ["sell_out", None, "unknown"])
+@pytest.mark.parametrize("statuses", [(OFF,), (AT, OFF)])
+def test_non_promotion_evidence_cannot_raise_timing_alerts(basis, statuses):
+    reads = [_obs(3 + i, status, basis=basis) for i, status in enumerate(statuses)]
+    assert activation_timing(reads, alert_days=3) == []
+
+
+def test_legacy_checks_without_a_price_basis_do_not_prove_promotion_timing():
+    legacy = _obs(3, OFF)
+    del legacy.parse_flags["cpor_activation"]["price_basis"]
+    assert activation_timing([legacy], alert_days=3) == []
+
+
+@pytest.mark.parametrize(
+    "reads, expected",
+    [
+        ([_obs(0, AT, basis="sell_out"), _obs(3, OFF)], ["late_activation"]),
+        ([_obs(0, AT), _obs(3, OFF, basis="sell_out")], []),
+    ],
+)
+def test_fallback_checks_do_not_create_promotion_transitions(reads, expected):
+    assert [a["kind"] for a in activation_timing(reads, alert_days=3)] == expected
+
+
+def test_fallback_check_does_not_count_as_a_promotion_recovery():
+    reads = [_obs(0, AT), _obs(3, OFF), _obs(3, AT, hour=15, basis="sell_out")]
+    (early,) = activation_timing(reads, alert_days=3)
+    assert early["kind"] == "early_deactivation"
+    assert early["back_at_price_on"] is None
+
+
 def _session(observations):
     listing = SimpleNamespace(
         id=4, customer_id=11, product_id=9, marketplace="shop-a", url="u", external_id="x"
@@ -160,6 +259,8 @@ def test_the_setting_defaults_to_three_and_reads_the_environment(monkeypatch: py
     assert Settings(_env_file=None, **base).cip_listing_activation_alert_days == 3
     monkeypatch.setenv("CIP_LISTING_ACTIVATION_ALERT_DAYS", "5")
     assert Settings(_env_file=None, **base).cip_listing_activation_alert_days == 5
+    monkeypatch.setenv("CIP_LISTING_ACTIVATION_ALERT_DAYS", "0")
+    assert Settings(_env_file=None, **base).cip_listing_activation_alert_days == 0
     monkeypatch.setenv("CIP_LISTING_ACTIVATION_ALERT_DAYS", "-1")
     with pytest.raises(ValueError):
         Settings(_env_file=None, **base)

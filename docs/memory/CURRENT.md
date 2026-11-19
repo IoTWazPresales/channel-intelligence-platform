@@ -1,8 +1,11 @@
 # CURRENT state
 
-**W1-B activation timing (2026-11-18):** branch `feat/w1b-activation-timing-20261118`, stacked on #105 and #104. It adds late-activation and early-deactivation alerts to listing intelligence and the Market activation lens.
+**W1-B activation timing (2026-11-19, PR #106 fix round 1):** branch `feat/w1b-activation-timing-20261118`, stacked on #105 and #104. It adds late-activation and early-deactivation alerts to listing intelligence and the Market activation lens.
 - **Threshold:** Warren decided 3 days (13:27 SAST). It is set by `CIP_LISTING_ACTIVATION_ALERT_DAYS` (default 3), not hard-coded.
-- **Evidence:** alerts come from stored per-check activation results; nothing is guessed between checks.
+- **Evidence / B2:** timing uses only stored `price_basis="promo"` checks. Distributor sell-in (`sell_out`), missing and unknown bases cannot establish promotion timing; point-in-time activation remains unchanged.
+- **B1:** transitions and recoveries keep the query's `fetched_at, id` order, including same-day checks and equal timestamps. Calendar dates still determine lateness/earliness at the configured threshold.
+- **Tests prepared:** expanded timing pytest and Vitest regressions; new `test_listing_activation_timing_db.py` reuses the existing `cip_test` identity-checking rollback fixture and the canonical activation evaluator.
+- **Validation limits:** read-only patch delivery, no files applied. Exploratory in-memory pytest (ORM imports omitted): 29 passed, 2 ORM/config tests deselected; nine selected regressions fail against the original service. No saved gate log, database connection, database-suite run, Vitest execution or browser acceptance. The orchestrator must apply the patch, run API tests on `cip_test`, web type/lint/Vitest checks, and inspect 1280x800 / 390x844 browser evidence before acceptance.
 - No migration, no deploy.
 
 **W1-B worklist (2026-11-18):** branch `feat/w1b-stock-not-listed-20261118` (stacked on `fix/listing-coverage-226-20261118`) adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
