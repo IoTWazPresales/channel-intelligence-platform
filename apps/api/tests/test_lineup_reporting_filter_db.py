@@ -113,12 +113,16 @@ async def test_budget_position_derivation_reads_only_the_reporting_customer(sess
 
 
 @pytest.mark.anyio
-async def test_planned_reservation_sync_reads_only_the_reporting_customer(session):
+async def test_planned_reservation_sync_no_longer_reads_any_lineup(session):
+    """Lane L4 (Warren 2026-11-19): the planner is sell-through only, so the sync planned
+    reservation reads no line-up row, reporting customer or not. It is "not available"."""
     await _world(session)
     out = await session.run_sync(
         lambda sync: promo_plan_builder.derive_planned_reservation_sync(
             sync, period_label=PERIOD_LABEL
         )
     )
-    assert out["skipped_missing_sku"] == 1
+    assert out["available"] is False
+    assert out["planned_reservation_usd"] is None
+    assert out["skipped_missing_sku"] == 0
     assert out["planned_line_count"] == 0

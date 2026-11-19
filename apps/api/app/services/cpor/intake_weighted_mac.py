@@ -12,6 +12,11 @@ Not in the blend:
 - DAP
 
 Approved `cost_basis` is never rewritten here.
+
+The promotion planner does not use `suggest_intake_weighted_mac` any more (Warren 2026-11-19:
+"strictly sell-through for everything"). It calls `suggest_sellthrough_mac` below, which reads
+only the customer's own sell-through, as does the planner's case-line cost-suggest endpoint.
+`suggest_intake_weighted_mac` remains available for historical cost analysis.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from sqlalchemy.orm import Session
 from app.models.facts import FactBuyPlan, FactInboundShipment, FactSalesSellout
 from app.models.lineup import FactLineupPlanItem
 from app.services.channel_ops_derived_stock import compute_derived_for_pair_sync
+from app.services.cpor import planner_sellthrough
 from app.services.cpor.cost_suggestion import (
     CostSuggestion,
     _tier1_cst,
@@ -344,7 +350,8 @@ def suggest_intake_weighted_mac(
         qty=qty_a,
         unit_cost=cst_mac,
         as_of=as_of_a or cst_as_of,
-        flags=[f for f in flags_a] + (["cross_grain_valuation"] if qty_a > 0 else [])
+        flags=[f for f in flags_a]
+        + (["cross_grain_valuation"] if qty_a > 0 else [])
         + (["no_cst_mac"] if cst_mac is None else []),
         extra={
             "cost_field": t1.evidence.get("field_used") if t1 else None,
@@ -488,4 +495,76 @@ def suggest_intake_weighted_mac(
         cost_source=cost_source,
         evidence=evidence,
         flags=ordered_flags,
+    )
+
+
+def suggest_sellthrough_mac(
+    session: Session,
+    *,
+    customer_id: int,
+    product_id: int,
+    tenant_id: str = "default",
+    book: planner_sellthrough.SellthroughBook | None = None,
+) -> CostSuggestion:
+    """Planner cost: the customer's own sell-through ``unit_mac``, else ``unit_cost``.
+
+    The latest reported week with a positive figure for this customer and product. Shipments,
+    buy plan, distributor sell-out, line-ups, earlier cases and the distributor's cost are not
+    read. With no sell-through cost the result has no ``cost_basis`` and the flag
+    ``no_sellthrough_cost``; nothing is filled in. ``cost_source`` is ``cst_reported``, the value
+    the VAT-basis and SOH-check code already understands for a cost taken from a customer file.
+    """
+    if book is None:
+        book = planner_sellthrough.read_book(
+            session,
+            tenant_id=tenant_id,
+            customer_id=int(customer_id),
+            product_ids=[int(product_id)],
+            want=("cost",),
+        )
+    fig = book.figures(int(product_id))
+    cost = fig.get("cost")
+    evidence: dict[str, Any] = {
+        "composer": "sellthrough_mac",
+        "source": planner_sellthrough.SOURCE_LABEL,
+        "customer_id": int(customer_id),
+        "product_id": int(product_id),
+        "rule": "latest reported week with a positive unit_mac, else unit_cost",
+        "not_in_blend": [
+            "shipments",
+            "buy_plan",
+            "distributor_sell_out",
+            "lineup",
+            "earlier_cases",
+            "distributor_cost",
+        ],
+    }
+    if cost is None:
+        evidence["reason"] = fig.get("cost_reason")
+        evidence["blend"] = {"cost_basis": None, "formula": "sell-through cost not reported"}
+        return CostSuggestion(
+            cost_basis=None,
+            cost_source=None,
+            evidence=evidence,
+            flags=["no_sellthrough_cost"],
+        )
+    field_used = str(fig["cost_field"])
+    evidence.update(
+        {
+            "tier": "cst_reported",
+            "as_of": fig["cost_as_of"],
+            "field_used": field_used,
+            field_used: float(cost),
+        }
+    )
+    if fig.get("cost_fact_id") is not None:
+        evidence["fact_id"] = int(fig["cost_fact_id"])
+    if fig.get("cost_vat_basis") is not None:
+        evidence["vat_basis"] = str(fig["cost_vat_basis"])
+    evidence["blend"] = {"cost_basis": float(cost), "formula": evidence["rule"]}
+    return CostSuggestion(
+        cost_basis=_as_decimal(cost),
+        cost_source="cst_reported",
+        evidence=evidence,
+        flags=[],
     )

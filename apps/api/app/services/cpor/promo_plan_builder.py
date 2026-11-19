@@ -1,8 +1,15 @@
-"""B4 — promotion plan builder draft (compose A2 + B1 + B2 + 15C per-line grid).
+"""B4 — promotion plan builder draft (per-line grid, create-from-draft).
 
 Compose is the primary surface. Optional create-from-draft writes a **draft** CPOR case
-via the existing case/line path (no parallel economics ledger). Unit 15C emits per-line
-intake-weighted MAC + history units; create carries operator edits (D-051–D-053).
+via the existing case/line path (no parallel economics ledger). Create carries operator
+edits (D-051–D-053).
+
+Sell-through only (Warren 2026-11-19: "strictly sell-through for everything, drop the rest").
+Price, cost, stock and expected units for the planner come from the customer's own
+``fact_customer_sellthrough`` rows and nothing else; see ``planner_sellthrough`` for the
+definitions. Line-ups, demand forecasts, listings, competitor prices, distributor cover,
+shipments, buy plans, distributor sell-out, SKU assumptions and earlier cases are not read here.
+A figure sell-through does not carry is returned as missing with a reason.
 """
 
 from __future__ import annotations
@@ -12,52 +19,32 @@ from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload, load_only
+from sqlalchemy.orm import Session, load_only
 
-from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
-from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.customer_report_config import CustomerReportConfig
-from app.models.derived import WeeksOfCoverObservation
 from app.models.dimensions import DimCompetitorBrand, DimCompetitorProduct, DimCustomer, DimProduct
-from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.facts import FactCompetitorMapping, FactCompetitorPrice
-from app.models.listing_capture import CustomerListing, ListingObservation
-from app.services.store_dc.rules import (
-    DEFAULT_SLOW_COVER_MULTIPLE,
-    is_slow,
-    is_weekly,
-    norm_label,
-    slow_multiple as configured_slow_multiple,
-    weekly_rate,
-    weeks_of_cover,
-)
-from app.models.fact_demand_forecast import FactDemandForecast
-from app.models.lineup import FactLineupPlanItem
 from app.services import commercial_tenant_profile as tenant_profile
 from app.services.commercial_planner.lineup_period_canonical import (
-    active_lineup_case_filters,
-    active_lineup_line_filters,
     normalize_period_label,
     parse_period_filter_to_year_quarter,
     period_label_sql_variants,
-    period_labels_equivalent,
     quarter_bounds_from_period_start,
-    quarter_from_period_start,
 )
-from app.services.cpor.intake_weighted_mac import suggest_intake_weighted_mac
-
-logger = logging.getLogger(__name__)
-from app.services.cpor.intelligence_scope import where_commercial_intelligence
-from app.services.cpor.norms_and_comparable import (
-    build_comparable_cases,
-    normalize_quarter_label,
-    quarter_index,
-)
+from app.services.cpor import planner_sellthrough
+from app.services.cpor.intake_weighted_mac import suggest_sellthrough_mac
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
 from app.services.lineup.cover_policy import resolve_target_cover_weeks_sync
-from app.services.lineup.profit_reservation import compute_profit_with_reservation
-from app.services.lineup.reporting_gate import reporting_plan_items_clause
+from app.services.store_dc.rules import (
+    DEFAULT_SLOW_COVER_MULTIPLE,
+    is_slow,
+)
+from app.services.store_dc.rules import (
+    slow_multiple as configured_slow_multiple,
+)
+
+logger = logging.getLogger(__name__)
 
 EDITABLE_PLANNER_FIELDS = (
     "estimate_qty",
@@ -68,12 +55,15 @@ EDITABLE_PLANNER_FIELDS = (
     "pod_quarter",
 )
 COST_SOURCE_MANUAL = "manual"
-COST_SOURCE_INTAKE_WEIGHTED = "intake_weighted"
-PRODUCT_SET_LINEUP = "commercial_lineup_line"
-PRODUCT_SET_CUSTOMER_HISTORY = "same_customer_cpor_case_line"
+COST_SOURCE_SELLTHROUGH = "cst_reported"
+PRODUCT_SET_SELLTHROUGH = "customer_sellthrough"
 PRODUCT_SET_SEED = "seed_case_lines"
 PRODUCT_SET_EXPLICIT = "line_specs"
 DEFAULT_PROPOSAL_PROMOTION_TYPE = "Sell out PP"
+# The planned reservation needs a line-up's planned units and the SKU's reserve percentages.
+# Customer sell-through carries neither, so there is no sell-through-only reservation.
+RESERVATION_NOT_AVAILABLE = "reservation_needs_lineup_and_sku_assumptions_not_in_sellthrough"
+MONEY_STATUS_NOT_AVAILABLE = "not_available"
 
 
 def window_from_period_label(period_label: str | None) -> tuple[date, date]:
@@ -89,72 +79,6 @@ def window_from_period_label(period_label: str | None) -> tuple[date, date]:
     return q_start, q_end_excl - timedelta(days=1)
 
 
-def _lineup_case_matches_period(case: CommercialLineupCase, period_label: str) -> bool:
-    if period_labels_equivalent(case.period_label, period_label):
-        return True
-    if case.inferred_period_start is None:
-        return False
-    filt_year, filt_q = parse_period_filter_to_year_quarter(period_label)
-    case_year, case_q = quarter_from_period_start(case.inferred_period_start)
-    if filt_year is not None and filt_year != case_year:
-        return False
-    if filt_q is not None and filt_q != case_q:
-        return False
-    return filt_year is not None or filt_q is not None
-
-
-def _dedupe_specs(specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    best: dict[tuple[int, int | None], dict[str, Any]] = {}
-    for spec in specs:
-        key = (int(spec["product_id"]), spec.get("distributor_id"))
-        prev = best.get(key)
-        if prev is None:
-            best[key] = spec
-            continue
-        prev_srp = float(prev.get("srp") or 0)
-        new_srp = float(spec.get("srp") or 0)
-        if prev_srp <= 0 < new_srp:
-            best[key] = spec
-        elif new_srp > 0 and float(spec.get("estimate_qty") or 0) > float(prev.get("estimate_qty") or 0):
-            best[key] = spec
-    return list(best.values())
-
-
-def _specs_from_lineup(session: Session, *, customer_id: int, period_label: str) -> list[dict[str, Any]]:
-    cases = list(session.scalars(select(CommercialLineupCase).where(*active_lineup_case_filters())).all())
-    case_ids = [int(c.id) for c in cases if _lineup_case_matches_period(c, period_label)]
-    if not case_ids:
-        return []
-    lines = session.scalars(
-        select(CommercialLineupLine).where(
-            CommercialLineupLine.case_id.in_(tuple(case_ids)),
-            CommercialLineupLine.customer_id == int(customer_id),
-            CommercialLineupLine.product_id.isnot(None),
-            *active_lineup_line_filters(),
-        )
-    ).all()
-    out: list[dict[str, Any]] = []
-    for line in lines:
-        srp = _positive_srp(
-            float(line.dap_evidence_local) if line.dap_evidence_local is not None else None,
-            float(line.msrp_local) if line.msrp_local is not None else None,
-            float(line.promo_price_evidence_local) if line.promo_price_evidence_local is not None else None,
-        )
-        did = int(line.distributor_id) if line.distributor_id is not None else None
-        out.append(
-            {
-                "seed_line_id": None,
-                "product_id": int(line.product_id),
-                "distributor_id": did,
-                "srp": srp,
-                "estimate_qty": float(line.quantity_units or 0),
-                "pod_quarter": normalize_period_label(period_label),
-                "cover_override": None,
-            }
-        )
-    return _dedupe_specs(out)
-
-
 # Reads used by propose. Window columns stay on the model for the case-line grain;
 # these queries do not need them, so a database that has not added them yet still loads.
 _CASE_LINE_PROPOSE_READ = (
@@ -168,199 +92,75 @@ _CASE_LINE_PROPOSE_READ = (
 )
 
 
-def _specs_from_customer_history(session: Session, *, customer_id: int, period_label: str) -> list[dict[str, Any]]:
-    cases = list(
-        session.scalars(
-            select(CporCase)
-            .where(
-                CporCase.customer_id == int(customer_id),
-                CporCase.superseded_by_case_id.is_(None),
-                where_commercial_intelligence(),
-                CporCase.status.in_(("ended", "settled", "draft", "proposed", "approved", "active")),
-            )
-            .order_by(CporCase.id.desc())
-        ).all()
+def _specs_from_sellthrough(
+    session: Session, *, customer_id: int, period_label: str, tenant_id: str = "default"
+) -> list[dict[str, Any]]:
+    """The customer's own sell-through products: sold, or held stock, inside the run-rate window.
+
+    Price, cost and units are filled per line from the same sell-through (see
+    ``_compose_suggestion_row``); a spec carries only the product and the quarter.
+    """
+    cutoff = planner_sellthrough.window_cutoff(
+        session,
+        tenant_id=tenant_id,
+        customer_id=int(customer_id),
+        window_weeks=planner_sellthrough.run_rate_weeks(),
     )
-    if not cases:
-        return []
-    case_ids = [int(c.id) for c in cases]
-    lines = session.scalars(
-        select(CporCaseLine)
-        .options(load_only(*_CASE_LINE_PROPOSE_READ))
-        .where(CporCaseLine.case_id.in_(tuple(case_ids)), CporCaseLine.product_id.isnot(None))
-        .order_by(CporCaseLine.id.desc())
-    ).all()
-    case_rank = {cid: i for i, cid in enumerate(case_ids)}
-    lines = sorted(lines, key=lambda ln: (case_rank.get(int(ln.case_id), 10_000), -int(ln.id)))
-    out: list[dict[str, Any]] = []
-    for line in lines:
-        srp = _positive_srp(float(line.srp) if line.srp is not None else None)
-        did = int(line.distributor_id) if line.distributor_id is not None else None
-        out.append(
-            {
-                "seed_line_id": None,
-                "product_id": int(line.product_id),
-                "distributor_id": did,
-                "srp": srp,
-                "estimate_qty": float(line.estimate_qty or 0),
-                "pod_quarter": normalize_period_label(period_label) or line.pod_quarter,
-                "cover_override": None,
-            }
-        )
-    return _dedupe_specs(out)
+    product_ids = planner_sellthrough.products_in_window(
+        session, tenant_id=tenant_id, customer_id=int(customer_id), cutoff=cutoff
+    )
+    return [
+        {
+            "seed_line_id": None,
+            "product_id": int(pid),
+            "distributor_id": None,
+            "srp": None,
+            "estimate_qty": 0.0,
+            "pod_quarter": normalize_period_label(period_label),
+            "cover_override": None,
+        }
+        for pid in product_ids
+    ]
 
 
 def product_specs_for_customer_period(
-    session: Session, *, customer_id: int, period_label: str
+    session: Session, *, customer_id: int, period_label: str, tenant_id: str = "default"
 ) -> tuple[list[dict[str, Any]], str | None]:
-    lineup = _specs_from_lineup(session, customer_id=customer_id, period_label=period_label)
-    if lineup:
-        return lineup, PRODUCT_SET_LINEUP
-    history = _specs_from_customer_history(session, customer_id=customer_id, period_label=period_label)
-    if history:
-        return history, PRODUCT_SET_CUSTOMER_HISTORY
+    specs = _specs_from_sellthrough(
+        session, customer_id=customer_id, period_label=period_label, tenant_id=tenant_id
+    )
+    if specs:
+        return specs, PRODUCT_SET_SELLTHROUGH
     return [], None
 
 
-def build_same_customer_comparables(
-    session: Session,
-    *,
-    customer_id: int,
-    period_label: str | None,
-    limit: int = 10,
-    exclude_case_id: int | None = None,
-) -> dict[str, Any]:
-    """Same-customer historical cases only. Never ranks other customers."""
-    n = normalize_period_label(period_label)
-    target_q = normalize_quarter_label(n) if n else None
-    t_idx = quarter_index(target_q) if target_q else None
-    cases = list(
-        session.scalars(
-            select(CporCase)
-            .where(
-                CporCase.customer_id == int(customer_id),
-                CporCase.superseded_by_case_id.is_(None),
-                where_commercial_intelligence(),
-            )
-            .options(joinedload(CporCase.lines).load_only(*_CASE_LINE_PROPOSE_READ))
-        )
-        .unique()
-        .all()
-    )
-    ranked: list[dict[str, Any]] = []
-    for case in cases:
-        if exclude_case_id is not None and int(case.id) == int(exclude_case_id):
-            continue
-        est = 0.0
-        quarters: list[str] = []
-        for line in case.lines or []:
-            try:
-                e = float(line.estimate_qty or 0)
-            except (TypeError, ValueError):
-                e = 0.0
-            if e > 0:
-                est += e
-            q = normalize_quarter_label(getattr(line, "pod_quarter", None), fallback=case.window_start)
-            if q:
-                quarters.append(q)
-        q_seed = max(set(quarters), key=quarters.count) if quarters else normalize_quarter_label(
-            None, fallback=case.window_start
-        )
-        q_idx = quarter_index(q_seed) if q_seed else None
-        if t_idx is not None and q_idx is not None:
-            q_prox = 1.0 / (1.0 + abs(q_idx - t_idx))
-        else:
-            q_prox = 0.0
-        ranked.append(
-            {
-                "case_id": int(case.id),
-                "case_code": case.case_code,
-                "customer_id": int(case.customer_id),
-                "promotion_type": case.promotion_type,
-                "status": case.status,
-                "window_start": case.window_start.isoformat() if case.window_start else None,
-                "window_end": case.window_end.isoformat() if case.window_end else None,
-                "quarter": q_seed,
-                "estimate_qty": round(est, 4),
-                "score": q_prox,
-            }
-        )
-    ranked.sort(key=lambda r: (-float(r["score"]), -float(r["estimate_qty"])))
-    return {
-        "items": ranked[: max(1, min(int(limit), 50))],
-        "error": None,
-        "same_customer_only": True,
-    }
-
-
-def _positive_srp(*candidates: float | None) -> float | None:
-    for raw in candidates:
-        if raw is None:
-            continue
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            continue
-        if value > 0:
-            return value
-    return None
-
-
-def _forecast_volume_sync(
+def sellthrough_volume_sync(
     session: Session,
     *,
     product_id: int | None,
     customer_id: int | None,
     horizon_weeks: int = 13,
+    tenant_id: str = "default",
+    book: planner_sellthrough.SellthroughBook | None = None,
 ) -> dict[str, Any]:
-    as_of = date.today()
-    period_to = as_of + timedelta(weeks=max(1, horizon_weeks))
-    stmt = select(func.coalesce(func.sum(FactDemandForecast.forecast_units), 0)).where(
-        FactDemandForecast.period_start >= as_of,
-        FactDemandForecast.period_start < period_to,
+    """Expected units: the customer's sell-through run rate for the product times the horizon."""
+    if book is None and customer_id is not None and product_id is not None:
+        book = planner_sellthrough.read_book(
+            session,
+            tenant_id=tenant_id,
+            customer_id=int(customer_id),
+            product_ids=[int(product_id)],
+            want=("window",),
+        )
+    if book is None or product_id is None:
+        book = planner_sellthrough.SellthroughBook(
+            customer_id=None, window_weeks=planner_sellthrough.run_rate_weeks()
+        )
+    volume = planner_sellthrough.volume_from_figures(
+        book.figures(int(product_id) if product_id is not None else 0), horizon_weeks=horizon_weeks
     )
-    if product_id is not None:
-        stmt = stmt.where(FactDemandForecast.product_id == int(product_id))
-    if customer_id is not None:
-        stmt = stmt.where(FactDemandForecast.customer_id == int(customer_id))
-    units = float(session.execute(stmt).scalar() or 0)
-    return {
-        "horizon_weeks": horizon_weeks,
-        "period_from": as_of.isoformat(),
-        "period_to": period_to.isoformat(),
-        "forecast_units": units,
-        "source": "fact_demand_forecast",
-        "grain_filters": {"product_id": product_id, "customer_id": customer_id},
-    }
-
-
-def _srp_evidence_by_product_sync(session: Session, product_ids: set[int]) -> dict[int, float]:
-    if not product_ids:
-        return {}
-    rows = session.execute(
-        select(
-            CommercialLineupLine.product_id,
-            CommercialLineupLine.dap_evidence_local,
-            CommercialLineupLine.msrp_local,
-            CommercialLineupLine.id,
-        )
-        .where(CommercialLineupLine.product_id.in_(tuple(product_ids)))
-        .order_by(CommercialLineupLine.id.desc())
-    ).all()
-    out: dict[int, float] = {}
-    for pid, dap, msrp, _lid in rows:
-        if pid is None:
-            continue
-        key = int(pid)
-        if key in out:
-            continue
-        srp = _positive_srp(
-            float(dap) if dap is not None else None,
-            float(msrp) if msrp is not None else None,
-        )
-        if srp is not None:
-            out[key] = srp
-    return out
+    volume["grain_filters"] = {"product_id": product_id, "customer_id": customer_id}
+    return volume
 
 
 def derive_planned_reservation_sync(
@@ -369,117 +169,48 @@ def derive_planned_reservation_sync(
     period_label: str | None = None,
     limit: int = 5000,
 ) -> dict[str, Any]:
-    """B2 money-track planned reservation (sync) for B4 budget check — never fabricate SRP."""
-    # Line-ups exist only for reporting customers: drafts of other customers are not reserved.
-    items = list(
-        session.scalars(select(FactLineupPlanItem).where(reporting_plan_items_clause()).limit(limit)).all()
-    )
-    if period_label:
-        want = normalize_period_label(period_label)
-        items = [i for i in items if period_labels_equivalent(i.period_label, want)]
+    """Planned reservation for the budget check: not available from customer sell-through.
 
-    product_ids: set[int] = set()
-    raw: list[tuple[int, float, float | None]] = []
-    if items:
-        for item in items:
-            pid = int(item.product_id)
-            product_ids.add(pid)
-            raw.append((pid, float(item.planned_volume_units or 0), None))
-        srp_map = _srp_evidence_by_product_sync(session, product_ids)
-        raw = [(pid, qty, srp_map.get(pid)) for pid, qty, _ in raw]
-    else:
-        cases = list(
-            session.execute(select(CommercialLineupCase.id, CommercialLineupCase.period_label).limit(200)).all()
-        )
-        if period_label:
-            cases = [(cid, pl) for cid, pl in cases if period_labels_equivalent(pl, period_label)]
-        case_ids = [int(cid) for cid, _ in cases]
-        if case_ids:
-            for line in session.scalars(
-                select(CommercialLineupLine)
-                .where(
-                    CommercialLineupLine.case_id.in_(tuple(case_ids)),
-                    CommercialLineupLine.product_id.isnot(None),
-                )
-                .limit(limit)
-            ).all():
-                pid = int(line.product_id)  # type: ignore[arg-type]
-                product_ids.add(pid)
-                srp = _positive_srp(
-                    float(line.dap_evidence_local) if line.dap_evidence_local is not None else None,
-                    float(line.msrp_local) if line.msrp_local is not None else None,
-                )
-                raw.append((pid, float(line.quantity_units or 0), srp))
+    The reservation was built from line-up planned units and SKU assumptions (reserve
+    percentages, controlled cost). Warren's rule is that the planner uses customer sell-through
+    only, and sell-through carries neither. Nothing is read and nothing is invented: the result
+    says so and every amount is ``None``, never ``0``.
 
-    sku_by_pid: dict[int, CommercialSkuAssumption] = {}
-    if product_ids:
-        for sku in session.scalars(
-            select(CommercialSkuAssumption).where(CommercialSkuAssumption.product_id.in_(tuple(product_ids)))
-        ).all():
-            sku_by_pid[int(sku.product_id)] = sku
-
-    reserved = 0.0
-    revenue = 0.0
-    planned_n = 0
-    skipped_missing_sku = 0
-    skipped_missing_srp = 0
-    for pid, qty, srp in raw:
-        if qty <= 0:
-            continue
-        sku = sku_by_pid.get(pid)
-        if sku is None:
-            skipped_missing_sku += 1
-            continue
-        if srp is None or srp <= 0:
-            skipped_missing_srp += 1
-            continue
-        economics = compute_profit_with_reservation(
-            net_requirement_units=qty,
-            target_srp_local=float(srp),
-            promo_srp_local=None,
-            controlled_cost_amount=float(sku.controlled_cost_amount),
-            reserve_total_pct=float(sku.reserve_total_pct),
-            promo_reserve_split_pct=float(sku.promo_reserve_split_pct),
-            vat_rate_pct=float(sku.vat_rate_pct),
-            fx_plan_currency_per_cost_currency=float(sku.fx_plan_currency_per_cost_currency),
-        )
-        reserved += float((economics.get("reservation") or {}).get("total") or 0)
-        revenue += float(economics.get("oem_sell_in_per_unit") or 0) * qty
-        planned_n += 1
-
-    sku_n = int(session.execute(select(func.count()).select_from(CommercialSkuAssumption)).scalar() or 0)
+    What the caller shows: the planned reservation and the remaining budget as "Not available
+    yet", with ``reason``. Money already drawn is still shown. A planned support figure typed by
+    the operator is used as entered, and then the budget check runs on it.
+    """
+    del session, period_label, limit
     return {
-        "planned_reservation_usd": round(reserved, 4),
-        "planned_revenue_usd": round(revenue, 4),
-        "planned_line_count": planned_n,
-        "sku_assumption_count": sku_n,
-        "skipped_missing_sku": skipped_missing_sku,
-        "skipped_missing_srp": skipped_missing_srp,
+        "available": False,
+        "reason": RESERVATION_NOT_AVAILABLE,
+        "planned_reservation_usd": None,
+        "planned_revenue_usd": None,
+        "planned_line_count": 0,
+        "sku_assumption_count": None,
+        "skipped_missing_sku": 0,
+        "skipped_missing_srp": 0,
         "reservation_source": tenant_profile.RESERVATION_SOURCE,
-        "from_lineup_derived": planned_n > 0,
+        "from_lineup_derived": False,
     }
 
 
-def _intake_payload(sug: Any) -> dict[str, Any]:
+def _cost_payload(sug: Any) -> dict[str, Any]:
+    """Per-line cost payload. ``intake_weighted`` is the response key the planner screens read."""
     evidence = dict(sug.evidence or {})
     return {
         "cost_basis": float(sug.cost_basis) if sug.cost_basis is not None else None,
         "cost_source": sug.cost_source,
         "evidence": evidence,
         "flags": list(sug.flags or []),
-        "bucket_a_on_hand": evidence.get("bucket_a_on_hand"),
-        "bucket_b_intake": evidence.get("bucket_b_intake"),
-        "planned_supply": evidence.get("planned_supply"),
-        "sellout_value": evidence.get("sellout_value"),
-        "disti_cost": evidence.get("disti_cost"),
+        # Compatibility keys for sources the planner no longer uses.
+        "bucket_a_on_hand": None,
+        "bucket_b_intake": None,
+        "planned_supply": None,
+        "sellout_value": None,
+        "disti_cost": None,
         "blend": evidence.get("blend"),
-        "not_in_blend": evidence.get("not_in_blend")
-        or [
-            "sellout_value_display_only",
-            "planned_supply_no_native_cost",
-            "dsi_wac_not_ingested",
-            "dap",
-        ],
+        "not_in_blend": list(evidence.get("not_in_blend") or []),
     }
 
 
@@ -517,7 +248,9 @@ def _normalize_line_spec(raw: dict[str, Any]) -> dict[str, Any]:
         "product_id": pid,
         "distributor_id": int(did) if did is not None else None,
         "srp": float(raw["srp"]) if raw.get("srp") is not None else None,
-        "estimate_qty": float(raw["estimate_qty"] or 0) if raw.get("estimate_qty") is not None else 0.0,
+        "estimate_qty": float(raw["estimate_qty"] or 0)
+        if raw.get("estimate_qty") is not None
+        else 0.0,
         "pod_quarter": raw.get("pod_quarter"),
         "cover_override": float(cover) if cover is not None else None,
     }
@@ -532,13 +265,18 @@ def _collect_line_specs(
     line_specs: list[dict[str, Any]] | None,
     customer_id: int | None = None,
     period_label: str | None = None,
+    tenant_id: str = "default",
 ) -> tuple[list[dict[str, Any]], str | None]:
     if line_specs is not None:
         return [_normalize_line_spec(s) for s in line_specs], PRODUCT_SET_EXPLICIT
     specs: list[dict[str, Any]] = []
     source: str | None = None
     if seed is not None:
-        stmt = select(CporCaseLine).options(load_only(*_CASE_LINE_PROPOSE_READ)).where(CporCaseLine.case_id == seed.id)
+        stmt = (
+            select(CporCaseLine)
+            .options(load_only(*_CASE_LINE_PROPOSE_READ))
+            .where(CporCaseLine.case_id == seed.id)
+        )
         if product_id is not None:
             stmt = stmt.where(CporCaseLine.product_id == int(product_id))
         stmt = stmt.order_by(CporCaseLine.id.asc())
@@ -548,7 +286,7 @@ def _collect_line_specs(
             source = PRODUCT_SET_SEED
     elif customer_id is not None and period_label:
         specs, source = product_specs_for_customer_period(
-            session, customer_id=int(customer_id), period_label=period_label
+            session, customer_id=int(customer_id), period_label=period_label, tenant_id=tenant_id
         )
         if product_id is not None:
             specs = [s for s in specs if int(s["product_id"]) == int(product_id)]
@@ -559,38 +297,17 @@ def _collect_line_specs(
     return specs, source
 
 
-def customer_sku_cover_from_rows(
-    rows: list[Any],
-    *,
-    target_weeks: float | None,
-    multiple: float = DEFAULT_SLOW_COVER_MULTIPLE,
-) -> dict[str, Any]:
-    """Customer × product cover from reported sell-through. Not stored, and not a target.
+COVER_NOTE = (
+    "Observed cover is customer stock divided by this customer's sell-through run rate. It does "
+    "not change the stored cover target and it is not stored. Units above that target can feed "
+    "the suggested quantity. The flag does not block a save."
+)
 
-    Grain follows the store/DC read model: when any row names a site, rows with
-    no site label are the collapsed chain grain and are left out of both stock
-    and sales, so a chain report is never added on top of the sites it covers.
-    With no site rows, the chain rows are the account grain and are used.
-    Sites group by ``norm_label``; each site's latest stock report counts once.
-    """
-    weekly: dict[Any, float] = {}
-    latest_soh: dict[str, tuple[Any, float]] = {}
-    has_sites = any(norm_label(row[5]) for row in rows)
-    for row in rows:
-        period, grain, kind, units, soh, site = row[0], row[1], row[2], row[3], row[4], row[5]
-        site_key = norm_label(site)
-        if has_sites and not site_key:
-            continue
-        if soh is not None:
-            previous = latest_soh.get(site_key)
-            if previous is None or period >= previous[0]:
-                latest_soh[site_key] = (period, float(soh))
-        if is_weekly(grain, kind):
-            weekly[period] = weekly.get(period, 0.0) + float(units or 0)
-    soh_total = sum(item[1] for item in latest_soh.values()) if latest_soh else None
-    periods = sorted(weekly)
-    rate = weekly_rate([weekly[period] for period in periods[-4:]]) if periods else None
-    weeks = weeks_of_cover(soh_total, rate)
+
+def _cover_from_figures(
+    figures: dict[str, Any], *, target_weeks: float | None, multiple: float
+) -> dict[str, Any]:
+    weeks = figures.get("cover_weeks")
     flag = None
     if weeks is not None:
         flag = (
@@ -598,18 +315,43 @@ def customer_sku_cover_from_rows(
             if target_weeks is not None and is_slow(weeks, float(target_weeks), multiple)
             else "observed_cover"
         )
+    rate = figures.get("weekly_rate")
+    soh = figures.get("soh_units")
     return {
         "weeks": None if weeks is None else round(float(weeks), 4),
         "flag": flag,
         "grain": "customer_sku",
         "writes_target_cover": False,
-        "soh_units": None if soh_total is None else round(float(soh_total), 4),
+        "soh_units": None if soh is None else round(float(soh), 4),
         "weekly_rate": None if rate is None else round(float(rate), 4),
-        "note": (
-            "Observed cover does not change the stored cover target and it is not stored. "
-            "Units above that target can feed the suggested quantity. The flag does not block a save."
-        ),
+        "window_weeks": figures.get("window_weeks"),
+        "weeks_used": figures.get("weeks_used"),
+        "last_reported_week": figures.get("last_reported_week"),
+        "cover_reason": figures.get("cover_reason"),
+        "soh_reason": figures.get("soh_reason"),
+        "units_reason": figures.get("units_reason"),
+        "note": COVER_NOTE,
     }
+
+
+def customer_sku_cover_from_rows(
+    rows: list[Any],
+    *,
+    target_weeks: float | None,
+    multiple: float = DEFAULT_SLOW_COVER_MULTIPLE,
+    window_weeks: int | None = None,
+) -> dict[str, Any]:
+    """Customer × product cover from reported sell-through. Not stored, and not a target.
+
+    Rows are ``(period, grain, kind, units, soh, site)``. The run rate is the mean weekly
+    units over the most recent ``window_weeks`` reported weeks (configured, default 8); stock is
+    each site's latest report; cover is stock divided by the run rate. Grain follows the
+    store/DC read model: when any row names a site, rows with no site label are the collapsed
+    chain grain and are left out, so a chain report is never added on top of its sites.
+    """
+    weeks = int(window_weeks) if window_weeks is not None else planner_sellthrough.run_rate_weeks()
+    figures = planner_sellthrough.figures_from_rows(rows, None, None, window_weeks=weeks)
+    return _cover_from_figures(figures, target_weeks=target_weeks, multiple=multiple)
 
 
 def _approved_competitor_prices(session: Session, product_id: int) -> list[dict[str, Any]]:
@@ -623,7 +365,10 @@ def _approved_competitor_prices(session: Session, product_id: int) -> list[dict[
             FactCompetitorPrice.observed_at,
         )
         .select_from(FactCompetitorMapping)
-        .join(DimCompetitorProduct, DimCompetitorProduct.id == FactCompetitorMapping.competitor_product_id)
+        .join(
+            DimCompetitorProduct,
+            DimCompetitorProduct.id == FactCompetitorMapping.competitor_product_id,
+        )
         .join(DimCompetitorBrand, DimCompetitorBrand.id == DimCompetitorProduct.brand_id)
         .join(
             FactCompetitorPrice,
@@ -644,7 +389,9 @@ def _approved_competitor_prices(session: Session, product_id: int) -> list[dict[
         if key in seen:
             continue
         seen.add(key)
-        label = " ".join(part for part in (str(brand or "").strip(), str(name or sku or "").strip()) if part)
+        label = " ".join(
+            part for part in (str(brand or "").strip(), str(name or sku or "").strip()) if part
+        )
         prices.append({"label": label, "price": float(price), "observed": str(observed)[:10]})
     return prices
 
@@ -665,17 +412,27 @@ def load_promotion_line_evidence(
     target_weeks: float | None = None,
     tenant_id: str = "default",
     slow_multiple: float | None = None,
+    book: planner_sellthrough.SellthroughBook | None = None,
 ) -> dict[str, Any]:
-    """Listing, approved competitor prices, and customer × product cover for one plan line.
+    """Customer × product stock health for one plan line, from sell-through only.
 
-    ``slow_multiple`` defaults to the customer's configured slow-cover multiple, the same
-    setting the store and DC board uses, and the shared fallback when none is stored.
+    The shopper listing, the approved competitor prices and the distributor's weeks of cover are
+    not read any more. Their response keys stay and say they are unavailable.
+    ``distributor_id`` is accepted for callers and unused.
+    ``slow_multiple`` defaults to the customer's configured slow-cover multiple, the same setting
+    the store and DC board uses, and the shared fallback when none is stored. ``book`` carries
+    sell-through already read for the whole draft; without it one read is made for this product.
     """
+    del distributor_id
+    unused = "The planner uses customer sell-through only. This source is not read."
     listing: dict[str, Any] = {
-        "listed": False,
-        "listing_count": 0,
+        "listed": None,
+        "listing_count": None,
         "status": None,
         "last_observed_price": None,
+        "data_unavailable": True,
+        "reason": "not_a_sellthrough_source",
+        "note": unused,
     }
     competitor: dict[str, Any] = {
         "data_unavailable": True,
@@ -683,7 +440,8 @@ def load_promotion_line_evidence(
         "price": None,
         "prices": [],
         "mapped": False,
-        "note": "No competitor price is stored. An empty fact is not filled in.",
+        "reason": "not_a_sellthrough_source",
+        "note": unused,
     }
     cover: dict[str, Any] = {
         "weeks": None,
@@ -693,91 +451,34 @@ def load_promotion_line_evidence(
         "distributor_product_weeks": None,
         "soh_units": None,
         "weekly_rate": None,
-        "note": (
-            "Observed cover does not change the stored cover target and it is not stored. "
-            "Units above that target can feed the suggested quantity. The flag does not block a save."
-        ),
+        "window_weeks": planner_sellthrough.run_rate_weeks(),
+        "cover_reason": planner_sellthrough.NO_CUSTOMER,
+        "note": COVER_NOTE,
     }
     try:
-        if customer_id is not None:
-            listings = session.execute(
-                select(CustomerListing.id, CustomerListing.status)
-                .where(CustomerListing.customer_id == int(customer_id))
-                .where(CustomerListing.product_id == int(product_id))
-            ).all()
-            listing["listing_count"] = len(listings)
-            listing["listed"] = len(listings) > 0
-            if listings:
-                listing["status"] = listings[0][1]
-                obs = session.execute(
-                    select(ListingObservation.extracted_price)
-                    .where(ListingObservation.listing_id.in_([int(row[0]) for row in listings]))
-                    .order_by(ListingObservation.fetched_at.desc())
-                    .limit(1)
-                ).all()
-                if obs and obs[0][0] is not None:
-                    # Shopper's price: the buy-box price stored on extracted_price.
-                    listing["last_observed_price"] = float(obs[0][0])
-        count = session.execute(select(func.count()).select_from(FactCompetitorPrice)).scalar()
-        row_count = int(count or 0)
-        competitor["row_count"] = row_count
-        competitor["data_unavailable"] = row_count == 0
-        if row_count > 0:
-            prices = _approved_competitor_prices(session, int(product_id))
-            competitor["prices"] = prices
-            competitor["mapped"] = bool(prices)
-            if prices:
-                competitor["price"] = min(item["price"] for item in prices)
-                competitor["note"] = (
-                    "Approved competitor prices for this product. "
-                    "This is product competition, not a comparison of customers."
-                )
-            else:
-                competitor["note"] = (
-                    "Competitor prices are stored, and none are on an approved map for this product."
-                )
         if customer_id is not None:
             multiple = slow_multiple
             if multiple is None:
                 multiple = _customer_slow_multiple(session, int(customer_id))
             cover["slow_multiple"] = float(multiple)
-            sellthrough_rows = session.execute(
-                select(
-                    FactCustomerSellthrough.period_start_date,
-                    FactCustomerSellthrough.period_grain,
-                    FactCustomerSellthrough.period_type,
-                    FactCustomerSellthrough.units_sold,
-                    FactCustomerSellthrough.reported_soh,
-                    FactCustomerSellthrough.site_label,
-                ).where(
-                    FactCustomerSellthrough.tenant_id == tenant_id,
-                    FactCustomerSellthrough.customer_id == int(customer_id),
-                    FactCustomerSellthrough.product_id == int(product_id),
+            if book is None:
+                book = planner_sellthrough.read_book(
+                    session,
+                    tenant_id=tenant_id,
+                    customer_id=int(customer_id),
+                    product_ids=[int(product_id)],
+                    want=("window",),
                 )
-            ).all()
             cover.update(
-                customer_sku_cover_from_rows(
-                    sellthrough_rows,
-                    target_weeks=target_weeks,
-                    multiple=multiple,
+                _cover_from_figures(
+                    book.figures(int(product_id)), target_weeks=target_weeks, multiple=multiple
                 )
             )
-        woc_stmt = select(WeeksOfCoverObservation.weeks_of_cover).where(
-            WeeksOfCoverObservation.product_id == int(product_id)
-        )
-        if distributor_id is not None:
-            woc_stmt = woc_stmt.where(WeeksOfCoverObservation.distributor_id == int(distributor_id))
-        woc_rows = session.execute(
-            woc_stmt.order_by(WeeksOfCoverObservation.cover_as_of_date.desc()).limit(1)
-        ).all()
-        if woc_rows and woc_rows[0][0] is not None:
-            cover["distributor_product_weeks"] = float(woc_rows[0][0])
     except Exception:
         logger.exception(
-            "promotion line evidence read failed customer_id=%s product_id=%s distributor_id=%s",
+            "promotion line evidence read failed customer_id=%s product_id=%s",
             customer_id,
             product_id,
-            distributor_id,
         )
         listing["data_unavailable"] = True
         competitor["data_unavailable"] = True
@@ -797,10 +498,10 @@ def load_promotion_line_evidence(
 
 
 QUANTITY_FORMULA = (
-    "Mean of the positive signals: forecast units, this customer's earlier estimate "
-    "for the same product, and units of stock above the cover target. A missing signal "
-    "is left out. When none of those are positive, the mean of this customer's comparable "
-    "cases is used, then the line's own estimate. Nothing here blocks a save."
+    "Mean of the positive signals: expected units from this customer's sell-through run rate "
+    "over the horizon, and units of customer stock above the cover target. A missing signal "
+    "is left out. Reported zero sales stays zero; without sell-through units the suggestion is "
+    "not available. Nothing here blocks a save."
 )
 
 
@@ -822,87 +523,52 @@ def cover_surplus_units(
     return round(surplus, 4)
 
 
-def customer_product_history_units(
-    session: Session,
-    *,
-    customer_id: int,
-    product_id: int,
-    exclude_case_id: int | None,
-) -> dict[str, Any]:
-    """Mean estimate on this customer's other cases for the same product.
-
-    Other customers are not read. The case being filled is excluded so a second
-    click does not blend the quantity it just wrote.
-    """
-    stmt = (
-        select(CporCaseLine.estimate_qty)
-        .join(CporCase, CporCase.id == CporCaseLine.case_id)
-        .where(
-            CporCase.customer_id == int(customer_id),
-            CporCaseLine.product_id == int(product_id),
-            CporCase.superseded_by_case_id.is_(None),
-            where_commercial_intelligence(),
-        )
-    )
-    if exclude_case_id is not None:
-        stmt = stmt.where(CporCase.id != int(exclude_case_id))
-    values: list[float] = []
-    for (qty,) in session.execute(stmt).all():
-        try:
-            number = float(qty or 0)
-        except (TypeError, ValueError):
-            continue
-        if number > 0:
-            values.append(number)
-    mean = (sum(values) / len(values)) if values else None
-    return {
-        "mean": None if mean is None else round(mean, 4),
-        "line_count": len(values),
-        "blocks": False,
-    }
-
-
 def blend_cip_quantity(
     *,
-    forecast_units: float,
-    history_units: float | None,
+    forecast_units: float | None,
     cover_surplus_units: float | None,
-    comparable_cases: list[dict[str, Any]] | None,
     spec_units: float,
 ) -> dict[str, Any]:
-    """Suggested line quantity. Flags explain the inputs. They never block."""
+    """Suggested line quantity from sell-through only. Flags explain the inputs. They never block.
+
+    ``forecast_units`` is the sell-through run rate over the horizon (``None`` when the customer has
+    no weekly sell-through for the product). ``spec_units`` is accepted for compatibility but
+    never supplies a suggestion: a seed or payload estimate is not sell-through evidence.
+    """
+    del spec_units
     signals: list[tuple[str, float]] = []
-    forecast = float(forecast_units or 0)
-    if forecast > 0:
+    forecast = None if forecast_units is None else float(forecast_units)
+    if forecast is not None and forecast > 0:
         signals.append(("forecast", forecast))
-    if history_units is not None and float(history_units) > 0:
-        signals.append(("history", float(history_units)))
     if cover_surplus_units is not None and float(cover_surplus_units) > 0:
         signals.append(("cover", float(cover_surplus_units)))
     fallback: str | None = None
+    unavailable_reason: str | None = None
+    qty: float | None
     if signals:
         qty = sum(units for _, units in signals) / len(signals)
+    elif forecast is not None:
+        qty = 0.0
     else:
-        estimates = [float(item.get("estimate_qty") or 0) for item in (comparable_cases or [])]
-        estimates = [item for item in estimates if item > 0]
-        if estimates:
-            qty = sum(estimates) / len(estimates)
-            fallback = "comparable_case_mean"
-        else:
-            qty = float(spec_units or 0)
-            fallback = "line_estimate"
+        qty = None
+        unavailable_reason = "no_sellthrough_units"
     flags = [f"cip_qty_{name}" for name, _ in signals]
+    if qty is None:
+        flags.append("cip_qty_unavailable")
     if fallback:
         flags.append(f"cip_qty_{fallback}")
     return {
-        "suggested_estimate_qty": round(float(qty), 4),
+        "suggested_estimate_qty": None if qty is None else round(float(qty), 4),
+        "unavailable_reason": unavailable_reason,
         "signals": [{"source": name, "units": round(float(units), 4)} for name, units in signals],
         "fallback": fallback,
         "cover_surplus_units": (
             None if cover_surplus_units is None else round(float(cover_surplus_units), 4)
         ),
-        "history_units": None if history_units is None else round(float(history_units), 4),
-        "forecast_units": round(forecast, 4),
+        # Earlier cases are not a planner source: the key stays so the screens read it as missing.
+        "history_units": None,
+        "history_line_count": 0,
+        "forecast_units": None if forecast is None else round(forecast, 4),
         "blocks": False,
         "formula": QUANTITY_FORMULA,
         "flags": flags,
@@ -917,9 +583,7 @@ def _compose_suggestion_row(
     customer_id: int | None,
     horizon_weeks: int,
     period_label: str | None,
-    top_comparables: list[dict[str, Any]],
-    window_start: date | None = None,
-    window_end: date | None = None,
+    book: planner_sellthrough.SellthroughBook | None = None,
     tenant_id: str = "default",
 ) -> dict[str, Any]:
     pid = int(spec["product_id"])
@@ -933,44 +597,43 @@ def _compose_suggestion_row(
     else:
         weeks, cover_source = (None, "unknown")
 
-    if window_start is None:
-        window_start = seed.window_start if seed is not None else date.today()
-    if window_end is None:
-        window_end = seed.window_end if seed is not None else date.today()
-    as_of = date.today()
-    intake = None
-    if customer_id is not None:
-        intake = suggest_intake_weighted_mac(
+    if book is None:
+        book = planner_sellthrough.read_book(
             session,
-            customer_id=int(customer_id),
-            product_id=pid,
-            distributor_id=int(did) if did is not None else None,
-            window_start=window_start,
-            window_end=window_end,
-            as_of=as_of,
-            exclude_case_id=int(seed.id) if seed is not None else None,
+            tenant_id=tenant_id,
+            customer_id=int(customer_id) if customer_id is not None else None,
+            product_ids=[pid],
         )
-    intake_json = _intake_payload(intake) if intake is not None else {
-        "cost_basis": None,
-        "cost_source": None,
-        "evidence": {},
-        "flags": ["no_customer_for_mac"],
-        "bucket_a_on_hand": None,
-        "bucket_b_intake": None,
-        "planned_supply": None,
-        "sellout_value": None,
-        "disti_cost": None,
-        "blend": None,
-        "not_in_blend": [],
-    }
+    figures = book.figures(pid)
+    if customer_id is not None:
+        sug = suggest_sellthrough_mac(
+            session, customer_id=int(customer_id), product_id=pid, tenant_id=tenant_id, book=book
+        )
+        cost_json = _cost_payload(sug)
+    else:
+        cost_json = {
+            "cost_basis": None,
+            "cost_source": None,
+            "evidence": {},
+            "flags": ["no_customer_for_cost"],
+            "bucket_a_on_hand": None,
+            "bucket_b_intake": None,
+            "planned_supply": None,
+            "sellout_value": None,
+            "disti_cost": None,
+            "blend": None,
+            "not_in_blend": [],
+        }
 
-    volume = _forecast_volume_sync(
-        session,
-        product_id=pid,
-        customer_id=customer_id,
-        horizon_weeks=horizon_weeks,
-    )
-    srp = spec.get("srp")
+    volume = planner_sellthrough.volume_from_figures(figures, horizon_weeks=horizon_weeks)
+    volume["grain_filters"] = {"product_id": pid, "customer_id": customer_id}
+
+    # Recompute supplies evidence; the client separately preserves deliberate dirty edits.
+    if figures.get("price") is not None:
+        srp, srp_source = float(figures["price"]), planner_sellthrough.SOURCE_LABEL
+    else:
+        srp, srp_source = None, None
+
     pod_quarter = spec.get("pod_quarter") or (
         period_label
         or (
@@ -987,31 +650,19 @@ def _compose_suggestion_row(
         distributor_id=int(did) if did is not None else None,
         target_weeks=float(weeks) if weeks is not None else None,
         tenant_id=tenant_id,
+        book=book,
     )
     observed = evidence.get("observed_cover") or {}
-    history = (
-        customer_product_history_units(
-            session,
-            customer_id=int(customer_id),
-            product_id=pid,
-            exclude_case_id=int(seed.id) if seed is not None else None,
-        )
-        if customer_id is not None
-        else {"mean": None, "line_count": 0, "blocks": False}
-    )
     quantity = blend_cip_quantity(
-        forecast_units=float(volume.get("forecast_units") or 0),
-        history_units=history.get("mean"),
+        forecast_units=volume.get("forecast_units"),
         cover_surplus_units=cover_surplus_units(
             observed.get("soh_units"),
             observed.get("weekly_rate"),
             float(weeks) if weeks is not None else None,
         ),
-        comparable_cases=top_comparables,
         spec_units=float(spec.get("estimate_qty") or 0),
     )
-    quantity["history_line_count"] = int(history.get("line_count") or 0)
-    flags = list(intake_json.get("flags") or [])
+    flags = list(cost_json.get("flags") or [])
     if observed.get("flag") == "high_cover":
         flags.append("observed_cover_high")
     for flag in quantity["flags"]:
@@ -1032,11 +683,12 @@ def _compose_suggestion_row(
         "distributor_id": int(did) if did is not None else None,
         "customer_id": int(customer_id) if customer_id is not None else None,
         "pod_quarter": pod_quarter,
-        "srp": float(srp) if srp is not None else None,
+        "srp": srp,
+        "srp_source": srp_source,
         "suggested_estimate_qty": quantity["suggested_estimate_qty"],
         "quantity_evidence": quantity,
-        "suggested_cost_basis": intake_json.get("cost_basis"),
-        "suggested_cost_source": intake_json.get("cost_source"),
+        "suggested_cost_basis": cost_json.get("cost_basis"),
+        "suggested_cost_source": cost_json.get("cost_source"),
         "cover": {
             "weeks": round(float(weeks), 4) if weeks is not None else None,
             "source": cover_source,
@@ -1044,18 +696,48 @@ def _compose_suggestion_row(
         },
         "volume": volume,
         "promotion_evidence": evidence,
-        "intake_weighted": intake_json,
+        "intake_weighted": cost_json,
+        # Why a figure is missing. A key is None when sell-through supplied the figure.
+        "missing": {
+            "price": None if srp is not None else figures.get("price_reason"),
+            "cost": None if cost_json.get("cost_basis") is not None else figures.get("cost_reason"),
+            "units": None if volume.get("available") else volume.get("reason"),
+            "stock": figures.get("soh_reason"),
+        },
         "flags": flags,
         "editable_fields": list(EDITABLE_PLANNER_FIELDS),
-        "display_only_fields": [
-            "bucket_a_on_hand",
-            "bucket_b_intake",
-            "planned_supply",
-            "sellout_value",
-            "disti_cost",
-            "blend",
-        ],
+        "display_only_fields": [],
     }
+
+
+def _sum_line_volumes(
+    rows: list[dict[str, Any]],
+    *,
+    horizon_weeks: int,
+    book: planner_sellthrough.SellthroughBook,
+) -> dict[str, Any]:
+    """Draft-level expected units: the sum of the lines that have a sell-through run rate."""
+    available = [r["volume"] for r in rows if (r.get("volume") or {}).get("available")]
+    base = planner_sellthrough.volume_from_figures(
+        {
+            "weekly_rate": None,
+            "window_weeks": book.window_weeks,
+            "units_reason": planner_sellthrough.NO_SELLTHROUGH,
+        },
+        horizon_weeks=horizon_weeks,
+    )
+    if not available:
+        return base
+    base.update(
+        {
+            "forecast_units": sum(float(v["forecast_units"]) for v in available),
+            "weekly_run_rate": sum(float(v["weekly_run_rate"]) for v in available),
+            "available": True,
+            "reason": None,
+            "line_count": len(available),
+        }
+    )
+    return base
 
 
 def build_promo_plan_draft(
@@ -1090,32 +772,16 @@ def build_promo_plan_draft(
     if window_start is None and period_label:
         window_start, window_end = window_from_period_label(period_label)
 
-    if seed_case_id is not None:
-        comparables = build_comparable_cases(session, case_id=int(seed_case_id), limit=comparable_limit)
-    elif effective_customer is not None:
-        comparables = build_same_customer_comparables(
-            session,
-            customer_id=int(effective_customer),
-            period_label=period_label,
-            limit=comparable_limit,
-        )
-    else:
-        comparables = {"items": [], "error": "no_customer", "same_customer_only": True}
-    volume = _forecast_volume_sync(
-        session,
-        product_id=product_id,
-        customer_id=effective_customer,
-        horizon_weeks=horizon_weeks,
-    )
+    # Earlier cases are not a planner source (sell-through only), so no comparables are read.
+    # ``comparable_limit`` stays on the signature for the endpoints that pass it.
+    del comparable_limit
+    comparables = {"items": [], "error": "not_a_sellthrough_source", "same_customer_only": True}
 
     derived = derive_planned_reservation_sync(session, period_label=period_label)
-    reserved = float(planned_support_usd) if planned_support_usd is not None else float(
-        derived["planned_reservation_usd"] or 0
-    )
-    planned_rev = (
-        float(planned_revenue_usd)
-        if planned_revenue_usd is not None
-        else float(derived["planned_revenue_usd"] or 0)
+    # Only a figure the operator typed is a planned reservation. None means not available.
+    reserved: float | None = float(planned_support_usd) if planned_support_usd is not None else None
+    planned_rev: float | None = (
+        float(planned_revenue_usd) if planned_revenue_usd is not None else None
     )
 
     drawn_stmt = select(
@@ -1137,17 +803,19 @@ def build_promo_plan_draft(
     if ledger_drawn is not None:
         drawn = ledger_drawn
         drawn_source = "budget_ledger"
-    remaining = reserved - drawn
-    support_pct = (reserved / planned_rev) if planned_rev > 0 and reserved else None
+    remaining = None if reserved is None else reserved - drawn
+    support_pct = (
+        (reserved / planned_rev)
+        if reserved and planned_rev is not None and planned_rev > 0
+        else None
+    )
 
-    if reserved > 0 and drawn > reserved:
+    if reserved is None:
+        money_status = MONEY_STATUS_NOT_AVAILABLE
+    elif reserved > 0 and drawn > reserved:
         money_status = "over"
     elif reserved > 0:
         money_status = "ok"
-    elif int(derived.get("sku_assumption_count") or 0) == 0:
-        money_status = "missing_sku_economics"
-    elif int(derived.get("skipped_missing_srp") or 0) > 0:
-        money_status = "missing_srp"
     else:
         money_status = "no_planned_reservation"
 
@@ -1166,9 +834,9 @@ def build_promo_plan_draft(
         "tenant_profile": snap,
         "tracks": {
             "money": {
-                "planned_reservation_usd": round(reserved, 4),
+                "planned_reservation_usd": None if reserved is None else round(reserved, 4),
                 "drawn_cpor_usd": round(drawn, 4),
-                "remaining_usd": round(remaining, 4),
+                "remaining_usd": None if remaining is None else round(remaining, 4),
                 "status": money_status,
                 "binding": tenant_profile.CONSTRAINT_AXIS in ("money", "dual"),
             },
@@ -1183,8 +851,10 @@ def build_promo_plan_draft(
         "period_label_normalized": normalize_period_label(period_label),
         "reservation_source": tenant_profile.RESERVATION_SOURCE,
         "q002_reservation_source": tenant_profile.RESERVATION_SOURCE,
-        "planned_from_lineup_derived": bool(derived.get("from_lineup_derived"))
-        and planned_support_usd is None,
+        "planned_from_lineup_derived": False,
+        "reservation_not_available_reason": (
+            (derived.get("reason") or RESERVATION_NOT_AVAILABLE) if reserved is None else None
+        ),
         "derive_diagnostics": {
             "skipped_missing_sku": derived.get("skipped_missing_sku"),
             "skipped_missing_srp": derived.get("skipped_missing_srp"),
@@ -1195,7 +865,6 @@ def build_promo_plan_draft(
         "create_blocked": bool(hard and over_budget_warn),
     }
 
-    top = (comparables.get("items") or [])[:3]
     specs, product_set_source = _collect_line_specs(
         session,
         seed=seed,
@@ -1204,6 +873,14 @@ def build_promo_plan_draft(
         line_specs=line_specs,
         customer_id=int(effective_customer) if effective_customer is not None else None,
         period_label=period_label,
+        tenant_id=tenant_id,
+    )
+    # One sell-through read for every product in the draft, not one per line.
+    book = planner_sellthrough.read_book(
+        session,
+        tenant_id=tenant_id,
+        customer_id=int(effective_customer) if effective_customer is not None else None,
+        product_ids=[int(spec["product_id"]) for spec in specs],
     )
     suggestion_rows = [
         _compose_suggestion_row(
@@ -1213,21 +890,20 @@ def build_promo_plan_draft(
             customer_id=effective_customer,
             horizon_weeks=horizon_weeks,
             period_label=period_label,
-            top_comparables=top,
-            window_start=window_start,
-            window_end=window_end,
+            book=book,
             tenant_id=tenant_id,
         )
         for spec in specs
     ]
-    suggested_estimate = sum(float(r.get("suggested_estimate_qty") or 0) for r in suggestion_rows)
-    if suggested_estimate <= 0:
-        suggested_estimate = float(volume["forecast_units"] or 0)
-        if suggested_estimate <= 0 and top:
-            ests = [float(t.get("estimate_qty") or 0) for t in top]
-            ests = [e for e in ests if e > 0]
-            if ests:
-                suggested_estimate = sum(ests) / len(ests)
+    volume = _sum_line_volumes(suggestion_rows, horizon_weeks=horizon_weeks, book=book)
+    estimates = [
+        float(r["suggested_estimate_qty"])
+        for r in suggestion_rows
+        if r.get("suggested_estimate_qty") is not None
+    ]
+    suggested_estimate: float | None = sum(estimates) if estimates else None
+    if (suggested_estimate is None or suggested_estimate <= 0) and volume.get("forecast_units"):
+        suggested_estimate = float(volume["forecast_units"])
 
     seed_lines: list[dict[str, Any]] = []
     if seed is not None:
@@ -1241,7 +917,9 @@ def build_promo_plan_draft(
                 {
                     "line_id": int(line.id),
                     "product_id": int(line.product_id),
-                    "distributor_id": int(line.distributor_id) if line.distributor_id is not None else None,
+                    "distributor_id": int(line.distributor_id)
+                    if line.distributor_id is not None
+                    else None,
                     "srp": float(line.srp) if line.srp is not None else None,
                     "estimate_qty": float(line.estimate_qty or 0),
                     "pod_quarter": line.pod_quarter,
@@ -1254,12 +932,12 @@ def build_promo_plan_draft(
         "seed_case_found": seed is not None,
         "seed_customer_id": seed_customer_id,
         "seed_promotion_type": seed.promotion_type if seed is not None else None,
-        "seed_window_start": seed.window_start.isoformat() if seed is not None else (
-            window_start.isoformat() if window_start else None
-        ),
-        "seed_window_end": seed.window_end.isoformat() if seed is not None else (
-            window_end.isoformat() if window_end else None
-        ),
+        "seed_window_start": seed.window_start.isoformat()
+        if seed is not None
+        else (window_start.isoformat() if window_start else None),
+        "seed_window_end": seed.window_end.isoformat()
+        if seed is not None
+        else (window_end.isoformat() if window_end else None),
         "window_start": window_start.isoformat() if window_start else None,
         "window_end": window_end.isoformat() if window_end else None,
         "customer_id": int(effective_customer) if effective_customer is not None else None,
@@ -1268,28 +946,36 @@ def build_promo_plan_draft(
         "lines": suggestion_rows,
         "comparables": {
             "count": len(comparables.get("items") or []),
-            "top": top,
+            "top": [],
             "error": comparables.get("error"),
             "same_customer_only": bool(comparables.get("same_customer_only")),
         },
         "volume": volume,
-        "suggested_estimate_qty": round(float(suggested_estimate), 4),
+        "suggested_estimate_qty": None
+        if suggested_estimate is None
+        else round(float(suggested_estimate), 4),
         "budget_check": budget,
         "next_step": (
-            "POST /cpor/intelligence/promo-plan-draft/create-case with lines[] to write a draft CPOR case"
+            "POST /cpor/intelligence/promo-plan-draft/create-case with lines[] "
+            "to write a draft CPOR case"
         ),
         "notes": [
-            f"Reservation source={tenant_profile.RESERVATION_SOURCE}; "
-            f"binding_axis={tenant_profile.CONSTRAINT_AXIS}; "
-            f"over_action={tenant_profile.OVER_BUDGET_ACTION} (hard_enforce="
-            f"{tenant_profile.HARD_ENFORCE_BUDGET})",
-            "Per-line volume from fact_demand_forecast (B1); comparable volume is fallback only",
-            "Per-line MAC from suggest_intake_weighted_mac (no second engine)",
+            "Sell-through only: price, cost, stock and expected units come from the customer's "
+            "sell-through (units sold, unit sell price, MAC or cost, reported stock). A figure "
+            "it does not carry is shown as not available, with the reason, and is not filled from "
+            "another source.",
+            "Expected units are the mean weekly units over the latest "
+            f"{planner_sellthrough.run_rate_weeks()} "
+            "reported weeks times the horizon. Cover is reported stock divided by that run rate.",
+            "The planned reservation is not available from sell-through (it needs line-up units "
+            "and SKU "
+            "assumptions). A planned support figure typed by the operator is used as entered.",
             "Cover is session cover_override only — never writes commercial_customer_term",
-            "Budget uses B2 lineup-derived reservation when planned_support_usd omitted",
             "Dirty-flag is client-owned; Refresh must not clobber dirty cells",
-            "Customer+period product set is lineup then same-customer history; never other customers",
-            "Listing joins by customer and product. Competitor price is the latest approved map, or empty. Suggested quantity is the mean of forecast, this customer's history for the product, and units above the cover target. Cover policy is not written. Flags do not block.",
+            "Customer+period product set is the products this customer's sell-through reports; "
+            "never other customers",
+            "Suggested quantity is the mean of expected units and units above the cover target. "
+            "Flags do not block.",
         ],
         "uncovered": [
             "uplift_from_claim_evidence",
@@ -1297,8 +983,14 @@ def build_promo_plan_draft(
     }
 
 
-def _grain_key(product_id: int, distributor_id: int | None, pod_quarter: str | None) -> tuple[int, int | None, str]:
-    return (int(product_id), int(distributor_id) if distributor_id is not None else None, str(pod_quarter or ""))
+def _grain_key(
+    product_id: int, distributor_id: int | None, pod_quarter: str | None
+) -> tuple[int, int | None, str]:
+    return (
+        int(product_id),
+        int(distributor_id) if distributor_id is not None else None,
+        str(pod_quarter or ""),
+    )
 
 
 def _write_specs_from_draft_or_payload(
@@ -1392,9 +1084,11 @@ def create_case_from_promo_draft(
     """Create a draft CPOR case from B4 compose / planner grid (existing case/line path).
 
     Payload ``lines[]`` is authoritative (D-053). ``suggest_cost_basis`` is unused for draft
-    cost — Approve still snapshots it. Cover overrides are not persisted to customer terms (D-054).
+    cost — Approve still snapshots it. A line with no sell-through cost and no manual cost is
+    written with no cost basis and no cost source. Cover overrides are not persisted to
+    customer terms (D-054).
     """
-    del suggest_cost_basis  # draft cost comes from intake composer or manual dirty MAC
+    del suggest_cost_basis  # draft cost is the sell-through MAC or a manual dirty MAC
     if seed_case_id is None and (customer_id is None or not period_label):
         raise ValueError("missing_seed_or_customer_period")
     draft = build_promo_plan_draft(
@@ -1427,15 +1121,24 @@ def create_case_from_promo_draft(
             f"(action={budget.get('over_budget_action')})"
         )
 
-    write_specs = _write_specs_from_draft_or_payload(draft=draft, lines=lines, product_id=product_id)
+    write_specs = _write_specs_from_draft_or_payload(
+        draft=draft, lines=lines, product_id=product_id
+    )
     if not write_specs:
-        raise ValueError("no_lines_to_create — lineup/history empty for this customer and period, or pass lines[]")
+        raise ValueError("no_lines_to_create — no customer sell-through products, or pass lines[]")
 
     seen_grains: set[tuple[int, int | None, str]] = set()
     for spec in write_specs:
-        grain = _grain_key(int(spec["product_id"]), spec.get("distributor_id"), spec.get("pod_quarter") or period_label)
+        grain = _grain_key(
+            int(spec["product_id"]),
+            spec.get("distributor_id"),
+            spec.get("pod_quarter") or period_label,
+        )
         if grain in seen_grains:
-            raise ValueError(f"duplicate_line_grain product_id={grain[0]} distributor_id={grain[1]} pod_quarter={grain[2]}")
+            raise ValueError(
+                f"duplicate_line_grain product_id={grain[0]} distributor_id={grain[1]} "
+                f"pod_quarter={grain[2]}"
+            )
         seen_grains.add(grain)
 
     from app.services.cpor.promotion_type_vocab import CPOR_CHANNEL_SET
@@ -1518,7 +1221,6 @@ def create_case_from_promo_draft(
 
     created_lines: list[CporCaseLine] = []
     line_reports: list[dict[str, Any]] = []
-    as_of = date.today()
     default_pod = period_label or (
         f"{str(case.window_start.year)[2:]}Q{(case.window_start.month - 1) // 3 + 1}"
         if case.window_start is not None
@@ -1540,24 +1242,20 @@ def create_case_from_promo_draft(
         dirty = {str(f) for f in (spec.get("dirty_fields") or [])}
         did = spec.get("distributor_id")
         pod = spec.get("pod_quarter") or default_pod
-        intake = suggest_intake_weighted_mac(
+        intake = suggest_sellthrough_mac(
             session,
             customer_id=case.customer_id,
             product_id=pid,
-            distributor_id=int(did) if did is not None else None,
-            window_start=case.window_start,
-            window_end=case.window_end,
-            as_of=as_of,
-            exclude_case_id=case.id,
+            tenant_id=case.tenant_id or tenant_id,
         )
-        intake_json = _intake_payload(intake)
+        intake_json = _cost_payload(intake)
         supplied_cost = spec.get("cost_basis")
         if "cost_basis" in dirty and supplied_cost is not None:
             cost_basis = float(supplied_cost)
             cost_source = COST_SOURCE_MANUAL
         else:
             cost_basis = float(intake.cost_basis) if intake.cost_basis is not None else None
-            cost_source = COST_SOURCE_INTAKE_WEIGHTED
+            cost_source = COST_SOURCE_SELLTHROUGH if cost_basis is not None else None
         cover_override = spec.get("cover_override")
         cost_evidence = {
             **intake_json["evidence"],
@@ -1570,11 +1268,7 @@ def create_case_from_promo_draft(
             },
         }
         draft_line = next(
-            (
-                row
-                for row in (draft.get("lines") or [])
-                if int(row.get("product_id") or 0) == pid
-            ),
+            (row for row in (draft.get("lines") or []) if int(row.get("product_id") or 0) == pid),
             None,
         )
         evidence = _promotion_evidence_for_written_line(
@@ -1668,7 +1362,7 @@ def create_case_from_promo_draft(
         "case_id": int(case.id),
         "case_code": case.case_code,
         "line_id": int(first.id),
-        "line_ids": [int(l.id) for l in created_lines],
+        "line_ids": [int(line.id) for line in created_lines],
         "lines": line_reports,
         "estimate_qty": float(first.estimate_qty or 0),
         "over_budget_warn": bool(budget.get("over_budget_warn")),
@@ -1761,18 +1455,26 @@ def apply_cip_quantities(
     eligible = _quantity_lines(session, case.id)
     preview = preview_cip_quantities(session, case_id=int(case.id), tenant_id=tenant_id)
     by_line = {
-        int(row["line_id"]): row
-        for row in preview["lines"]
-        if row.get("line_id") is not None
+        int(row["line_id"]): row for row in preview["lines"] if row.get("line_id") is not None
     }
     written: list[dict[str, Any]] = []
+    unavailable: list[dict[str, Any]] = []
     for line in eligible:
         if is_voided_line(line):
             continue
         row = by_line.get(int(line.id))
         if row is None:
             continue
-        line.estimate_qty = float(row.get("suggested_estimate_qty") or 0)
+        if row.get("suggested_estimate_qty") is None:
+            # Sell-through gives no units for this product: keep the line's estimate, say why.
+            unavailable.append(
+                {
+                    "line_id": int(line.id),
+                    "reason": (row.get("quantity_evidence") or {}).get("unavailable_reason"),
+                }
+            )
+            continue
+        line.estimate_qty = float(row.get("suggested_estimate_qty"))
         recompute_case_line(session, line, case=case, write_event=False)
         written.append(
             {
@@ -1788,4 +1490,5 @@ def apply_cip_quantities(
         "blocks": False,
         "formula": QUANTITY_FORMULA,
         "lines": written,
+        "unavailable": unavailable,
     }

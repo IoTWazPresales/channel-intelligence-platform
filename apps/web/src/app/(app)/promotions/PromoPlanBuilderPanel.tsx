@@ -23,7 +23,6 @@ import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifier
 import { apiGet, apiPost } from '@/lib/api';
 
 import {
-  evidenceCaption,
   hydratePlannerRows,
   markDirty,
   mergePromoPlanSuggestions,
@@ -32,30 +31,32 @@ import {
   toRecomputeSpecs,
   type DirtyField,
   type PlannerRow,
+  type PromotionEvidence,
   type SuggestionLine,
 } from './promoPlanDraftMerge';
 
+function sellthroughCaption(evidence?: PromotionEvidence | null): string {
+  if (evidence?.read_failed) return 'Sell-through evidence unavailable';
+  const cover = evidence?.observed_cover;
+  if (cover?.weeks == null) return 'Customer cover: Not available yet';
+  return `Customer cover ${cover.weeks}w${cover.flag === 'high_cover' ? ' (high)' : ''}`;
+}
+
 type DraftPayload = {
   lines?: SuggestionLine[];
-  suggested_estimate_qty?: number;
+  suggested_estimate_qty?: number | null;
   budget_check?: {
     over_budget_warn?: boolean;
     create_blocked?: boolean;
     planned_from_lineup_derived?: boolean;
     reservation_source?: string;
     drawn_source?: string;
-    tracks?: { money?: { status?: string; planned_reservation_usd?: number; drawn_cpor_usd?: number } };
+    reservation_not_available_reason?: string | null;
+    tracks?: {
+      money?: { status?: string; planned_reservation_usd?: number | null; drawn_cpor_usd?: number };
+    };
   };
-  comparables?: { count?: number };
 };
-
-function formatLeg(leg: Record<string, unknown> | null | undefined): string {
-  if (!leg) return '—';
-  const qty = leg.qty ?? '—';
-  const cost = leg.unit_cost ?? leg.unit_amount ?? leg.unit_cost_proxy ?? '—';
-  const asOf = leg.as_of ?? '—';
-  return `qty ${String(qty)} · cost ${String(cost)} · as-of ${String(asOf)}`;
-}
 
 function MacExplainCell(params: ICellRendererParams<PlannerRow>) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -67,7 +68,7 @@ function MacExplainCell(params: ICellRendererParams<PlannerRow>) {
       <IconButton
         size="small"
         data-testid={`b4-mac-popover-${row.product_id}`}
-        aria-label="MAC buckets"
+        aria-label="Cost evidence"
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
@@ -80,15 +81,16 @@ function MacExplainCell(params: ICellRendererParams<PlannerRow>) {
       <Popover open={Boolean(anchor)} anchorEl={anchor} onClose={() => setAnchor(null)}>
         <Box sx={{ p: 2, maxWidth: 420 }} data-testid={`b4-mac-popover-body-${row.product_id}`}>
           <Typography variant="subtitle2" gutterBottom>
-            Intake-weighted MAC (display legs not in blend)
+            Cost from this customer’s sell-through
           </Typography>
-          <Typography variant="body2">Bucket A (on-hand): {formatLeg(intake.bucket_a_on_hand)}</Typography>
-          <Typography variant="body2">Bucket B (intake): {formatLeg(intake.bucket_b_intake)}</Typography>
-          <Typography variant="body2">Planned supply (display): {formatLeg(intake.planned_supply)}</Typography>
-          <Typography variant="body2">Sell-out value (display): {formatLeg(intake.sellout_value)}</Typography>
-          <Typography variant="body2">Disti cost proxy (display): {formatLeg(intake.disti_cost)}</Typography>
+          <Typography variant="body2">
+            Cost: {String(intake.cost_basis ?? row.suggested_cost_basis ?? 'Not available yet')}
+          </Typography>
+          <Typography variant="body2">
+            Field: {String(intake.evidence?.field_used ?? '—')} · reported week: {String(intake.evidence?.as_of ?? '—')}
+          </Typography>
           <Typography variant="body2" sx={{ mt: 1 }}>
-            Blend: {String(intake.blend?.formula ?? '—')} = {String(intake.blend?.cost_basis ?? row.suggested_cost_basis ?? '—')}
+            Rule: {String(intake.blend?.formula ?? '—')}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Flags: {(intake.flags || row.flags || []).join(', ') || 'none'}
@@ -111,7 +113,6 @@ export function PromoPlanBuilderPanel() {
   const [addDistributorId, setAddDistributorId] = useState('');
   const [rows, setRows] = useState<PlannerRow[]>([]);
   const [budgetCheck, setBudgetCheck] = useState<DraftPayload['budget_check']>();
-  const [comparableCount, setComparableCount] = useState(0);
   const [productSetSource, setProductSetSource] = useState<string | null>(null);
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [createIsError, setCreateIsError] = useState(false);
@@ -120,9 +121,12 @@ export function PromoPlanBuilderPanel() {
   const applyDraft = useCallback((payload: DraftPayload, mode: 'replace' | 'merge') => {
     const incoming = payload.lines ?? [];
     setBudgetCheck(payload.budget_check);
-    setComparableCount(payload.comparables?.count ?? 0);
     setProductSetSource((payload as { product_set_source?: string | null }).product_set_source ?? null);
-    setRows((prev) => (mode === 'merge' ? mergePromoPlanSuggestions(prev, incoming) : hydratePlannerRows(incoming)));
+    setRows((prev) => {
+      const next = mode === 'merge' ? mergePromoPlanSuggestions(prev, incoming) : hydratePlannerRows(incoming);
+      const evidence = new Map(incoming.map((line) => [line.row_key, line.promotion_evidence]));
+      return next.map((row) => ({ ...row, evidence_caption: sellthroughCaption(evidence.get(row.row_key)) }));
+    });
   }, []);
 
   const canCompose = Boolean(customer?.id) || /^\d+$/.test(seedCaseId);
@@ -220,6 +224,11 @@ export function PromoPlanBuilderPanel() {
         headerName: 'Units',
         minWidth: 110,
         editable: true,
+        valueFormatter: (p) => (
+          p.data?.flags.includes('cip_qty_unavailable') && !p.data.dirty_fields.includes('estimate_qty')
+            ? 'Not available yet'
+            : String(p.value ?? 'Not available yet')
+        ),
         cellClassRules: { 'cip-cell-dirty': (p) => Boolean(p.data?.dirty_fields.includes('estimate_qty')) },
       },
       {
@@ -228,11 +237,11 @@ export function PromoPlanBuilderPanel() {
         minWidth: 110,
         editable: true,
         cellClassRules: { 'cip-cell-dirty': (p) => Boolean(p.data?.dirty_fields.includes('cost_basis')) },
-        valueFormatter: (p) => (p.value == null || p.value === '' ? '—' : String(p.value)),
+        valueFormatter: (p) => (p.value == null || p.value === '' ? 'Not available yet' : String(p.value)),
       },
       {
         colId: 'mac_explain',
-        headerName: 'Buckets',
+        headerName: 'Cost evidence',
         minWidth: 88,
         maxWidth: 100,
         editable: false,
@@ -245,6 +254,7 @@ export function PromoPlanBuilderPanel() {
         headerName: 'SRP',
         minWidth: 110,
         editable: true,
+        valueFormatter: (p) => (p.value == null ? 'Not available yet' : String(p.value)),
         cellClassRules: { 'cip-cell-dirty': (p) => Boolean(p.data?.dirty_fields.includes('srp')) },
       },
       {
@@ -309,9 +319,10 @@ export function PromoPlanBuilderPanel() {
         Create promotion plan
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Pick a customer and period. Lines come from that customer’s lineup for the period, or from that
-        customer’s own history — not from other customers. The Evidence column shows listing, competitor
-        price, and a suggested quantity from cover, forecast and this customer’s history. Flags do not block.
+        Pick a customer and period. Lines are the products that customer’s own sell-through reports. Price,
+        cost, stock and expected units all come from that sell-through and nothing else; a figure it does not
+        carry shows as not available yet. The Evidence column shows customer cover, and the suggested quantity
+        comes from the sell-through run rate and the cover target. Flags do not block.
       </Typography>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
         <Box sx={{ minWidth: 280, flex: 1 }}>
@@ -436,7 +447,7 @@ export function PromoPlanBuilderPanel() {
               dirty_fields: [],
               intake_weighted: {},
               flags: [],
-              evidence_caption: evidenceCaption(undefined),
+              evidence_caption: sellthroughCaption(undefined),
             };
             const next = [...rows, extra];
             setRows(next);
@@ -459,18 +470,20 @@ export function PromoPlanBuilderPanel() {
       ) : null}
       {budgetCheck?.over_budget_warn ? (
         <Alert severity="warning" sx={{ mb: 1 }} data-testid="b4-over-budget-warn">
-          Over-budget vs B2 planned reservation (warn only unless hard enforce blocks create).
+          Over-budget vs entered planned support (warn only unless hard enforce blocks create).
         </Alert>
       ) : null}
       {rows.length > 0 ? (
         <>
           <Typography variant="body2" component="div" data-testid="b4-draft-summary" sx={{ mb: 1 }}>
-            Lines: {rows.length} · source: {productSetSource ?? '—'} · same-customer comparables:{' '}
-            {comparableCount} · budget status {String(budgetCheck?.tracks?.money?.status ?? '—')} ·
-            planned reservation USD {String(budgetCheck?.tracks?.money?.planned_reservation_usd ?? 0)} ·{' '}
+            Lines: {rows.length} · source: {productSetSource ?? '—'} · budget status{' '}
+            {String(budgetCheck?.tracks?.money?.status ?? '—')} · planned reservation USD{' '}
+            {budgetCheck?.tracks?.money?.planned_reservation_usd == null
+              ? 'Not available yet (it needs line-up units and SKU assumptions, not sell-through)'
+              : String(budgetCheck.tracks.money.planned_reservation_usd)}{' '}
+            ·{' '}
             {budgetCheck?.drawn_source === 'budget_ledger' ? 'ledger drawn' : 'drawn'} USD{' '}
-            {String(budgetCheck?.tracks?.money?.drawn_cpor_usd ?? 0)} · reservation source{' '}
-            {String(budgetCheck?.reservation_source ?? 'derived_from_profit')} · dirty cells survive Refresh
+            {String(budgetCheck?.tracks?.money?.drawn_cpor_usd ?? 0)} · dirty cells survive Refresh
           </Typography>
           <EnterpriseDataGrid
             rowData={rows}
@@ -485,13 +498,13 @@ export function PromoPlanBuilderPanel() {
           />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
             Cover weeks here is a session override only — it does not write customer cover policy. Reset restores
-            suggested values. MAC buckets are explain-only.
+            suggested values. The cost evidence is explain-only.
           </Typography>
         </>
       ) : (
         <Typography variant="caption" color="text.secondary">
-          Pick a customer and period, then propose from evidence. Lineup for that customer and period is the
-          product set; same-customer history is the fallback. Optional seed case id still works. Edits stick
+          Pick a customer and period, then propose from evidence. The customer’s own sell-through is the
+          product set. Optional seed case id still works. Edits stick
           across Refresh; Reset restores the suggestion.
         </Typography>
       )}

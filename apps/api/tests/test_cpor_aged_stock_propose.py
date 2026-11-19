@@ -5,14 +5,16 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.services.cpor.promo_plan_builder import (
     build_promo_plan_draft,
     customer_sku_cover_from_rows,
     load_promotion_line_evidence,
 )
 from app.services.store_dc.rules import stock_action_covers_site, stock_action_in_notes
-from app.services.store_dc.stock_actions import auto_propose_from_intelligence, execute_aged_stock_action
+from app.services.store_dc.stock_actions import (
+    auto_propose_from_intelligence,
+    execute_aged_stock_action,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -166,31 +168,23 @@ class _Result:
         return list(self._rows)
 
 
-def test_evidence_joins_approved_competitor_price_and_keeps_cover_grains_apart():
+def test_evidence_is_sellthrough_only_and_keeps_cover_grains_apart():
     statements: list[str] = []
+    weeks = [date(2026, 10, 5), date(2026, 10, 12), date(2026, 10, 19), date(2026, 10, 26)]
 
     class Session:
         def __init__(self):
+            # Window cutoff, then the window rows. Nothing else is read.
             self.plan = [
-                _Result(rows=[]),
-                _Result(scalar=3),
-                _Result(rows=[("House", "C-1", "Other model", 199.5, "2026-11-01")]),
-                _Result(
-                    rows=[
-                        (date(2026, 10, 5), "week", "weekly", 1, 40, "North"),
-                        (date(2026, 10, 12), "week", "weekly", 1, 40, "North"),
-                        (date(2026, 10, 19), "week", "weekly", 1, 40, "North"),
-                        (date(2026, 10, 26), "week", "weekly", 1, 40, "North"),
-                    ]
-                ),
-                _Result(rows=[(11.0,)]),
+                _Result(rows=[(d,) for d in reversed(weeks)]),
+                _Result(rows=[(81, d, "week", "weekly", 1, 40, "North") for d in weeks]),
             ]
 
         def scalar(self, _stmt):
             return None  # no customer report config: the shared slow multiple applies
 
         def execute(self, stmt):
-            statements.append(str(stmt))
+            statements.append(str(stmt).lower())
             return self.plan.pop(0)
 
     evidence = load_promotion_line_evidence(
@@ -203,30 +197,31 @@ def test_evidence_joins_approved_competitor_price_and_keeps_cover_grains_apart()
     )
 
     assert evidence["read_failed"] is False
-    assert evidence["competitor_price"]["data_unavailable"] is False
-    assert evidence["competitor_price"]["mapped"] is True
-    assert evidence["competitor_price"]["price"] == 199.5
-    assert evidence["competitor_price"]["prices"][0]["label"] == "House Other model"
-    assert "approval_status" in statements[2]
+    # Listings, competitor prices and distributor cover are not planner sources.
+    assert evidence["listing"]["data_unavailable"] is True
+    assert evidence["competitor_price"]["data_unavailable"] is True
+    assert evidence["competitor_price"]["mapped"] is False
+    assert evidence["competitor_price"]["price"] is None
+    assert evidence["observed_cover"]["distributor_product_weeks"] is None
+    assert all("fact_customer_sellthrough" in sql for sql in statements)
+    assert not any(
+        "competitor" in sql or "weeks_of_cover" in sql or "listing" in sql for sql in statements
+    )
     assert evidence["observed_cover"]["weeks"] == 40
     assert evidence["observed_cover"]["grain"] == "customer_sku"
     assert evidence["observed_cover"]["flag"] == "high_cover"
     assert evidence["observed_cover"]["writes_target_cover"] is False
-    assert evidence["observed_cover"]["distributor_product_weeks"] == 11.0
 
 
-def test_competitor_prices_without_an_approved_map_stay_off_the_product():
+def test_competitor_prices_are_not_read_for_the_planner():
     class Session:
         def execute(self, stmt):
-            text = str(stmt).lower()
-            if "count" in text:
-                return _Result(scalar=4)
-            return _Result(rows=[])
+            raise AssertionError(f"nothing is read without a customer: {stmt}")
 
     evidence = load_promotion_line_evidence(
         Session(), customer_id=None, product_id=81, distributor_id=None
     )
-    assert evidence["competitor_price"]["data_unavailable"] is False
+    assert evidence["competitor_price"]["data_unavailable"] is True
     assert evidence["competitor_price"]["price"] is None
     assert evidence["competitor_price"]["mapped"] is False
     assert evidence["observed_cover"]["weeks"] is None
@@ -240,8 +235,19 @@ def test_high_observed_cover_adds_surplus_units_and_does_not_block(monkeypatch):
         mod,
         "load_promotion_line_evidence",
         lambda *_a, **_k: {
-            "listing": {"listed": True, "listing_count": 1, "status": "active", "last_observed_price": 50.0},
-            "competitor_price": {"data_unavailable": False, "row_count": 1, "price": 40.0, "mapped": True, "prices": []},
+            "listing": {
+                "listed": True,
+                "listing_count": 1,
+                "status": "active",
+                "last_observed_price": 50.0,
+            },
+            "competitor_price": {
+                "data_unavailable": False,
+                "row_count": 1,
+                "price": 40.0,
+                "mapped": True,
+                "prices": [],
+            },
             "observed_cover": {
                 "weeks": 40.0,
                 "flag": "high_cover",
@@ -253,32 +259,20 @@ def test_high_observed_cover_adds_surplus_units_and_does_not_block(monkeypatch):
             "read_failed": False,
         },
     )
-    monkeypatch.setattr(mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (6.0, "tenant_default"))
     monkeypatch.setattr(
-        mod,
-        "suggest_intake_weighted_mac",
-        lambda *_a, **_k: SimpleNamespace(cost_basis=10.0, cost_source="intake_weighted", evidence={}, flags=["bucket_a"]),
+        mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (6.0, "tenant_default")
     )
     monkeypatch.setattr(
         mod,
-        "_forecast_volume_sync",
-        lambda *_a, **_k: {"forecast_units": 12, "horizon_weeks": 13, "source": "fact_demand_forecast"},
+        "suggest_sellthrough_mac",
+        lambda *_a, **_k: SimpleNamespace(
+            cost_basis=10.0, cost_source="cst_reported", evidence={}, flags=[]
+        ),
     )
-    monkeypatch.setattr(mod, "build_same_customer_comparables", lambda *_a, **_k: {"items": [], "same_customer_only": True})
-    monkeypatch.setattr(
-        mod,
-        "derive_planned_reservation_sync",
-        lambda *_a, **_k: {
-            "planned_reservation_usd": 0,
-            "planned_revenue_usd": 0,
-            "planned_line_count": 0,
-            "sku_assumption_count": 1,
-            "skipped_missing_sku": 0,
-            "skipped_missing_srp": 0,
-            "reservation_source": "derived_from_profit",
-            "from_lineup_derived": False,
-        },
-    )
+    # Run rate 1 a week over the 13 week horizon: 13 expected units.
+    book = mod.planner_sellthrough.SellthroughBook(customer_id=18, window_weeks=8)
+    book.window_rows[81] = [(date(2026, 10, 26), "week", "weekly", 1.0, 40.0, None)]
+    monkeypatch.setattr(mod.planner_sellthrough, "read_book", lambda *_a, **_k: book)
 
     class Session:
         def execute(self, *_a, **_k):
@@ -309,9 +303,9 @@ def test_high_observed_cover_adds_surplus_units_and_does_not_block(monkeypatch):
         line_specs=[{"product_id": 81, "srp": 10, "estimate_qty": 1, "pod_quarter": "2026Q4"}],
     )
     line = out["lines"][0]
-    # Forecast 12 alone was the old suggestion. Cover surplus is 40 - 6*1 = 34.
-    # The suggestion is the mean of those two. History is empty on this session.
-    assert line["suggested_estimate_qty"] == 23
+    # Sell-through run rate over the horizon is 13. Cover surplus is 40 - 6*1 = 34.
+    # The suggestion is the mean of those two.
+    assert line["suggested_estimate_qty"] == 23.5
     assert line["quantity_evidence"]["blocks"] is False
     assert "cip_qty_forecast" in line["flags"]
     assert "cip_qty_cover" in line["flags"]
@@ -374,7 +368,12 @@ def test_promote_creates_a_draft_and_a_second_call_does_not(monkeypatch):
 
     def create(_session, **kwargs):
         calls.append(kwargs)
-        return {"created": True, "case_id": 5, "case_code": "CPOR-5", "href": "/commercial-planner/cpor-cases/5"}
+        return {
+            "created": True,
+            "case_id": 5,
+            "case_code": "CPOR-5",
+            "href": "/commercial-planner/cpor-cases/5",
+        }
 
     monkeypatch.setattr(actions, "create_case_from_promo_draft", create)
     monkeypatch.setattr(actions, "build_customer_view", lambda *_a, **_k: _slow_view())
@@ -427,7 +426,9 @@ def test_move_and_return_are_not_support_claims(monkeypatch):
     monkeypatch.setattr(
         actions,
         "create_case_from_promo_draft",
-        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 8, "case_code": "CPOR-8", "href": "/x"},
+        lambda _session, **kwargs: (
+            calls.append(kwargs) or {"case_id": 8, "case_code": "CPOR-8", "href": "/x"}
+        ),
     )
     monkeypatch.setattr(actions, "build_customer_view", lambda *_a, **_k: _slow_view())
     monkeypatch.setattr(actions, "_srp_for_line", lambda *_a, **_k: 80.0)
@@ -470,7 +471,16 @@ def test_action_refuses_a_line_that_is_not_slow_or_unsold(monkeypatch):
     monkeypatch.setattr(
         actions,
         "build_customer_view",
-        lambda *_a, **_k: {"sites": [{"site_label": "North", "lines": [{"product_id": 9, "suggestions": [], "stock_on_hand": 4}]}], "account": None, "dc_sections": []},
+        lambda *_a, **_k: {
+            "sites": [
+                {
+                    "site_label": "North",
+                    "lines": [{"product_id": 9, "suggestions": [], "stock_on_hand": 4}],
+                }
+            ],
+            "account": None,
+            "dc_sections": [],
+        },
     )
     with pytest.raises(ValueError, match="line_not_slow_or_unsold"):
         execute_aged_stock_action(
@@ -493,8 +503,18 @@ def test_auto_propose_skips_a_line_without_a_price_and_opens_one_draft(monkeypat
         "_collect_aged_stock",
         lambda *_a, **_k: (
             [
-                {"customer_id": 3, "product_id": 9, "stock_on_hand": 12, "suggestions": ["promote"]},
-                {"customer_id": 3, "product_id": 10, "stock_on_hand": 4, "suggestions": ["promote"]},
+                {
+                    "customer_id": 3,
+                    "product_id": 9,
+                    "stock_on_hand": 12,
+                    "suggestions": ["promote"],
+                },
+                {
+                    "customer_id": 3,
+                    "product_id": 10,
+                    "stock_on_hand": 4,
+                    "suggestions": ["promote"],
+                },
             ],
             False,
         ),
@@ -508,7 +528,9 @@ def test_auto_propose_skips_a_line_without_a_price_and_opens_one_draft(monkeypat
     monkeypatch.setattr(
         actions,
         "create_case_from_promo_draft",
-        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 11, "case_code": "CPOR-11", "href": "/x"},
+        lambda _session, **kwargs: (
+            calls.append(kwargs) or {"case_id": 11, "case_code": "CPOR-11", "href": "/x"}
+        ),
     )
 
     out = auto_propose_from_intelligence(
@@ -559,8 +581,10 @@ def test_create_case_stamps_move_before_commit_and_keeps_cover_off_the_term(monk
     )
     monkeypatch.setattr(
         mod,
-        "suggest_intake_weighted_mac",
-        lambda *_a, **_k: SimpleNamespace(cost_basis=10.0, cost_source="intake_weighted", evidence={}, flags=["bucket_a"]),
+        "suggest_sellthrough_mac",
+        lambda *_a, **_k: SimpleNamespace(
+            cost_basis=10.0, cost_source="cst_reported", evidence={}, flags=[]
+        ),
     )
 
     class Session:
@@ -569,7 +593,9 @@ def test_create_case_stamps_move_before_commit_and_keeps_cover_off_the_term(monk
             if name == "DimCustomer":
                 return SimpleNamespace(id=int(key), tenant_id="tenant-a")
             if name == "DimProduct":
-                return SimpleNamespace(id=int(key), sku="SKU-9", name="Name", sales_model_name="Model")
+                return SimpleNamespace(
+                    id=int(key), sku="SKU-9", name="Name", sales_model_name="Model"
+                )
             return None
 
         def execute(self, *_a, **_k):
@@ -617,7 +643,10 @@ def test_create_case_stamps_move_before_commit_and_keeps_cover_off_the_term(monk
     assert str(case.notes).startswith("stock_action=move;not_a_support_claim=true")
     assert line.cost_evidence_json["stock_action"] == "move"
     assert "observed_cover_high" in line.cost_evidence_json["flags"]
-    assert line.cost_evidence_json["promotion_evidence"]["observed_cover"]["writes_target_cover"] is False
+    assert (
+        line.cost_evidence_json["promotion_evidence"]["observed_cover"]["writes_target_cover"]
+        is False
+    )
     assert line.cost_evidence_json["planner"]["cover_not_persisted_to_customer_term"] is True
 
 
@@ -631,30 +660,32 @@ def test_a_recorded_site_does_not_cover_every_site():
     assert stock_action_covers_site({"site_labels": [None]}, "North") is False
 
 
-def test_lineup_price_stays_on_the_target_customer(monkeypatch):
+def test_aged_stock_price_is_the_target_customers_sellthrough_price(monkeypatch):
     import app.services.store_dc.stock_actions as actions
     from sqlalchemy.dialects import postgresql
 
-    monkeypatch.setattr(
-        actions,
-        "load_promotion_line_evidence",
-        lambda *_a, **_k: {"listing": {"last_observed_price": None}},
-    )
     seen = []
+
+    class _Rows(list):
+        def all(self):
+            return list(self)
 
     class Session:
         def execute(self, statement, *_a, **_k):
             seen.append(statement)
-            return _Result(scalar=80)
+            return _Rows([(9, date(2026, 10, 26), 80)])
 
     price = actions._srp_for_line(Session(), customer_id=3, product_id=9, tenant_id="tenant-a")
-    sql = str(seen[0].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})).lower()
+    sql = str(
+        seen[0].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    ).lower()
     assert price == 80.0
-    assert "customer_id" in sql
-    assert "superseded_by_case_id" in sql
-    assert "cancelled" in sql
-    assert "msrp_local" in sql
-    assert "dap_evidence" not in sql
+    assert len(seen) == 1
+    assert "fact_customer_sellthrough" in sql
+    assert "fact_customer_sellthrough.customer_id = 3" in sql
+    assert "fact_customer_sellthrough.tenant_id = 'tenant-a'" in sql
+    assert "unit_sell_price > 0" in sql
+    assert "msrp_local" not in sql and "dap_evidence" not in sql and "lineup" not in sql
 
 
 def _two_site_view():
@@ -684,12 +715,16 @@ def test_one_sites_stock_action_does_not_suppress_another_site(monkeypatch):
     monkeypatch.setattr(
         actions,
         "create_case_from_promo_draft",
-        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 6, "case_code": "CPOR-6", "href": "/x"},
+        lambda _session, **kwargs: (
+            calls.append(kwargs) or {"case_id": 6, "case_code": "CPOR-6", "href": "/x"}
+        ),
     )
 
     class OpenNorth:
         def execute(self, *_a, **_k):
-            return _OpenResult([(5, "stock_action=promote", {"site_labels": ["North"], "stock_action": "promote"})])
+            return _OpenResult(
+                [(5, "stock_action=promote", {"site_labels": ["North"], "stock_action": "promote"})]
+            )
 
     south = execute_aged_stock_action(
         OpenNorth(),
@@ -744,7 +779,9 @@ def test_account_grain_is_not_suppressed_by_a_named_site(monkeypatch):
     monkeypatch.setattr(
         actions,
         "create_case_from_promo_draft",
-        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 7, "case_code": "CPOR-7", "href": "/x"},
+        lambda _session, **kwargs: (
+            calls.append(kwargs) or {"case_id": 7, "case_code": "CPOR-7", "href": "/x"}
+        ),
     )
 
     class OpenNorth:
@@ -774,8 +811,20 @@ def test_auto_propose_keeps_a_site_the_open_case_does_not_cover(monkeypatch):
         "_collect_aged_stock",
         lambda *_a, **_k: (
             [
-                {"customer_id": 3, "product_id": 9, "site_label": "North", "stock_on_hand": 10, "suggestions": ["promote"]},
-                {"customer_id": 3, "product_id": 9, "site_label": "South", "stock_on_hand": 7, "suggestions": ["promote"]},
+                {
+                    "customer_id": 3,
+                    "product_id": 9,
+                    "site_label": "North",
+                    "stock_on_hand": 10,
+                    "suggestions": ["promote"],
+                },
+                {
+                    "customer_id": 3,
+                    "product_id": 9,
+                    "site_label": "South",
+                    "stock_on_hand": 7,
+                    "suggestions": ["promote"],
+                },
             ],
             False,
         ),
@@ -789,7 +838,9 @@ def test_auto_propose_keeps_a_site_the_open_case_does_not_cover(monkeypatch):
     monkeypatch.setattr(
         actions,
         "create_case_from_promo_draft",
-        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 12, "case_code": "CPOR-12", "href": "/x"},
+        lambda _session, **kwargs: (
+            calls.append(kwargs) or {"case_id": 12, "case_code": "CPOR-12", "href": "/x"}
+        ),
     )
     auto_propose_from_intelligence(
         SimpleNamespace(),
@@ -815,7 +866,11 @@ def test_auto_propose_is_not_capped_at_the_display_list(monkeypatch):
     monkeypatch.setattr(
         actions,
         "build_customer_view",
-        lambda *_a, **_k: {"account": {"site_label": None, "customer_id": 3, "lines": rows}, "sites": [], "dc_sections": []},
+        lambda *_a, **_k: {
+            "account": {"site_label": None, "customer_id": 3, "lines": rows},
+            "sites": [],
+            "dc_sections": [],
+        },
     )
     monkeypatch.setattr(actions, "_open_case_id", lambda *_a, **_k: None)
     monkeypatch.setattr(actions, "_srp_for_line", lambda *_a, **_k: 10.0)
@@ -823,7 +878,9 @@ def test_auto_propose_is_not_capped_at_the_display_list(monkeypatch):
     monkeypatch.setattr(
         actions,
         "create_case_from_promo_draft",
-        lambda _session, **kwargs: calls.append(kwargs) or {"case_id": 13, "case_code": "CPOR-13", "href": "/x"},
+        lambda _session, **kwargs: (
+            calls.append(kwargs) or {"case_id": 13, "case_code": "CPOR-13", "href": "/x"}
+        ),
     )
     out = auto_propose_from_intelligence(
         SimpleNamespace(),
@@ -849,7 +906,11 @@ def test_display_list_is_truncated_when_another_customer_remains(monkeypatch):
             {"product_id": i, "suggestions": ["promote"], "stock_on_hand": 1, "site_label": None}
             for i in range(200)
         ]
-        return {"account": {"site_label": None, "customer_id": cid, "lines": lines}, "sites": [], "dc_sections": []}
+        return {
+            "account": {"site_label": None, "customer_id": cid, "lines": lines},
+            "sites": [],
+            "dc_sections": [],
+        }
 
     monkeypatch.setattr(actions, "build_customer_view", view)
     monkeypatch.setattr(actions, "build_lead_index", lambda *_a, **_k: {})
@@ -886,12 +947,16 @@ def test_suggestion_rows_read_stores_and_need_from_distributor():
                     {
                         "site_label": "North",
                         "customer_id": 3,
-                        "lines": [{"product_id": 9, "suggestions": ["promote"], "stock_on_hand": 5}],
+                        "lines": [
+                            {"product_id": 9, "suggestions": ["promote"], "stock_on_hand": 5}
+                        ],
                     },
                     {
                         "site_label": "Other",
                         "customer_id": 8,
-                        "lines": [{"product_id": 7, "suggestions": ["promote"], "stock_on_hand": 9}],
+                        "lines": [
+                            {"product_id": 7, "suggestions": ["promote"], "stock_on_hand": 9}
+                        ],
                     },
                 ],
                 "need_from_distributor": [
@@ -910,7 +975,9 @@ def test_suggestion_rows_read_stores_and_need_from_distributor():
                 "sites": [
                     {
                         "site_label": "Ghost",
-                        "lines": [{"product_id": 1, "suggestions": ["promote"], "stock_on_hand": 1}],
+                        "lines": [
+                            {"product_id": 1, "suggestions": ["promote"], "stock_on_hand": 1}
+                        ],
                     }
                 ],
                 "lines": [{"product_id": 2, "suggestions": ["return"], "stock_on_hand": 1}],
@@ -951,11 +1018,15 @@ def test_explicit_line_keeps_promotion_evidence_when_the_draft_omits_it(monkeypa
 
     monkeypatch.setattr(mod, "build_promo_plan_draft", build)
     monkeypatch.setattr(mod, "load_promotion_line_evidence", load)
-    monkeypatch.setattr(mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (6.0, "tenant_default"))
+    monkeypatch.setattr(
+        mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (6.0, "tenant_default")
+    )
     monkeypatch.setattr(
         mod,
-        "suggest_intake_weighted_mac",
-        lambda *_a, **_k: SimpleNamespace(cost_basis=10.0, cost_source="intake_weighted", evidence={}, flags=[]),
+        "suggest_sellthrough_mac",
+        lambda *_a, **_k: SimpleNamespace(
+            cost_basis=10.0, cost_source="cst_reported", evidence={}, flags=[]
+        ),
     )
 
     class Session:
@@ -1000,7 +1071,15 @@ def test_explicit_line_keeps_promotion_evidence_when_the_draft_omits_it(monkeypa
         tenant_id="tenant-a",
         period_label="2026Q4",
         actor="planner",
-        lines=[{"product_id": 9, "srp": 100, "estimate_qty": 12, "pod_quarter": "2026Q4", "site_labels": ["South"]}],
+        lines=[
+            {
+                "product_id": 9,
+                "srp": 100,
+                "estimate_qty": 12,
+                "pod_quarter": "2026Q4",
+                "site_labels": ["South"],
+            }
+        ],
         stock_action="promote",
         **writers,
     )
@@ -1013,7 +1092,9 @@ def test_explicit_line_keeps_promotion_evidence_when_the_draft_omits_it(monkeypa
     assert line.cost_evidence_json["site_labels"] == ["South"]
 
     loaded.clear()
-    supplied = {"observed_cover": {"flag": "observed_cover", "weeks": 8, "writes_target_cover": False}}
+    supplied = {
+        "observed_cover": {"flag": "observed_cover", "weeks": 8, "writes_target_cover": False}
+    }
     create_case_from_promo_draft(
         Session(),
         customer_id=3,

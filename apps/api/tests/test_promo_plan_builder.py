@@ -2,13 +2,12 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
+from app.services.cpor import planner_sellthrough
 from app.services.cpor.promo_plan_builder import (
-    COST_SOURCE_INTAKE_WEIGHTED,
     COST_SOURCE_MANUAL,
+    COST_SOURCE_SELLTHROUGH,
     build_promo_plan_draft,
     create_case_from_promo_draft,
-    derive_planned_reservation_sync,
     load_promotion_line_evidence,
 )
 
@@ -16,7 +15,7 @@ from app.services.cpor.promo_plan_builder import (
 @pytest.fixture(autouse=True)
 def _no_budget_ledger(monkeypatch):
     """N-0079 draws the campaign headroom from the budget ledger (a savepoint query), which these
-    hand-built sessions cannot run. Pin the "no ledger" answer; the ledger path has its own test below."""
+    hand-built sessions cannot run. Pin "no ledger"; the ledger path has its own test below."""
     monkeypatch.setattr("app.services.budget_ledger.used_usd", lambda *_a, **_k: None)
 
 
@@ -28,23 +27,6 @@ def test_draw_comes_from_the_budget_ledger_when_there_is_one(monkeypatch):
         return 123.5
 
     monkeypatch.setattr("app.services.budget_ledger.used_usd", ledger)
-    monkeypatch.setattr(
-        "app.services.cpor.promo_plan_builder.build_comparable_cases",
-        lambda session, *, case_id, limit=10: {"case_id": case_id, "error": "case_not_found", "items": []},
-    )
-    monkeypatch.setattr(
-        "app.services.cpor.promo_plan_builder.derive_planned_reservation_sync",
-        lambda *_a, **_k: {
-            "planned_reservation_usd": 1000,
-            "planned_revenue_usd": 5000,
-            "planned_line_count": 1,
-            "sku_assumption_count": 1,
-            "skipped_missing_sku": 0,
-            "skipped_missing_srp": 0,
-            "reservation_source": "derived_from_profit",
-            "from_lineup_derived": False,
-        },
-    )
 
     class R:
         def scalar(self):
@@ -66,10 +48,13 @@ def test_draw_comes_from_the_budget_ledger_when_there_is_one(monkeypatch):
         def scalars(self, *_a, **_k):
             return MagicMock(all=MagicMock(return_value=[]))
 
-    out = build_promo_plan_draft(Session(), seed_case_id=1, period_label="26Q2")
+    out = build_promo_plan_draft(
+        Session(), seed_case_id=1, period_label="26Q2", planned_support_usd=1000
+    )
     check = out["budget_check"]
     assert check["drawn_source"] == "budget_ledger"
     assert check["tracks"]["money"]["drawn_cpor_usd"] == 123.5
+    assert check["tracks"]["money"]["remaining_usd"] == 876.5
     assert seen["quarter"] == "26Q2"
 
 
@@ -94,81 +79,31 @@ def test_build_promo_plan_draft_case_not_found(monkeypatch):
         def scalars(self, *_a, **_k):
             return MagicMock(all=MagicMock(return_value=[]))
 
-    import app.services.cpor.promo_plan_builder as mod
-
-    def fake_comp(session, *, case_id, limit=10):
-        return {"case_id": case_id, "error": "case_not_found", "items": []}
-
-    monkeypatch.setattr(mod, "build_comparable_cases", fake_comp)
-    monkeypatch.setattr(
-        mod,
-        "derive_planned_reservation_sync",
-        lambda *_a, **_k: {
-            "planned_reservation_usd": 0,
-            "planned_revenue_usd": 0,
-            "planned_line_count": 0,
-            "sku_assumption_count": 0,
-            "skipped_missing_sku": 0,
-            "skipped_missing_srp": 0,
-            "reservation_source": "derived_from_profit",
-            "from_lineup_derived": False,
-        },
-    )
     out = build_promo_plan_draft(FakeSession(), seed_case_id=999999)
     assert out["draft"] is True
     assert out["lines"] == []
-    assert out["comparables"]["error"] == "case_not_found"
+    assert out["comparables"]["count"] == 0
     assert out["budget_check"]["hard_enforce"] is True
     assert out["budget_check"]["binding_axis"] == "money"
     assert out["budget_check"]["reservation_source"] == "derived_from_profit"
     assert out["budget_check"]["over_budget_action"] == "require_reapproval"
-    assert out["budget_check"]["tracks"]["money"]["status"] == "missing_sku_economics"
-
-
-def test_derive_planned_skips_missing_srp(monkeypatch):
-    item = SimpleNamespace(product_id=10, planned_volume_units=100, period_label="26Q2")
-    sku = SimpleNamespace(
-        sales_model_name="X1-SALES-MODEL",
-        product_id=10,
-        controlled_cost_amount=500.0,
-        reserve_total_pct=0.1,
-        promo_reserve_split_pct=0.5,
-        vat_rate_pct=0.15,
-        fx_plan_currency_per_cost_currency=1.0,
-    )
-
-    class FakeSession:
-        def scalars(self, stmt):
-            # FactLineupPlanItem then CommercialSkuAssumption
-            text = str(stmt)
-            if "commercial_sku_assumption" in text.lower() or "CommercialSkuAssumption" in text:
-                return MagicMock(all=MagicMock(return_value=[sku]))
-            return MagicMock(all=MagicMock(return_value=[item]))
-
-        def execute(self, *_a, **_k):
-            class R:
-                def all(self):
-                    return []
-
-                def scalar(self):
-                    return 1
-
-            return R()
-
-    import app.services.cpor.promo_plan_builder as mod
-
-    monkeypatch.setattr(mod, "_srp_evidence_by_product_sync", lambda *_a, **_k: {})
-    out = derive_planned_reservation_sync(FakeSession(), period_label="26Q2")
-    assert out["planned_line_count"] == 0
-    assert out["skipped_missing_srp"] == 1
+    # Customer sell-through has no planned reservation: not available, never a fake 0.
+    money = out["budget_check"]["tracks"]["money"]
+    assert money["status"] == "not_available"
+    assert money["planned_reservation_usd"] is None
+    assert money["remaining_usd"] is None
+    assert out["budget_check"]["over_budget_warn"] is False
+    assert out["budget_check"]["create_blocked"] is False
 
 
 def _reservation_stub():
     return {
-        "planned_reservation_usd": 0,
-        "planned_revenue_usd": 0,
+        "available": False,
+        "reason": "reservation_needs_lineup_and_sku_assumptions_not_in_sellthrough",
+        "planned_reservation_usd": None,
+        "planned_revenue_usd": None,
         "planned_line_count": 0,
-        "sku_assumption_count": 1,
+        "sku_assumption_count": None,
         "skipped_missing_sku": 0,
         "skipped_missing_srp": 0,
         "reservation_source": "derived_from_profit",
@@ -176,20 +111,31 @@ def _reservation_stub():
     }
 
 
-class _FakeIntake:
+class _FakeCost:
     def __init__(self, cost_basis=12.5, flags=None):
         self.cost_basis = cost_basis
-        self.cost_source = "intake_weighted"
-        self.flags = flags or ["cross_grain_valuation"]
+        self.cost_source = "cst_reported" if cost_basis is not None else None
+        self.flags = flags or []
         self.evidence = {
-            "composer": "intake_weighted_mac",
-            "bucket_a_on_hand": {"qty": 10, "unit_cost": 10.0, "as_of": "2026-08-01", "flags": []},
-            "bucket_b_intake": {"qty": 2, "unit_cost": 20.0, "as_of": "2026-08-10", "flags": ["intake_is_oem_sell_in_evidence"]},
-            "planned_supply": {"qty": 5, "unit_cost": 10.0, "flags": ["planned_supply_no_native_cost"]},
-            "sellout_value": {"qty": 10, "unit_amount": 99.0, "flags": ["sellout_value_display_only"]},
-            "disti_cost": {"unit_cost_proxy": 11.0, "flags": ["dsi_wac_not_ingested"]},
-            "blend": {"formula": "(Aq·CST_MAC + Bq·inbound_unit_price) / (Aq+Bq)", "cost_basis": 12.5},
+            "composer": "sellthrough_mac",
+            "field_used": "unit_mac",
+            "as_of": "2026-08-01",
+            "blend": {"formula": "latest reported week", "cost_basis": cost_basis},
+            "not_in_blend": ["shipments", "buy_plan"],
         }
+
+
+def _book(customer_id, *, weekly_units_by_product=None):
+    """Sell-through already read for the draft: weekly chain rows per product."""
+    from datetime import date, timedelta
+
+    book = planner_sellthrough.SellthroughBook(customer_id=customer_id, window_weeks=8)
+    for pid, units in (weekly_units_by_product or {}).items():
+        book.window_rows[pid] = [
+            (date(2026, 3, 2) + timedelta(weeks=i), "week", "week", u, None, None)
+            for i, u in enumerate(units)
+        ]
+    return book
 
 
 def test_build_promo_plan_draft_emits_per_line_mac_and_units(monkeypatch):
@@ -203,8 +149,12 @@ def test_build_promo_plan_draft_emits_per_line_mac_and_units(monkeypatch):
         window_end=date(2026, 6, 30),
         channel="reseller",
     )
-    line_a = SimpleNamespace(id=1, product_id=101, distributor_id=3, srp=19999, estimate_qty=4, pod_quarter="26Q2")
-    line_b = SimpleNamespace(id=2, product_id=102, distributor_id=3, srp=8999, estimate_qty=8, pod_quarter="26Q2")
+    line_a = SimpleNamespace(
+        id=1, product_id=101, distributor_id=3, srp=19999, estimate_qty=4, pod_quarter="26Q2"
+    )
+    line_b = SimpleNamespace(
+        id=2, product_id=102, distributor_id=3, srp=8999, estimate_qty=8, pod_quarter="26Q2"
+    )
     prod_a = SimpleNamespace(sales_model_name="X-SALES-MODEL", id=101, sku="SKU-A", name="Alpha")
     prod_b = SimpleNamespace(sales_model_name="X-SALES-MODEL", id=102, sku="SKU-B", name="Beta")
 
@@ -235,33 +185,37 @@ def test_build_promo_plan_draft_emits_per_line_mac_and_units(monkeypatch):
 
     import app.services.cpor.promo_plan_builder as mod
 
-    monkeypatch.setattr(mod, "build_comparable_cases", lambda *_a, **_k: {"items": []})
-    monkeypatch.setattr(mod, "derive_planned_reservation_sync", lambda *_a, **_k: _reservation_stub())
     monkeypatch.setattr(
-        mod,
-        "_forecast_volume_sync",
-        lambda *_a, **k: {
-            "horizon_weeks": 13,
-            "forecast_units": 40 if k.get("product_id") == 101 else 15,
-            "source": "fact_demand_forecast",
-        },
+        mod, "derive_planned_reservation_sync", lambda *_a, **_k: _reservation_stub()
     )
-    monkeypatch.setattr(mod, "suggest_intake_weighted_mac", lambda *_a, **_k: _FakeIntake())
-    monkeypatch.setattr(mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (6.0, "customer_term"))
+    monkeypatch.setattr(
+        mod.planner_sellthrough,
+        "read_book",
+        lambda *_a, **_k: _book(7, weekly_units_by_product={101: [10.0, 10.0], 102: [5.0]}),
+    )
+    monkeypatch.setattr(mod, "suggest_sellthrough_mac", lambda *_a, **_k: _FakeCost())
+    monkeypatch.setattr(
+        mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (6.0, "customer_term")
+    )
 
     out = build_promo_plan_draft(FakeSession(), seed_case_id=10, period_label="26Q2")
     assert len(out["lines"]) == 2
-    assert out["lines"][0]["suggested_estimate_qty"] == 40
-    assert out["lines"][1]["suggested_estimate_qty"] == 15
+    # Expected units: sell-through run rate (10 and 5 a week) times the 13 week horizon.
+    assert out["lines"][0]["suggested_estimate_qty"] == 130
+    assert out["lines"][1]["suggested_estimate_qty"] == 65
+    assert out["lines"][0]["volume"]["source"] == "customer_sellthrough_run_rate"
     assert out["lines"][0]["suggested_cost_basis"] == 12.5
-    assert out["lines"][0]["intake_weighted"]["bucket_a_on_hand"]["qty"] == 10
-    assert "sellout_value_display_only" in (
-        out["lines"][0]["intake_weighted"]["sellout_value"]["flags"]
-    )
+    assert out["lines"][0]["suggested_cost_source"] == "cst_reported"
+    # A seed price is not sell-through evidence and cannot supply the suggestion.
+    assert out["lines"][0]["srp"] is None
+    assert out["lines"][0]["srp_source"] is None
+    assert out["lines"][0]["intake_weighted"]["bucket_a_on_hand"] is None
+    assert out["lines"][0]["intake_weighted"]["sellout_value"] is None
     assert out["lines"][0]["cover"]["weeks"] == 6.0
     assert out["lines"][0]["cover"]["source"] == "customer_term"
     assert "cost_basis" in out["lines"][0]["editable_fields"]
-    assert "bucket_a_on_hand" in out["lines"][0]["display_only_fields"]
+    assert out["lines"][0]["display_only_fields"] == []
+    assert out["volume"]["forecast_units"] == 195
 
 
 def test_create_case_from_promo_draft_carries_edits_and_skips_cover_persist(monkeypatch):
@@ -290,7 +244,13 @@ def test_create_case_from_promo_draft_carries_edits_and_skips_cover_persist(monk
             if name == "CporCase":
                 return seed
             if name == "DimProduct":
-                return prod if int(key) == 101 else SimpleNamespace(id=int(key), sku="X", name="X", sales_model_name="X-SALES-MODEL")
+                return (
+                    prod
+                    if int(key) == 101
+                    else SimpleNamespace(
+                        id=int(key), sku="X", name="X", sales_model_name="X-SALES-MODEL"
+                    )
+                )
             return None
 
         def scalars(self, *_a, **_k):
@@ -328,15 +288,16 @@ def test_create_case_from_promo_draft_carries_edits_and_skips_cover_persist(monk
     import app.services.cpor.promo_plan_builder as mod
     from app.models.cpor import CporCaseLine
 
-    monkeypatch.setattr(mod, "build_comparable_cases", lambda *_a, **_k: {"items": []})
-    monkeypatch.setattr(mod, "derive_planned_reservation_sync", lambda *_a, **_k: _reservation_stub())
     monkeypatch.setattr(
-        mod,
-        "_forecast_volume_sync",
-        lambda *_a, **_k: {"horizon_weeks": 13, "forecast_units": 10, "source": "fact_demand_forecast"},
+        mod, "derive_planned_reservation_sync", lambda *_a, **_k: _reservation_stub()
     )
-    monkeypatch.setattr(mod, "suggest_intake_weighted_mac", lambda *_a, **_k: _FakeIntake(cost_basis=12.5))
-    monkeypatch.setattr(mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (4.0, "tenant_default"))
+    monkeypatch.setattr(mod.planner_sellthrough, "read_book", lambda *_a, **_k: _book(7))
+    monkeypatch.setattr(
+        mod, "suggest_sellthrough_mac", lambda *_a, **_k: _FakeCost(cost_basis=12.5)
+    )
+    monkeypatch.setattr(
+        mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (4.0, "tenant_default")
+    )
 
     def generate_case_code(_s):
         return "C-NEW"
@@ -394,13 +355,14 @@ def test_create_case_from_promo_draft_carries_edits_and_skips_cover_persist(monk
     assert len(written) == 2
     assert written[0].cost_source == COST_SOURCE_MANUAL
     assert float(written[0].cost_basis) == 18.0
-    assert written[1].cost_source == COST_SOURCE_INTAKE_WEIGHTED
+    assert written[1].cost_source == COST_SOURCE_SELLTHROUGH
+    assert float(written[1].cost_basis) == 12.5
     assert float(written[1].estimate_qty) == 22
     planner = written[0].cost_evidence_json["planner"]
     assert planner["cover_override"] == 8.0
     assert planner["cover_not_persisted_to_customer_term"] is True
     assert out["lines"][0]["cost_source"] == COST_SOURCE_MANUAL
-    assert out["lines"][1]["cost_source"] == COST_SOURCE_INTAKE_WEIGHTED
+    assert out["lines"][1]["cost_source"] == COST_SOURCE_SELLTHROUGH
     from app.models.cpor import CporCase
 
     created_case = next(o for o in added if isinstance(o, CporCase))
@@ -426,7 +388,7 @@ def test_build_promo_plan_draft_requires_seed_or_customer_period():
 
 def test_build_promo_plan_draft_from_customer_period_same_customer_only(monkeypatch):
     import app.services.cpor.promo_plan_builder as mod
-    from app.services.cpor.promo_plan_builder import PRODUCT_SET_LINEUP
+    from app.services.cpor.promo_plan_builder import PRODUCT_SET_SELLTHROUGH
 
     class FakeSession:
         def execute(self, *_a, **_k):
@@ -445,7 +407,9 @@ def test_build_promo_plan_draft_from_customer_period_same_customer_only(monkeypa
         def get(self, model, key):
             name = getattr(model, "__name__", str(model))
             if name == "DimProduct":
-                return SimpleNamespace(id=int(key), sku="SKU", name="Name", sales_model_name="X-SALES-MODEL")
+                return SimpleNamespace(
+                    id=int(key), sku="SKU", name="Name", sales_model_name="X-SALES-MODEL"
+                )
             return None
 
         def scalar(self, *_a, **_k):
@@ -469,53 +433,30 @@ def test_build_promo_plan_draft_from_customer_period_same_customer_only(monkeypa
                     "cover_override": None,
                 }
             ],
-            PRODUCT_SET_LINEUP,
+            PRODUCT_SET_SELLTHROUGH,
         ),
     )
+    monkeypatch.setattr(mod.planner_sellthrough, "read_book", lambda *_a, **_k: _book(18))
     monkeypatch.setattr(
-        mod,
-        "build_same_customer_comparables",
-        lambda *_a, **_k: {
-            "items": [{"case_id": 309, "customer_id": 18, "estimate_qty": 40, "score": 1}],
-            "error": None,
-            "same_customer_only": True,
-        },
+        mod, "suggest_sellthrough_mac", lambda *_a, **_k: _FakeCost(cost_basis=10.0)
     )
     monkeypatch.setattr(
-        mod,
-        "derive_planned_reservation_sync",
-        lambda *_a, **_k: {
-            "planned_reservation_usd": 0,
-            "planned_revenue_usd": 0,
-            "planned_line_count": 0,
-            "sku_assumption_count": 0,
-            "skipped_missing_sku": 0,
-            "skipped_missing_srp": 0,
-            "reservation_source": "derived_from_profit",
-            "from_lineup_derived": False,
-        },
+        mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (4.0, "tenant_default")
     )
-    monkeypatch.setattr(
-        mod,
-        "_forecast_volume_sync",
-        lambda *_a, **_k: {"horizon_weeks": 13, "forecast_units": 12, "source": "fact_demand_forecast"},
-    )
-    monkeypatch.setattr(mod, "suggest_intake_weighted_mac", lambda *_a, **_k: SimpleNamespace(cost_basis=10.0, cost_source="intake_weighted", evidence={}, flags=[]))
-    monkeypatch.setattr(mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (4.0, "tenant_default"))
-    monkeypatch.setattr(mod, "build_comparable_cases", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("seed comparable path must not run")))
 
     out = build_promo_plan_draft(FakeSession(), customer_id=18, period_label="2026Q2")
     assert out["seed_case_id"] is None
-    assert out["product_set_source"] == PRODUCT_SET_LINEUP
+    assert out["product_set_source"] == PRODUCT_SET_SELLTHROUGH
     assert out["customer_id"] == 18
     assert out["window_start"] == "2026-04-01"
     assert out["window_end"] == "2026-06-30"
     assert out["comparables"]["same_customer_only"] is True
+    assert out["comparables"]["count"] == 0  # earlier cases are not a planner source
     assert out["lines"][0]["product_id"] == 81
-    assert all(t["customer_id"] == 18 for t in out["comparables"]["top"])
     evidence = out["lines"][0]["promotion_evidence"]
     assert evidence["read_failed"] is False
-    assert evidence["listing"]["listed"] is False
+    assert evidence["listing"]["listed"] is None  # shopper listings are not a planner source
+    assert evidence["listing"]["data_unavailable"] is True
     assert evidence["competitor_price"]["data_unavailable"] is True
     assert evidence["competitor_price"]["price"] is None
     assert evidence["observed_cover"]["writes_target_cover"] is False
@@ -525,6 +466,9 @@ def test_build_promo_plan_draft_from_customer_period_same_customer_only(monkeypa
 
 def test_load_promotion_line_evidence_failed_read_is_not_an_honest_empty(caplog):
     class Boom:
+        def scalar(self, *_a, **_k):
+            return None
+
         def execute(self, *_a, **_k):
             raise RuntimeError("db down")
 
@@ -534,7 +478,7 @@ def test_load_promotion_line_evidence_failed_read_is_not_an_honest_empty(caplog)
         )
 
     assert evidence["read_failed"] is True
-    assert evidence["listing"]["listed"] is False
+    assert evidence["listing"]["listed"] is None
     assert evidence["listing"]["data_unavailable"] is True
     assert evidence["competitor_price"]["price"] is None
     assert evidence["competitor_price"]["data_unavailable"] is True
@@ -542,4 +486,3 @@ def test_load_promotion_line_evidence_failed_read_is_not_an_honest_empty(caplog)
     assert evidence["observed_cover"]["data_unavailable"] is True
     assert any("promotion line evidence read failed" in record.message for record in caplog.records)
     assert any(record.exc_info and record.exc_info[0] is RuntimeError for record in caplog.records)
-

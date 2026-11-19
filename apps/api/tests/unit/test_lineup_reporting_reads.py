@@ -1,8 +1,9 @@
 """Line-up read paths show reporting customers only (Warren 2026-11-19 reporting-only rule).
 
 Each read of ``fact_lineup_plan_item`` that feeds the Planning line-up screens or the planned
-reservation (``GET /lineup/items``, the async budget-position derivation and
-``derive_planned_reservation_sync``) is driven with a capturing fake session (no database). The
+reservation (``GET /lineup/items`` and the async budget-position derivation) is driven with a
+capturing fake session (no database); the sync planned reservation no longer reads line-ups at
+all (lane L4, see the last tests). The
 statement it emits against the plan-item table must carry the shared reporting definition from
 ``app.services.customer_reporting`` (reports expected true AND not merged away) as a restriction on
 ``fact_lineup_plan_item.customer_id``, and must keep its other filters. The cross-module DB proof is
@@ -140,19 +141,23 @@ def test_budget_position_derivation_carries_reporting_predicate():
     _assert_reporting_only(reads[0])
 
 
-def test_planned_reservation_sync_carries_reporting_predicate_and_limit():
+def test_planned_reservation_sync_reads_no_lineup_at_all():
+    """Warren 2026-11-19 (lane L4): the promotion planner is sell-through only.
+
+    ``derive_planned_reservation_sync`` used to read ``fact_lineup_plan_item`` (and carried the
+    reporting-customer restriction). It no longer reads any line-up: the planned reservation is
+    "not available" (see tests/unit/test_planner_sellthrough_sources.py). The reporting
+    restriction on the line-up screens and the async budget position is covered above.
+    """
     session = _SyncSession()
     out = promo_plan_builder.derive_planned_reservation_sync(session, limit=123)
-    assert out["planned_line_count"] == 0
-    reads = _plan_item_reads(session.statements)
-    assert len(reads) == 1
-    _assert_reporting_only(reads[0])
-    assert "limit" in reads[0]
+    assert session.statements == []
+    assert out["available"] is False
+    assert out["planned_reservation_usd"] is None
 
 
-def test_planned_reservation_sync_with_period_label_still_restricted():
+def test_planned_reservation_sync_with_period_label_reads_nothing():
     session = _SyncSession()
     promo_plan_builder.derive_planned_reservation_sync(session, period_label="2026Q2")
-    reads = _plan_item_reads(session.statements)
-    assert len(reads) == 1
-    _assert_reporting_only(reads[0])
+    assert _plan_item_reads(session.statements) == []
+    assert session.statements == []

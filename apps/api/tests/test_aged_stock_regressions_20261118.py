@@ -1,6 +1,6 @@
 """Regressions for the BACKLOG-227 fixes merged in #96 (alignment D3, 2026-11-18).
 
-Retired cases and lineup rows, site identity and concurrent creation. The first four
+Retired cases, the sell-through-only price, site identity and concurrent creation. The first four
 tests use fakes only. The lock test opens two sessions on ``cip_test`` and writes nothing.
 """
 
@@ -10,15 +10,13 @@ import uuid
 
 import app.services.store_dc.stock_actions as actions
 import pytest
-from app.models.commercial_lineup import CommercialLineupLine
-from app.services.commercial_planner.lineup_period_canonical import active_lineup_line_filters
 from app.services.store_dc.stock_actions import execute_aged_stock_action
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
-from tests.test_cpor_aged_stock_propose import _OpenResult, _Result, _writers
+from tests.test_cpor_aged_stock_propose import _OpenResult, _writers
 
 
 @pytest.fixture(autouse=True)
@@ -32,22 +30,31 @@ def _sql(clause) -> str:
     ).lower()
 
 
-def test_a_superseded_lineup_row_never_sets_the_price(monkeypatch):
-    monkeypatch.setattr(actions, "load_promotion_line_evidence", lambda *_a, **_k: {"listing": {}})
+def test_no_lineup_row_ever_sets_the_price(monkeypatch):
+    """Warren 2026-11-19: price is the customer's sell-through ``unit_sell_price`` only.
+
+    The earlier rule read line-up shelf prices and had to skip superseded rows. No line-up table
+    is read now, so a superseded (or any) line-up row cannot set the price.
+    """
     seen = []
+
+    class _Rows(list):
+        def all(self):
+            return list(self)
 
     class FakeSession:
         def execute(self, statement, *_a, **_k):
             seen.append(statement)
-            return _Result(scalar=80)
+            return _Rows([])
 
-    actions._srp_for_line(FakeSession(), customer_id=3, product_id=9, tenant_id="tenant-a")
+    assert (
+        actions._srp_for_line(FakeSession(), customer_id=3, product_id=9, tenant_id="tenant-a")
+        is None
+    )
+    assert len(seen) == 1
     sql = _sql(seen[0])
-    filters = active_lineup_line_filters()
-    assert filters, "the active-line filter must exist"
-    for clause in filters:
-        assert _sql(clause) in sql
-    assert _sql(CommercialLineupLine.row_status != "superseded") in sql
+    assert "fact_customer_sellthrough" in sql
+    assert "commercial_lineup" not in sql
 
 
 def test_a_superseded_case_or_voided_line_is_not_an_open_action():

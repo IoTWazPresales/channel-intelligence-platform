@@ -13,18 +13,13 @@ from typing import Any
 from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import Session
 
-from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
-from app.services.commercial_planner.lineup_period_canonical import active_lineup_line_filters
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.store_dc import SiteCandidate
-from app.services.cpor.promo_plan_builder import (
-    _positive_srp,
-    create_case_from_promo_draft,
-    load_promotion_line_evidence,
-)
+from app.services.cpor import planner_sellthrough
 from app.services.cpor.customer_soh_check import customer_soh_check
+from app.services.cpor.promo_plan_builder import create_case_from_promo_draft
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
 from app.services.store_dc.read_model import build_customer_view, build_lead_index
 from app.services.store_dc.rules import (
@@ -106,7 +101,9 @@ def _blocks(view: dict[str, Any], *, customer_id: int) -> list[dict[str, Any]]:
         owner = section.get("customer_id")
         if owner is None or int(owner) != int(customer_id):
             continue
-        needs = [item for item in (section.get("need_from_distributor") or []) if isinstance(item, dict)]
+        needs = [
+            item for item in (section.get("need_from_distributor") or []) if isinstance(item, dict)
+        ]
         if not needs:
             continue
         label = section.get("site_label")
@@ -347,31 +344,26 @@ def list_aged_stock(
     return out
 
 
-def _srp_for_line(session: Session, *, customer_id: int, product_id: int, tenant_id: str) -> float | None:
-    """Shopper price, then lineup shelf price. Sell-in DAP is not a promotion price."""
-    evidence = load_promotion_line_evidence(
+def _srp_for_line(
+    session: Session, *, customer_id: int, product_id: int, tenant_id: str
+) -> float | None:
+    """Promotion price for aged-stock Promote: the customer's own sell-through ``unit_sell_price``.
+
+    The latest reported week with a positive price for this customer and product. Warren
+    2026-11-19: the planner uses customer sell-through only, so the earlier rule (shopper
+    listing price, else line-up shelf price) is gone, and so are competitor prices and earlier
+    cases. With no sell-through price this returns ``None`` and the caller keeps its
+    ``no_positive_srp`` outcome: no draft is created.
+    """
+    book = planner_sellthrough.read_book(
         session,
-        customer_id=customer_id,
-        product_id=product_id,
-        distributor_id=None,
         tenant_id=tenant_id,
+        customer_id=int(customer_id),
+        product_ids=[int(product_id)],
+        want=("price",),
     )
-    listing_price = (evidence.get("listing") or {}).get("last_observed_price")
-    msrp = session.execute(
-        select(CommercialLineupLine.msrp_local)
-        .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupLine.case_id)
-        .where(
-            CommercialLineupLine.product_id == int(product_id),
-            CommercialLineupLine.customer_id == int(customer_id),
-            CommercialLineupLine.msrp_local.is_not(None),
-            CommercialLineupCase.superseded_by_case_id.is_(None),
-            CommercialLineupCase.commercial_status.notin_(("cancelled", "superseded")),
-            *active_lineup_line_filters(),
-        )
-        .order_by(CommercialLineupLine.id.desc())
-        .limit(1)
-    ).scalar()
-    return _positive_srp(listing_price, float(msrp) if msrp is not None else None)
+    price = book.figures(int(product_id)).get("price")
+    return float(price) if price is not None else None
 
 
 def _row_evidence(row: Any) -> dict | None:
@@ -494,7 +486,11 @@ def execute_aged_stock_action(
     if PROMOTE_TYPE not in CPOR_PROMOTION_TYPE_SET:
         raise ValueError("stock_promotion_type_missing")
     view = build_customer_view(session, tenant_id, int(customer_id))
-    line = _matching_line(_suggestion_rows(view, customer_id=int(customer_id)), product_id=product_id, site_label=site_label)
+    line = _matching_line(
+        _suggestion_rows(view, customer_id=int(customer_id)),
+        product_id=product_id,
+        site_label=site_label,
+    )
     if line is None:
         raise ValueError("line_not_slow_or_unsold")
     soh = line.get("stock_on_hand")
@@ -526,7 +522,9 @@ def execute_aged_stock_action(
             "customer_id": int(customer_id),
             "product_id": int(product_id),
         }
-    srp = _srp_for_line(session, customer_id=int(customer_id), product_id=int(product_id), tenant_id=tenant_id)
+    srp = _srp_for_line(
+        session, customer_id=int(customer_id), product_id=int(product_id), tenant_id=tenant_id
+    )
     if srp is None:
         raise ValueError("no_positive_srp")
     period = period_label or current_period_label()
@@ -586,7 +584,13 @@ def _merged_promote_lines(
         site = _blank_site(row.get("site_label"))
         soh = row.get("stock_on_hand")
         if soh is None or float(soh) <= 0:
-            skipped.append({"customer_id": customer_id, "product_id": product_id, "reason": "no_stock_to_act_on"})
+            skipped.append(
+                {
+                    "customer_id": customer_id,
+                    "product_id": product_id,
+                    "reason": "no_stock_to_act_on",
+                }
+            )
             continue
         eligible.append((product_id, site, float(soh)))
     for product_id, site, _soh in sorted(eligible, key=lambda item: (item[0], norm_label(item[1]))):
@@ -599,28 +603,41 @@ def _merged_promote_lines(
             site_label=site,
         )
     for product_id, site, soh in eligible:
-        if _open_case_id(
-            session,
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            product_id=product_id,
-            action="promote",
-            site_label=site,
-        ) is not None:
-            skipped.append({"customer_id": customer_id, "product_id": product_id, "reason": "already_open"})
+        if (
+            _open_case_id(
+                session,
+                tenant_id=tenant_id,
+                customer_id=customer_id,
+                product_id=product_id,
+                action="promote",
+                site_label=site,
+            )
+            is not None
+        ):
+            skipped.append(
+                {"customer_id": customer_id, "product_id": product_id, "reason": "already_open"}
+            )
             continue
         current = by_product.get(product_id)
         if current is None:
-            by_product[product_id] = {"product_id": product_id, "estimate_qty": float(soh), "site_labels": [site]}
+            by_product[product_id] = {
+                "product_id": product_id,
+                "estimate_qty": float(soh),
+                "site_labels": [site],
+            }
         else:
             current["estimate_qty"] = float(current["estimate_qty"]) + float(soh)
             if site not in current["site_labels"]:
                 current["site_labels"].append(site)
     ready: list[dict[str, Any]] = []
     for product_id, spec in by_product.items():
-        srp = _srp_for_line(session, customer_id=customer_id, product_id=product_id, tenant_id=tenant_id)
+        srp = _srp_for_line(
+            session, customer_id=customer_id, product_id=product_id, tenant_id=tenant_id
+        )
         if srp is None:
-            skipped.append({"customer_id": customer_id, "product_id": product_id, "reason": "no_positive_srp"})
+            skipped.append(
+                {"customer_id": customer_id, "product_id": product_id, "reason": "no_positive_srp"}
+            )
             continue
         ready.append(
             {
@@ -665,7 +682,9 @@ def auto_propose_from_intelligence(
     created: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     for cid, rows in grouped.items():
-        specs = _merged_promote_lines(session, tenant_id=tenant_id, customer_id=cid, rows=rows, skipped=skipped)
+        specs = _merged_promote_lines(
+            session, tenant_id=tenant_id, customer_id=cid, rows=rows, skipped=skipped
+        )
         if not specs:
             continue
         for spec in specs:
