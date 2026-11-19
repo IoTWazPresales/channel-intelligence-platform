@@ -38,6 +38,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useProductLines } from '@/features/catalog/useProductLines';
 import type { DefinitionV2 } from '@/features/dashboards/builder/types';
+import { useDashboardList } from '@/features/dashboards/dashboardList';
 import type { ChartControlsState } from '@/features/workbench-ui/ChartControls';
 import { RankedBars, StateKey, TrendChart, axisTitle, formatMeasure, rankBars, type MeasureUnit } from '@/features/workbench-ui/charts';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
@@ -107,10 +108,6 @@ type Delivery = {
   created_at: string | null;
 };
 
-type DashboardsResponse = {
-  items: { id: number; name: string; widgets?: { saved_report_id?: number | null }[] }[];
-};
-
 export type VisualMode = 'kpi' | 'table' | 'bar' | 'line';
 
 type Cadence = 'weekly_monday_0700' | 'daily_0700' | 'on_import_complete';
@@ -168,11 +165,8 @@ export function ReportBuilderView() {
     queryFn: ({ signal }) => apiGet<{ items: Delivery[] }>('/api/v1/reports/inbox?limit=200', { signal }),
     retry: false,
   });
-  const dashboardsQ = useQuery({
-    queryKey: ['dashboards'],
-    queryFn: ({ signal }) => apiGet<DashboardsResponse>('/api/v1/dashboards', { signal }),
-    retry: false,
-  });
+  // The editor's identity-scoped list, so pinning or removing a widget there updates the counts here.
+  const { query: dashboardsQ } = useDashboardList();
   const entitiesQ = useQuery({
     queryKey: ['sellout-filter-options'],
     queryFn: ({ signal }) =>

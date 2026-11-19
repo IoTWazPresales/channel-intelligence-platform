@@ -8,7 +8,7 @@ import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { apiGet } from '@/lib/api';
 import { briefSignalsQueryKey } from '@/lib/myAccounts';
-import { useMyAccountsCleared } from '@/lib/useMyAccountsCleared';
+import { useMyAccountsChoice } from '@/lib/useMyAccountsCleared';
 
 import { OVERVIEW_DESCRIPTION, OVERVIEW_LEAVES, OVERVIEW_TITLE, overviewLeafFromPath } from './overviewPaths';
 import { useClientReady } from './useClientReady';
@@ -38,9 +38,9 @@ export function OverviewChrome({
   const leaf = overviewLeafFromPath(pathname);
   const leafMeta = OVERVIEW_LEAVES.find((l) => l.value === leaf);
   const ready = useClientReady();
-  const accountsCleared = useMyAccountsCleared();
+  const accountsChoice = useMyAccountsChoice();
   const { data: briefData } = useQuery({
-    queryKey: briefSignalsQueryKey(accountsCleared),
+    queryKey: briefSignalsQueryKey(accountsChoice),
     queryFn: ({ signal }) => apiGet<BriefSignalsResponse>('/api/v1/brief/signals', { signal }),
     staleTime: 30_000,
   });
