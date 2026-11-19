@@ -1,5 +1,9 @@
 # CURRENT state
 
+**BACKLOG-046 shipment sheet scope (2026-11-19, PR #112 Fix Round 1; branch `feat/b046-sheet-scope-20261118`):** the mapping step no longer falls back to every column when no selected sheet is recognised; headers, samples, `in_scope` and `skipped_sheets` now agree, and every unrecognised sheet is listed as Ignored. An empty scope gives no headers, mappings or samples and stays blocked by the existing mapping gate. Selection and explicit BOM opt-in are unchanged. **PARTIAL-DEFERRED:** the shared detector still accepts exception/summary tabs with operational headers; BACKLOG-046 records the policy decision Warren must make and the strict expected-failure tests. N-0072 is not complete. No migration. Not merged.
+
+**Round 1 verification (2026-11-19):** `cip_test` pytest (scope unit, new DB-backed scope tests and existing shipment mapping/selection tests) 32 passed, 7 xfailed (strict, the deferred detector guard); `tsc` clean; Vitest imports 4 passed. Browser viewport proof not yet run.
+
 **Wave 3 Phase C ops health and backups (2026-11-18):** branch `feat/ops-backup-schedule-20261118`.
 
 - **Health (PR #110 fix round 1):** `GET /admin/ops/overview` reads due/late/missing and requires each expected customer's current Monday-due period to be tracked. Due reads pending; absent tracking/receipt evidence reads untracked. "Every expected report has arrived" needs receipt evidence in the exact preceding 8 days, never future-dated. Supervisor and backup cards remain in place.
