@@ -18,6 +18,8 @@
 
 **PR #111 fix round 2 (same branch, 2026-11-19):** the Codex review B2 fix. The dashboards editor, Overview and Reports now read one identity-scoped list key (`dashboardListKey` / `useDashboardList` in `apps/web/src/features/dashboards/dashboardList.ts`), so deleting or changing a widget in the editor shows on Overview and in the Reports pinned counts straight away, not after the 60-second freshness window. The round-1 identity guarantees are unchanged. New `dashboardList.crossScreen.test.tsx` checks both screens on one retained QueryClient and fails if the old shared key is put back. The earlier broad-run failure was a test matcher (ASCII hyphen vs the rendered em dash), now fixed. Results: web tsc 0; vitest dashboards/overview/reports/login 36 files / 249 tests passed; `src/features src/app` 227 files / 1254 tests passed; ESLint clean on changed files. No API change. Browser check at 1280x800 and 390x844 is still to do.
 
+**Line-ups reporting-only (2026-11-19, BACKLOG-262, PR from `feat/l2-lineup-reporting-20261119`):** `GET /lineup/items`, the budget-position read and the planner's planned reservation now read only customers with "Reports expected" (shared reader, merged-away excluded). The 1,470 old non-reporting drafts are still in `cip`; deleting them is a separate data step after merge. Not yet proven on the live screen.
+
 **W1-B activation timing (2026-11-19, PR #106 fix round 1):** branch `feat/w1b-activation-timing-20261118`, stacked on #105 and #104. It adds late-activation and early-deactivation alerts to listing intelligence and the Market activation lens.
 
 - **Threshold:** Warren decided 3 days (13:27 SAST). It is set by `CIP_LISTING_ACTIVATION_ALERT_DAYS` (default 3), not hard-coded.

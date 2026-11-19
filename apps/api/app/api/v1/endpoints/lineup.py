@@ -29,6 +29,7 @@ from app.services.lineup.net_requirement import (
     build_net_requirement_rows,
 )
 from app.services.lineup.profit_reservation import compute_profit_with_reservation
+from app.services.lineup.reporting_gate import reporting_plan_items_clause
 
 router = APIRouter()
 
@@ -134,12 +135,21 @@ async def list_lineup_items(
     period_start: date | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(FactLineupPlanItem).options(
-        selectinload(FactLineupPlanItem.customer),
-        selectinload(FactLineupPlanItem.channel),
-        selectinload(FactLineupPlanItem.product),
-        selectinload(FactLineupPlanItem.predecessor_product),
-        selectinload(FactLineupPlanItem.successor_product),
+    """Line-up plan rows of reporting customers only (reports expected, not merged away).
+
+    Every Planning screen total and pending count comes from this list, so the restriction lives
+    here; rows of non-reporting customers are never listed or counted.
+    """
+    stmt = (
+        select(FactLineupPlanItem)
+        .options(
+            selectinload(FactLineupPlanItem.customer),
+            selectinload(FactLineupPlanItem.channel),
+            selectinload(FactLineupPlanItem.product),
+            selectinload(FactLineupPlanItem.predecessor_product),
+            selectinload(FactLineupPlanItem.successor_product),
+        )
+        .where(reporting_plan_items_clause())
     )
     if customer_id is not None:
         stmt = stmt.where(FactLineupPlanItem.customer_id == customer_id)
