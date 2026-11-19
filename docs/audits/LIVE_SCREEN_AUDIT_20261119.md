@@ -3,12 +3,12 @@
 Live app `http://localhost:3000` on RF2300014-NB3, main checkout at `22beb215` (`feat/integrate-20261103`), live DB `cip`.
 Every SQL figure below was read from `cip` in a read-only psql session (`default_transaction_read_only=on`, `current_database()` printed = `cip`), between 16:20 and 16:45 SAST. No code, config or data was changed.
 
-## STATUS OF THIS AUDIT — screenshots BLOCKED on a sign-in
+## STATUS OF THIS AUDIT
 
-The live app runs `CIP_AUTH_MODE=session` (`apps/api/.env`). The repo's Playwright specs that sign in (`apps/web/e2e/builder-auth.spec.ts`, `e4-saved-query-auth.spec.ts`) use `CIP_BUILDER_TEST_API` + `CIP_BUILDER_TEST_TOKEN` against a **test** API; neither variable is set on this PC and there is no dev-login route or seeded smoke user for live. `.cursor/rules/smoke-via-browser.mdc` requires a browser session but names no credential.
-**So no route was screenshotted.** Needed from Warren, once: a login for the live app (or a viewer/steward account made for the audit). Then every route in section 3 gets 1280x800 and 390x844 full-page shots under `docs/audits/screens-20261119/`.
-
-Sections 1–2 (the four items Warren found + the Reports strip) are proven from code and live data, without screenshots.
+- Sections 1–2: the four items Warren found, proven from code and live data (16:20–16:45 SAST).
+- Section 7: D1 reader restore stopped; nothing was written to `cip`.
+- Section 8: why discovery has not found websites and listings (read-only, dry run).
+- **Section 9: signed-in screenshots of all 56 routes at 1280x800 and 390x844 (16:53–17:33 SAST), compared and classified.** The sign-in block noted earlier was cleared with the local admin login (not recorded here).
 
 ## Plain-language summary
 
@@ -96,7 +96,7 @@ Mock-up vs page (code read, no screenshot yet):
 
 `fact_customer_sellthrough` latest period per reporting customer: Amazon 2026-10-12 · Game 2026-06-29 · Makro 2026-06-29 · Computer Mania 2026-06-29 · Takealot 2026-07-27 · Evetech 2026-07-27 · **Hifi 2025-06-09 · Incredible Connection 2025-06-09**. Hifi/IC: one file each ever (`HiFi_only_Store_sales_WK24.xlsx`, `IC_only_Store_sales_WK24.xlsx`, loaded 2026-11-10, 1,544 / 4,237 rows); the raw rows have no year (columns `Sales TW`, `Site Code`, `Site Name`, …), and the importer dated them week 24 of 2025. The week starting 2025-06-09 ends 2025-06-15, which is 522 days before 2026-11-19, so "522 days" is the data, not a reader fault. If the file was week 24 **2026**, it is a **CODE BUG** (year inference for year-less week files); otherwise it is real staleness (no newer Hifi/IC file loaded). Other customers are 4–5 months stale (last loads 11 Aug–21 Oct): real.
 
-## 3. Route list (from `apps/web/src/features/shell/navConfig.ts`) — screenshots pending login
+## 3. Route list (from `apps/web/src/features/shell/navConfig.ts`)
 
 Overview: `/brief` · Business dashboard `/dashboards` · Reports `/reports` · Report inbox `/inbox`
 Stock & Sell-through: `/stock`, `/stock?lens=cover`, `/stock?lens=movement`, `/channel-intelligence`, `/stock/replenishment`, `/stock?lens=execution`, `/forecasts`
@@ -108,7 +108,7 @@ Data & Stewardship: `/admin/imports`, `/admin/imports?template=customer_sell_thr
 Administration: `/admin/users/list`, `/admin/ops`, `/admin/sql-viewer`, `/admin/port-conditions`, `/admin/audit-log`, `/settings`
 Also linked: `/lineup/new-customer`, `/sell-out` (→ `/stock?lens=movement`).
 
-Per-route status: **NOT YET AUDITED** — awaits a live login (screens + compare + classify).
+Per-route status: see section 9.
 
 ## 4. Decisions needed from Warren (WRONG RULE / design)
 
@@ -181,3 +181,86 @@ All read-only: SQL on `cip`, a discovery **dry run** (`apply=False`, `SET TRANSA
 1. **Run it once on live now** (DATA STEP; authorised as a job run): Sites & sellers → autoconfigure, or the beat task with `on_demand=True`. It writes `cst_listing_seed` proposals only, plus Redis run records. On today's data it will propose little: Takealot and Evetech are fully watched, and the other 5 have no site key.
 2. **Record the 5 websites** (DATA STEP, steward screen exists): site key + domain for Hifi, Incredible Connection, Makro, Computer Mania, Game. Warren chose "watch all five sites". The domains are customer data and must come from Warren or the steward. Discovery then searches each one on its next run.
 3. **NOT BUILT, needs a decision:** (a) automatic website finding for a customer (there is no search provider; it would need one, e.g. a web-search API key, or a rule using the customer's e-mail domain); (b) a reader for sites whose product page is built in the browser (Takealot), because the HTML probe can never match there; (c) Amazon product links for its 51 listings, and a way to search Amazon.
+
+## 9. Signed-in screen audit — all 56 routes (16:53–17:33 SAST)
+
+**Method.** Playwright (`C:\Users\warren_eliason\terminals\screen_audit_20261119.cjs`), signed in to `http://localhost:3000` as the local admin through the normal login form (login HTTP 200; the password is not written anywhere in this repo or log). For each route: wait for network idle (45 s cap, 120 s for `/listing-capture`), +1.5 s, then a full-page shot at **1280x800** and at **390x844** (device scale 2, so files are 2560/780 px wide), plus the page text. **112 screenshots + `results.json`** are on Warren's PC in `C:\Users\warren_eliason\terminals\screens-20261119\` (not committed: binary, several are 50k–185k px tall). SQL below read-only on `cip` (`current_database()` = `cip`, `default_transaction_read_only=on`).
+
+**Limits of this pass.** (1) Most shells scroll inside `main`, so a "full-page" shot is often just the viewport (1688 px tall at 390). (2) The page text was read once, at the 1280 pass; some panels were still loading then (e.g. `/brief` text said "No start actions" while its 390 shot, taken seconds later, shows the admin start cards). Where text and screenshot disagree, the screenshot is the evidence. (3) No 390 page overflows sideways: every 390 shot is exactly 390 CSS px wide.
+
+### 9.1 Per-route classification
+
+| Area | Route | Real data on live? | Class |
+|---|---|---|---|
+| Overview | `/brief` | Start cards for admin, signals load late; "No tenant dashboard yet" (none published) | MATCHES |
+| Overview | `/dashboards` | 6 signals, widget builder, 3 saved dashboards | MATCHES |
+| Overview | `/reports` | Builder works; inbox counters still "Loading…" at capture | MATCHES (slow counters, see 9.3 T1) |
+| Overview | `/inbox` | Weekly WoC deliveries to 16 Nov; shipping digests from 29 Oct | MATCHES |
+| Stock | `/stock`, `?lens=cover` | SOH 59,955 units, 2,481 pairs, cover 21.8 w, as of 29 Oct | MATCHES (data age: last import 29 Oct, see N1) |
+| Stock | `?lens=movement` | Sell-out W29–W41, shipped-in to W44 | MATCHES (sell-out stops W41, N1) |
+| Stock | `/channel-intelligence` | Customer sell-through KPIs, down 38% YoY | MATCHES |
+| Stock | `/stock/replenishment` (Stores and DCs, store map) | No store has coordinates | NOT BUILT — known item 1.2 |
+| Stock | `?lens=execution` | 26Q3 plan 32,509 vs shipped 10,493 (32%) | MATCHES |
+| Stock | `/forecasts` | "Forecasts need 8 weeks of applied sell-out… covers 2 of 8 weeks. Latest sell-out is W41 (2026-10-09)" | **DATA STEP — N2** |
+| Supply | `/supply`, `/supply/shipments` | 948 open, 171 past ETA, US$34.3m pipeline | MATCHES |
+| Supply | `/admin/shipment-evidence`, `/admin/po-management` | Evidence lines; 335 protected PO links | MATCHES (po-management 390 page is 38k CSS px tall, N10) |
+| Planning | `/lineup`, `/lineup/cases` | 1,647 plan lines / 1,646 pending for everyone | CODE BUG + DATA STEP — known item 1.3 |
+| Planning | `/lineup/new-customer` | Customer list = exactly the 8 "Reports expected" customers | MATCHES (#122) |
+| Planning | `/commercial-planner` | "No plans yet" — 0 plans created, 29 lineups listed | MATCHES (empty by use) |
+| Planning | `/roadmap` | "No roadmap rows"; `fact_product_roadmap` = 0 | **DATA STEP — N5** |
+| Planning | `/pricing` | "No recorded prices" | **DATA STEP — N6** |
+| Promotions | `/commercial-planner/cpor-cases` (Budget ledger / Case book) | Book R4.4m, 74 ended, 210 settled | MATCHES |
+| Promotions | `/promotions` | KPIs, 0 in planning, 75 at-risk | WRONG RULE + NOT BUILT — known item 1.4 |
+| Promotions | `/promotions/timeline` | Empty until a customer is chosen | MATCHES (as built; mock-up wants the timeline on the planner itself, L3) |
+| Promotions | `.../claims`, `.../payment-evidence-import`, `.../historical-import` | 304 plans via historical import, 1 template | MATCHES |
+| Promotions | `/admin/customer-commercial-terms` | "No customer commercial terms yet" | **DATA STEP — N7** (moot if planner is sell-through only) |
+| Promotions | `/budgets` | Ledger renders | MATCHES |
+| Market | `/listing-capture` registry / observations / intelligence / proposals / quality | 218 listings, 148,989–163,716 readings; screen shows 0 while the 90 s call runs; amazon/takealot "Not configured"; "Sites ready 1 of 3" | CODE BUG + NOT BUILT — known item 1.1 and section 8 |
+| Market | `/competition?tab=mappings`, `?tab=prices` | 0 mappings, 0 prices; `dim_competitor_product` = 0 | **DATA STEP — N3** |
+| Market | `/competition?tab=competitor-listings` | Labelled "planned — nothing here works yet" (BACKLOG §9.9) | **NOT BUILT — N4** |
+| Data | `/admin/imports` (+ CST template) | 201 completed jobs; **0 in the last 7 days; last import 29 Oct 14:05** | MATCHES (screen) — data age is N1 |
+| Data | `/admin/mappings`, `/admin/masters`, `/admin/products`, `/admin/product-master-gaps`, `/admin/customers` (+ duplicates), `/admin/distributors` (+ duplicates), `/admin/channels-regions`, `/admin/cst-steward`, `/admin/steward-audit` | 3,264 candidates, 18,157 products, 1,697 gap tokens, real masters | MATCHES |
+| Admin | `/admin/users/list`, `/admin/sql-viewer`, `/admin/audit-log`, `/settings` | 3 users, audit rows, settings | MATCHES |
+| Admin | `/admin/ops` | "Services degraded — tunnel blocked" (outbound 7844 blocked on this network since 08:54) | MATCHES (reports the real state; network, not CIP) |
+| Admin | `/admin/port-conditions` | "No figures entered yet"; `port_condition` = 0 | **DATA STEP — N8** (hand-entered by design) |
+
+Route totals (56): **MATCHES 39** · known four items 9 routes · new non-matching 8 routes.
+
+### 9.2 New findings beyond the four known
+
+| # | Finding | Evidence | Class |
+|---|---|---|---|
+| N1 | **Sales data on live is old.** No import of any kind since **29 Oct 14:05**. Distributor sell-out (`fact_sales_sellout`, 58,128 rows) ends **9 Oct 2026 (W41)**. Customer sell-through (`fact_customer_sellthrough`, 20,546 rows) ends per customer as in section 2: Amazon 12 Oct; Takealot/Evetech 27 Jul; Game/Makro/Computer Mania 29 Jun; Hifi/IC Jun 2025. | `import_job` max(created_at) = 2026-10-29 14:05 +02; 0 jobs in 7 days | DATA STEP (load newer files) + **decision** (Q1 below): a sell-through-only planner will plan off data 1–5 months old |
+| N2 | Forecasts page cannot forecast | needs 8 weeks of applied sell-out, has 2; 66,627 `fact_demand_forecast` rows kept as workspace only | DATA STEP (same root as N1) |
+| N3 | Competition empty | `dim_competitor_product` 0, `fact_competitor_mapping` 0, `fact_competitor_price` 0 | DATA STEP (no competitor data ever loaded) |
+| N4 | Competitor listings tab is a placeholder | page says "planned … nothing here works yet" | NOT BUILT (BACKLOG §9.9) |
+| N5 | Product roadmap empty | `fact_product_roadmap` 0 | DATA STEP |
+| N6 | Recorded prices empty | screen "No recorded prices" | DATA STEP (moot for a sell-through-only planner) |
+| N7 | Customer commercial terms empty | screen "No customer commercial terms yet" | DATA STEP (moot for a sell-through-only planner) |
+| N8 | Port delay figures empty | `port_condition` 0 | DATA STEP (manual by design) |
+| N9 | **Counts show 0 while loading** instead of a placeholder: Market header "0 monitored listings · 0 observations" on the observations tab; Promotions header "0 ended" at 390 while the 1280 pass shows 74 ended. This is what Warren read as "no listings". | `results.json` text for `/listing-capture?tab=observations`; `promotions__390.png` vs `promotions__1280.png` | CODE BUG (UI: show "…" until loaded; goes with lane L1, plus `PromotionPlannerSurface.tsx` header in L3) |
+| N10 | Mobile: whole tables rendered unpaged — `/lineup/cases` 390 shot is 185,524 px (≈92,800 CSS px) tall, `/admin/po-management` 76,052 px (≈38,000 CSS px) | screenshot sizes | CODE BUG (paging/virtualise at 390; lineup part goes with L2) |
+
+### 9.3 To check (not classified yet)
+
+- T1: nine routes never reached network idle within 45 s (`/dashboards`, `/stock?lens=execution`, `/admin/po-management`, `/lineup/cases`, `/commercial-planner`, `/roadmap`, the 3 `/competition` tabs) and `/reports` counters still said "Loading…". Either a slow API call or a poller that never stops. Needs the API log timings per call before it can be called a CODE BUG.
+
+### 9.4 Counts per class (findings across sections 1, 8 and 9)
+
+| Class | Count | Items |
+|---|---|---|
+| MATCHES | 39 routes | 9.1 |
+| CODE BUG | 5 | listings 90 s intelligence read; header = page size; line-ups list/reserve ignore "Reports expected"; N9 zero-while-loading; N10 mobile paging |
+| DATA STEP | 11 | delete 1,470 old drafts (decided); run discovery once; record 5 customer websites; link 51 Amazon listings to products; N1 newer sales files; N2; N3; N5; N6; N7; N8 |
+| NOT BUILT | 5 | store pins offline matching + steward confirm (decided); planner layout vs mock-up; automatic website finding; reader for browser-built pages (Takealot) / Amazon search; N4 competitor listings |
+| WRONG RULE | 1 | planner uses 10 non-sell-through sources incl. PR #96 price rule (decided: strict sell-through) |
+| To check | 1 | T1 |
+
+### 9.5 Decisions still needed from Warren
+
+1. **Old sales data vs sell-through only (new).** Newest customer sell-through is 12 Oct (Amazon) and 27 Jul or older for everyone else; nothing imported since 29 Oct. Options: (a) load the missing customer files, then build the sell-through-only planner; (b) build it now and let it show "data as of <date>" per customer; (c) also count distributor sell-out (newest 9 Oct) as sell-through.
+2. **Hifi / Incredible Connection week 24 files:** 2025 or 2026? (still open from the first round).
+3. **The 5 websites:** (a) Warren/steward gives the website for Hifi, Incredible Connection, Makro, Computer Mania, Game and CIP's discovery takes it from there; (b) build automatic website finding (needs a web-search API key, or a rule from the customer's e-mail domain).
+4. **Takealot (79 listings unread since 4 Nov):** its product page is built in the browser, so the page reader can never match. Options: (a) build a browser-based reader (heavier, runs a headless browser); (b) a reader for the site's JSON data; (c) stop watching Takealot.
+5. **Amazon (51 listings, none linked to a product):** (a) steward links them, then discovery checks them; (b) stop watching Amazon.
+6. **Empty pricing / commercial terms / competitor data:** with a sell-through-only planner, should these screens stay (for later use) or be hidden?
