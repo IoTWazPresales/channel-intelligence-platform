@@ -1,6 +1,6 @@
 'use client';
 
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -210,6 +210,12 @@ function LineupContainerInner() {
           clearAvailable={productId != null || approval === 'pending' || slice != null}
         />
       </Box>
+      <Typography
+        data-testid="lineup-reporting-note"
+        sx={{ fontSize: '12px', color: 'text.secondary', m: 0 }}
+      >
+        Reporting customers only.
+      </Typography>
       <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
         <LineupWorkspace />
       </Box>

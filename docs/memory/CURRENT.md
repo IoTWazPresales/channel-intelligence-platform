@@ -16,7 +16,11 @@
 
 **PR #111 fix round 1 (branch `feat/d0141-starting-screen-20261118`):** the Codex review B1 fix scopes the dashboard list and its cache writes and invalidations by tenant and user, so a list retained from a previous sign-in cannot trigger starter creation. Vitest covers successive users on one QueryClient, tenant changes, delayed identity/list responses, creation/refetch and failed lists; `test_d0141_starting_screen_db.py` adds an owner-isolation test. Results: `cip_test` 95 passed, 1 skipped; web tsc 0, vitest dashboards 26 files / 194 tests passed. Browser check at 1280x800 and 390x844 is still to do on the running app. Rollout and the permission matrix stay PARTIAL-DEFERRED in BACKLOG-248.
 
+**Planner layout to the mock-up (2026-11-19, BACKLOG-254 row "Live audit 2026-11-19 layout rebuild", PR from `feat/l3-planner-layout-20261119`):** five-card KPI strip, one filter bar, customer-row timeline with Week/Month on `/promotions`, detail panel and five-card action queue; the Promotions header shows a loading marker instead of 0 (N9). Web only; no API change. Not yet proven on the live screen.
+
 **PR #111 fix round 2 (same branch, 2026-11-19):** the Codex review B2 fix. The dashboards editor, Overview and Reports now read one identity-scoped list key (`dashboardListKey` / `useDashboardList` in `apps/web/src/features/dashboards/dashboardList.ts`), so deleting or changing a widget in the editor shows on Overview and in the Reports pinned counts straight away, not after the 60-second freshness window. The round-1 identity guarantees are unchanged. New `dashboardList.crossScreen.test.tsx` checks both screens on one retained QueryClient and fails if the old shared key is put back. The earlier broad-run failure was a test matcher (ASCII hyphen vs the rendered em dash), now fixed. Results: web tsc 0; vitest dashboards/overview/reports/login 36 files / 249 tests passed; `src/features src/app` 227 files / 1254 tests passed; ESLint clean on changed files. No API change. Browser check at 1280x800 and 390x844 is still to do.
+
+**Line-ups reporting-only (2026-11-19, BACKLOG-262, PR from `feat/l2-lineup-reporting-20261119`):** `GET /lineup/items`, the budget-position read and the planner's planned reservation now read only customers with "Reports expected" (shared reader, merged-away excluded). The 1,470 old non-reporting drafts are still in `cip`; deleting them is a separate data step after merge. Not yet proven on the live screen.
 
 **W1-B activation timing (2026-11-19, PR #106 fix round 1):** branch `feat/w1b-activation-timing-20261118`, stacked on #105 and #104. It adds late-activation and early-deactivation alerts to listing intelligence and the Market activation lens.
 
@@ -31,6 +35,8 @@
 - **Validation:** 2026-11-19: `cip_test` listing pytest 317 passed (includes the new rollback-only `test_listing_activation_timing_db.py` and expanded timing unit tests); web `tsc` clean, Vitest `src/features/market-listings` 7 files / 34 passed. Running-app evidence not yet collected.
 
 - No migration, no deploy.
+
+**Listings speed and counts (2026-11-19, BACKLOG-263, PR from `feat/l1-listings-speed-20261119`):** listing intelligence is set-based (live `cip` read-only: 146.98 s -> 3.31 s, identical output for 218 listings); `/listings` returns real `total`/`status_counts`/`unlinked`; the Market header shows a loading state, not 0. Not yet proven on the live screen.
 
 **W1-B worklist (2026-11-19, PR #105 Round 1):** branch `feat/w1b-stock-not-listed-20261118`. #104 is already merged into integration. The PR adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
 

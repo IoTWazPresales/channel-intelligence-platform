@@ -159,3 +159,21 @@ describe('LineupContainer customer/period scope (PR #115 B1)', () => {
     expectFigure('lineup-pending-approval', '2');
   });
 });
+
+describe('LineupContainer reporting-only scope (Warren 2026-11-19)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('says in one line that line-ups cover reporting customers only, whatever the scope', () => {
+    renderPage('');
+    const note = screen.getByTestId('lineup-reporting-note');
+    expect(note).toHaveTextContent('Reporting customers only.');
+    expect(screen.getAllByTestId('lineup-reporting-note')).toHaveLength(1);
+  });
+
+  it('totals and pending counts come straight from the rows the API returns', () => {
+    renderPage('');
+    expectSummary('4 plan lines');
+    expectFigure('lineup-pending-approval', '2');
+    expect(screen.getByTestId('lineup-planned-units')).toHaveTextContent('4 plan lines (all statuses)');
+  });
+});
