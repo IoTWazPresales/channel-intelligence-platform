@@ -70,7 +70,7 @@ function New-DeployRecord {
         build = 'not run'; build_id_before = $null; build_id_after = $null
         restarts = @(); api_ready = $null; celery_ping = $null
         web_checks = @(); launches_first = $null; launches_second = $null; launch_problems = @()
-        result = 'incomplete'; failure = $null; current_step = $null; failed_step = $null; finished = $null
+        result = 'incomplete'; failure = $null; current_step = $null; failed_step = $null; steps = @(); finished = $null
     }
 }
 
@@ -84,8 +84,13 @@ function Format-DeployRecord {
     $lines += "- /health/ready: $($Record.api_ready); Celery ping: $($Record.celery_ping)."
     foreach ($w in @($Record.web_checks)) { $lines += "- web 3000 at $($w.at): HTTP $($w.code)." }
     $lines += "- Launch counts: first $(($Record.launches_first | ConvertTo-Json -Compress)), second $(($Record.launches_second | ConvertTo-Json -Compress)); problems: $(@($Record.launch_problems).Count)."
+    if (@($Record.steps).Count -gt 0) {
+        $lines += "- Steps: " + ((@($Record.steps) | ForEach-Object { "$($_.name) $($_.at)" }) -join ', ') + '.'
+    }
     if ($Record.failure) {
-        if ($Record.failed_step) { $lines += "- Stopped at $($Record.failed_step): $($Record.failure)" } else { $lines += "- Stopped: $($Record.failure)" }
+        # Keep a multi-line failure (pnpm output tail, a list of dirty files) inside one bullet.
+        $why = ("$($Record.failure)" -replace "`r?`n", "`n  ")
+        if ($Record.failed_step) { $lines += "- Stopped at $($Record.failed_step): $why" } else { $lines += "- Stopped: $why" }
     }
     return ($lines -join "`n")
 }
@@ -144,10 +149,43 @@ function Invoke-NativeStep {
     return $r.Output
 }
 
+function Test-DeployPrerequisites {
+    # Preflight: every program the deploy runs must exist before anything is pulled, built or restarted.
+    # Throws "required program not found: X" for the first missing one (git, pnpm, then the API venv python).
+    param([string]$Git = 'git', [string]$Pnpm = 'pnpm', [Parameter(Mandatory)][string]$Python)
+    foreach ($p in @($Git, $Pnpm, $Python)) {
+        $found = Get-Command -Name $p -CommandType Application, ExternalScript -ErrorAction SilentlyContinue
+        if (-not $found) { throw "required program not found: $p" }
+    }
+}
+
+function Get-InstallDecision {
+    # Whether pnpm install must run. A marker left by an earlier run that started the install and did not
+    # finish it forces the install even when the lockfile is unchanged between the two SHAs (a re-run after
+    # a failed install has sha_before == sha_after, so the lockfile diff alone would skip it).
+    param([bool]$LockfileChanged, [bool]$MarkerExists)
+    if ($MarkerExists) { return [pscustomobject]@{ Run = $true; Reason = 'forced: a previous pnpm install did not finish' } }
+    if ($LockfileChanged) { return [pscustomobject]@{ Run = $true; Reason = 'lockfile changed' } }
+    return [pscustomobject]@{ Run = $false; Reason = 'skipped (lockfile unchanged)' }
+}
+
+function Invoke-GuardedInstall {
+    # Write the marker before the install and remove it only after the install succeeded. If Action throws,
+    # the marker stays, so the next run forces the install (Get-InstallDecision).
+    param([Parameter(Mandatory)][string]$MarkerPath, [Parameter(Mandatory)][scriptblock]$Action)
+    $dir = Split-Path -Parent $MarkerPath
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $enc = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($MarkerPath, "pnpm install started $((Get-Date).ToString('s'))", $enc)
+    $null = & $Action
+    Remove-Item -LiteralPath $MarkerPath -Force
+}
+
 function Set-DeployStep {
-    # Name the step now running, so a failure can say where it stopped.
+    # Name the step now running, so a failure can say where it stopped, and note when it began.
     param($Record, [string]$Name)
     $Record.current_step = $Name
+    $Record.steps += [ordered]@{ name = $Name; at = (Get-Date).ToString('s') }
 }
 
 function Set-DeployFailure {
@@ -169,7 +207,11 @@ function Invoke-DeployGuarded {
         if ($Record.result -ne 'FAILED') { Set-DeployFailure $Record "$($_.Exception.Message)" }
         Write-Host "DEPLOY STOPPED$(if ($Record.failed_step) { " at $($Record.failed_step)" }): $($Record.failure)"
     } finally {
-        try { $null = & $Save } catch { Write-Host "COULD NOT SAVE THE DEPLOY RECORD: $($_.Exception.Message)" }
+        try { $null = & $Save } catch {
+            # A deploy whose record is lost does not pass: the record is a deliverable, so the exit code is non-zero.
+            Write-Host "COULD NOT SAVE THE DEPLOY RECORD: $($_.Exception.Message)$(if ($ok) { ' (the deploy steps passed, but the exit code is 1 because the record is missing)' })"
+            $ok = $false
+        }
     }
     return $ok
 }

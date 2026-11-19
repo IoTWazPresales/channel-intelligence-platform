@@ -1,18 +1,19 @@
 # Batch deploy after a merged batch (Wave 3 B2; orchestrator brief section 8).
 #
-# Default is a PLAN: it reads git state and prints the steps it would run. Nothing is pulled, built or
+# Default is a PLAN: it prints the steps without running git, pnpm or python. Nothing is pulled, built or
 # restarted unless -Execute is given. Run -Execute only when a deploy is authorized.
 #
 #   .\scripts\cip-deploy.ps1                       # plan only (no changes)
-#   .\scripts\cip-deploy.ps1 -Execute              # pull --ff-only, install if the lockfile changed, build,
+#   .\scripts\cip-deploy.ps1 -Execute              # pull --ff-only, install if changed or retry needed, build,
 #                                                  # restart api, worker, web one at a time, verify
 #   .\scripts\cip-deploy.ps1 -Execute -SkipPull    # deploy what is checked out (no pull)
 #
 # Steps with -Execute, stopping at the first failure:
+#   0. Check git, pnpm and the API venv python before any git read, pull, install or restart.
 #   1. Refuse a linked worktree (the supervisor runs the primary checkout), a dirty tracked working tree or a
 #      detached HEAD. Record branch and SHA before.
 #   2. git pull --ff-only (never a merge or rebase). Record SHA after.
-#   3. pnpm install --frozen-lockfile only when pnpm-lock.yaml changed between the two SHAs.
+#   3. pnpm install --frozen-lockfile when pnpm-lock.yaml changed or an earlier install did not finish.
 #   4. pnpm --filter @cip/web build. Record apps/web/.next/BUILD_ID before and after (must change).
 #   5. For api, worker (includes beat), web in that order: scripts\cip-supervisor-stop.ps1 -Component <c> -Restart,
 #      then wait until status.json shows it healthy with a launch after the request.
@@ -21,7 +22,7 @@
 #      component's launch count unchanged between the two checks.
 # With -Execute the record is written as JSON and as a CURRENT.md block under %LOCALAPPDATA%\CIP\deploys\,
 # also when a step fails (the record then names the failure and the step that failed).
-# A program that is not installed (git, pnpm, python) fails its step with a "not found" message.
+# A missing required program stops at prerequisites with a "required program not found" message.
 # Exit code 0 only when every step passed (or, in plan mode, when the plan was printed).
 param(
     [switch]$Execute,
@@ -42,6 +43,7 @@ $stateDir   = Join-Path $env:LOCALAPPDATA 'CIP\always-on'
 $statusFile = Join-Path $stateDir 'status.json'
 $stopScript = Join-Path $PSScriptRoot 'cip-supervisor-stop.ps1'
 $recordDir  = Join-Path $env:LOCALAPPDATA 'CIP\deploys'
+$installMarker = Join-Path $recordDir 'pnpm-install-incomplete.marker'
 $components = @('wsl', 'redis', 'worker', 'api', 'web', 'tunnel')
 
 function Invoke-Git {
@@ -98,23 +100,12 @@ function Stop-Deploy {
     throw $Why
 }
 
-# 1. Preconditions
-$branch = Invoke-Git @('rev-parse', '--abbrev-ref', 'HEAD')
-$record.branch = $branch
-$record.sha_before = Invoke-Git @('rev-parse', 'HEAD')
-$record.build_id_before = Read-BuildId
-$dirty = Invoke-Git @('status', '--porcelain', '--untracked-files=no')
-# A linked worktree has a .git file (gitdir: pointer); the primary checkout has a .git folder.
-$linkedWorktree = Test-Path -LiteralPath (Join-Path $repo '.git') -PathType Leaf
-
 if (-not $Execute) {
-    Write-Host "PLAN ONLY (no changes). Repo $repo, branch $branch at $($record.sha_before)."
-    if ($linkedWorktree) { Write-Host '  ! linked worktree: -Execute would refuse (run from the primary checkout).' }
-    if ($branch -eq 'HEAD') { Write-Host '  ! detached HEAD: -Execute would refuse.' }
-    if ($dirty) { Write-Host '  ! tracked changes present: -Execute would refuse.' }
+    Write-Host "PLAN ONLY (no changes). Repo $repo; branch, SHA and BUILD_ID unknown until run."
+    Write-Host '  0. check git, pnpm and API venv python; refuse a linked worktree, tracked changes or detached HEAD'
     if ($SkipPull) { Write-Host '  1. no pull (-SkipPull)' } else { Write-Host '  1. git pull --ff-only' }
-    Write-Host '  2. pnpm install --frozen-lockfile, only if pnpm-lock.yaml changed in the pull'
-    Write-Host "  3. pnpm --filter @cip/web build (BUILD_ID now: $($record.build_id_before))"
+    Write-Host '  2. pnpm install --frozen-lockfile if the lockfile changed or a previous install did not finish'
+    Write-Host '  3. pnpm --filter @cip/web build (BUILD_ID unknown until run)'
     $n = 4
     foreach ($c in (Get-DeployRestartOrder)) { Write-Host "  $n. restart $c via cip-supervisor-stop.ps1, wait for healthy"; $n++ }
     Write-Host "  $n. $ApiBase/health/ready = 200 and celery inspect ping replies"; $n++
@@ -123,7 +114,20 @@ if (-not $Execute) {
 }
 
 $deployBody = {
+    Set-DeployStep $record 'prerequisites'
+    try { Test-DeployPrerequisites -Git 'git' -Pnpm 'pnpm' -Python $py } catch {
+        Stop-Deploy "$($_.Exception.Message)"
+    }
+
+    # 1. Preconditions (git reads belong inside the failure-recording guard).
     Set-DeployStep $record 'preconditions'
+    $branch = Invoke-Git @('rev-parse', '--abbrev-ref', 'HEAD')
+    $record.branch = $branch
+    $record.sha_before = Invoke-Git @('rev-parse', 'HEAD')
+    $record.build_id_before = Read-BuildId
+    $dirty = Invoke-Git @('status', '--porcelain', '--untracked-files=no')
+    # A linked worktree has a .git file (gitdir: pointer); the primary checkout has a .git folder.
+    $linkedWorktree = Test-Path -LiteralPath (Join-Path $repo '.git') -PathType Leaf
     if ($linkedWorktree) { Stop-Deploy 'this is a linked worktree; the supervisor runs the primary checkout' }
     if ($branch -eq 'HEAD') { Stop-Deploy 'detached HEAD; check out the trunk branch first' }
     if ($dirty) { Stop-Deploy "tracked changes in the working tree:`n$dirty" }
@@ -138,24 +142,27 @@ $deployBody = {
         $record.sha_after = Invoke-Git @('rev-parse', 'HEAD')
     }
 
-    # 3. Install only when the lockfile changed
+    # 3. Install when the lockfile changed or an earlier install did not finish
     Set-DeployStep $record 'pnpm install'
     $changed = @()
     if ($record.sha_after -ne $record.sha_before) {
         $changed = (Invoke-Git @('diff', '--name-only', $record.sha_before, $record.sha_after)) -split "`n"
     }
     $record.lockfile_changed = (Test-LockfileChanged $changed)
-    if ($record.lockfile_changed) {
-        Write-Host 'pnpm install --frozen-lockfile'
+    $installDecision = Get-InstallDecision -LockfileChanged $record.lockfile_changed -MarkerExists (Test-Path -LiteralPath $installMarker)
+    if ($installDecision.Run) {
+        Write-Host "pnpm install --frozen-lockfile ($($installDecision.Reason))"
         Push-Location $repo
         try {
-            Invoke-NativeStep -Description 'pnpm install' -FilePath 'pnpm' -ArgumentList @('install', '--frozen-lockfile') | Out-Null
+            Invoke-GuardedInstall -MarkerPath $installMarker -Action {
+                Invoke-NativeStep -Description 'pnpm install' -FilePath 'pnpm' -ArgumentList @('install', '--frozen-lockfile') | Out-Null
+            }
             $record.install = 'ok'
         } catch {
             $record.install = "failed: $($_.Exception.Message)"
             throw
         } finally { Pop-Location }
-    } else { $record.install = 'skipped (lockfile unchanged)' }
+    } else { $record.install = $installDecision.Reason }
 
     # 4. Build
     Set-DeployStep $record 'web build'
