@@ -37,12 +37,17 @@ def portfolio_committed_usd(session: Session, *, include_case_id: int | None = N
     """Sum support USD across cases in committed lifecycle statuses.
 
     When the budget ledger exists, this is the ledger draw. Draft and cancelled
-    cases are not on that draw.
+    cases are not on that draw, because the ledger only holds ``commit`` rows once a
+    case is approved. So the case being checked (``include_case_id``) is added at its
+    own support when it has no commit rows yet. A case that already has commit rows is
+    in the draw and is not counted twice.
     """
-    from app.services.budget_ledger import used_usd
+    from app.services.budget_ledger import case_has_commit_rows, used_usd
 
     ledger = used_usd(session)
     if ledger is not None:
+        if include_case_id is not None and not case_has_commit_rows(session, int(include_case_id)):
+            return ledger + case_support_usd(session, int(include_case_id))
         return ledger
     return _portfolio_committed_from_cases(session, include_case_id=include_case_id)
 

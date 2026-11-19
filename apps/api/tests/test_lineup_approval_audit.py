@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_db
+from app.core.security import Role, get_current_user
 from app.main import app
 
 client = TestClient(app)
@@ -13,6 +14,14 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def clear_overrides():
+    # PATCH takes its actor from the authenticated user, never from the X-User-Id header.
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": "reviewer-1",
+        "role": Role.ADMIN,
+        "tenant_id": "default",
+        "email": None,
+        "display_name": None,
+    }
     yield
     app.dependency_overrides.clear()
 
@@ -42,7 +51,7 @@ def test_patch_approval_change_invokes_audit_writer():
         r = client.patch(
             "/api/v1/lineup/items/7",
             json={"approval_status": "approved", "notes": "LGTM"},
-            headers={"X-User-Id": "reviewer-1"},
+            headers={"X-User-Id": "forged-by-client"},
         )
     assert r.status_code == 200
     audit.assert_awaited_once()
@@ -52,6 +61,7 @@ def test_patch_approval_change_invokes_audit_writer():
     assert kwargs["old_status"] == "draft"
     assert kwargs["new_status"] == "approved"
     assert kwargs["notes"] == "LGTM"
+    # The authenticated user, not the forged header.
     assert kwargs["actor"] == "reviewer-1"
 
 

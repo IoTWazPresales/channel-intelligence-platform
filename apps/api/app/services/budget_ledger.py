@@ -87,6 +87,11 @@ def _select_across_product_lines(session: Session, stmt):
     row security stays on the table, so listing reads are unchanged. This statement
     opens the read gate and puts the caller's lines back before it returns. None when
     the table is not there yet.
+
+    On any other error the savepoint is rolled back before the error propagates. The
+    open scope is a transaction-local setting made inside that savepoint, so the
+    rollback puts the caller's scope back and a later read in the same transaction
+    cannot see more than the caller may.
     """
     nested = session.begin_nested()
     try:
@@ -104,6 +109,9 @@ def _select_across_product_lines(session: Session, stmt):
     except ProgrammingError:
         nested.rollback()
         return None
+    except BaseException:
+        nested.rollback()
+        raise
     return rows
 
 
@@ -126,6 +134,24 @@ def used_usd(session: Session, *, landed_quarter: str | None = None) -> float | 
         return None
     tagged = [(str(kind), float(amount), tag) for kind, amount, tag in rows]
     return headroom_used_from_tagged(tagged)
+
+
+def case_has_commit_rows(session: Session, case_id: int) -> bool:
+    """True when the ledger already holds a commit row for this case, on any product line.
+
+    A case with commit rows is already in the ledger draw. Reads every product line,
+    like the draw. False when the table is not there yet.
+    """
+    stmt = (
+        select(BudgetLedgerEntry.id)
+        .where(
+            BudgetLedgerEntry.case_id == int(case_id),
+            BudgetLedgerEntry.entry_type == "commit",
+        )
+        .limit(1)
+    )
+    rows = _select_across_product_lines(session, stmt)
+    return bool(rows)
 
 
 def position_with_pending(

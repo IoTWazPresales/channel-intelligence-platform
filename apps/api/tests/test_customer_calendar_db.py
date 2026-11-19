@@ -132,7 +132,14 @@ def test_migration_creates_both_tables_with_row_security_policies_and_checks(
     assert ("customer_calendar_event", "SELECT") in pols
     assert ("customer_calendar_event", "INSERT") in pols
     assert ("customer_calendar_event", "DELETE") in pols
-    assert ("customer_calendar_event", "UPDATE") not in pols
+    # B-3: UPDATE exists only so a customer merge can repoint customer_id (tenant-bound).
+    assert ("customer_calendar_event", "UPDATE") in pols
+    assert {c for t, c in pols if t == "customer_calendar_event"} == {
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+    }
     assert {c for t, c in pols if t == "customer_calendar_mapping_profile"} == {
         "SELECT",
         "INSERT",

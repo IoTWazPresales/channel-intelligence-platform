@@ -91,6 +91,20 @@ def group_rows(world: World):
     return customer_id, ids
 
 
+def _decide(db: Session, customer_id: int, status: str):
+    return asyncio.run(
+        lineup.group_approve_lineup_items(
+            lineup.LineupGroupApprovalBody(
+                customer_id=customer_id,
+                period_start=date(2026, 1, 1),
+                approval_status=status,
+            ),
+            db=_AwaitableSession(db),
+            user={"id": "group-test-reviewer"},
+        )
+    )
+
+
 def _reject(db: Session, customer_id: int):
     return asyncio.run(
         lineup.group_approve_lineup_items(
@@ -102,7 +116,7 @@ def _reject(db: Session, customer_id: int):
                 notes=" reviewed ",
             ),
             db=_AwaitableSession(db),
-            x_user_id="group-test-reviewer",
+            user={"id": "group-test-reviewer"},
         )
     )
 
@@ -175,3 +189,28 @@ def test_second_item_failure_rolls_back_status_ledger_and_audit(session, group_r
     ]
     assert _ledger(session, ids) == before
     assert _events(session, ids) == []
+
+
+def test_status_is_read_fresh_under_the_lock_so_a_decided_item_is_skipped(session, group_rows):
+    """C-3: an item another approver decided after this session loaded it must be skipped.
+
+    The session holds a stale copy ('draft'); the database row is already 'approved'. The
+    locking select refreshes it (populate_existing), so the group approval sees 'approved',
+    changes nothing, and writes no ledger row and no event for it.
+    """
+    customer_id, ids = group_rows
+    stale = session.get(FactLineupPlanItem, ids[0])
+    stale.approval_status = "draft"
+    session.flush()
+    assert stale.approval_status == "draft"
+    # The other approver's committed write, invisible to this session's identity map.
+    session.execute(
+        text("update fact_lineup_plan_item set approval_status = 'approved' where id = :i"),
+        {"i": ids[0]},
+    )
+    before = _ledger(session, ids)
+    result = _decide(session, customer_id, "approved")
+    assert result["changed"] == 0 and result["changed_ids"] == []
+    assert _ledger(session, ids) == before
+    assert _events(session, ids) == []
+    assert session.get(FactLineupPlanItem, ids[0]).approval_status == "approved"

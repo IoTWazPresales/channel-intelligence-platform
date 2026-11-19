@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from sqlalchemy import delete, func, select, text, update
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import DBAPIError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.models.commercial_planner import CommercialCustomerTerm
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer
 from app.models.import_distributor_si import CustomerSourceTokenAlias, ImportEntityMappingCandidate
-from app.services.customer_fk_discovery import discover_customer_fk_columns, extra_customer_ref_specs
+from app.services.customer_fk_discovery import (
+    TENANT_BOUND_TABLE_SETTINGS,
+    discover_customer_fk_columns,
+    extra_customer_ref_specs,
+)
 from app.services.customer_usage import _CUSTOMER_MAPPING_ENTITY_TYPES
 
 # Tables where repoint uses row-level dedup instead of blind UPDATE (unique per customer_id).
@@ -32,25 +38,91 @@ class CustomerFullRepointAbortError(RuntimeError):
         super().__init__(message)
 
 
+def _customer_tenant(db: Session, customer_id: int) -> str | None:
+    """The customer's tenant, or None when no such customer row exists."""
+    return db.scalar(select(DimCustomer.tenant_id).where(DimCustomer.id == int(customer_id)))
+
+
+@contextmanager
+def tenant_bound_context(
+    db: Session,
+    pairs: tuple[tuple[str, str], ...],
+    *,
+    customer_id: int,
+    keeper_id: int | None = None,
+) -> Iterator[None]:
+    """Bind the customers' tenant for tenant-bound row-security tables, then restore it.
+
+    Does nothing unless one of ``pairs`` is a tenant-bound table. Refuses (rather than
+    skipping) when the tenant cannot be known: a blank tenant, or a keeper in another
+    tenant than the loser, because a row cannot move between tenants. A customer row
+    that does not exist cannot be referenced by any row (foreign key), so there is
+    nothing to bind and the count is truthfully zero.
+    """
+    settings = sorted(
+        {TENANT_BOUND_TABLE_SETTINGS[t] for t, _column in pairs if t in TENANT_BOUND_TABLE_SETTINGS}
+    )
+    if not settings:
+        yield
+        return
+    tenant = _customer_tenant(db, customer_id)
+    if tenant is None:
+        yield
+        return
+    if not tenant.strip():
+        raise CustomerFullRepointAbortError(
+            f"customer {customer_id} has no tenant; cannot bind tenant row security for {', '.join(sorted(t for t, _c in pairs if t in TENANT_BOUND_TABLE_SETTINGS))}",
+            loser_id=int(customer_id),
+        )
+    if keeper_id is not None:
+        keeper_tenant = _customer_tenant(db, keeper_id)
+        if (keeper_tenant or "").strip() != tenant.strip():
+            raise CustomerFullRepointAbortError(
+                f"keeper {keeper_id} and loser {customer_id} are not in the same tenant; "
+                "tenant-bound rows cannot move between tenants",
+                loser_id=int(customer_id),
+            )
+    saved = {
+        name: db.execute(text("SELECT current_setting(:g, true)"), {"g": name}).scalar()
+        for name in settings
+    }
+    try:
+        for name in settings:
+            db.execute(text("SELECT set_config(:g, :t, true)"), {"g": name, "t": tenant})
+        yield
+    finally:
+        try:
+            for name, value in saved.items():
+                db.execute(
+                    text("SELECT set_config(:g, :t, true)"),
+                    {"g": name, "t": "" if value is None else str(value)},
+                )
+        except DBAPIError:
+            # The transaction already failed; its local settings end with it.
+            pass
+
+
 def count_customer_fk_refs(db: Session, customer_id: int) -> dict[str, int]:
     """Count rows referencing ``customer_id`` per discovered FK column."""
     cid = int(customer_id)
     counts: dict[str, int] = {}
-    for table, column in discover_customer_fk_columns(db):
-        key = f"{table}.{column}"
-        try:
-            with db.begin_nested():
-                n = int(
-                    db.execute(
-                        text(f"SELECT count(*) FROM {table} WHERE {column} = :cid"),
-                        {"cid": cid},
-                    ).scalar()
-                    or 0
-                )
-        except ProgrammingError:
-            n = 0
-        if n:
-            counts[key] = n
+    pairs = discover_customer_fk_columns(db)
+    with tenant_bound_context(db, pairs, customer_id=cid):
+        for table, column in pairs:
+            key = f"{table}.{column}"
+            try:
+                with db.begin_nested():
+                    n = int(
+                        db.execute(
+                            text(f"SELECT count(*) FROM {table} WHERE {column} = :cid"),
+                            {"cid": cid},
+                        ).scalar()
+                        or 0
+                    )
+            except ProgrammingError:
+                n = 0
+            if n:
+                counts[key] = n
 
     for table, column, where_extra in extra_customer_ref_specs():
         key = f"{table}.{column}"
@@ -205,38 +277,45 @@ def repoint_customer_footprint_full(
     mapping_updates = _repoint_import_mapping_candidates(db, keeper_id=kid, loser_id=lid)
     stats["mapping_candidates"] = mapping_updates
 
-    for table, column in discover_customer_fk_columns(db):
-        if table in _UNIQUE_PER_CUSTOMER_TABLES:
-            continue
-        if table == "customer_source_token_alias":
-            continue
-        key = f"{table}.{column}"
-        expected = int((expected_counts or {}).get(key, -1))
-        try:
-            before = int(
-                db.execute(text(f"SELECT count(*) FROM {table} WHERE {column} = :lid"), {"lid": lid}).scalar() or 0
-            )
-            if before == 0:
+    pairs = discover_customer_fk_columns(db)
+    # Tenant-bound row-security tables (customer calendar) are counted and updated under
+    # the customers' tenant, or forced row security would hide their rows from the merge.
+    with tenant_bound_context(db, pairs, customer_id=lid, keeper_id=kid):
+        for table, column in pairs:
+            if table in _UNIQUE_PER_CUSTOMER_TABLES:
                 continue
-            r = db.execute(
-                text(f"UPDATE {table} SET {column} = :kid WHERE {column} = :lid"),
-                {"kid": kid, "lid": lid},
-            )
-            actual = int(r.rowcount or 0)
-            # Tombstone chain flatten: verify against live before-count, not preview snapshot.
-            rowcount_expected = before if (table == "dim_customer" and column == "merged_into_customer_id") else expected
-            if rowcount_expected >= 0:
-                _require_repoint_rowcount(expected=rowcount_expected, actual=actual, table=key, loser_id=lid)
-            elif before > 0:
-                _require_repoint_rowcount(expected=before, actual=actual, table=key, loser_id=lid)
-            stats["table_updates"][key] = actual
-        except ProgrammingError as exc:
-            raise CustomerFullRepointAbortError(
-                f"repoint failed for {key}: {exc}",
-                loser_id=lid,
-                table=table,
-            ) from exc
+            if table == "customer_source_token_alias":
+                continue
+            key = f"{table}.{column}"
+            expected = int((expected_counts or {}).get(key, -1))
+            try:
+                before = int(
+                    db.execute(text(f"SELECT count(*) FROM {table} WHERE {column} = :lid"), {"lid": lid}).scalar()
+                    or 0
+                )
+                if before == 0:
+                    continue
+                r = db.execute(
+                    text(f"UPDATE {table} SET {column} = :kid WHERE {column} = :lid"),
+                    {"kid": kid, "lid": lid},
+                )
+                actual = int(r.rowcount or 0)
+                # Tombstone chain flatten: verify against live before-count, not preview snapshot.
+                rowcount_expected = (
+                    before if (table == "dim_customer" and column == "merged_into_customer_id") else expected
+                )
+                if rowcount_expected >= 0:
+                    _require_repoint_rowcount(expected=rowcount_expected, actual=actual, table=key, loser_id=lid)
+                elif before > 0:
+                    _require_repoint_rowcount(expected=before, actual=actual, table=key, loser_id=lid)
+                stats["table_updates"][key] = actual
+            except ProgrammingError as exc:
+                raise CustomerFullRepointAbortError(
+                    f"repoint failed for {key}: {exc}",
+                    loser_id=lid,
+                    table=table,
+                ) from exc
 
-    db.flush()
-    _assert_zero_loser_refs(db, lid)
+        db.flush()
+        _assert_zero_loser_refs(db, lid)
     return stats

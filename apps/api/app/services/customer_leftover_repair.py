@@ -16,6 +16,7 @@ from app.services.customer_full_repoint import (
     _assert_zero_loser_refs,
     count_customer_fk_refs,
     repoint_customer_footprint_full,
+    tenant_bound_context,
 )
 from app.services.merge_redirect import follow_customer_merge_redirect_sync
 
@@ -34,18 +35,21 @@ def leftover_fk_counts(db: Session, customer_id: int) -> dict[str, int]:
     """Per-FK leftover counts excluding ``dim_customer.merged_into_customer_id``."""
     cid = int(customer_id)
     counts: dict[str, int] = {}
-    for table, column in discover_customer_fk_columns(db):
-        if (table, column) in _LEFTOVER_SKIP:
-            continue
-        n = int(
-            db.execute(
-                text(f"SELECT count(*) FROM {table} WHERE {column} = :cid"),
-                {"cid": cid},
-            ).scalar()
-            or 0
-        )
-        if n:
-            counts[f"{table}.{column}"] = n
+    pairs = discover_customer_fk_columns(db)
+    # Tenant-bound row-security tables are counted under the customer's tenant.
+    with tenant_bound_context(db, pairs, customer_id=cid):
+        for table, column in pairs:
+            if (table, column) in _LEFTOVER_SKIP:
+                continue
+            n = int(
+                db.execute(
+                    text(f"SELECT count(*) FROM {table} WHERE {column} = :cid"),
+                    {"cid": cid},
+                ).scalar()
+                or 0
+            )
+            if n:
+                counts[f"{table}.{column}"] = n
     return counts
 
 
