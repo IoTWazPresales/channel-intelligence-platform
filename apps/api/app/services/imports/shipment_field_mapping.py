@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.ingestion import ImportJob, RawFileMetadata, SourceDefinition
+from app.services.imports.shipment_evidence_report_detect import REPORT_UNKNOWN
 from app.services.imports.pm_mapping_memory import MEMORY_SCHEMA_VERSION, load_by_header_norm, norm_header_key
 from app.services.imports.tenant_mapping_scope import assert_source_tenant, source_memory_visible
 from app.storage.local import get_storage_backend
@@ -537,10 +538,38 @@ def shipment_mapping_gate_errors(mapping: dict[str, str]) -> list[dict[str, str]
     return errs
 
 
+SKIP_NOT_SELECTED = "not_selected"
+SKIP_UNRECOGNISED_LAYOUT = "unrecognised_layout"
+
+
+def _in_scope_frames(frames: list[tuple[Any, Any, str, str]]) -> list[tuple[Any, Any, str, str]]:
+    """Use the same recognised frames as validation, even when none are in scope."""
+    return [f for f in frames if f[2] != REPORT_UNKNOWN]
+
+
+def skipped_sheets(
+    frames: list[tuple[Any, Any, str, str]], available: list[str] | None
+) -> list[dict[str, str]]:
+    """Sheets this import will not ingest, and why (not selected, or layout not recognised)."""
+    loaded = [str(sn) for sn, _f, _rt, _ls in frames if sn is not None]
+    out: list[dict[str, str]] = [
+        {"sheet": name, "reason": SKIP_NOT_SELECTED}
+        for name in (available or [])
+        if str(name) not in loaded
+    ]
+    out.extend(
+        {"sheet": str(sn), "reason": SKIP_UNRECOGNISED_LAYOUT}
+        for sn, _f, rt, _ls in frames
+        if sn is not None and rt == REPORT_UNKNOWN
+    )
+    return out
+
+
 def _union_frame_headers(frames: list[tuple[Any, Any, str, str]]) -> list[str]:
+    """Mapping headers come only from the in-scope sheets (BACKLOG-046)."""
     seen: set[str] = set()
     out: list[str] = []
-    for _sn, frame, _rt, _ls in frames:
+    for _sn, frame, _rt, _ls in _in_scope_frames(frames):
         if frame is None or not len(frame.columns):
             continue
         for c in frame.columns:
@@ -601,9 +630,16 @@ def infer_shipment_import_job_sync(db: Session, job_id: int) -> ImportJob:
                 "report_type": rt,
                 "line_state": ls,
                 "row_count": int(len(frame)) if frame is not None else 0,
+                "in_scope": rt != REPORT_UNKNOWN,
             }
         )
-        if tabular_column_infer is None and frame is not None and len(frame.columns) > 0 and len(frame) > 0:
+        if (
+            rt != REPORT_UNKNOWN
+            and tabular_column_infer is None
+            and frame is not None
+            and len(frame.columns) > 0
+            and len(frame) > 0
+        ):
             try:
                 tabular_column_infer = infer_schema(frame)
             except Exception:
@@ -612,6 +648,9 @@ def infer_shipment_import_job_sync(db: Session, job_id: int) -> ImportJob:
     inferred: dict[str, Any] = {
         "kind": "shipment_workbook",
         "sheets": meta_reports,
+        "skipped_sheets": skipped_sheets(
+            frames, (job.staged_metadata or {}).get("available_sheets")
+        ),
         "mapping_notices": notices,
     }
     if tabular_column_infer is not None:
@@ -671,4 +710,10 @@ def shipment_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         ],
         "selected_sheets": [str(name) for name in (job.staged_metadata or {}).get("selected_sheets") or []],
         "sheet_selection_confirmed": bool((job.staged_metadata or {}).get("sheet_selection_confirmed")),
+        # BACKLOG-046: sheets this import leaves out, with the reason (badge in the mapping step).
+        "skipped_sheets": [
+            {"sheet": str(item.get("sheet")), "reason": str(item.get("reason"))}
+            for item in (inf.get("skipped_sheets") or [])
+            if isinstance(item, dict) and item.get("sheet")
+        ],
     }
