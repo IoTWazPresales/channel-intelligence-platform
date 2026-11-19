@@ -334,6 +334,10 @@ def build_proposal(
     db: Session, *, customer_id: int, source: str, period_start: date
 ) -> dict[str, Any]:
     source = validate_source(source)
+    # Any day in a quarter means that quarter: line-ups are keyed by the quarter start, so a
+    # mid-quarter date must never be stored as its own period (it would split the customer's
+    # quarter and miss the exact-date upsert of a later pull).
+    period_start = _quarter_start(period_start)
     customer = db.get(DimCustomer, customer_id)
     if customer is None:
         raise ProposalError(404, "customer_not_found", "Customer not found.")
@@ -454,6 +458,7 @@ def write_new_customer_lineup(
     """
     from app.services.budget_ledger import apply_lineup_approval
 
+    period_start = _quarter_start(period_start)  # store the canonical quarter start only
     customer = db.get(DimCustomer, customer_id)
     if customer is None:
         raise ProposalError(404, "customer_not_found", "Customer not found.")

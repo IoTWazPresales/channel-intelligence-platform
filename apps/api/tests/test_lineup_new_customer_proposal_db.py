@@ -285,6 +285,44 @@ async def test_approve_creates_the_ticked_lines_approved_with_audit_in_one_trans
 
 
 @pytest.mark.anyio
+async def test_mid_quarter_date_is_stored_as_the_quarter_start_and_blocks_a_second_approval(session):
+    """Review B3: a mid-quarter date never becomes its own period (no split quarter, no duplicates)."""
+    tag = secrets.token_hex(3)
+    cust = await _customer(session, tag, "mid", reports=True)
+    prod = await _product(session, tag, "p", cost=2)
+    db = _NoCommit(session)
+
+    proposal = await _proposal(session, cust.id, "pm_bottom_cost", date(2026, 11, 20))
+    assert proposal["period_start"] == "2026-10-01"
+
+    body = NewCustomerApproveBody(
+        source="pm_bottom_cost", period_start=date(2026, 11, 20), product_ids=[prod.id]
+    )
+    out = await approve_new_customer_lineup(cust.id, body, db=db, x_user_id="tester")
+    assert out["period_start"] == "2026-10-01"
+    items = (
+        (
+            await session.execute(
+                select(FactLineupPlanItem).where(FactLineupPlanItem.customer_id == cust.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [i.period_start for i in items] == [TARGET]
+    case = await session.get(CommercialLineupCase, out["commercial_case_id"])
+    assert case.inferred_period_start == TARGET
+
+    # Another day in the same quarter is the same period: refused, nothing more written.
+    again = NewCustomerApproveBody(
+        source="pm_bottom_cost", period_start=date(2026, 12, 31), product_ids=[prod.id]
+    )
+    with pytest.raises(HTTPException) as err:
+        await approve_new_customer_lineup(cust.id, again, db=db, x_user_id="tester")
+    assert err.value.status_code == 409 and err.value.detail["code"] == "lineup_exists_for_period"
+
+
+@pytest.mark.anyio
 async def test_approval_lock_excludes_a_second_session_for_the_same_customer_and_quarter():
     """Two real sessions: while one holds the approval lock, the other cannot take it (B1).
 
