@@ -49,11 +49,34 @@ const masterProposal: Proposal = {
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return renderWithProviders(
+  const view = renderWithProviders(
     <QueryClientProvider client={client}>
       <NewCustomerLineup />
     </QueryClientProvider>,
   );
+  return { ...view, client };
+}
+
+const refreshedProposal: Proposal = {
+  ...masterProposal,
+  line_count: 3,
+  lines: [
+    ...masterProposal.lines,
+    {
+      product_id: 13,
+      sku: 'SKU-13',
+      label: 'Gamma',
+      seed_source: 'previous_lineups',
+      evidence: { kind: 'previous_lineups', scope: 'master', periods: ['2026-07-01'] },
+    },
+  ],
+};
+
+async function showPreviousLineupsProposal() {
+  await chooseCustomer();
+  fireEvent.click(screen.getByLabelText(/SKUs from the previous line-ups/));
+  fireEvent.click(screen.getByRole('button', { name: /show proposal/i }));
+  await screen.findByText('Alpha');
 }
 
 async function chooseCustomer() {
@@ -116,6 +139,43 @@ describe('NewCustomerLineup', () => {
     expect(body).toMatchObject({ source: 'previous_lineups', product_ids: [12] });
     expect(await screen.findByText(/Approved 1 line/)).toBeTruthy();
     expect(screen.getByRole('link', { name: /open the line-up cases/i }).getAttribute('href')).toBe('/lineup/cases');
+  });
+
+  it('keeps the unticked lines when the proposal refreshes and leaves new lines unticked', async () => {
+    apiPostMock.mockResolvedValue({ approved_count: 1, commercial_case_id: 55, created: [] });
+    const { client } = renderPage();
+    await showPreviousLineupsProposal();
+    fireEvent.click(screen.getByLabelText('Include SKU-11'));
+    expect(screen.getByText('1 of 2 lines selected')).toBeTruthy();
+
+    // A background refetch (reconnect, focus) returns changed data, including a new product.
+    apiGetMock.mockImplementation(async (url: string) =>
+      url.includes('reporting-customers') ? { customers: [{ id: 7, name: 'Seven Stores' }] } : refreshedProposal,
+    );
+    await client.refetchQueries({ queryKey: ['lineup', 'new-customer', 'proposal'] });
+    await screen.findByText('Gamma');
+
+    expect((screen.getByLabelText('Include SKU-11') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Include SKU-12') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Include SKU-13') as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByText('1 of 3 lines selected')).toBeTruthy();
+    expect(screen.getByText(/1 new line appeared/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /approve 1 line/i }));
+    await waitFor(() => expect(apiPostMock).toHaveBeenCalledTimes(1));
+    expect(apiPostMock.mock.calls[0][1]).toMatchObject({ product_ids: [12] });
+  });
+
+  it('starts again with every line ticked when the source changes', async () => {
+    renderPage();
+    await showPreviousLineupsProposal();
+    fireEvent.click(screen.getByLabelText('Include SKU-11'));
+    expect(screen.getByText('1 of 2 lines selected')).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText(/Master-catalogue items with a PM bottom cost/));
+    fireEvent.click(screen.getByRole('button', { name: /show proposal/i }));
+    await screen.findByText('Alpha');
+    expect(screen.getByText('2 of 2 lines selected')).toBeTruthy();
   });
 
   it('disables approval when every line is unticked', async () => {

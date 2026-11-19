@@ -170,6 +170,79 @@ def test_reporting_customer_passes():
     svc.ensure_reporting_customer(_FakeSync(True), 7)
 
 
+# --- approval serialisation (B1): one advisory lock per tenant + customer + quarter ---
+
+
+def test_lock_key_is_per_tenant_customer_and_calendar_quarter():
+    key = svc.customer_quarter_lock_key
+    base = key("t1", 7, date(2026, 10, 1))
+    assert base == key("t1", 7, date(2026, 11, 20))  # same quarter, any day in it
+    assert base != key("t1", 7, date(2027, 1, 1))  # another quarter
+    assert base != key("t1", 8, date(2026, 10, 1))  # another customer
+    assert base != key("t2", 7, date(2026, 10, 1))  # another tenant
+
+
+class _RecordingSync:
+    def __init__(self, calls: list[Any]) -> None:
+        self._calls = calls
+
+    def execute(self, stmt: Any, params: Any = None) -> None:
+        self._calls.append(("execute", str(stmt), params))
+
+    def get(self, _model: Any, ident: Any) -> Any:
+        return SimpleNamespace(id=ident, tenant_id="t1", code="C")
+
+
+def test_lock_executes_a_transaction_scoped_advisory_lock():
+    calls: list[Any] = []
+    svc.lock_customer_quarter(_RecordingSync(calls), "t1", 7, date(2026, 10, 1))
+    [(_, sql, params)] = calls
+    assert "pg_advisory_xact_lock" in sql
+    assert params["key"] == svc.customer_quarter_lock_key("t1", 7, date(2026, 10, 1))
+
+
+def test_write_takes_the_lock_before_it_rebuilds_and_rechecks_the_proposal(monkeypatch):
+    calls: list[Any] = []
+    sync = _RecordingSync(calls)
+
+    def fake_build(_db, **_kw):
+        calls.append(("build_proposal",))
+        raise ProposalError(409, "lineup_exists_for_period", "Already has rows.")
+
+    monkeypatch.setattr(svc, "build_proposal", fake_build)
+    with pytest.raises(ProposalError) as err:
+        svc.write_new_customer_lineup(
+            sync,  # type: ignore[arg-type]
+            customer_id=7,
+            source=SOURCE_PM_BOTTOM_COST,
+            period_start=date(2026, 11, 20),
+            product_ids=[1],
+            actor="u",
+        )
+    assert err.value.code == "lineup_exists_for_period"
+    assert [c[0] for c in calls] == ["execute", "build_proposal"]
+    assert calls[0][2]["key"] == svc.customer_quarter_lock_key("t1", 7, date(2026, 10, 1))
+
+
+def test_write_for_an_unknown_customer_is_refused_before_any_lock(monkeypatch):
+    calls: list[Any] = []
+
+    class _NoCustomer(_RecordingSync):
+        def get(self, _model: Any, _ident: Any) -> Any:
+            return None
+
+    with pytest.raises(ProposalError) as err:
+        svc.write_new_customer_lineup(
+            _NoCustomer(calls),  # type: ignore[arg-type]
+            customer_id=7,
+            source=SOURCE_PM_BOTTOM_COST,
+            period_start=Q4,
+            product_ids=[1],
+            actor=None,
+        )
+    assert err.value.status_code == 404 and calls == []
+
+
 # --- endpoint wiring (service faked)  ---
 
 

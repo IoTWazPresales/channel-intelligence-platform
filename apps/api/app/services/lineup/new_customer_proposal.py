@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -412,6 +412,28 @@ def build_proposal(
 
 # --- the write (all but the audit event and the commit, which the endpoint owns) -----------
 
+APPROVE_LOCK_NAMESPACE = "cip.new_customer_lineup.approve"
+_APPROVE_LOCK_SQL = text("SELECT pg_advisory_xact_lock(hashtext(:key), hashtext(:namespace))")
+
+
+def customer_quarter_lock_key(tenant_id: str, customer_id: int, period_start: date) -> str:
+    """One key per tenant + customer + calendar quarter (any day in the quarter maps to it)."""
+    quarter = quarter_bounds_from_period_start(period_start)[0]
+    return "\x1f".join((str(tenant_id), str(int(customer_id)), quarter.isoformat()))
+
+
+def lock_customer_quarter(
+    db: Session, tenant_id: str, customer_id: int, period_start: date
+) -> None:
+    """Block until no other open transaction is approving this customer's quarter."""
+    db.execute(
+        _APPROVE_LOCK_SQL,
+        {
+            "key": customer_quarter_lock_key(tenant_id, customer_id, period_start),
+            "namespace": APPROVE_LOCK_NAMESPACE,
+        },
+    )
+
 
 def write_new_customer_lineup(
     db: Session,
@@ -422,14 +444,23 @@ def write_new_customer_lineup(
     product_ids: Iterable[int],
     actor: str | None,
 ) -> dict[str, Any]:
-    """Create the customer's approved line-up rows for the chosen products. Does not commit."""
+    """Create the customer's approved line-up rows for the chosen products. Does not commit.
+
+    Approvals for the same tenant + customer + quarter are serialised with a transaction-scoped
+    advisory lock, taken before the proposal is rebuilt, so the "no rows yet for the period" check
+    inside ``build_proposal`` is re-run under the lock. The lock is released when the caller's
+    transaction ends (the endpoint commits after the audit events), so a waiting second approval
+    sees the first one's committed rows and is refused with ``lineup_exists_for_period``.
+    """
     from app.services.budget_ledger import apply_lineup_approval
 
+    customer = db.get(DimCustomer, customer_id)
+    if customer is None:
+        raise ProposalError(404, "customer_not_found", "Customer not found.")
+    lock_customer_quarter(db, customer.tenant_id, customer_id, period_start)
     proposal = build_proposal(db, customer_id=customer_id, source=source, period_start=period_start)
     chosen = validate_selection((ln["product_id"] for ln in proposal["lines"]), product_ids)
     lines_by_id = {ln["product_id"]: ln for ln in proposal["lines"]}
-    customer = db.get(DimCustomer, customer_id)
-    assert customer is not None  # build_proposal checked
     label = proposal["period_label"]
     note = f"new_customer_proposal source={source}" + (
         f" scope={proposal['fallback']}" if proposal["fallback"] else ""

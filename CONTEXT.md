@@ -20,6 +20,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 - 2026-11-18 - **W1-B in stock, not watched:** `feat/w1b-stock-not-listed-20261118`, read-only worklist endpoint and Coverage-tab table. Remaining worklists and what each needs: BACKLOG-244.
 
+- 2026-11-19 - **PR #119 final wave (a) fix round 1:** new-customer line-up approval is serialised per customer and quarter by a transaction-scoped advisory lock (no duplicate accepted line-ups, no migration); the proposal page keeps the user's unticked lines across refreshes. Navigation link, own-history-only-in-plan-items, case status and import gating stay PARTIAL-DEFERRED in BACKLOG-252.
 - 2026-11-19 - **PR #115 final wave (b) fix round 1:** line-up headline and scope counts follow the selected customer/period/product slice; net requirement and plan coverage labelled master scope; group-approval DB tests on `cip_test`. Economics scope (b2) and approval roles stay PARTIAL-DEFERRED in BACKLOG-251.
 - 2026-11-19 - **PR #112 BACKLOG-046 Fix Round 1:** an empty shipment-sheet scope yields no mapping or samples and every skipped sheet is reported; the broader detector guard and optional BOM planning scope stay PARTIAL-DEFERRED in BACKLOG-046.
 - 2026-11-18 - **Listing coverage (BACKLOG-226):** `fix/listing-coverage-226-20261118`. HTTP failures, seller-only changes, seed/listing reconciliation, bounded latest reads, delisted and product-less listings, and honest loading/error UI. Review points: BACKLOG-243.

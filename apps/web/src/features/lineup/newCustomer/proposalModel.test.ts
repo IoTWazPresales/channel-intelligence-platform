@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  EMPTY_SELECTION,
   SOURCE_OPTIONS,
   allProductIds,
   approveBody,
@@ -8,7 +9,10 @@ import {
   evidenceText,
   proposalPath,
   quarterLabel,
+  reconcileSelection,
+  requestKey,
   toggleProduct,
+  toggleSelection,
 } from './proposalModel';
 import type { Proposal, ProposalLine } from './types';
 
@@ -106,6 +110,42 @@ describe('selection', () => {
       period_start: '2026-10-01',
       product_ids: [2, 5],
     });
+  });
+});
+
+describe('reconcileSelection', () => {
+  const lineFor = (id: number): ProposalLine => ({ ...prevLine, product_id: id, sku: `S-${id}` });
+  const withIds = (...ids: number[]) => proposal({ lines: ids.map(lineFor), line_count: ids.length });
+  const keyA = requestKey({ customerId: 7, source: 'previous_lineups', periodStart: '2026-10-01' });
+
+  it('ticks every line for a request it has not seen', () => {
+    const s = reconcileSelection(EMPTY_SELECTION, keyA, withIds(1, 2));
+    expect(s.selected).toEqual(new Set([1, 2]));
+    expect(s.unreviewed.size).toBe(0);
+  });
+
+  it('keeps exclusions on a refresh, drops vanished lines and leaves new lines unticked', () => {
+    const first = reconcileSelection(EMPTY_SELECTION, keyA, withIds(1, 2, 3));
+    const unticked = toggleSelection(first, 1);
+    const refreshed = reconcileSelection(unticked, keyA, withIds(1, 2, 4));
+    expect(refreshed.selected).toEqual(new Set([2]));
+    expect(refreshed.unreviewed).toEqual(new Set([4]));
+    // A second refresh does not tick the new line either; ticking it counts as reviewed.
+    const again = reconcileSelection(refreshed, keyA, withIds(1, 2, 4));
+    expect(again.selected).toEqual(new Set([2]));
+    const reviewed = toggleSelection(again, 4);
+    expect(reviewed.selected).toEqual(new Set([2, 4]));
+    expect(reviewed.unreviewed.size).toBe(0);
+  });
+
+  it('resets when the customer, period or source changes', () => {
+    const unticked = toggleSelection(reconcileSelection(EMPTY_SELECTION, keyA, withIds(1, 2)), 1);
+    const otherPeriod = requestKey({ customerId: 7, source: 'previous_lineups', periodStart: '2027-01-01' });
+    const otherSource = requestKey({ customerId: 7, source: 'pm_bottom_cost', periodStart: '2026-10-01' });
+    const otherCustomer = requestKey({ customerId: 8, source: 'previous_lineups', periodStart: '2026-10-01' });
+    for (const key of [otherPeriod, otherSource, otherCustomer]) {
+      expect(reconcileSelection(unticked, key, withIds(1, 2)).selected).toEqual(new Set([1, 2]));
+    }
   });
 });
 

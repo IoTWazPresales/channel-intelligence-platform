@@ -52,6 +52,62 @@ export function toggleProduct(selected: Set<number>, productId: number): Set<num
   return next;
 }
 
+/**
+ * What the user has ticked for one proposal request. `known` is every product the user has been
+ * shown so far, `unreviewed` the ones that appeared in a refresh after the first load. Those are
+ * left unticked until the user decides, so a background refresh never widens what gets approved.
+ */
+export type SelectionState = {
+  key: string;
+  selected: Set<number>;
+  known: Set<number>;
+  unreviewed: Set<number>;
+};
+
+export const EMPTY_SELECTION: SelectionState = {
+  key: '',
+  selected: new Set(),
+  known: new Set(),
+  unreviewed: new Set(),
+};
+
+/** Identity of a proposal request. Changing the customer, period or source changes it. */
+export function requestKey(r: { customerId: number; source: SeedSource; periodStart: string }): string {
+  return `${r.customerId}|${r.source}|${r.periodStart}`;
+}
+
+/**
+ * Apply freshly loaded proposal data to the selection. A different request starts with every line
+ * ticked. The same request keeps the user's exclusions: lines still in the data keep their tick,
+ * lines that disappeared drop out, and lines never seen before arrive unticked and unreviewed.
+ */
+export function reconcileSelection(prev: SelectionState, key: string, p: Proposal): SelectionState {
+  const ids = allProductIds(p);
+  if (prev.key !== key) {
+    return { key, selected: ids, known: new Set(ids), unreviewed: new Set() };
+  }
+  const selected = new Set<number>();
+  const known = new Set(prev.known);
+  const unreviewed = new Set<number>();
+  for (const id of ids) {
+    if (prev.known.has(id)) {
+      if (prev.selected.has(id)) selected.add(id);
+      if (prev.unreviewed.has(id)) unreviewed.add(id);
+    } else {
+      known.add(id);
+      unreviewed.add(id);
+    }
+  }
+  return { key, selected, known, unreviewed };
+}
+
+/** The user ticks or unticks one line; that counts as having reviewed it. */
+export function toggleSelection(state: SelectionState, productId: number): SelectionState {
+  const unreviewed = new Set(state.unreviewed);
+  unreviewed.delete(productId);
+  return { ...state, selected: toggleProduct(state.selected, productId), unreviewed };
+}
+
 export function approveBody(source: SeedSource, periodStart: string, selected: Set<number>): ApproveBody {
   return { source, period_start: periodStart, product_ids: [...selected].sort((a, b) => a - b) };
 }

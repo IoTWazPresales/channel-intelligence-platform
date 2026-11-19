@@ -285,6 +285,99 @@ async def test_approve_creates_the_ticked_lines_approved_with_audit_in_one_trans
 
 
 @pytest.mark.anyio
+async def test_approval_lock_excludes_a_second_session_for_the_same_customer_and_quarter():
+    """Two real sessions: while one holds the approval lock, the other cannot take it (B1).
+
+    Commits nothing: the lock is transaction-scoped and both sessions roll back at the end.
+    ``pg_try_advisory_xact_lock`` stands in for the waiting second approval, which would block on
+    the same key; after the first transaction ends the key is free and the second sees its rows.
+    """
+    from app.db.session import AsyncSessionLocal
+    from app.services.lineup import new_customer_proposal as svc
+    from sqlalchemy import text
+
+    tenant = f"t-{secrets.token_hex(3)}"
+    customer_id = 2_000_000_001  # the lock key needs no customer row
+
+    def _try_lock(period: date, cust: int = customer_id, ten: str = tenant):
+        return lambda sync: sync.scalar(
+            text("SELECT pg_try_advisory_xact_lock(hashtext(:key), hashtext(:ns))"),
+            {
+                "key": svc.customer_quarter_lock_key(ten, cust, period),
+                "ns": svc.APPROVE_LOCK_NAMESPACE,
+            },
+        )
+
+    async with AsyncSessionLocal() as first, AsyncSessionLocal() as second:
+        try:
+            await first.run_sync(
+                lambda sync: svc.lock_customer_quarter(sync, tenant, customer_id, TARGET)
+            )
+            # Same customer, same quarter (a different day in it): excluded while `first` is open.
+            assert await second.run_sync(_try_lock(date(2026, 11, 20))) is False
+            # Another quarter, another customer, another tenant: not excluded.
+            assert await second.run_sync(_try_lock(Q3)) is True
+            assert await second.run_sync(_try_lock(TARGET, customer_id + 1)) is True
+            assert await second.run_sync(_try_lock(TARGET, ten=tenant + "x")) is True
+            await second.rollback()
+            # Transaction end releases it (the endpoint commits after the audit events).
+            await first.rollback()
+            assert await second.run_sync(_try_lock(TARGET)) is True
+        finally:
+            await first.rollback()
+            await second.rollback()
+
+
+@pytest.mark.anyio
+async def test_approve_takes_the_customer_quarter_lock_and_a_repeat_is_refused(session):
+    """The approve path holds the lock for the open transaction; a repeat approval is refused.
+
+    A second session cannot take the same key while the first approval's transaction is open, and
+    once rows exist the re-check inside the lock refuses with 409 without writing anything.
+    """
+    from app.db.session import AsyncSessionLocal
+    from app.services.lineup import new_customer_proposal as svc
+    from sqlalchemy import text
+
+    tag = secrets.token_hex(3)
+    cust = await _customer(session, tag, "lock", reports=True)
+    prod = await _product(session, tag, "p", cost=5)
+    db = _NoCommit(session)
+    body = NewCustomerApproveBody(
+        source="pm_bottom_cost", period_start=TARGET, product_ids=[prod.id]
+    )
+    await approve_new_customer_lineup(cust.id, body, db=db, x_user_id="tester")
+
+    async with AsyncSessionLocal() as other:
+        try:
+            got = await other.run_sync(
+                lambda sync: sync.scalar(
+                    text("SELECT pg_try_advisory_xact_lock(hashtext(:key), hashtext(:ns))"),
+                    {
+                        "key": svc.customer_quarter_lock_key(cust.tenant_id, cust.id, TARGET),
+                        "ns": svc.APPROVE_LOCK_NAMESPACE,
+                    },
+                )
+            )
+            assert got is False  # still held by the approving transaction
+        finally:
+            await other.rollback()
+
+    with pytest.raises(HTTPException) as again:
+        await approve_new_customer_lineup(cust.id, body, db=db, x_user_id="tester")
+    assert (again.value.status_code, again.value.detail["code"]) == (
+        409,
+        "lineup_exists_for_period",
+    )
+    cases = await session.scalar(
+        select(func.count())
+        .select_from(CommercialLineupLine)
+        .where(CommercialLineupLine.customer_id == cust.id)
+    )
+    assert cases == 1
+
+
+@pytest.mark.anyio
 async def test_approve_refuses_products_outside_the_proposal_and_non_reporting_customers(session):
     tag = secrets.token_hex(3)
     cust = await _customer(session, tag, "new", reports=True)

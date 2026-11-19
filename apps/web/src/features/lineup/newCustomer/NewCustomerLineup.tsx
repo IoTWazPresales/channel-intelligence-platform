@@ -27,16 +27,19 @@ import { apiGet, apiPost } from '@/lib/api';
 
 import { nextLineupQuarter } from '../lineupQuarter';
 import {
+  EMPTY_SELECTION,
   REPORTING_CUSTOMERS_PATH,
   SOURCE_OPTIONS,
-  allProductIds,
   approveBody,
   approvePath,
   basisHeadline,
   evidenceText,
   proposalPath,
-  toggleProduct,
+  reconcileSelection,
+  requestKey,
+  toggleSelection,
 } from './proposalModel';
+import type { SelectionState } from './proposalModel';
 import type { ApproveResult, Proposal, ReportingCustomer, SeedSource } from './types';
 
 type Request = { customerId: number; source: SeedSource; periodStart: string };
@@ -58,7 +61,7 @@ export function NewCustomerLineup() {
   const [periodStart, setPeriodStart] = useState(() => nextLineupQuarter().periodStart);
   const [source, setSource] = useState<SeedSource | ''>('');
   const [requested, setRequested] = useState<Request | null>(null);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION);
   const [approved, setApproved] = useState<{ result: ApproveResult; customer: string } | null>(null);
 
   const customers = useQuery({
@@ -81,9 +84,13 @@ export function NewCustomerLineup() {
   });
 
   const data = proposal.data;
+  const key = requested ? requestKey(requested) : '';
+  // Refreshes of the same request keep the user's exclusions; only a different customer, period
+  // or source (a different key) starts again with every line ticked.
   useEffect(() => {
-    if (data) setSelected(allProductIds(data));
-  }, [data]);
+    if (data && key) setSelection((prev) => reconcileSelection(prev, key, data));
+  }, [data, key]);
+  const selected = selection.selected;
 
   const approve = useMutation({
     mutationFn: (req: Request) =>
@@ -92,6 +99,7 @@ export function NewCustomerLineup() {
       const name = data?.customer.name ?? '';
       setApproved({ result, customer: name });
       setRequested(null);
+      setSelection(EMPTY_SELECTION);
     },
   });
 
@@ -102,6 +110,7 @@ export function NewCustomerLineup() {
   const resetResult = () => {
     setRequested(null);
     setApproved(null);
+    setSelection(EMPTY_SELECTION);
     approve.reset();
   };
 
@@ -223,6 +232,14 @@ export function NewCustomerLineup() {
               Quantities and prices are not invented: lines start with empty quantities. Untick any line you do
               not want, then approve.
             </Typography>
+            {selection.unreviewed.size > 0 ? (
+              <Alert severity="warning">
+                {selection.unreviewed.size} new {plural(selection.unreviewed.size)} appeared after the proposal
+                refreshed. {selection.unreviewed.size === 1 ? 'It is' : 'They are'} not ticked: review and tick
+                {selection.unreviewed.size === 1 ? ' it' : ' them'} if you want {selection.unreviewed.size === 1 ? 'it' : 'them'}{' '}
+                included.
+              </Alert>
+            ) : null}
             {data.lines.length === 0 ? (
               <Alert severity="warning">
                 No SKUs were found for this source and period. Try the other source.
@@ -244,7 +261,7 @@ export function NewCustomerLineup() {
                         <Checkbox
                           size="small"
                           checked={selected.has(line.product_id)}
-                          onChange={() => setSelected((prev) => toggleProduct(prev, line.product_id))}
+                          onChange={() => setSelection((prev) => toggleSelection(prev, line.product_id))}
                           inputProps={{ 'aria-label': `Include ${line.sku}` }}
                         />
                       </TableCell>
