@@ -43,7 +43,15 @@ def _confirmed_dc_labels(db: Session, tenant_id: str) -> dict[int, set[str]]:
     return out
 
 
-def build_store_map(db: Session, tenant_id: str, customer_ids: list[int] | None = None) -> dict[str, Any]:
+def build_store_map(
+    db: Session,
+    tenant_id: str,
+    customer_ids: list[int] | None = None,
+    *,
+    include_proposals: bool = True,
+) -> dict[str, Any]:
+    """One row per store per customer. ``location_suggestion`` is the offline pin proposal for an
+    unpinned store; it is computed here and never saved (``include_proposals=False`` skips it)."""
     stmt = select(
         FactCustomerSellthrough.customer_id,
         FactCustomerSellthrough.product_id,
@@ -106,6 +114,8 @@ def build_store_map(db: Session, tenant_id: str, customer_ids: list[int] | None 
         ).all():
             customers.append({"id": int(cid), "code": code, "name": name})
     names = {c["id"]: c["name"] for c in customers}
+    # The store's own customer words are removed before the place is looked up.
+    customer_words = {c["id"]: [c["name"], c["code"]] for c in customers}
     configs = {}
     if customer_id_set:
         for row in db.execute(
@@ -176,8 +186,10 @@ def build_store_map(db: Session, tenant_id: str, customer_ids: list[int] | None 
                 "longitude": float(loc.longitude) if pinned else None,
                 "pinned": pinned,
                 "location_suggestion": None
-                if pinned
-                else suggest_store_location(display[key], place_name=place_name),
+                if pinned or not include_proposals
+                else suggest_store_location(
+                    display[key], place_name=place_name, customer_names=customer_words.get(customer_id)
+                ),
                 "location_id": loc.id if loc is not None else None,
                 "last_week_start": last_period.isoformat() if last_period else None,
                 "last_week_units": round(units, 2),
@@ -200,7 +212,31 @@ def _legend() -> dict[str, str]:
     }
 
 
-def drop_pin(
+class _CustomerPinScope:
+    """What a pin write needs about one customer. Read once, reused for a bulk confirm."""
+
+    def __init__(self, db: Session, tenant_id: str, customer_id: int) -> None:
+        customer = db.get(DimCustomer, customer_id)
+        if customer is None or customer.tenant_id != tenant_id:
+            raise LookupError(str(customer_id))
+        self.known = {
+            norm_label(item)
+            for item in db.execute(
+                select(FactCustomerSellthrough.site_label)
+                .where(
+                    FactCustomerSellthrough.tenant_id == tenant_id,
+                    FactCustomerSellthrough.customer_id == customer_id,
+                    FactCustomerSellthrough.site_label.is_not(None),
+                )
+                .distinct()
+            ).scalars().all()
+        }
+        self.existing = list(
+            db.execute(select(CustomerLocation).where(CustomerLocation.customer_id == customer_id)).scalars().all()
+        )
+
+
+def _write_pin(
     db: Session,
     *,
     tenant_id: str,
@@ -209,33 +245,23 @@ def drop_pin(
     latitude: float,
     longitude: float,
     actor: str,
-) -> dict[str, Any]:
+    scope: _CustomerPinScope | None = None,
+) -> str:
+    """Validate and write one coordinate. Returns the normalised store key. The only coordinate write."""
     if latitude is None or longitude is None:
         raise ValueError("Both coordinates are required")
     lat = float(latitude)
     lon = float(longitude)
     if not -90 <= lat <= 90 or not -180 <= lon <= 180:
         raise ValueError("Coordinates are out of range")
-    customer = db.get(DimCustomer, customer_id)
-    if customer is None or customer.tenant_id != tenant_id:
-        raise LookupError(str(customer_id))
+    scope = scope or _CustomerPinScope(db, tenant_id, customer_id)
     label = site_label.strip()
     key = norm_label(label)
     if not key:
         raise ValueError("A store label is required")
-    known = db.execute(
-        select(FactCustomerSellthrough.site_label)
-        .where(
-            FactCustomerSellthrough.tenant_id == tenant_id,
-            FactCustomerSellthrough.customer_id == customer_id,
-            FactCustomerSellthrough.site_label.is_not(None),
-        )
-    ).scalars().all()
-    if key not in {norm_label(item) for item in known}:
+    if key not in scope.known:
         raise LookupError("store")
-    existing = db.execute(
-        select(CustomerLocation).where(CustomerLocation.customer_id == customer_id)
-    ).scalars().all()
+    existing = scope.existing
     match = next((loc for loc in existing if norm_label(loc.location_name) == key or norm_label(loc.location_code) == key), None)
     if match is None:
         digest = hashlib.sha256(f"{tenant_id}:{customer_id}:{key}".encode()).hexdigest()[:12]
@@ -251,11 +277,130 @@ def drop_pin(
             is_active=True,
         )
         db.add(match)
+        existing.append(match)
     match.latitude = lat
     match.longitude = lon
     db.flush()
-    payload = build_store_map(db, tenant_id, [customer_id])
-    store = next((s for s in payload["stores"] if s["customer_id"] == customer_id and norm_label(s["site_label"]) == key), None)
+    return key
+
+
+def _store_row(payload: dict[str, Any], customer_id: int, key: str) -> dict[str, Any] | None:
+    return next(
+        (s for s in payload["stores"] if s["customer_id"] == customer_id and norm_label(s["site_label"]) == key),
+        None,
+    )
+
+
+def drop_pin(
+    db: Session,
+    *,
+    tenant_id: str,
+    customer_id: int,
+    site_label: str,
+    latitude: float,
+    longitude: float,
+    actor: str,
+) -> dict[str, Any]:
+    key = _write_pin(
+        db,
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+        site_label=site_label,
+        latitude=latitude,
+        longitude=longitude,
+        actor=actor,
+    )
+    # The saved store has no proposal to show, so the whole customer's proposals are not recomputed.
+    payload = build_store_map(db, tenant_id, [customer_id], include_proposals=False)
+    store = _store_row(payload, customer_id, key)
     if store is None:
         raise LookupError("store")
     return store
+
+
+MAX_BULK_CONFIRM = 500
+
+
+def confirm_pins(
+    db: Session,
+    *,
+    tenant_id: str,
+    items: list[dict[str, Any]],
+    actor: str,
+) -> dict[str, Any]:
+    """Save pins a steward confirmed, each through the one write path (``_write_pin``).
+
+    An item with ``latitude`` and ``longitude`` is an edited pin and is saved as given. An item
+    without coordinates confirms the proposal the map shows for that store; it is recomputed
+    here, so the client cannot confirm a place the matcher did not propose. A store with no
+    proposal, a store that is already pinned (without coordinates), an unknown store or bad
+    coordinates is reported in ``failed`` and writes nothing. The other items still save.
+    """
+    if len(items) > MAX_BULK_CONFIRM:
+        raise ValueError(f"At most {MAX_BULK_CONFIRM} pins per request")
+    by_customer: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for item in items:
+        by_customer[int(item["customer_id"])].append(item)
+    saved: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+
+    def fail(item: dict[str, Any], message: str) -> None:
+        failed.append(
+            {"customer_id": int(item["customer_id"]), "site_label": item.get("site_label"), "error": message}
+        )
+
+    for customer_id, group in by_customer.items():
+        try:
+            scope = _CustomerPinScope(db, tenant_id, customer_id)
+        except LookupError:
+            for item in group:
+                fail(item, "Customer not found")
+            continue
+        proposals: dict[str, dict[str, Any]] | None = None
+        written: list[str] = []
+        for item in group:
+            label = str(item.get("site_label") or "")
+            key = norm_label(label)
+            lat, lon = item.get("latitude"), item.get("longitude")
+            try:
+                if (lat is None) != (lon is None):
+                    raise ValueError("Both coordinates are required")
+                if lat is None:
+                    if proposals is None:
+                        current = build_store_map(db, tenant_id, [customer_id])
+                        proposals = {
+                            norm_label(s["site_label"]): s
+                            for s in current["stores"]
+                            if s["customer_id"] == customer_id
+                        }
+                    store = proposals.get(key)
+                    if store is None:
+                        raise LookupError("store")
+                    if store["pinned"]:
+                        raise ValueError("This store already has a pin; send coordinates to move it")
+                    suggestion = store.get("location_suggestion") or {}
+                    if suggestion.get("outcome") != "suggest":
+                        raise ValueError("No proposal for this store; send coordinates")
+                    lat, lon = suggestion["latitude"], suggestion["longitude"]
+                _write_pin(
+                    db,
+                    tenant_id=tenant_id,
+                    customer_id=customer_id,
+                    site_label=label,
+                    latitude=lat,
+                    longitude=lon,
+                    actor=actor,
+                    scope=scope,
+                )
+                written.append(key)
+            except LookupError:
+                fail(item, "Store not found for this customer")
+            except ValueError as exc:
+                fail(item, str(exc))
+        if written:
+            payload = build_store_map(db, tenant_id, [customer_id], include_proposals=False)
+            for key in written:
+                row = _store_row(payload, customer_id, key)
+                if row is not None:
+                    saved.append(row)
+    return {"saved": saved, "failed": failed}
