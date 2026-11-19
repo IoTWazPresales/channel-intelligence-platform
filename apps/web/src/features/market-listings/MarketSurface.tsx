@@ -34,6 +34,7 @@ import { ActivationTimingAlerts } from '@/features/market-listings/ActivationTim
 import { COMPETITION_CAPABILITIES, LISTING_CAPABILITIES } from '@/features/market-listings/capabilities';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
 import { ListingCaptureHealth } from '@/features/market-listings/ListingCaptureHealth';
+import { type IntelligenceRow, useListingIntelligence } from '@/features/market-listings/listingIntelligence';
 import { ListingLinksLens } from '@/features/market-listings/ListingLinksLens';
 import { ListingOffersSupply } from '@/features/market-listings/ListingOffersSupply';
 import { ListingQualityLens } from '@/features/market-listings/ListingQualityLens';
@@ -72,6 +73,19 @@ type Listing = {
   original_url?: string | null;
 };
 
+/** Listings list: a page of rows plus real counts over every row (BACKLOG-226). */
+type ListingsPayload = {
+  items: Listing[];
+  total?: number;
+  /** Count per status over all rows (not the page). Absent on an older API. */
+  status_counts?: Record<string, number>;
+  unlinked?: number;
+  data_unavailable?: boolean;
+};
+
+const LISTINGS_PAGE_SIZE = 200;
+const LISTINGS_MAX_PAGES = 25;
+
 type Proposal = {
   id: number;
   customer_id: number;
@@ -83,30 +97,6 @@ type Proposal = {
   status: string;
   suggested_url?: string | null;
   source?: string | null;
-};
-
-type IntelligenceRow = {
-  listing_id: number;
-  customer_id: number;
-  product_id: number | null;
-  marketplace: string;
-  url: string;
-  observation_count: number;
-  span_days: number | null;
-  history_status: string;
-  first_price: number | null;
-  last_price: number | null;
-  price_drift_pct: number | null;
-  activation_status: string | null;
-  activation_message?: string | null;
-  case_price?: number | null;
-  case_id?: number | null;
-  last_availability?: string | null;
-  last_promo_badge?: string | null;
-  last_fetched?: string | null;
-  buy_box_label?: string | null;
-  buy_box_seller?: string | null;
-  worklist: boolean;
 };
 
 type Observation = {
@@ -312,22 +302,29 @@ export function MarketSurface() {
     [pathname, router, search],
   );
 
-  const { data: listingsPage } = useQuery({
+  const { data: listingsPage, isError: listingsIsError } = useQuery({
     queryKey: ['listing-capture', 'listings'],
-    queryFn: ({ signal }) =>
-      apiGet<{ items: Listing[]; total: number; data_unavailable?: boolean }>(
-        '/api/v1/listing-capture/listings?page_size=200',
-        { signal },
-      ),
+    queryFn: async ({ signal }): Promise<ListingsPayload> => {
+      // The API caps a page at 200 rows: read on until every row is here (total is real).
+      let page = 1;
+      let first: ListingsPayload | null = null;
+      const items: Listing[] = [];
+      while (page <= LISTINGS_MAX_PAGES) {
+        const got = await apiGet<ListingsPayload>(
+          `/api/v1/listing-capture/listings?page=${page}&page_size=${LISTINGS_PAGE_SIZE}`,
+          { signal },
+        );
+        first ??= got;
+        const rows = got.items ?? [];
+        items.push(...rows);
+        if (got.data_unavailable || rows.length < LISTINGS_PAGE_SIZE || items.length >= (got.total ?? 0)) break;
+        page += 1;
+      }
+      return { ...(first as ListingsPayload), items };
+    },
   });
-  const { data: intel } = useQuery({
-    queryKey: ['listing-capture', 'intelligence'],
-    queryFn: ({ signal }) =>
-      apiGet<{ items: IntelligenceRow[]; listings?: number; data_unavailable?: boolean }>(
-        '/api/v1/listing-capture/intelligence',
-        { signal },
-      ),
-  });
+  const intelQuery = useListingIntelligence();
+  const intel = intelQuery.data;
   const { data: proposals } = useQuery({
     queryKey: ['listing-capture', 'proposals'],
     queryFn: ({ signal }) =>
@@ -495,10 +492,16 @@ export function MarketSurface() {
     customerName,
   ]);
 
+  /** Real counts come from the API over every matching row; the loaded rows are only a fallback. */
+  const statusCounts = listingsPage?.status_counts;
+  const listingsTotal = listingsPage?.total ?? listings.length;
+  const listingsReady = listingsPage != null && !listingsPage.data_unavailable;
   const counts = {
-    active: listings.filter((l) => l.status === 'active').length,
-    problems: listings.filter((l) => l.status === 'dead_link' || l.status === 'out_of_stock').length,
-    unlinked: listings.filter((l) => !l.product_id).length,
+    active: statusCounts ? (statusCounts.active ?? 0) : listings.filter((l) => l.status === 'active').length,
+    problems: statusCounts
+      ? (statusCounts.dead_link ?? 0) + (statusCounts.out_of_stock ?? 0)
+      : listings.filter((l) => l.status === 'dead_link' || l.status === 'out_of_stock').length,
+    unlinked: listingsPage?.unlinked ?? listings.filter((l) => !l.product_id).length,
     notActivated: (intel?.items ?? []).filter((r) => r.activation_status === 'not_activated').length,
     live: (intel?.items ?? []).filter((r) => r.activation_status === 'price_consistent').length,
     drifted: (intel?.items ?? []).filter(
@@ -847,10 +850,31 @@ export function MarketSurface() {
   );
 
   const mapping = mappingRows.find((m) => m.id === selectedMapping) ?? null;
-  const obsCount = listings.reduce((n, l) => n + (intelById.get(l.id)?.observation_count ?? 0), 0);
+  /** Every listing's readings, from the fast endpoint (not only the rows loaded in the grid). */
+  const obsCount = (intel?.items ?? []).reduce((n, r) => n + (r.observation_count ?? 0), 0);
+  const listingsPart = listingsIsError || listingsPage?.data_unavailable
+    ? 'Listings unavailable'
+    : listingsPage
+      ? `${listingsTotal} monitored listings`
+      : 'Loading listings…';
+  const observationsPart = intelQuery.failed
+    ? 'Observations unavailable'
+    : intelQuery.loading
+      ? 'Loading observations…'
+      : `${obsCount} observations`;
+  const intelFigureState = intelQuery.loading ? 'loading' : intelQuery.failed ? 'empty' : 'ready';
+  const intelFigureNote = intelQuery.failed ? 'Unavailable' : undefined;
+  const listingFigureState = listingsReady ? 'ready' : listingsPage ? 'empty' : listingsIsError ? 'empty' : 'loading';
+  const lastCheckText = intelQuery.failed
+    ? 'unavailable'
+    : intelQuery.loading
+      ? 'loading…'
+      : lastCheckAt
+        ? fmtFetched(lastCheckAt)
+        : 'not yet';
 
   const lensCounts: Partial<Record<MarketLens, number>> = {
-    listings: listings.length,
+    listings: listingsPage ? listingsTotal : undefined,
     proposals: counts.proposals,
     competition: counts.pendingMappings || undefined,
     activation: counts.notActivated || undefined,
@@ -860,7 +884,7 @@ export function MarketSurface() {
     <Box data-testid="market-surface">
       <MarketChrome
         counts={lensCounts}
-        meta={`${listings.length} monitored listings · ${obsCount} observations`}
+        meta={`${listingsPart} · ${observationsPart}`}
         actions={
           <>
             <Button variant="outlined" size="small" href="/reports">
@@ -891,14 +915,30 @@ export function MarketSurface() {
           <Stack spacing={2} sx={{ mt: 2 }} data-testid="market-listings-lens">
             <Typography variant="body2" color="text.secondary" data-testid="listing-last-check">
               Checks run every 30 minutes while this computer is running. Last check:{' '}
-              {lastCheckAt ? fmtFetched(lastCheckAt) : 'not yet'}.
+              {lastCheckText}.
             </Typography>
+            {intelQuery.failed ? (
+              <Alert
+                severity="warning"
+                data-testid="listing-intelligence-error"
+                action={
+                  <Button color="inherit" size="small" onClick={() => void intelQuery.refetch()}>
+                    Retry
+                  </Button>
+                }
+              >
+                The observation counts and promotion figures could not be loaded. Nothing here is zero
+                because of this; try again.
+              </Alert>
+            ) : null}
             <HeadlineStrip columns={5}>
               <HeadlineFigure
                 label="Active listings"
                 value={counts.active}
-                unit={`of ${listings.length}`}
+                unit={`of ${listingsTotal}`}
                 compact
+                state={listingFigureState}
+                stateNote={listingFigureState === 'empty' ? 'Unavailable' : undefined}
                 caption={`${counts.problems} out of stock or dead`}
                 severity={counts.problems ? 'warn' : 'good'}
               />
@@ -906,6 +946,8 @@ export function MarketSurface() {
                 label="Promo live at price"
                 value={counts.live}
                 compact
+                state={intelFigureState}
+                stateNote={intelFigureNote}
                 severity="good"
                 caption="Observed price = case SRP in window"
                 onClick={() => setParams({ activation: 'price_consistent' })}
@@ -914,6 +956,8 @@ export function MarketSurface() {
                 label="Promo not at price"
                 value={counts.notActivated}
                 compact
+                state={intelFigureState}
+                stateNote={intelFigureNote}
                 severity={counts.notActivated ? 'bad' : 'neutral'}
                 caption="Live case, shelf price differs"
                 onClick={() => setParams({ activation: 'not_activated' })}
@@ -922,12 +966,16 @@ export function MarketSurface() {
                 label="Price moved since first seen"
                 value={counts.drifted}
                 compact
+                state={intelFigureState}
+                stateNote={intelFigureNote}
                 caption="first ≠ last observation"
               />
               <HeadlineFigure
                 label="Unlinked listings"
                 value={counts.unlinked}
                 compact
+                state={listingFigureState}
+                stateNote={listingFigureState === 'empty' ? 'Unavailable' : undefined}
                 severity={counts.unlinked ? 'warn' : 'neutral'}
                 caption="No product — resolve token"
               />

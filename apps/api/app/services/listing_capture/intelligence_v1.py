@@ -17,9 +17,10 @@ promotion window a listing was checked in. Threshold: ``cip_listing_activation_a
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.listing_capture import CustomerListing, ListingObservation
@@ -137,11 +138,15 @@ def activation_timing(observations: list[Any], *, alert_days: int) -> list[dict[
     return alerts
 
 
-def _activation(obs: ListingObservation | None) -> dict[str, Any]:
+def _activation(obs: Any | None) -> dict[str, Any]:
+    """The stored activation result on the last reading (``obs.activation`` or ``parse_flags``)."""
     if obs is None:
         return {"status": None, "message": None, "case_price": None}
-    flags = obs.parse_flags if isinstance(obs.parse_flags, dict) else {}
-    act = flags.get("cpor_activation") if isinstance(flags.get("cpor_activation"), dict) else {}
+    raw = getattr(obs, "activation", None)
+    if raw is None and hasattr(obs, "parse_flags"):
+        flags = obs.parse_flags if isinstance(obs.parse_flags, dict) else {}
+        raw = flags.get("cpor_activation")
+    act = raw if isinstance(raw, dict) else {}
     return {
         "status": act.get("status"),
         "message": act.get("message"),
@@ -156,49 +161,170 @@ def _drift(first: float | None, last: float | None) -> float | None:
     return (last - first) / first
 
 
+# --- set-based reads (BACKLOG-226) -------------------------------------------------------------
+# A fixed number of statements however many listings exist. None selects ``raw_snapshot`` (the
+# stored page copy) or any other large column. Per-observation history is read only for the
+# checks that can prove promotion timing (stored promo-basis results, small JSON fragments).
+
+_LO = ListingObservation
+
+
+def _listing_stmt() -> Select[Any]:
+    return select(
+        CustomerListing.id,
+        CustomerListing.customer_id,
+        CustomerListing.product_id,
+        CustomerListing.marketplace,
+        CustomerListing.url,
+        CustomerListing.external_id,
+    ).order_by(CustomerListing.id)
+
+
+def _count_stmt() -> Select[Any]:
+    return select(
+        _LO.listing_id.label("listing_id"),
+        func.count(_LO.id).label("n"),
+        func.min(_LO.fetched_at).label("first_ts"),
+        func.max(_LO.fetched_at).label("last_ts"),
+    ).group_by(_LO.listing_id)
+
+
+def _priced_ends_stmt() -> Select[Any]:
+    """First and last priced reading per listing (fetched_at, then id)."""
+    ranked = (
+        select(
+            _LO.listing_id.label("listing_id"),
+            _LO.extracted_price.label("price"),
+            func.row_number()
+            .over(partition_by=_LO.listing_id, order_by=(_LO.fetched_at.asc(), _LO.id.asc()))
+            .label("rn_first"),
+            func.row_number()
+            .over(partition_by=_LO.listing_id, order_by=(_LO.fetched_at.desc(), _LO.id.desc()))
+            .label("rn_last"),
+        )
+        .where(_LO.extracted_price.is_not(None))
+        .subquery("priced")
+    )
+    return select(ranked.c.listing_id, ranked.c.price, ranked.c.rn_first, ranked.c.rn_last).where(
+        or_(ranked.c.rn_first == 1, ranked.c.rn_last == 1)
+    )
+
+
+def _latest_stmt() -> Select[Any]:
+    """The last reading per listing (fetched_at, then id): only the columns the worklist shows."""
+    ranked = select(
+        _LO.listing_id.label("listing_id"),
+        _LO.fetched_at.label("fetched_at"),
+        _LO.buy_box_seller.label("buy_box_seller"),
+        _LO.buy_box_own.label("buy_box_own"),
+        _LO.extracted_availability.label("extracted_availability"),
+        _LO.extracted_promo_badge.label("extracted_promo_badge"),
+        _LO.parse_flags["cpor_activation"].label("activation"),
+        func.row_number()
+        .over(partition_by=_LO.listing_id, order_by=(_LO.fetched_at.desc(), _LO.id.desc()))
+        .label("rn"),
+    ).subquery("latest")
+    return select(
+        ranked.c.listing_id,
+        ranked.c.fetched_at,
+        ranked.c.buy_box_seller,
+        ranked.c.buy_box_own,
+        ranked.c.extracted_availability,
+        ranked.c.extracted_promo_badge,
+        ranked.c.activation,
+    ).where(ranked.c.rn == 1)
+
+
+def _timing_stmt() -> Select[Any]:
+    """Stored promo-basis results that can prove timing, in the order the rule reads them.
+
+    Failed fetches and parses are left out here (they prove nothing, ``_failed_read``); the rule
+    still checks the stored ``snapshot_stored`` flag.
+    """
+    activation = _LO.parse_flags["cpor_activation"]
+    return (
+        select(
+            _LO.id.label("id"),
+            _LO.listing_id.label("listing_id"),
+            _LO.fetched_at.label("fetched_at"),
+            _LO.http_status.label("http_status"),
+            _LO.parse_status.label("parse_status"),
+            _LO.parse_flags["snapshot_stored"].astext.label("snapshot_stored"),
+            activation.label("activation"),
+        )
+        .where(
+            activation["price_basis"].astext == "promo",
+            activation["status"].astext.in_((_AT_PRICE, _OFF_PRICE)),
+            or_(_LO.http_status.is_(None), _LO.http_status == 200),
+            _LO.parse_status == "ok",
+        )
+        .order_by(_LO.listing_id, _LO.fetched_at.asc(), _LO.id.asc())
+    )
+
+
 def build_listing_intelligence(
     session: Session, *, alert_days: int | None = None
 ) -> dict[str, Any]:
     days = _alert_days() if alert_days is None else int(alert_days)
-    listings = list(session.scalars(select(CustomerListing).order_by(CustomerListing.id)).all())
+    listings = list(session.execute(_listing_stmt()))
+    counts = {int(r.listing_id): r for r in session.execute(_count_stmt())}
+    first_prices: dict[int, float] = {}
+    last_prices: dict[int, float] = {}
+    for r in session.execute(_priced_ends_stmt()):
+        if r.rn_first == 1:
+            first_prices[int(r.listing_id)] = float(r.price)
+        if r.rn_last == 1:
+            last_prices[int(r.listing_id)] = float(r.price)
+    latest = {int(r.listing_id): r for r in session.execute(_latest_stmt())}
+    checks: dict[int, list[Any]] = {}
+    for r in session.execute(_timing_stmt()):
+        flags: dict[str, Any] = {
+            "cpor_activation": r.activation if isinstance(r.activation, dict) else {}
+        }
+        if r.snapshot_stored is not None:
+            flags["snapshot_stored"] = r.snapshot_stored
+        checks.setdefault(int(r.listing_id), []).append(
+            SimpleNamespace(
+                id=r.id,
+                fetched_at=r.fetched_at,
+                http_status=r.http_status,
+                parse_status=r.parse_status,
+                parse_flags=flags,
+            )
+        )
+
     items: list[dict[str, Any]] = []
     for listing in listings:
-        obs = list(
-            session.scalars(
-                select(ListingObservation)
-                .where(ListingObservation.listing_id == int(listing.id))
-                .order_by(ListingObservation.fetched_at.asc(), ListingObservation.id.asc())
-            ).all()
-        )
-        priced = [o for o in obs if o.extracted_price is not None]
-        first_ts = obs[0].fetched_at if obs else None
-        last_ts = obs[-1].fetched_at if obs else None
+        lid = int(listing.id)
+        agg = counts.get(lid)
+        n_obs = int(agg.n) if agg is not None else 0
+        first_ts = agg.first_ts if agg is not None else None
+        last_ts = agg.last_ts if agg is not None else None
         span_days = None
         if first_ts is not None and last_ts is not None:
             span_days = max(0, (last_ts - first_ts).days)
-        ready = bool(span_days is not None and span_days >= MIN_SPAN_DAYS and len(obs) >= 2)
+        ready = bool(span_days is not None and span_days >= MIN_SPAN_DAYS and n_obs >= 2)
         # Prices are the shopper's buy-box price (``extracted_price``). Needs do not read them.
-        first_price = float(priced[0].extracted_price) if priced else None
-        last_price = float(priced[-1].extracted_price) if priced else None
-        last_obs = obs[-1] if obs else None
-        own = getattr(last_obs, "buy_box_own", None) if last_obs is not None else None
+        first_price = first_prices.get(lid)
+        last_price = last_prices.get(lid)
+        last_obs = latest.get(lid)
+        own = last_obs.buy_box_own if last_obs is not None else None
         act = _activation(last_obs)
-        last_fetched = getattr(last_obs, "fetched_at", None) if last_obs is not None else None
         row = {
-            "listing_id": int(listing.id),
+            "listing_id": lid,
             "customer_id": int(listing.customer_id),
             "product_id": int(listing.product_id) if listing.product_id is not None else None,
             "marketplace": listing.marketplace,
             "url": listing.url,
             "external_id": listing.external_id,
-            "observation_count": len(obs),
+            "observation_count": n_obs,
             "span_days": span_days,
             "ready": ready,
             "history_status": "ready" if ready else "accumulating",
             "first_price": first_price,
             "last_price": last_price,
             "shoppers_price": last_price,
-            "buy_box_seller": getattr(last_obs, "buy_box_seller", None) if last_obs is not None else None,
+            "buy_box_seller": last_obs.buy_box_seller if last_obs is not None else None,
             "buy_box_own": own,
             "buy_box_label": "Own" if own is True else "Competition" if own is False else None,
             "price_drift_pct": _drift(first_price, last_price),
@@ -206,11 +332,11 @@ def build_listing_intelligence(
             "activation_message": act.get("message"),
             "case_price": act.get("case_price"),
             "case_id": act.get("case_id"),
-            "last_availability": getattr(last_obs, "extracted_availability", None) if last_obs else None,
-            "last_promo_badge": getattr(last_obs, "extracted_promo_badge", None) if last_obs else None,
-            "last_fetched": last_fetched.isoformat() if last_fetched is not None else None,
+            "last_availability": last_obs.extracted_availability if last_obs is not None else None,
+            "last_promo_badge": last_obs.extracted_promo_badge if last_obs is not None else None,
+            "last_fetched": last_obs.fetched_at.isoformat() if last_obs is not None else None,
             "worklist": bool(ready and act.get("status") == "not_activated"),
-            "activation_timing": activation_timing(obs, alert_days=days),
+            "activation_timing": activation_timing(checks.get(lid, []), alert_days=days),
         }
         items.append(row)
 

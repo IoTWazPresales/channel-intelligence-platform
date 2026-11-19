@@ -34,6 +34,8 @@
 
 - No migration, no deploy.
 
+**Listings speed and counts (2026-11-19, BACKLOG-263, PR from `feat/l1-listings-speed-20261119`):** listing intelligence is set-based (live `cip` read-only: 146.98 s -> 3.31 s, identical output for 218 listings); `/listings` returns real `total`/`status_counts`/`unlinked`; the Market header shows a loading state, not 0. Not yet proven on the live screen.
+
 **W1-B worklist (2026-11-19, PR #105 Round 1):** branch `feat/w1b-stock-not-listed-20261118`. #104 is already merged into integration. The PR adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
 
 - the offer/competitor comparison needs data;
