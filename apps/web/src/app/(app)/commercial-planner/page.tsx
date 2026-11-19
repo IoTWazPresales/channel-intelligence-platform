@@ -967,6 +967,11 @@ function CommercialPlannerPageInner() {
   });
 
   const lineById = useMemo(() => new Map((lines ?? []).map((l) => [l.id, l])), [lines]);
+  // Suggestions are plan-wide; a slice shows only those for its own visible lines.
+  const visibleSuggestions = useMemo(
+    () => (suggestions ?? []).filter((b) => !slice || lineById.has(b.line_id)),
+    [suggestions, slice, lineById],
+  );
 
   const firstLineEconCcy = useMemo(() => {
     const hit = (lines ?? []).find((l) => (l.economics_calc_currency_code ?? '').trim());
@@ -2041,7 +2046,16 @@ function CommercialPlannerPageInner() {
                   Plan: {activePlan.plan_name} ({activePlan.period_start} – {activePlan.period_end ?? 'open-ended'})
                 </Typography>
               ) : null}
-              <Button size="small" component={Link} href="/commercial-planner" data-testid="planner-slice-clear">
+              <Button
+                size="small"
+                component={Link}
+                href="/commercial-planner"
+                // Keep the slice's plan when clearing the customer filter (otherwise the default is plans[0]).
+                onClick={() => {
+                  if (activePlanId != null) setSelectedPlanId(activePlanId);
+                }}
+                data-testid="planner-slice-clear"
+              >
                 All customers
               </Button>
               <Button
@@ -2546,7 +2560,7 @@ function CommercialPlannerPageInner() {
                 context.
               </Typography>
               <Stack spacing={1}>
-                {(suggestions ?? []).flatMap((bundle) => {
+                {visibleSuggestions.flatMap((bundle) => {
                   const ln = lineById.get(bundle.line_id);
                   const label = lineEntitySummary(ln) || `Line #${bundle.line_id}`;
                   const isLineupBased = bundle._meta?.data_sources.lineup === true;
@@ -2628,7 +2642,7 @@ function CommercialPlannerPageInner() {
                       );
                     });
                 })}
-                {!suggestions?.length ? (
+                {!visibleSuggestions.length ? (
                   <Typography color="text.secondary">No suggestions available yet.</Typography>
                 ) : null}
               </Stack>

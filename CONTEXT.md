@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-19 - **PR #117 final wave (b) part 2:** a line-up group opens its customer/period slice in the commercial-planner workbench (same plan lines and stored economics, slice totals). Review round 1: All customers keeps the slice's plan; suggestions limited to the slice's lines. Residuals in BACKLOG-251.
+
 - 2026-11-19 - **PR #115 final wave (b) fix round 1:** line-up headline and scope counts follow the selected customer/period/product slice; net requirement and plan coverage labelled master scope; group-approval DB tests on `cip_test`. Economics scope (b2) and approval roles stay PARTIAL-DEFERRED in BACKLOG-251.
 - 2026-11-19 - **PR #112 BACKLOG-046 Fix Round 1:** an empty shipment-sheet scope yields no mapping or samples and every skipped sheet is reported; the broader detector guard and optional BOM planning scope stay PARTIAL-DEFERRED in BACKLOG-046.
 - 2026-11-18 - **Listing coverage (BACKLOG-226):** `fix/listing-coverage-226-20261118`. HTTP failures, seller-only changes, seed/listing reconciliation, bounded latest reads, delisted and product-less listings, and honest loading/error UI. Review points: BACKLOG-243.

@@ -2288,6 +2288,43 @@ describe('CommercialPlannerPage — customer/period slice', () => {
     expect(calls.some((u) => u.includes('/lines'))).toBe(false);
   });
 
+  it('All customers keeps the slice plan instead of falling back to the first plan', async () => {
+    navState.search = 'customer=5&period=2026-01-01';
+    const view = renderPage();
+    expect(await screen.findByTestId('grid-row-21')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('planner-slice-clear'));
+    navState.search = '';
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <CommercialPlannerPage />
+      </QueryClientProvider>
+    );
+    expect(await screen.findByTestId('grid-row-22')).toBeInTheDocument();
+    expect(screen.getByTestId('grid-row-21')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-slice-banner')).not.toBeInTheDocument();
+    const calls = mockState.apiGetMock.mock.calls.map((c) => String(c[0]));
+    expect(calls).not.toContain('/api/v1/commercial-planner/plans/1/lines');
+  });
+
+  it('shows only the slice\'s own suggestions', async () => {
+    navState.search = 'customer=5&period=2026-01-01';
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (url === '/api/v1/commercial-planner/plans') return PLANS;
+      if (url === '/api/v1/commercial-planner/plans/2/lines') return PLAN2_LINES;
+      if (url === '/api/v1/commercial-planner/plans/2/suggestions') {
+        return [
+          { line_id: 21, suggestions: [{ type: 'units', value: 12, reason: 'in slice', confidence: 'high', factors: {} }] },
+          { line_id: 22, suggestions: [{ type: 'units', value: 22, reason: 'other customer', confidence: 'high', factors: {} }] },
+        ];
+      }
+      return [];
+    });
+    renderPage();
+    expect(await screen.findByTestId('suggestion-card-main-21-units-0')).toBeInTheDocument();
+    expect(screen.queryByTestId('suggestion-card-main-22-units-0')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Line #22/)).not.toBeInTheDocument();
+  });
+
   it('without slice params shows the whole plan and no slice banner', async () => {
     navState.search = '';
     mockState.apiGetMock.mockImplementation(mockState.defaultApiGetImpl);
