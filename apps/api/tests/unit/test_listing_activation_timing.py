@@ -227,12 +227,23 @@ def _session(observations):
     listing = SimpleNamespace(
         id=4, customer_id=11, product_id=9, marketplace="shop-a", url="u", external_id="x"
     )
-    session = MagicMock()
-    session.scalars.side_effect = [
-        MagicMock(all=lambda: [listing]),
-        MagicMock(all=lambda: observations),
+    # The rewritten read is set-based (session.execute); answer it from memory.
+    from tests.unit.test_listing_intelligence_queries import RecordingSession
+
+    full = [
+        SimpleNamespace(
+            **vars(o),
+            listing_id=listing.id,
+            http_status=200,
+            parse_status="ok",
+            extracted_availability=None,
+            extracted_promo_badge=None,
+            buy_box_seller=None,
+            buy_box_own=None,
+        )
+        for o in observations
     ]
-    return session
+    return RecordingSession([listing], full)
 
 
 def test_intelligence_uses_the_configured_threshold(monkeypatch: pytest.MonkeyPatch):

@@ -3964,6 +3964,16 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Needs** | (1) Deploy merged Wave 1 (brief section 8). (2) Test instance on `cip_test` with the uploaded real files and queued migrations (section 7). (3) A verification user and its credentials for the test instance, and **an existing session for the live readonly run** (`CIP_VERIFY_STORAGE_STATE` or `CIP_VERIFY_SESSION_TOKEN`) issued by the operator: readonly never logs in. (4) Approval of the live read-only run, and of a read-only figure-check session on `cip`. (5) Re-run `apps/api/tests/test_figure_check_db.py` on `cip_test` before the pass. (6) A checks file for the figures each route shows (run data, kept out of the repository if entity-specific). (7) Decide how readonly runs treat pages that read through POST endpoints (see PARTIAL-DEFERRED (a)): the guard aborts them, so those widgets render without data on the live run. |
 | **TRIGGER** | After Wave 1 is merged and deployed, before Wave 3 Phase B. |
 
+## BACKLOG-263 — Listings: intelligence speed and real counts (live screen audit 2026-11-19, item 1.1 and N9)
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Built, PR open** (`feat/l1-listings-speed-20261119`), 2026-11-19. Done only after merge, live restart and a live screenshot. |
+| **Source** | Warren 16:21 "I don't see any listings". Audit item 1.1: 218 listings and 163,716 readings existed, but `GET /listing-capture/intelligence` took 90 s (per-listing N+1 loading `raw_snapshot`), so the Market header showed "0 monitored listings · 0 observations" while it ran (N9), and the header used the page size (200), not the total. |
+| **What shipped** | `build_listing_intelligence` runs 5 set-based statements regardless of listing count and never selects `raw_snapshot`/`meta_json`. `/listings` pages in SQL and returns `total`, `status_counts` (ignores the status filter) and `unlinked`. Web: header and active/problem/unlinked counts come from the API counts; the grid reads past the 200-row page cap; "Loading observations…" / "unavailable" + Retry instead of 0; one shared `useListingIntelligence` hook. |
+| **Evidence** | Live `cip`, read-only transaction (`current_database()=cip`, `transaction_read_only=on`), 218 listings: old 146.98 s, new 3.31 s; outputs identical for all 218 items (only `as_of` differs). |
+| **Left open** | The timing prefilter reads `parse_flags -> 'cpor_activation'` across all readings; add an index only if it becomes slow. Discovery and site coverage are not part of this item. |
+
 ## BACKLOG-250 — Final wave (c): aged/slow stock duplication — confirm on live data
 
 | Field | Detail |
