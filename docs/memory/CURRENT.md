@@ -1,11 +1,13 @@
 # CURRENT state
 
-**W1-B worklist (2026-11-18):** branch `feat/w1b-stock-not-listed-20261118` (stacked on `fix/listing-coverage-226-20261118`) adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
+**W1-B worklist (2026-11-19, PR #105 Round 1):** branch `feat/w1b-stock-not-listed-20261118`. #104 is already merged into integration. The PR adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
 - the offer/competitor comparison needs data;
 - competitor-page monitoring needs a migration;
-- activation alerts need a decision.
+- activation alerts (3 days, decided) are built in stacked PR #106.
 
-No migration, no deploy.
+**Round 1 fixes:** B1 wires searchable account selection into `customer_id` and the query key, with accurate truncation/empty wording. B2 replaces duplicate stock SQL with the unchanged `sell_through_overview.load_stock_positions` reader; explicit account/tenant filters, latest dates and net site totals are retained. New unit, cip_test and web regression cases cover them.
+
+**Validation (2026-11-19):** `cip_test` 307 passed; `tsc` clean; Vitest market-listings 6 files / 29 passed. Browser smoke not yet run. No migration, no deploy.
 
 **Listing coverage defects (2026-11-18):** branch `fix/listing-coverage-226-20261118` off `feat/integrate-20261103` closes all eight BACKLOG-226 sub-items in `listing_capture/coverage.py`, `registry.extraction_unchanged`, `adapters/html_page.py` and `ListingCoverageLens.tsx`:
 
