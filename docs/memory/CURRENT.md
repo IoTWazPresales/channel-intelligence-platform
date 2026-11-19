@@ -4,6 +4,34 @@
 
 **PR #111 fix round 1 (branch `feat/d0141-starting-screen-20261118`):** the Codex review B1 fix scopes the dashboard list and its cache writes and invalidations by tenant and user, so a list retained from a previous sign-in cannot trigger starter creation. Vitest covers successive users on one QueryClient, tenant changes, delayed identity/list responses, creation/refetch and failed lists; `test_d0141_starting_screen_db.py` adds an owner-isolation test. Results: `cip_test` 95 passed, 1 skipped; web tsc 0, vitest dashboards 26 files / 194 tests passed. Browser check at 1280x800 and 390x844 is still to do on the running app. Rollout and the permission matrix stay PARTIAL-DEFERRED in BACKLOG-248.
 
+**W1-B worklist (2026-11-19, PR #105 Round 1):** branch `feat/w1b-stock-not-listed-20261118`. #104 is already merged into integration. The PR adds the read-only "In stock, not watched" worklist: `GET /api/v1/listing-capture/stock-not-listed`, shown under the Coverage tab. The remaining W1-B worklists are BACKLOG-244:
+
+- the offer/competitor comparison needs data;
+- competitor-page monitoring needs a migration;
+- activation alerts (3 days, decided) are built in stacked PR #106.
+
+**Round 1 fixes:** B1 wires searchable account selection into `customer_id` and the query key, with accurate truncation/empty wording. B2 replaces duplicate stock SQL with the unchanged `sell_through_overview.load_stock_positions` reader; explicit account/tenant filters, latest dates and net site totals are retained. New unit, cip_test and web regression cases cover them.
+
+**Validation (2026-11-19):** `cip_test` 307 passed; `tsc` clean; Vitest market-listings 6 files / 29 passed. Browser smoke not yet run. No migration, no deploy.
+
+**BACKLOG-046 shipment sheet scope (2026-11-19, PR #112 Fix Round 1; branch `feat/b046-sheet-scope-20261118`):** the mapping step no longer falls back to every column when no selected sheet is recognised; headers, samples, `in_scope` and `skipped_sheets` now agree, and every unrecognised sheet is listed as Ignored. An empty scope gives no headers, mappings or samples and stays blocked by the existing mapping gate. Selection and explicit BOM opt-in are unchanged. **PARTIAL-DEFERRED:** the shared detector still accepts exception/summary tabs with operational headers; BACKLOG-046 records the policy decision Warren must make and the strict expected-failure tests. N-0072 is not complete. No migration. Not merged.
+
+**Round 1 verification (2026-11-19):** `cip_test` pytest (scope unit, new DB-backed scope tests and existing shipment mapping/selection tests) 32 passed, 7 xfailed (strict, the deferred detector guard); `tsc` clean; Vitest imports 4 passed. Browser viewport proof not yet run.
+
+**Wave 3 Phase C ops health and backups (2026-11-18):** branch `feat/ops-backup-schedule-20261118`.
+
+- **Health (PR #110 fix round 1):** `GET /admin/ops/overview` reads due/late/missing and requires each expected customer's current Monday-due period to be tracked. Due reads pending; absent tracking/receipt evidence reads untracked. "Every expected report has arrived" needs receipt evidence in the exact preceding 8 days, never future-dated. Supervisor and backup cards remain in place.
+
+- **Scripts:** `scripts/ops/nightly_backup_cip.ps1` (verify, retention 14 daily + 8 weekly, a disposable restore every 7 days, status JSON) and `scripts/ops/install_backup_task.ps1`, which only prints unless `-Register` is given.
+
+- **P1 restore guard:** source and target use the same restricted URL grammar (only sslmode/connect_timeout/application_name query keys); encoded database paths and connection overrides fail closed. The standalone helper requires SourceUrl, protects cip_test/source, and verifies both actual database identities before wiping.
+
+- **P1 restore success:** all native steps must exit zero; nightly also requires the target's complete success marker. A refused restore writes failed status. Pester adds mocked identity/native-failure regressions.
+
+- **Validation (fix round 1):** Pester nightly_backup_cip.Tests.ps1 37 passed and restore_cip_smoke.Tests.ps1 17 passed; cip_test 73 passed (ops logs/overview health/unit ops health and config tests); web tsc 0 and vitest administration 18 passed. No real backup, restore, scheduler registration or service restart was run. Next: Codex re-review.
+
+- **Not done (operator):** registering the task, setting `CIP_BACKUP_DATABASE_URL` and `CIP_RESTORE_SMOKE_URL`, and the first real nightly and restore run (BACKLOG-247).
+
 **2026-11-18 - Wave 2 verification harness (`feat/w2-verification-matrix-20261118`, PR #113, fix round 1 after the Codex review):** reusable tooling for the Wave 2 pass, built but not run against any app. View x viewport x state matrix (`apps/web/src/lib/verification/matrix.ts`): the 17 Wave 1 routes plus the views that mount only behind a query (`/promotions?plan=<id>`, `/listing-capture?tab=sites|links|coverage|proposals|intelligence`, `/admin/cst-steward?tab=stock-gap`). A Playwright spec/config (`apps/web/playwright.wave2.config.ts`) with a write guard in both modes and no webServer. **Readonly mode never signs in** (login writes a session row, so it is a blocked write): it needs an existing session (`CIP_VERIFY_STORAGE_STATE` or `CIP_VERIFY_SESSION_TOKEN`) and refuses to start without one. Empty/error/loading run in both modes by GET interception; each state case checks the interception fired, and the error state needs an error-specific indication (an informational alert no longer passes it). Read-only figure checker (`apps/api/scripts/verify/figure_check.py`); its database test `tests/test_figure_check_db.py` is reported passing on `cip_test` by the coordinator. How to run: `docs/audits/WAVE2_VERIFICATION_HARNESS.md`. Deploy, test instance, live read-only run, credentials and the live readonly session need authorization; POST-read widgets and interaction stay deferred: BACKLOG-249.
 
 **Final wave (c) aged/slow stock (branch `feat/fwc-aged-stock-grouping-20261118`, 2026-11-18):** the planner's aged-stock panel shows one line per customer and product with Slow/Unsold badges and the sites folded underneath; `stock_actions` now matches site labels with `norm_label`, so a store listed again under a confirmed DC with different case or spacing no longer gives a second line. Live confirmation: BACKLOG-250. No migration. Not merged.
@@ -39,6 +67,8 @@ Review points: BACKLOG-243. No migration, no deploy; tests on `cip_test` only.
 - **Not done:** making `api-fast` a required check on `feat/integrate-*` or `main` is a GitHub admin setting (BACKLOG-246).
 
 **Last updated:** 2026-11-18 (docs reconcile, branch `fix/docs-reconcile-20261118`; documentation only).
+
+**2026-11-19 - Final wave (b), PR #115 fix round 1 (`feat/fwb-lineup-group-approval-20261118`):** B1 fixed: the line-up container applies the customer/period slice before product filtering; planned units, approval rate and pending counts use that scope and the scope summary includes the pending-only filter. Net requirement and plan coverage are labelled master scope. New `LineupContainer.test.tsx` and rolled-back `cip_test` group-approval query/ledger/audit tests. Tests: `cip_test` 285 passed, 6 skipped; `tsc` clean; Vitest lineup 18 passed. Browser acceptance still to do. **PARTIAL-DEFERRED**, BACKLOG-251: workbench economics scope belongs to stacked b2; approval roles need Warren's decision.
 
 **2026-11-18 - W1-A supplier selection (`fix/w1a-replenishment-semantics-20261118`, PR pending review):** lead-time samples are distinct deliveries, not shipment lines (five lines of one delivery no longer meet the five-delivery floor). Each confirmed-DC SKU names its supplier by that distributor's own SKU stock, then learned lead time to the DC, then deliveries to the DC; the need uses that supplier's lead time; the UI shows it. Delivery-identity question for Warren and remaining W1-A gaps: BACKLOG-241. Review fixes: DC supplier evidence is limited to the DC's own and linked accounts; sell rates are calendar-based for weekly/daily/monthly reports (last four calendar weeks, missing weeks not zero).
 

@@ -1,5 +1,6 @@
 export type LineupPlanRow = {
   id: number;
+  customer_id?: number | null;
   customer_code: string | null;
   customer_name?: string | null;
   channel_code: string | null;

@@ -206,6 +206,10 @@ class Settings(BaseSettings):
     # set (rollout is Warren's).
     cip_starting_screen_policy: Literal["assigned", "d0141"] = "assigned"
 
+    # Wave 3 Phase C: where /ops/overview reads the supervisor status.json (always-on\) and
+    # the nightly backup status files (backups\). Empty means %LOCALAPPDATA%\CIP on the API host.
+    cip_ops_state_dir: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]

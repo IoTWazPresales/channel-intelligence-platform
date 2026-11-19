@@ -14,8 +14,10 @@ import {
 } from '@/features/lineup/lineupTypes';
 import {
   filterLineupRowsByExactProductId,
+  filterLineupRowsBySlice,
   parseExactLineupProductId,
   parseLineupApprovalFilter,
+  parseLineupSlice,
 } from '@/features/lineup/lineupViews';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { ScopeBar } from '@/features/workbench-ui/controls';
@@ -26,6 +28,7 @@ function LineupContainerInner() {
   const searchParams = useSearchParams();
   const approval = parseLineupApprovalFilter(searchParams?.get('approval'));
   const productId = parseExactLineupProductId(searchParams?.get('product'));
+  const slice = parseLineupSlice(searchParams?.get('customer'), searchParams?.get('period'));
 
   const { data: items } = useQuery({
     queryKey: ['lineup-items'],
@@ -52,12 +55,16 @@ function LineupContainerInner() {
   });
 
   const rows = items ?? [];
-  const scopedRows = productId == null ? rows : filterLineupRowsByExactProductId(rows, productId);
-  const plannedUnits = rows.reduce((s, r) => s + (Number(r.planned_volume_units) || 0), 0);
-  const decided = rows.filter((r) => r.approval_status === 'approved' || r.approval_status === 'rejected');
-  const approved = rows.filter((r) => r.approval_status === 'approved').length;
-  const approvalPct = decided.length > 0 ? Math.round((approved / decided.length) * 100) : rows.length ? 0 : 0;
-  const pendingCount = rows.filter((r) => isPendingApproval(r.approval_status)).length;
+  const slicedRows = filterLineupRowsBySlice(rows, slice);
+  const scopedRows = productId == null ? slicedRows : filterLineupRowsByExactProductId(slicedRows, productId);
+  // Headlines describe the selected slice/product across all approval statuses.
+  // The scope summary also accounts for the grid's pending-only filter.
+  const plannedUnits = scopedRows.reduce((s, r) => s + (Number(r.planned_volume_units) || 0), 0);
+  const decided = scopedRows.filter((r) => r.approval_status === 'approved' || r.approval_status === 'rejected');
+  const approved = scopedRows.filter((r) => r.approval_status === 'approved').length;
+  const approvalPct = decided.length > 0 ? Math.round((approved / decided.length) * 100) : 0;
+  const pendingCount = scopedRows.filter((r) => isPendingApproval(r.approval_status)).length;
+  const visibleCount = approval === 'pending' ? pendingCount : scopedRows.length;
   const netTotal =
     netReq?.data_unavailable === false
       ? Math.round((netReq.rows ?? []).reduce((s, r) => s + (r.net_requirement || 0), 0))
@@ -87,12 +94,28 @@ function LineupContainerInner() {
     });
   };
 
+  const clearSlice = () => {
+    setQuery((params) => {
+      params.delete('customer');
+      params.delete('period');
+    });
+  };
+
   const clearScope = () => {
     setQuery((params) => {
       params.delete('approval');
       params.delete('product');
+      params.delete('customer');
+      params.delete('period');
     });
   };
+
+  const sliceChipLabel = (() => {
+    if (!slice) return null;
+    const hit = rows.find((r) => r.customer_id === slice.customerId && r.period_start === slice.periodStart);
+    const who = hit?.customer_name || hit?.customer_code || `Customer ${slice.customerId}`;
+    return `${who} · ${hit?.period_label || slice.periodStart}`;
+  })();
 
   const productChipLabel = (() => {
     if (productId == null) return null;
@@ -106,26 +129,29 @@ function LineupContainerInner() {
       <Box data-testid="lineup-cases-strip">
         <HeadlineStrip columns={5}>
           <HeadlineFigure
+            testId="lineup-planned-units"
             label="Planned units"
-            value={rows.length ? formatUnits(plannedUnits) : '—'}
+            value={scopedRows.length ? formatUnits(plannedUnits) : '—'}
             compact
-            caption={`${rows.length} plan lines`}
+            caption={`${scopedRows.length} plan lines (all statuses)`}
           />
           <HeadlineFigure
             label="Net requirement"
             value={netTotal != null ? formatUnits(netTotal) : '—'}
             compact
-            caption="Bias included"
+            caption="Master scope; bias included"
           />
           <HeadlineFigure
+            testId="lineup-approval"
             label="Approval"
-            value={rows.length ? `${approvalPct}%` : '—'}
+            value={scopedRows.length ? `${approvalPct}%` : '—'}
             compact
-            caption="of decided lines"
+            caption="of decided lines in scope"
           />
           <HeadlineFigure
+            testId="lineup-pending-approval"
             label="Pending approval"
-            value={rows.length ? pendingCount : '—'}
+            value={scopedRows.length ? pendingCount : '—'}
             compact
             severity={pendingCount ? 'warn' : 'good'}
             onClick={() => setApproval(approval === 'pending' ? 'all' : 'pending')}
@@ -134,7 +160,7 @@ function LineupContainerInner() {
             label="Plan coverage"
             value={fillPct != null ? `${fillPct}%` : '—'}
             compact
-            caption="shipped against lineup"
+            caption="Master scope; shipped against lineup"
           />
         </HeadlineStrip>
       </Box>
@@ -144,7 +170,7 @@ function LineupContainerInner() {
             {
               key: 'all',
               label: 'All lines',
-              active: approval === 'all' && productId == null,
+              active: approval === 'all' && productId == null && slice == null,
               onToggle: () => clearScope(),
             },
             {
@@ -154,6 +180,16 @@ function LineupContainerInner() {
               onToggle: () => setApproval(approval === 'pending' ? 'all' : 'pending'),
               tone: 'warning',
             },
+            ...(sliceChipLabel
+              ? [
+                  {
+                    key: 'slice',
+                    label: sliceChipLabel,
+                    active: true,
+                    onToggle: clearSlice,
+                  },
+                ]
+              : []),
             ...(productChipLabel
               ? [
                   {
@@ -166,12 +202,12 @@ function LineupContainerInner() {
               : []),
           ]}
           summary={
-            productId == null
-              ? `${rows.length} plan lines`
-              : `${scopedRows.length} of ${rows.length} plan lines`
+            productId == null && approval === 'all'
+              ? `${visibleCount} plan lines`
+              : `${visibleCount} of ${slicedRows.length} plan lines`
           }
           onClear={clearScope}
-          clearAvailable={productId != null || approval === 'pending'}
+          clearAvailable={productId != null || approval === 'pending' || slice != null}
         />
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>

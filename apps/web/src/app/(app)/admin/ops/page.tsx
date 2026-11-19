@@ -17,6 +17,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 
 import { AdminChrome } from '@/features/administration/AdminChrome';
+import { OpsHealthPanel, type OpsHealth } from '@/features/administration/OpsHealthPanel';
 import { apiGet, safeDisplayError } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
@@ -46,6 +47,7 @@ type OpsOverview = {
     completed_last_14d: number;
   };
   failed_jobs: FailedJob[];
+  health?: OpsHealth;
   links: Record<string, string>;
 };
 
@@ -101,6 +103,8 @@ export default function AdminOpsPage() {
         Local multi-user readiness: API readiness, failed import jobs, and links to steward audit. Backup / restore
         runbooks live in <code>docs/BACKUP_AND_DR.md</code>.
       </Typography>
+
+      {overview.data ? <OpsHealthPanel health={overview.data.health} /> : null}
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
         <Paper sx={{ p: 2, flex: 1 }} data-testid="ops-health-card">
