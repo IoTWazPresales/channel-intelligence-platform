@@ -140,3 +140,44 @@ Per-route status: **NOT YET AUDITED** — awaits a live login (screens + compare
 | L6 Year inference (waits for Q4) | year-less WK files | CST sell-through importer (not yet located) |
 
 Matches a written requirement: L2 (Warren 2026-11-19: line-ups only for reporting customers; built for new writes in #122), L3 (mock-up + BACKLOG-254), L1 (navConfig "screen shows the last check", BACKLOG-226 coverage), D1 (restore script + `cip-requirements-alignment-20261118.md:54,80`).
+
+## 7. D1 reader restore — STOPPED (16:40 SAST)
+
+Warren (16:40): the readers were deleted on purpose; the **discovery tool** is meant to find each customer's website and listings. D1 was stopped during its first step (the pre-change `pg_dump`). **Nothing was changed on `cip`**, no clone was created, `restore_listing_site_readers.py` was never run (not on a clone, not on `cip`). The partial dump was deleted. Log: `C:\Users\warren_eliason\cip-apply-logs\20261119-d1-reader-restore\progress.txt`. Section 1.1's "DATA STEP D1" is withdrawn.
+
+## 8. Why discovery has not discovered websites and listings on live
+
+All read-only: SQL on `cip`, a discovery **dry run** (`apply=False`, `SET TRANSACTION READ ONLY`, no network: a fake fetch that answered 404 to every URL), Redis run-state reads, worker logs.
+
+### 8.1 How discovery works (code)
+
+- `apps/api/app/services/listing_capture/discovery.py` `discover_reporting_customers` (line 119), called only from `autoconfig.autoconfigure_sites` (`autoconfig.py:122-200`). That runs from the beat task `listing_capture.autoconfigure_sites` **once a day at 05:20 UTC = 07:20 SAST** (`worker/celery_app.py:48-53`) and from the steward button `POST /listing-capture/sites/autoconfigure` (`endpoints/listing_capture.py:230`).
+- **Discovery does not find a customer's website.** The site key comes from the customer's `customer_report_config.feed_profile_json.listing_seed.marketplace`, or else from the customer's existing `customer_listing.marketplace` values (`autoconfig.py:11-14`, `_site_keys`). With neither, the customer gets `no_site_key` and is skipped (`discovery.py` plan loop; `autoconfig.py:425-434`). A domain is recorded only by a steward on **Sites & sellers → "Record the site key and domain for a reporting customer that has neither"** (`ListingSitesLens.tsx:163-182`, `POST /listing-capture/sites/onboard`, `site_onboarding.record_customer_site`).
+- For a known site, discovery takes each product with `reported_soh > 0` in the customer's latest sell-through period that has **no listing yet**. It looks for the product's barcode, then its model, using the site's `search_url_pattern`, then a search form on the site's home page, then the site's sitemap (`_search_candidates`, `discovery.py:583-619`). A page is kept only when its barcode or model matches. It proposes a `cst_listing_seed` row (`proposed`); it never creates a listing. At most 25 products per customer/site per run. Fetches share the #95 per-site pacing (`site_fetch`, default 5 s, 403/429 pause in Redis, 10-minute budget).
+- No search engine or outside API is used. No search-provider key exists in the code (searched `listing_capture/` and `worker/tasks.py`). The only switches are `CIP_LISTING_LIVE_FETCH` and `CIP_LISTING_CAPTURE_SCHEDULE`; both are on, because the poll fetches live.
+- The reader for a site (`adapter_key`) is set automatically only to the general HTML reader. That happens after a page whose barcode or model matches the product (`discovery.py` docstring; `autoconfig` probe). Nothing sets the JSON reader (`adapters/rest_buybox.py`) automatically.
+
+### 8.2 Has it ever run on live? **No.**
+
+- The discovery code for reporting customers (`d2723d8a` 16 Nov, `a0c7dcc5`, `c5a4a991` shared pacing, `ead229f5`/`da478da7` 18 Nov) is **not** in `f691c44d`, the code live ran until the 15:56 restart today (`git merge-base --is-ancestor` = false for all five). The 07:20 runs on 17, 18 and 19 Nov ran the older autoconfigure. They finished in 0.5–1.0 s (`worker.err.log.1`), and Redis has **no** discovery run record for `cip` (`cip:listing_capture:last_run:cip:` holds only `autoconfigure:default` and `poll`; all 333 discovery keys belong to `cip_test` test tenants).
+- **First scheduled run with the new code: 20 Nov 07:20 SAST**, unless a steward presses "autoconfigure" on Sites & sellers first.
+- Output on `cip` so far: `cst_listing_seed` holds 281 rows, all from sell-through feeds, none from discovery: takealot 79 confirmed, evetech 88 confirmed + 63 proposed (11 Aug), amazon 51 confirmed (9 Aug). `listing_link` 0 rows, `listing_link_queue` 0, `site_candidate` 0, `platform_audit_event` with a site or listing action: 0.
+
+### 8.3 What blocks each reporting customer (dry run of the live code, no network)
+
+| Customer | Seed on cip | Dry-run result | Blocker | Class |
+|---|---|---|---|---|
+| Hifi (11) | none | `no_site_key` | no site key or domain recorded; discovery cannot find the website itself | DATA STEP (steward records the domain on Sites & sellers) + NOT BUILT (if Warren wants CIP to find the website by itself) |
+| Incredible Connection (12) | none | `no_site_key` | same | same |
+| Makro (15) | none | `no_site_key` | same | same |
+| Computer Mania (18) | none | `no_site_key` | same | same |
+| Game (57) | none | `no_site_key` | same | same |
+| Takealot (20) | marketplace + page patterns, no search URL | `reader_not_configured`; 18 stocked products, **all 18 already have a listing** → nothing to discover | Its 79 listings are unread because `adapter_key` is empty. The daily probe fetches a product page (HTTP 200) but finds no barcode or model in the HTML (`no_barcode_or_model_match`, Redis autoconfigure record 19 Nov 05:20 UTC), so it never sets the HTML reader. Nothing derives the JSON reader. | NOT BUILT (reader for a site whose product page is built in the browser) |
+| Amazon (299) | marketplace + page patterns, no search URL | `no_search_url`; 0 watched; would fetch the home page and `sitemap.xml` (14 requests in the dry run) | All **51 amazon listings have no `product_id`** (probe: `no_listing_with_product_and_url`), so the probe has nothing to check. Discovery can only use the home-page search form or the sitemap; whether Amazon answers a script is unknown until the first live run. | DATA STEP (link the 51 listings to products) + likely NOT BUILT (search on a site that blocks scripts) |
+| Evetech (52) | marketplace + page patterns | 34 stocked products, all watched; reader `html_page` set | none: working | MATCHES |
+
+### 8.4 What would make discovery work (no code changed here)
+
+1. **Run it once on live now** (DATA STEP; authorised as a job run): Sites & sellers → autoconfigure, or the beat task with `on_demand=True`. It writes `cst_listing_seed` proposals only, plus Redis run records. On today's data it will propose little: Takealot and Evetech are fully watched, and the other 5 have no site key.
+2. **Record the 5 websites** (DATA STEP, steward screen exists): site key + domain for Hifi, Incredible Connection, Makro, Computer Mania, Game. Warren chose "watch all five sites". The domains are customer data and must come from Warren or the steward. Discovery then searches each one on its next run.
+3. **NOT BUILT, needs a decision:** (a) automatic website finding for a customer (there is no search provider; it would need one, e.g. a web-search API key, or a rule using the customer's e-mail domain); (b) a reader for sites whose product page is built in the browser (Takealot), because the HTML probe can never match there; (c) Amazon product links for its 51 listings, and a way to search Amazon.
