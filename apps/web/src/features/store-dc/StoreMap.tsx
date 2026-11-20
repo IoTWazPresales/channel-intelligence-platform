@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 
+import { DEFAULT_MAP_SIZE, MapAside, MapCanvas, MapLayout, MapPanel } from '@/features/maps/MapCanvas';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
@@ -13,7 +14,7 @@ import { PinLegend } from './pins/PinLegend';
 import { proposedStores } from './pins/pinProposals';
 import { ProposedPinsPanel } from './pins/ProposedPinsPanel';
 import { useProposalConfirm } from './pins/useProposalConfirm';
-import { projectStores, sellThroughColor, spreadOverlaps, storeMapBounds, storeMapPanelHeight, unprojectStore } from './storeMapLayout';
+import { projectStores, sellThroughColor, spreadOverlaps, storeMapBounds, unprojectStore } from './storeMapLayout';
 import type { StoreMapPayload, StoreMapStore } from './types';
 
 function fmt(value: number | null | undefined): string {
@@ -53,6 +54,7 @@ export function StoreMap() {
   const [activePinKey, setActivePinKey] = useState<string | null>(null);
   const [dragBounds, setDragBounds] = useState<MapBounds | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [mapPx, setMapPx] = useState(DEFAULT_MAP_SIZE);
   const savingRef = useRef(false);
   const dragRef = useRef<{
     key: string; pointerId: number; clientX: number; clientY: number;
@@ -64,13 +66,6 @@ export function StoreMap() {
     queryFn: ({ signal }) => apiGet<StoreMapPayload>('/api/v1/store-dc/map', { signal }),
     staleTime: 30_000,
   });
-
-  const card = {
-    bgcolor: tokens.bg.surface,
-    border: `1px solid ${tokens.border.subtle}`,
-    borderRadius: 1.5,
-    p: 2,
-  } as const;
 
   const stores = mapQuery.data?.stores ?? [];
   const visible = customerId === 'all' ? stores : stores.filter((store) => store.customer_id === customerId);
@@ -209,7 +204,7 @@ export function StoreMap() {
   }
 
   return (
-    <Box data-testid="store-map" sx={{ mt: 1.5, ...card }}>
+    <Box data-testid="store-map" sx={{ mt: 1.5 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mb: 1 }}>
         <Typography variant="subtitle1">Stores</Typography>
         <Box data-testid="store-map-legend" sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
@@ -258,19 +253,14 @@ export function StoreMap() {
           </Button>
         ))}
       </Box>
-      <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' } }}>
-        <Box
+      <MapLayout>
+        <MapPanel>
+        <MapCanvas
           ref={canvasRef}
           data-testid="store-map-canvas"
-          data-height-xs={storeMapPanelHeight.xs}
-          data-height-md={storeMapPanelHeight.md}
-          sx={{
-            position: 'relative',
-            height: storeMapPanelHeight,
-            borderRadius: 1,
-            bgcolor: tokens.bg.surfaceMuted,
-            border: `1px solid ${tokens.border.subtle}`,
-          }}
+          label="Store locations coloured by sell-through"
+          bounds={bounds}
+          onSizeChange={setMapPx}
         >
           {mapStores.length === 0 ? (
             <Typography variant="body2" sx={{ p: 2, color: tokens.text.secondary }}>
@@ -372,12 +362,12 @@ export function StoreMap() {
               ) : null}
             </Box>
           ) : null}
-        </Box>
+        </MapCanvas>
+        </MapPanel>
+        <MapAside>
         <Box
           data-testid="store-map-unpinned"
-          data-height-xs={storeMapPanelHeight.xs}
-          data-height-md={storeMapPanelHeight.md}
-          sx={{ height: storeMapPanelHeight, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+          sx={{ height: mapPx.h, display: 'flex', flexDirection: 'column', minHeight: 0 }}
         >
           <Typography variant="caption" sx={{ color: tokens.text.secondary }}>
             No coordinates
@@ -460,7 +450,8 @@ export function StoreMap() {
           )}
           </Box>
         </Box>
-      </Box>
+        </MapAside>
+      </MapLayout>
       <ProposedPinsPanel
         stores={proposalList}
         saving={saving || proposalConfirm.saving}

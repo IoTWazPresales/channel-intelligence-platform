@@ -184,8 +184,10 @@ describe('StoreMap', () => {
     ]));
     const canvas = screen.getByTestId('store-map-canvas');
     const list = screen.getByTestId('store-map-unpinned');
-    expect(canvas.getAttribute('data-height-xs')).toBe(list.getAttribute('data-height-xs'));
-    expect(canvas.getAttribute('data-height-md')).toBe(list.getAttribute('data-height-md'));
+    expect(canvas).toHaveAttribute('data-map-canvas');
+    expect(getComputedStyle(canvas).aspectRatio).toMatch(/^1000\s*\/\s*646$/);
+    expect(within(canvas).getByRole('img')).toHaveAttribute('viewBox', '0 0 1000 646');
+    expect(getComputedStyle(list).height).toBe('646px');
     expect(screen.getByTestId('store-map-unpinned-scroll')).toBeInTheDocument();
   });
 
@@ -442,13 +444,13 @@ describe('StoreMap', () => {
     fireEvent.pointerDown(pin, { pointerId: 1, button: 0, clientX: 400, clientY: 300 });
     fireEvent.pointerMove(pin, { pointerId: 1, clientX: 450, clientY: 275 });
     fireEvent.pointerMove(pin, { pointerId: 1, clientX: 500, clientY: 250 });
-    expect(Number(pin.dataset.latitude)).toBeCloseTo(-29.7936, 6);
-    expect(Number(pin.dataset.longitude)).toBeCloseTo(20.2444, 6);
+    expect(Number(pin.dataset.latitude)).toBeCloseTo(-23.7, 6);
+    expect(Number(pin.dataset.longitude)).toBeCloseTo(34.2, 6);
     fireEvent.pointerUp(pin, { pointerId: 1, clientX: 500, clientY: 250 });
     const latitude = Number(pin.dataset.latitude);
     const longitude = Number(pin.dataset.longitude);
-    expect(latitude).toBeCloseTo(-29.7936, 6);
-    expect(longitude).toBeCloseTo(20.2444, 6);
+    expect(latitude).toBeCloseTo(-23.7, 6);
+    expect(longitude).toBeCloseTo(34.2, 6);
     expect(hoisted.posted).toEqual([]);
     expect(apiPost).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'SDC-C2' }));
@@ -596,8 +598,8 @@ describe('StoreMap', () => {
     fireEvent.pointerDown(pin, { pointerId: 1, button: 0, clientX: 500, clientY: 250 });
     fireEvent.pointerMove(pin, { pointerId: 1, clientX: 600, clientY: 200 });
     fireEvent.pointerUp(pin, { pointerId: 1, clientX: 600, clientY: 200 });
-    expect(Number(pin.dataset.latitude)).toBeCloseTo(-33.668, 6);
-    expect(Number(pin.dataset.longitude)).toBeCloseTo(18.632, 6);
+    expect(Number(pin.dataset.latitude)).toBeCloseTo(-23.7, 6);
+    expect(Number(pin.dataset.longitude)).toBeCloseTo(34.2, 6);
     expect(hoisted.posted).toEqual([]);
   });
 });

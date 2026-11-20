@@ -1,3 +1,5 @@
+import { BASEMAP_SIZE } from '@/features/maps/basemapDots';
+
 import { fmtDay, fmtUnits } from './format';
 import type { Vessel } from './types';
 
@@ -8,7 +10,7 @@ export type Cluster = {
   y: number;
 };
 
-const ASPECT = 646 / 1000; // the map is 1000 x 646: a y percentage is shorter than an x percentage
+const ASPECT = BASEMAP_SIZE.height / BASEMAP_SIZE.width; // the map is 1000 x 646: a y percentage is shorter than an x percentage
 
 function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.hypot(a.x - b.x, (a.y - b.y) * ASPECT);
