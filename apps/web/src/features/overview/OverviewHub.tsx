@@ -132,7 +132,7 @@ export function OverviewHub() {
 
   const dashboard = (
     <Panel
-      title="Business dashboard"
+      title="Chart builder"
       subtitle={
         active
           ? `${active.name}${brief?.as_of ? ` · data as of ${brief.as_of.slice(0, 10)}` : ''}`
@@ -172,7 +172,7 @@ export function OverviewHub() {
         ) : !active || widgets.length === 0 ? (
           <PanelRow
             severity="neutral"
-            primary="Open Business dashboard"
+            primary="Open Chart builder"
             secondary={
               !active
                 ? 'No tenant dashboard yet. This hub does not invent fixture KPIs.'
@@ -216,7 +216,7 @@ export function OverviewHub() {
         title="Needs attention"
         subtitle={
           awaitingBrief
-            ? 'Loading live signals…'
+            ? 'Loading live signals.'
             : briefUnavailable
               ? 'Attention signals are not available yet'
               : `${urgent.length} urgent · ${informational.length} informational`
@@ -226,7 +226,7 @@ export function OverviewHub() {
         <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
           {awaitingBrief ? (
             <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
-              Loading attention…
+              Loading attention.
             </Typography>
           ) : briefUnavailable ? (
             <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>

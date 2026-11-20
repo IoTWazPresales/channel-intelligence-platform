@@ -36,7 +36,7 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).toContain('/admin/steward-audit');
     expect(hrefs).toContain('/admin/ops');
     expect(hrefs).toContain('/commercial-planner');
-    expect(hrefs).toContain('/pricing');
+    expect(hrefs).toContain('/costs');
     expect(hrefs).toContain('/admin/imports');
   });
 
@@ -54,6 +54,7 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).toContain('/reports');
     expect(hrefs).toContain('/dashboards');
     expect(hrefs).toContain('/inbox');
+    expect(hrefs).toContain('/inventory');
     expect(hrefs).toContain('/channel-intelligence');
     expect(hrefs).toContain('/listing-capture?tab=registry');
     expect(hrefs).not.toContain('/dashboard');
@@ -64,7 +65,7 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).not.toContain('/admin/imports');
     expect(hrefs).not.toContain('/commercial-planner');
     expect(hrefs).not.toContain('/lineup/cases');
-    expect(hrefs).not.toContain('/pricing');
+    expect(hrefs).not.toContain('/costs');
     expect(labelsFor('viewer')).not.toContain('Administration');
     expect(labelsFor('viewer')).not.toContain('Data & Stewardship');
     expect(labelsFor('viewer')).not.toContain('Planning');
@@ -76,7 +77,7 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).toContain('/commercial-planner');
     expect(hrefs).toContain('/commercial-planner/cpor-cases');
     expect(hrefs).toContain('/lineup/cases');
-    expect(hrefs).toContain('/pricing');
+    expect(hrefs).toContain('/costs');
     expect(hrefs).not.toContain('/admin/users/list');
     expect(hrefs).not.toContain('/admin/sql-viewer');
     expect(hrefs).not.toContain('/admin/audit-log');
@@ -96,11 +97,20 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).not.toContain('/admin/sql-viewer');
     expect(hrefs).not.toContain('/admin/audit-log');
     expect(hrefs).not.toContain('/commercial-planner');
-    expect(hrefs).not.toContain('/pricing');
+    expect(hrefs).not.toContain('/costs');
     expect(hrefs).not.toContain('/admin/users/list');
     expect(labelsFor('steward')).toContain('Data & Stewardship');
     expect(labelsFor('steward')).not.toContain('Planning');
     expect(labelsFor('steward')).not.toContain('Promotions & Funding');
+  });
+
+  it('Costs appears in the rail for planners and admins only', () => {
+    for (const role of ['admin', 'planner']) {
+      expect(railNavGroups(role).flatMap((group) => group.items.map((leaf) => leaf.href))).toContain('/costs');
+    }
+    for (const role of ['steward', 'viewer']) {
+      expect(railNavGroups(role).flatMap((group) => group.items.map((leaf) => leaf.href))).not.toContain('/costs');
+    }
   });
 
   it('roleMayAccess grants admin everything', () => {

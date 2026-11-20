@@ -7,7 +7,6 @@ const STOCK_LEGACY_REDIRECTS: Record<string, string> = {
   '/sell-out': '/stock?lens=movement',
   '/plan-vs-executed': '/stock?lens=execution',
   '/shipping': '/supply/shipments',
-  '/inventory': '/stock?lens=cover',
 };
 
 const LINEUP_LEGACY_REDIRECTS: Record<string, string> = {
@@ -43,11 +42,20 @@ export function middleware(request: NextRequest) {
     url.pathname = lineupTarget;
     return NextResponse.redirect(url);
   }
-  if (pathname === '/stock' && request.nextUrl.searchParams.get('lens') === 'inbound') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/supply/shipments';
-    url.searchParams.delete('lens');
-    return NextResponse.redirect(url);
+  if (pathname === '/stock') {
+    const lens = request.nextUrl.searchParams.get('lens');
+    if (!lens || lens === 'cover') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/inventory';
+      url.searchParams.delete('lens');
+      return NextResponse.redirect(url);
+    }
+    if (lens === 'inbound') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/supply/shipments';
+      url.searchParams.delete('lens');
+      return NextResponse.redirect(url);
+    }
   }
   return NextResponse.next();
 }

@@ -1,7 +1,7 @@
 import type { NavItem, UserRole } from '@cip/types';
 
 /**
- * Production information architecture — N-0013 r3/r3.1, accepted as D-0008 (2026-09-03).
+ * Production information architecture - N-0013 r3/r3.1, accepted as D-0008 (2026-09-03).
  *
  * Primary navigation = capability domains derived from the data layer. A workflow lives in the
  * domain of its primary governed metric / entity. Leaves point at the REAL production route that
@@ -12,10 +12,10 @@ import type { NavItem, UserRole } from '@cip/types';
  */
 
 /**
- * live      — end-to-end usable on real data.
- * partial   — real code path, but a required step is missing, manual or hard-coded (rail, marked).
- * substrate — tables / endpoints exist, no working user-facing view (directory only, "data only").
- * planned   — chartered, not built (directory only, labelled).
+ * live      - end-to-end usable on real data.
+ * partial   - real code path, but a required step is missing, manual or hard-coded (rail, marked).
+ * substrate - tables / endpoints exist, no working user-facing view (directory only, "data only").
+ * planned   - chartered, not built (directory only, labelled).
  */
 export type LeafStatus = 'live' | 'partial' | 'substrate' | 'planned';
 
@@ -44,7 +44,7 @@ export type NavGroup = {
   label: string;
   /** Short label for narrow chrome (mobile bottom nav, crumbs). */
   short?: string;
-  /** Domain home — where the rail heading and the domain crumb link to. */
+  /** Domain home - where the rail heading and the domain crumb link to. */
   href?: string;
   /** Plain-language description of the domain, for the directory and palette. */
   what?: string;
@@ -62,7 +62,7 @@ const PLANNER_PLUS: UserRole[] = ['admin', 'planner'];
 const ADMIN_ONLY: UserRole[] = ['admin'];
 const ADMIN_STEWARD: UserRole[] = ['admin', 'steward'];
 
-/** Web feature flag — default on when unset. */
+/** Web feature flag - default on when unset. */
 export function isCommercialPlannerEnabled(): boolean {
   return process.env.NEXT_PUBLIC_CIP_COMMERCIAL_PLANNER_ENABLED !== 'false';
 }
@@ -92,7 +92,7 @@ export function filterNavGroupsForRole(groups: NavGroup[], role: string | null |
     .filter((g) => g.items.length > 0);
 }
 
-/** Domains and leaves the current role may see — every status (directory / palette). */
+/** Domains and leaves the current role may see - every status (directory / palette). */
 export function shellNavGroups(role?: string | null): NavGroup[] {
   let groups = navGroups;
   if (!isCommercialPlannerEnabled()) {
@@ -121,13 +121,13 @@ export const navGroups: NavGroup[] = [
     what: 'What needs attention now, your configurable view of the business, and reports you can save.',
     items: [
       {
-        label: 'Attention',
+        label: 'Dashboard',
         href: '/brief',
         roles: ALL,
         what: 'Live signals with counts and deep links: failed imports, cover breaches, blocked funding, stale stock.',
       },
       {
-        label: 'Business dashboard',
+        label: 'Chart builder',
         href: '/dashboards',
         roles: ALL,
         what: 'Configurable widgets over governed metrics; save and publish per role.',
@@ -153,7 +153,7 @@ export const navGroups: NavGroup[] = [
     href: '/stock',
     what: 'Distributor and retailer stock, weeks of cover, sell-out velocity and execution against plan.',
     items: [
-      { label: 'Cover', href: '/stock?lens=cover', roles: ALL, what: 'Derived SOH and weeks of cover per distributor × product; breaches and excess.' },
+      { label: 'Inventory', href: '/inventory', roles: ALL, what: 'Hand-entered customer stock: on-hand and on-order quantities by product and date. Retailer stock files are shown on Sell-through.' },
       { label: 'Movement', href: '/stock?lens=movement', roles: ALL, what: 'Weekly sell-out, shipments and stock trend by family and distributor.' },
       { label: 'Sell-through', href: '/channel-intelligence', roles: ALL, what: 'Retailer sell-through and customer inventory from retailer files.' },
       { label: 'Stores and DCs', href: '/stock/replenishment', roles: ALL, what: 'Store and distribution-centre replenishment. A steward confirms a site once. Suggestions do not create a promotion, transfer, or return.' },
@@ -201,10 +201,10 @@ export const navGroups: NavGroup[] = [
         what: 'Lifecycle phase and replacement candidates per product. The list exists; there is no planning view yet.',
       },
       {
-        label: 'Recorded prices',
-        href: '/pricing',
+        label: 'Costs',
+        href: '/costs',
         roles: PLANNER_PLUS,
-        what: 'List and net prices per SKU. A SKU that is not in the product master goes to product catalogue gaps. No product is created from a price.',
+        what: 'Upload controlled cost / PM bottom, VAT, FX and reserve assumptions for existing products; preview and confirm before applying.',
       },
     ],
   },
@@ -220,7 +220,7 @@ export const navGroups: NavGroup[] = [
         href: '/promotions',
         roles: PLANNER_PLUS,
         status: 'partial',
-        what: 'Author and review promotion cases — the same cases as the Case book: lines, waterfall, budget check, export. Propose from customer and period on this surface.',
+        what: 'Author and review promotion cases - the same cases as the Case book: lines, waterfall, budget check, export. Propose from customer and period on this surface.',
       },
       {
         label: 'Case book',
@@ -258,7 +258,7 @@ export const navGroups: NavGroup[] = [
         href: '/budgets',
         roles: PLANNER_PLUS,
         status: 'substrate',
-        what: 'Allocation, commitment, and actual. The list exists with no rows; the planner uses the lineup-derived reservation instead.',
+        what: 'Budget positions and ledger entries showing reservations, commitments, consumption, releases, payments and remaining funding.',
       },
     ],
   },
@@ -303,7 +303,7 @@ export const navGroups: NavGroup[] = [
         label: 'Customer sell-through files',
         href: '/admin/imports?template=customer_sell_through',
         roles: STEWARD_PLUS,
-        what: 'Retailer sell-through import — same steps, this file type already selected.',
+        what: 'Retailer sell-through import - same steps, this file type already selected.',
       },
       {
         label: 'Steward queue',

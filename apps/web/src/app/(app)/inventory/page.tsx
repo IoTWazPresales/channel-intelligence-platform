@@ -127,7 +127,7 @@ export default function InventoryPage() {
     return [
       ...factColumns.identityColDefs,
       // Name only (D7); the code is its own optional column in the picker's Reference group.
-      { field: 'customer_name', headerName: 'Customer', minWidth: 160, valueFormatter: (p) => p.value ?? '—' },
+      { field: 'customer_name', headerName: 'Customer', minWidth: 160, valueFormatter: (p) => p.value ?? '-' },
       { field: 'on_hand_units', headerName: 'On hand', type: 'numericColumn' },
       { field: 'on_order_units', headerName: 'On order', type: 'numericColumn' },
       { field: 'as_of_date', headerName: 'As of', minWidth: 120 },
@@ -145,7 +145,7 @@ export default function InventoryPage() {
 
   return (
     <>
-      <PageHeader {...navPageChrome('/stock', { search: '?lens=cover' })} />
+      <PageHeader {...navPageChrome('/inventory')} />
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
           intro="Hand-entered customer stock only. Retailer stock files land on Sell-through, not here."
@@ -159,7 +159,7 @@ export default function InventoryPage() {
             description:
               'Retailer stock files land on Sell-through, not here. Add or paste a row only when the figure was typed by hand.',
             primary: { label: 'Sell-through', href: '/channel-intelligence' },
-            secondary: { label: 'Attention', href: '/brief' },
+            secondary: { label: 'Dashboard', href: '/brief' },
           }}
           toolbar={
             <>

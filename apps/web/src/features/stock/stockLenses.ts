@@ -1,6 +1,6 @@
-/** Stock container lens keys — buyer-facing labels aligned to lab StockSurface. `inbound` still parses so `/stock?lens=inbound` can redirect to `/supply/shipments`. */
+/** Stock container lens keys - buyer-facing labels aligned to lab StockSurface. `inbound` still parses so `/stock?lens=inbound` can redirect to `/supply/shipments`. */
 export const STOCK_LENSES = [
-  { id: 'cover', label: 'Cover' },
+  { id: 'cover', label: 'Inventory' },
   { id: 'movement', label: 'Movement' },
   { id: 'sellthrough', label: 'Sell-through' },
   { id: 'execution', label: 'Execution vs plan' },
@@ -27,9 +27,9 @@ export type WocBucketId = 'lt2' | '2to4' | '4to8' | '8to13' | 'gte13';
 
 export const WOC_BUCKET_LABELS: Record<WocBucketId, string> = {
   lt2: '<2w',
-  '2to4': '2–4w',
-  '4to8': '4–8w',
-  '8to13': '8–13w',
+  '2to4': '2-4w',
+  '4to8': '4-8w',
+  '8to13': '8-13w',
   gte13: '13w+',
 };
 

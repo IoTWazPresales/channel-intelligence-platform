@@ -6,8 +6,8 @@ export const OVERVIEW_DESCRIPTION =
 export type OverviewLeaf = 'hub' | 'dashboard' | 'reports' | 'inbox';
 
 export const OVERVIEW_LEAVES: { value: OverviewLeaf; label: string; href: string }[] = [
-  { value: 'hub', label: 'Overview', href: '/brief' },
-  { value: 'dashboard', label: 'Business dashboard', href: '/dashboards' },
+  { value: 'hub', label: 'Dashboard', href: '/brief' },
+  { value: 'dashboard', label: 'Chart builder', href: '/dashboards' },
   { value: 'reports', label: 'Reports', href: '/reports' },
   { value: 'inbox', label: 'Report inbox', href: '/inbox' },
 ];

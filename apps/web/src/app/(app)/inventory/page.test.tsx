@@ -37,14 +37,15 @@ function renderPage() {
 }
 
 describe('/inventory copy (BACKLOG-135)', () => {
-  it('says the table is hand-entered and points retailer stock files to Sell-through', async () => {
+  it('shows the Inventory title and keeps the hand-entered stock page', async () => {
     renderPage();
+    expect(screen.getByRole('heading', { name: 'Inventory' })).toBeInTheDocument();
     expect(await screen.findByText('No hand-entered customer stock')).toBeTruthy();
     expect(screen.getAllByText(/Retailer stock files land on Sell-through, not here/)).toHaveLength(2);
     expect(screen.queryByText(/Customer stock reported by retailers/)).toBeNull();
     expect(screen.queryByText(/Import Center for file-based loads/)).toBeNull();
     expect(screen.queryByRole('link', { name: 'Import Center' })).toBeNull();
-    const link = screen.getByRole('link', { name: 'Sell-through' });
-    expect(link.getAttribute('href')).toBe('/channel-intelligence');
+    expect(screen.getByRole('link', { name: 'Sell-through' })).toHaveAttribute('href', '/channel-intelligence');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/brief');
   });
 });
