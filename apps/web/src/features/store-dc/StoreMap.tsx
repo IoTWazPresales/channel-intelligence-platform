@@ -13,6 +13,10 @@ import {
   MapLayout,
   MapPanel,
 } from '@/features/maps/MapCanvas';
+import { MapMarker } from '@/features/maps/MapMarker';
+import { MapViewControls } from '@/features/maps/MapViewControls';
+import { panLimits } from '@/features/maps/mapView';
+import { useMapView } from '@/features/maps/useMapView';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
@@ -21,6 +25,7 @@ import { proposedStores } from './pins/pinProposals';
 import { ProposedPinsPanel } from './pins/ProposedPinsPanel';
 import { useProposalConfirm } from './pins/useProposalConfirm';
 import {
+  finiteCoordinates,
   projectStores,
   sellThroughColor,
   spreadOverlaps,
@@ -45,6 +50,12 @@ function storePlace(store: StoreMapStore): string {
 
 type Coordinates = { latitude: number; longitude: number };
 type MapBounds = ReturnType<typeof storeMapBounds>;
+
+// Overlap spacing and click target for pins: dense metros keep every pin reachable.
+const PIN_SPREAD_PX = 16;
+const PIN_HIT_PX = 22;
+// Past this many pins the glow around each marker would blur into one blob.
+const GLOW_PIN_LIMIT = 60;
 
 export function StoreMap() {
   const theme = useTheme();
@@ -90,30 +101,34 @@ export function StoreMap() {
   const stores = mapQuery.data?.stores ?? [];
   const visible =
     customerId === 'all' ? stores : stores.filter((store) => store.customer_id === customerId);
+  // A store with no usable coordinates is never drawn (not at a corner, not at 0,0): it stays in
+  // the "No coordinates" list.
   const pinned = visible.filter(
-    (store) => store.pinned && store.latitude != null && store.longitude != null
+    (store) => store.pinned && finiteCoordinates(store.latitude, store.longitude)
   );
   const suggestions = visible.filter(
     (store) =>
       !store.pinned &&
       !rejected.has(storeKey(store)) &&
       store.location_suggestion?.outcome === 'suggest' &&
-      store.location_suggestion.latitude != null &&
-      store.location_suggestion.longitude != null
+      finiteCoordinates(store.location_suggestion.latitude, store.location_suggestion.longitude)
   );
   const suggestedKeys = new Set(suggestions.map(storeKey));
   const proposalList = proposedStores(visible, rejected);
-  const unpinned = visible.filter((store) => !store.pinned && !suggestedKeys.has(storeKey(store)));
   const mapStores = [...pinned, ...suggestions];
+  const mappedKeys = new Set(mapStores.map(storeKey));
+  const unpinned = visible.filter((store) => !mappedKeys.has(storeKey(store)));
   const points = mapStores.map((store) => ({
     id: storeKey(store),
     ...(store.pinned
-      ? { latitude: store.latitude!, longitude: store.longitude! }
-      : (overrides[storeKey(store)] ?? {
-          latitude: store.location_suggestion!.latitude!,
-          longitude: store.location_suggestion!.longitude!,
-        })),
+      ? finiteCoordinates(store.latitude, store.longitude)!
+      : (overrides[storeKey(store)] ??
+        finiteCoordinates(
+          store.location_suggestion!.latitude,
+          store.location_suggestion!.longitude
+        )!)),
   }));
+  const pointOf = new Map(points.map((point) => [point.id, point]));
   const needle = unpinnedQuery.trim().toLowerCase();
   const listed = needle
     ? unpinned.filter((store) =>
@@ -123,14 +138,24 @@ export function StoreMap() {
           .includes(needle)
       )
     : unpinned;
-  const bounds = dragBounds ?? storeMapBounds(points);
+  // The default view fits the continent the pins are in; the steward can pan and zoom away from
+  // it. A pin drag freezes whichever view it started in.
+  const fit = storeMapBounds(points);
+  const mapView = useMapView(fit, panLimits(fit, points), canvasRef);
+  const bounds = dragBounds ?? mapView.bounds;
   const projected = projectStores(points, bounds);
-  const placed = spreadOverlaps(projected, mapPx, 14);
+  const placed = spreadOverlaps(projected, mapPx, PIN_SPREAD_PX);
   const placeOf = new Map(placed.map((pin) => [pin.id, pin]));
   const selected = visible.find((store) => storeKey(store) === selectedKey) ?? null;
   const hover = mapStores.find((store) => storeKey(store) === hoverKey) ?? null;
   const activePin = suggestions.find((store) => storeKey(store) === activePinKey) ?? null;
   const activePosition = activePin ? placeOf.get(storeKey(activePin)) : null;
+
+  // A different customer is a different set of pins: fit the view to them again.
+  function chooseCustomer(next: number | 'all') {
+    setCustomerId(next);
+    mapView.reset();
+  }
 
   function startDrag(event: PointerEvent<HTMLButtonElement>, key: string) {
     if (savingRef.current || event.button !== 0) return;
@@ -310,7 +335,7 @@ export function StoreMap() {
         <Button
           size="small"
           variant={customerId === 'all' ? 'contained' : 'outlined'}
-          onClick={() => setCustomerId('all')}
+          onClick={() => chooseCustomer('all')}
         >
           All customers
         </Button>
@@ -319,7 +344,7 @@ export function StoreMap() {
             key={customer.id}
             size="small"
             variant={customerId === customer.id ? 'contained' : 'outlined'}
-            onClick={() => setCustomerId(customer.id)}
+            onClick={() => chooseCustomer(customer.id)}
           >
             {customer.name}
           </Button>
@@ -333,6 +358,8 @@ export function StoreMap() {
             label="Store locations coloured by sell-through"
             bounds={bounds}
             onSizeChange={setMapPx}
+            panHandlers={mapView.panHandlers}
+            grabbing={mapView.grabbing}
           >
             {mapStores.length === 0 ? (
               <Typography variant="body2" sx={{ p: 2, color: tokens.text.secondary }}>
@@ -342,57 +369,64 @@ export function StoreMap() {
             {mapStores.map((store) => {
               const key = storeKey(store);
               const unconfirmed = suggestedKeys.has(key);
-              const coordinates = points.find((point) => point.id === key)!;
-              const pin = placeOf.get(storeKey(store));
+              const coordinates = pointOf.get(key)!;
+              const pin = placeOf.get(key);
               if (!pin) return null;
               const color = sellThroughColor(
                 store.sell_through,
                 tokens.semantic.success,
                 tokens.semantic.danger
               );
+              const on = unconfirmed ? activePinKey === key : selectedKey === key;
+              // The Shipments marker: solid = a pin a steward saved, hollow dashed = a proposal
+              // (see PinLegend). The sell-through colour stays the marker colour.
               return (
-                <Box
-                  key={storeKey(store)}
-                  component="button"
-                  type="button"
+                <MapMarker
+                  key={key}
+                  x={pin.x}
+                  y={pin.y}
+                  offset={{ dx: pin.dx, dy: pin.dy }}
+                  hit={PIN_HIT_PX}
+                  color={color}
+                  size={on ? 16 : 11}
+                  selected={on}
+                  hollow={unconfirmed}
+                  glow={mapStores.length <= GLOW_PIN_LIMIT}
+                  zIndex={on ? 1 : undefined}
+                  cursor={unconfirmed ? 'grab' : 'pointer'}
+                  touchAction={unconfirmed ? 'none' : 'auto'}
                   data-testid={unconfirmed ? 'store-dot-unconfirmed' : 'store-dot'}
                   data-pin-state={unconfirmed ? 'unconfirmed' : 'confirmed'}
                   data-latitude={coordinates.latitude}
                   data-longitude={coordinates.longitude}
                   data-customer-id={store.customer_id}
                   aria-label={`${storePlace(store)}, ${store.site_label}, ${store.customer_name ?? ''}`}
-                  onMouseEnter={() => setHoverKey(storeKey(store))}
-                  onMouseLeave={() =>
-                    setHoverKey((current) => (current === storeKey(store) ? null : current))
-                  }
+                  aria-pressed={unconfirmed ? undefined : on}
+                  onMouseEnter={() => setHoverKey(key)}
+                  onMouseLeave={() => setHoverKey((current) => (current === key ? null : current))}
+                  onFocus={() => setHoverKey(key)}
+                  onBlur={() => setHoverKey((current) => (current === key ? null : current))}
                   onClick={() => (unconfirmed ? setActivePinKey(key) : setSelectedKey(key))}
                   onPointerDown={unconfirmed ? (event) => startDrag(event, key) : undefined}
                   onPointerMove={unconfirmed ? moveDrag : undefined}
                   onPointerUp={unconfirmed ? (event) => endDrag(event) : undefined}
                   onPointerCancel={unconfirmed ? (event) => endDrag(event, true) : undefined}
                   onLostPointerCapture={unconfirmed ? (event) => endDrag(event, true) : undefined}
-                  sx={{
-                    position: 'absolute',
-                    left: `${pin.x}%`,
-                    top: `${pin.y}%`,
-                    width: 14,
-                    height: 14,
-                    transform: `translate(calc(-50% + ${pin.dx}px), calc(-50% + ${pin.dy}px))`,
-                    borderRadius: '50%',
-                    border: unconfirmed
-                      ? `2px dashed ${tokens.text.primary}`
-                      : `2px solid ${tokens.bg.surface}`,
-                    // hollow = proposed, filled = a pin a steward saved (see PinLegend)
-                    bgcolor: unconfirmed ? 'transparent' : color,
-                    p: 0,
-                    cursor: unconfirmed ? 'grab' : 'pointer',
-                    touchAction: unconfirmed ? 'none' : 'auto',
-                  }}
                 />
               );
             })}
+            <MapViewControls
+              data-testid="store-map-view-controls"
+              onZoomIn={mapView.zoomIn}
+              onZoomOut={mapView.zoomOut}
+              onReset={mapView.reset}
+              canZoomIn={mapView.canZoomIn}
+              canZoomOut={mapView.canZoomOut}
+              canReset={mapView.panned}
+            />
             {activePin && activePosition ? (
               <Box
+                data-no-pan
                 data-testid="store-pin-actions"
                 sx={{
                   position: 'absolute',

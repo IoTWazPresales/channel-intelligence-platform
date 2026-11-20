@@ -7,7 +7,13 @@ import { apiPost } from '@/lib/api';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { StoreMap } from './StoreMap';
+import { storeMapBounds } from './storeMapLayout';
 import type { StoreMapPayload } from './types';
+
+/** The marker dot inside a pin's click target: the same element the Shipments map draws. */
+function dotOf(pin: HTMLElement): HTMLElement {
+  return pin.querySelector('[data-marker-dot]') as HTMLElement;
+}
 
 const hoisted = vi.hoisted(() => ({
   payload: null as StoreMapPayload | null,
@@ -186,7 +192,11 @@ describe('StoreMap', () => {
     const list = screen.getByTestId('store-map-unpinned');
     expect(canvas).toHaveAttribute('data-map-canvas');
     expect(getComputedStyle(canvas).aspectRatio).toMatch(/^1000\s*\/\s*646$/);
-    expect(within(canvas).getByRole('img')).toHaveAttribute('viewBox', '0 0 1000 646');
+    // Same box and basemap; the view zooms to the pins but keeps the 1000/646 aspect.
+    const [, , viewWidth, viewHeight] = (within(canvas).getByRole('img').getAttribute('viewBox') ?? '')
+      .split(' ')
+      .map(Number);
+    expect(viewWidth / viewHeight).toBeCloseTo(1000 / 646);
     expect(getComputedStyle(list).height).toBe('646px');
     expect(screen.getByTestId('store-map-unpinned-scroll')).toBeInTheDocument();
   });
@@ -421,8 +431,11 @@ describe('StoreMap', () => {
     const solid = screen.getAllByTestId('store-dot')[0];
     expect(parseFloat(getComputedStyle(pin).left)).toBeGreaterThan(parseFloat(getComputedStyle(solid).left));
     expect(parseFloat(getComputedStyle(pin).top)).toBeGreaterThan(parseFloat(getComputedStyle(solid).top));
-    expect(getComputedStyle(pin).borderStyle).toBe('dashed');
-    expect(getComputedStyle(solid).borderStyle).toBe('solid');
+    // Same marker as the Shipments map: hollow dashed when proposed, solid when saved.
+    expect(getComputedStyle(dotOf(pin)).borderStyle).toBe('dashed');
+    expect(dotOf(pin)).toHaveAttribute('data-hollow', 'true');
+    expect(dotOf(solid)).toHaveAttribute('data-hollow', 'false');
+    expect(getComputedStyle(dotOf(solid)).borderStyle).not.toBe('dashed');
     fireEvent.click(screen.getByRole('button', { name: 'SDC-C2' }));
     expect(screen.queryByTestId('store-dot-unconfirmed')).toBeNull();
     expect(screen.getAllByTestId('store-dot')).toHaveLength(1);
@@ -438,19 +451,27 @@ describe('StoreMap', () => {
     hoisted.payload = suggestedPayload();
     wrap(<StoreMap />);
     const pin = await screen.findByTestId('store-dot-unconfirmed');
+    const fitted = storeMapBounds([
+      { latitude: 1.5, longitude: 2.5 }, { latitude: -33.9, longitude: 18.4 },
+    ]);
     vi.spyOn(screen.getByTestId('store-map-canvas'), 'getBoundingClientRect').mockReturnValue({
       x: 0, y: 0, left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, toJSON: () => ({}),
     });
     fireEvent.pointerDown(pin, { pointerId: 1, button: 0, clientX: 400, clientY: 300 });
     fireEvent.pointerMove(pin, { pointerId: 1, clientX: 450, clientY: 275 });
     fireEvent.pointerMove(pin, { pointerId: 1, clientX: 500, clientY: 250 });
-    expect(Number(pin.dataset.latitude)).toBeCloseTo(-23.7, 6);
-    expect(Number(pin.dataset.longitude)).toBeCloseTo(34.2, 6);
+    // The view is the fit to the pins at pointer down, so a 10% drag moves each axis by 10% of
+    // that view's span, from the pin's (-33.9, 18.4). The map itself does not pan.
+    const expectedLatitude = -33.9 + 0.1 * (fitted.maxLat - fitted.minLat);
+    const expectedLongitude = 18.4 + 0.1 * (fitted.maxLon - fitted.minLon);
+    expect(Number(pin.dataset.latitude)).toBeCloseTo(expectedLatitude, 5);
+    expect(Number(pin.dataset.longitude)).toBeCloseTo(expectedLongitude, 5);
     fireEvent.pointerUp(pin, { pointerId: 1, clientX: 500, clientY: 250 });
     const latitude = Number(pin.dataset.latitude);
     const longitude = Number(pin.dataset.longitude);
-    expect(latitude).toBeCloseTo(-23.7, 6);
-    expect(longitude).toBeCloseTo(34.2, 6);
+    expect(latitude).toBeCloseTo(expectedLatitude, 5);
+    expect(longitude).toBeCloseTo(expectedLongitude, 5);
+    expect(screen.getByTestId('map-reset-view')).toBeDisabled();
     expect(hoisted.posted).toEqual([]);
     expect(apiPost).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'SDC-C2' }));
@@ -494,10 +515,11 @@ describe('StoreMap', () => {
       expect(legend).toHaveTextContent('Confirmed pin');
       expect(legend).toHaveTextContent('Proposed pin');
       expect(getComputedStyle(within(legend).getByTestId('legend-proposed-dot')).borderStyle).toBe('dashed');
-      expect(getComputedStyle(within(legend).getByTestId('legend-confirmed-dot')).borderStyle).toBe('solid');
+      expect(within(legend).getByTestId('legend-confirmed-dot')).toHaveAttribute('data-hollow', 'false');
       // the dot on the map matches the legend: hollow when proposed
-      const dot = screen.getByTestId('store-dot-unconfirmed');
+      const dot = dotOf(screen.getByTestId('store-dot-unconfirmed'));
       expect(getComputedStyle(dot).backgroundColor).toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+      expect(getComputedStyle(dot).borderStyle).toBe('dashed');
     });
 
     it('lists the proposals with a Confirm that uses the confirm route and saves one pin', async () => {
@@ -598,8 +620,143 @@ describe('StoreMap', () => {
     fireEvent.pointerDown(pin, { pointerId: 1, button: 0, clientX: 500, clientY: 250 });
     fireEvent.pointerMove(pin, { pointerId: 1, clientX: 600, clientY: 200 });
     fireEvent.pointerUp(pin, { pointerId: 1, clientX: 600, clientY: 200 });
-    expect(Number(pin.dataset.latitude)).toBeCloseTo(-23.7, 6);
-    expect(Number(pin.dataset.longitude)).toBeCloseTo(34.2, 6);
+    // A lone pin gets the minimum continent-scale view centred on it: a 10% drag of its span.
+    const view = storeMapBounds([{ latitude: -33.9, longitude: 18.4 }]);
+    expect(view.maxLon - view.minLon).toBeGreaterThanOrEqual(60);
+    expect(Number(pin.dataset.latitude)).toBeCloseTo(-33.9 + 0.1 * (view.maxLat - view.minLat), 5);
+    expect(Number(pin.dataset.longitude)).toBeCloseTo(18.4 + 0.1 * (view.maxLon - view.minLon), 5);
     expect(hoisted.posted).toEqual([]);
+  });
+
+  describe('pan, zoom and reset', () => {
+    const rect = {
+      x: 0, y: 0, left: 0, top: 0, width: 1000, height: 646, right: 1000, bottom: 646, toJSON: () => ({}),
+    };
+    const viewBoxOf = () => (within(screen.getByTestId('store-map-canvas')).getByRole('img').getAttribute('viewBox') ?? '')
+      .split(' ').map(Number);
+
+    async function mapReady() {
+      hoisted.payload = suggestedPayload();
+      wrap(<StoreMap />);
+      const canvas = await screen.findByTestId('store-map-canvas');
+      await screen.findByTestId('store-dot-unconfirmed');
+      vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue(rect);
+      return canvas;
+    }
+
+    it('drags the background to pan the view without touching any stored coordinate', async () => {
+      const canvas = await mapReady();
+      const before = viewBoxOf();
+      const pins = screen.getAllByTestId(/^store-dot/).map((pin) => [pin.dataset.latitude, pin.dataset.longitude]);
+      expect(getComputedStyle(canvas).cursor).toBe('grab');
+      expect(screen.getByTestId('map-reset-view')).toBeDisabled();
+      fireEvent.pointerDown(canvas, { pointerId: 1, button: 0, clientX: 500, clientY: 300 });
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 400, clientY: 340 });
+      expect(getComputedStyle(canvas).cursor).toBe('grabbing');
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 400, clientY: 340 });
+      const after = viewBoxOf();
+      // Dragging left shows what lies east; dragging down shows what lies north.
+      expect(after[0]).toBeGreaterThan(before[0]);
+      expect(after[1]).toBeLessThan(before[1]);
+      expect(after[2]).toBeCloseTo(before[2]);
+      expect(after[3]).toBeCloseTo(before[3]);
+      expect(getComputedStyle(canvas).cursor).toBe('grab');
+      expect(screen.getAllByTestId(/^store-dot/).map((pin) => [pin.dataset.latitude, pin.dataset.longitude])).toEqual(pins);
+      expect(hoisted.posted).toEqual([]);
+      expect(apiPost).not.toHaveBeenCalled();
+    });
+
+    it('keeps a click without movement from panning or changing the selection', async () => {
+      const canvas = await mapReady();
+      const before = viewBoxOf();
+      fireEvent.pointerDown(canvas, { pointerId: 1, button: 0, clientX: 500, clientY: 300 });
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 501, clientY: 301 });
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 501, clientY: 301 });
+      fireEvent.click(canvas);
+      expect(viewBoxOf()).toEqual(before);
+      expect(screen.getByTestId('map-reset-view')).toBeDisabled();
+      expect(screen.queryByTestId('store-map-lines')).toBeNull();
+      // A click on a confirmed pin still selects it.
+      fireEvent.click(screen.getAllByTestId('store-dot')[0]);
+      expect(screen.getByTestId('store-map-lines')).toBeInTheDocument();
+      expect(viewBoxOf()).toEqual(before);
+    });
+
+    it('drags a proposed pin, not the map, when the gesture starts on the pin', async () => {
+      await mapReady();
+      const pin = screen.getByTestId('store-dot-unconfirmed');
+      const latitude = pin.dataset.latitude;
+      fireEvent.pointerDown(pin, { pointerId: 1, button: 0, clientX: 500, clientY: 300 });
+      fireEvent.pointerMove(pin, { pointerId: 1, clientX: 450, clientY: 280 });
+      fireEvent.pointerUp(pin, { pointerId: 1, clientX: 450, clientY: 280 });
+      expect(pin.dataset.latitude).not.toBe(latitude);
+      // The map was not panned: its view is still the automatic fit.
+      expect(screen.getByTestId('map-reset-view')).toBeDisabled();
+    });
+
+    it('resets the view, and zooms in and out with the buttons', async () => {
+      const canvas = await mapReady();
+      const before = viewBoxOf();
+      fireEvent.pointerDown(canvas, { pointerId: 1, button: 0, clientX: 500, clientY: 300 });
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 400, clientY: 300 });
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 400, clientY: 300 });
+      expect(viewBoxOf()).not.toEqual(before);
+      fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
+      expect(viewBoxOf()).toEqual(before);
+      expect(screen.getByTestId('map-reset-view')).toBeDisabled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+      const zoomed = viewBoxOf();
+      expect(zoomed[2]).toBeLessThan(before[2]);
+      expect(zoomed[2] / zoomed[3]).toBeCloseTo(1000 / 646);
+      expect(screen.getByTestId('map-reset-view')).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+      expect(viewBoxOf()[2]).toBeCloseTo(before[2]);
+      fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
+      expect(viewBoxOf()).toEqual(before);
+    });
+
+    it('pans under a customer filter, and a new filter fits the view to its pins again', async () => {
+      const canvas = await mapReady();
+      fireEvent.click(screen.getByRole('button', { name: 'SDC-C1' }));
+      const filtered = viewBoxOf();
+      fireEvent.pointerDown(canvas, { pointerId: 1, button: 0, clientX: 500, clientY: 300 });
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 450, clientY: 300 });
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 450, clientY: 300 });
+      expect(viewBoxOf()[0]).toBeGreaterThan(filtered[0]);
+      expect(screen.getAllByTestId('store-dot')).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: 'SDC-C2' }));
+      expect(screen.getByTestId('map-reset-view')).toBeDisabled();
+    });
+  });
+
+  it('does not draw a store with unusable coordinates; it stays in the No coordinates list', async () => {
+    const base = payload();
+    hoisted.payload = {
+      ...base,
+      stores: [
+        base.stores[0],
+        { ...base.stores[1], site_label: 'Blank site', latitude: null, longitude: null },
+        { ...base.stores[1], site_label: 'Zero site', latitude: 0, longitude: 0 },
+        { ...base.stores[1], site_label: 'Text site', latitude: Number.NaN, longitude: 5 },
+      ],
+    };
+    wrap(<StoreMap />);
+    // The canvas is there before the data is, so wait for the usable store's dot itself.
+    expect(await screen.findAllByTestId('store-dot')).toHaveLength(1);
+    const list = screen.getByTestId('store-map-unpinned');
+    for (const label of ['Blank site', 'Zero site', 'Text site']) expect(list).toHaveTextContent(label);
+  });
+
+  it('draws pins with the Shipments marker: selection grows the dot and sets the pressed state', async () => {
+    hoisted.payload = suggestedPayload();
+    wrap(<StoreMap />);
+    const solid = (await screen.findAllByTestId('store-dot'))[0];
+    expect(solid).toHaveAttribute('aria-pressed', 'false');
+    expect(getComputedStyle(dotOf(solid)).width).toBe('11px');
+    fireEvent.click(solid);
+    expect(solid).toHaveAttribute('aria-pressed', 'true');
+    expect(getComputedStyle(dotOf(solid)).width).toBe('16px');
+    expect(dotOf(solid).parentElement).toBe(solid);
   });
 });
