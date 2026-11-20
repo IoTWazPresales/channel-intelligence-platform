@@ -1,0 +1,13 @@
+# Synthetic robots.txt for the matcher tests. The .test host is invented.
+User-agent: examplebot
+Disallow: /
+
+User-agent: *
+Disallow: /private/
+Disallow: /*?
+Allow: /?*
+Disallow: /files/*.pdf$
+Allow: /files/public/
+Disallow: /shop/
+Allow: /shop/open/
+Sitemap: https://wild.example.test/sitemap_a.xml

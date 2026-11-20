@@ -1,0 +1,5 @@
+User-agent: *
+Disallow:
+
+Sitemap: https://maps.example.test/sitemap-products.xml
+Sitemap: https://maps.example.test/sitemap-pages.xml
