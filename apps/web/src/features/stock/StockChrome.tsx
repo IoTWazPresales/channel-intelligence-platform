@@ -14,12 +14,12 @@ import { apiGet } from '@/lib/api';
 export const STOCK_TITLE = 'Stock & Sell-through';
 
 export const STOCK_DESCRIPTION =
-  'Distributor and retailer stock, weeks of cover, sell-out velocity and execution against plan — all derived from imported sell-out, SOH and shipment files.';
+  'Distributor and retailer stock, weeks of cover, sell-out velocity and execution against plan - all derived from imported sell-out, SOH and shipment files.';
 
 export type StockDomainLens = 'cover' | 'movement' | 'sellthrough' | 'execution' | 'forecast' | 'replenishment';
 
 const LENSES: { value: StockDomainLens; label: string; href: string }[] = [
-  { value: 'cover', label: 'Cover', href: '/stock?lens=cover' },
+  { value: 'cover', label: 'Inventory', href: '/inventory' },
   { value: 'movement', label: 'Movement', href: '/stock?lens=movement' },
   { value: 'sellthrough', label: 'Sell-through', href: '/channel-intelligence' },
   { value: 'replenishment', label: 'Stores and DCs', href: '/stock/replenishment' },

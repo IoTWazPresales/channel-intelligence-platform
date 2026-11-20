@@ -72,7 +72,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const displayName =
     (me?.display_name && me.display_name.trim()) ||
     (me?.email && me.email.trim()) ||
-    (meError ? 'Signed out' : '…');
+    (meError ? 'Signed out' : '.');
 
   const { data: briefMeta } = useBriefSignals();
   const badges = useMemo(() => domainBadgesFromSpine(briefMeta?.spine_badges), [briefMeta?.spine_badges]);
@@ -191,7 +191,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
               />
             ) : null}
           </Stack>
-          <Tooltip title="Search workflows (Ctrl/⌘ K)">
+          <Tooltip title="Search workflows (Ctrl/? K)">
             <Paper
               component="button"
               type="button"
@@ -216,18 +216,18 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             >
               <SearchIcon fontSize="small" />
               <Typography variant="body2" sx={{ display: { xs: 'none', md: 'block' }, flex: 1, textAlign: 'left' }}>
-                Find a workflow…
+                Find a workflow.
               </Typography>
               <Typography
                 variant="caption"
                 sx={{ display: { xs: 'none', md: 'block' }, border: '1px solid', borderColor: 'divider', borderRadius: 0.75, px: 0.5 }}
               >
-                ⌘K
+                ?K
               </Typography>
             </Paper>
           </Tooltip>
-          <Tooltip title={attention ? `${attention} signal${attention === 1 ? '' : 's'} need attention` : 'Attention'}>
-            <IconButton component={Link} href="/brief" aria-label="Attention" data-testid="topbar-attention">
+          <Tooltip title={attention ? `${attention} signal${attention === 1 ? '' : 's'} need attention` : 'Dashboard'}>
+            <IconButton component={Link} href="/brief" aria-label="Dashboard" data-testid="topbar-attention">
               <Badge badgeContent={attention || 0} color="warning" max={99}>
                 <NotificationsNoneOutlinedIcon />
               </Badge>

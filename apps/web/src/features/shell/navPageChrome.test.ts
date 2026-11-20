@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { OVERVIEW_LEAVES } from '@/features/overview/overviewPaths';
+import { STOCK_LENSES } from '@/features/stock/stockLenses';
+
+import { paletteHits } from './CommandPalette';
+import { navGroups, shellNavGroups } from './navConfig';
 import { matchNavLeaf, navPageChrome } from './navPageChrome';
 
 describe('matchNavLeaf (D-0008)', () => {
@@ -51,18 +56,39 @@ describe('matchNavLeaf (D-0008)', () => {
 
 describe('navPageChrome (D-0008)', () => {
   it('builds domain + leaf crumbs with a domain hub href when the leaf is not the hub', () => {
-    const chrome = navPageChrome('/stock', { search: '?lens=cover' });
-    expect(chrome.title).toBe('Cover');
+    const chrome = navPageChrome('/inventory');
+    expect(chrome.title).toBe('Inventory');
     expect(chrome.crumbs).toEqual([
       { label: 'Stock & Sell-through', href: '/stock' },
-      { label: 'Cover' },
+      { label: 'Inventory' },
     ]);
   });
 
   it('omits the domain href when the leaf is the domain hub', () => {
     const chrome = navPageChrome('/brief');
+    expect(chrome.title).toBe('Dashboard');
     expect(chrome.crumbs[0]).toEqual({ label: 'Overview' });
-    expect(chrome.crumbs[1]).toEqual({ label: 'Attention' });
+    expect(chrome.crumbs[1]).toEqual({ label: 'Dashboard' });
+  });
+
+  it('uses Chart builder at the existing dashboards route', () => {
+    expect(navPageChrome('/dashboards')).toEqual({
+      title: 'Chart builder',
+      crumbs: [
+        { label: 'Overview', href: '/brief' },
+        { label: 'Chart builder' },
+      ],
+    });
+  });
+
+  it('owns Costs under Planning', () => {
+    expect(navPageChrome('/costs')).toEqual({
+      title: 'Costs',
+      crumbs: [
+        { label: 'Planning', href: '/lineup' },
+        { label: 'Costs' },
+      ],
+    });
   });
 
   it('links the parent leaf when extra crumbs are present', () => {
@@ -118,5 +144,49 @@ describe('navPageChrome (D-0008)', () => {
     expect(matchNavLeaf('/lineup')).toBeNull();
     expect(matchNavLeaf('/admin/users/list')?.item.label).toBe('Users & roles');
     expect(matchNavLeaf('/admin/users')).toBeNull();
+  });
+});
+
+describe('shared navigation labels', () => {
+  it.each([
+    ['Dashboard', '/brief'],
+    ['Chart builder', '/dashboards'],
+    ['Inventory', '/inventory'],
+    ['Costs', '/costs'],
+  ])('uses %s in both the directory source and command palette', (label, href) => {
+    const directoryLeaves = shellNavGroups('admin').flatMap((group) => group.items);
+    expect(directoryLeaves.find((leaf) => leaf.href === href)?.label).toBe(label);
+    expect(paletteHits('admin', label)).toContainEqual(expect.objectContaining({ label, href }));
+  });
+
+  it('removes retired labels and Recorded prices from the directory and palette source', () => {
+    const leaves = navGroups.flatMap((group) => group.items);
+    const labels = leaves.map((leaf) => leaf.label);
+    for (const label of ['Cover', 'Brief', 'Attention', 'Business dashboard', 'Recorded prices']) {
+      expect(labels).not.toContain(label);
+    }
+    expect(leaves.some((leaf) => leaf.href === '/pricing')).toBe(false);
+    expect(paletteHits('admin', 'Recorded prices')).toEqual([]);
+  });
+
+  it('aligns the separately defined Overview and Stock labels', () => {
+    expect(OVERVIEW_LEAVES.find((leaf) => leaf.value === 'hub')).toMatchObject({
+      label: 'Dashboard',
+      href: '/brief',
+    });
+    expect(OVERVIEW_LEAVES.find((leaf) => leaf.value === 'dashboard')).toMatchObject({
+      label: 'Chart builder',
+      href: '/dashboards',
+    });
+    expect(STOCK_LENSES.find((lens) => lens.id === 'cover')?.label).toBe('Inventory');
+  });
+
+  it('describes Budget ledger without claiming it has no rows', () => {
+    const funding = navGroups.find((group) => group.id === 'funding');
+    const ledger = funding?.items.find((leaf) => leaf.href === '/budgets');
+    expect(ledger?.label).toBe('Budget ledger');
+    expect(ledger?.what).toBe(
+      'Budget positions and ledger entries showing reservations, commitments, consumption, releases, payments and remaining funding.',
+    );
   });
 });

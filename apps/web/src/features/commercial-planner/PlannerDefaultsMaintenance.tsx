@@ -2,16 +2,14 @@
 
 import {
   Alert,
-  Box,
   Button,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   InputLabel,
+  Link,
   MenuItem,
   Paper,
   Select,
@@ -19,14 +17,14 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState } from 'react';
+import NextLink from 'next/link';
+import { useMemo, useState } from 'react';
 
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import {
@@ -36,7 +34,7 @@ import {
   splitCostCurrencyForSelect,
   validateSkuEconomicsInputs,
 } from '@/features/commercial-planner/skuEconomicsCurrencyUi';
-import { apiDelete, apiDownloadBlob, apiGet, apiPatch, apiPost, apiPostFormData } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 
 type CustomerTerm = {
   id: number;
@@ -66,30 +64,6 @@ type SkuAssumption = {
   fx_plan_currency_per_cost_currency: number;
   reserve_total_pct: number;
   promo_reserve_split_pct: number;
-};
-
-type SkuImportPreviewRow = {
-  source_row: number;
-  sku: string | null;
-  part_number: string | null;
-  sales_model: string | null;
-  model_name: string | null;
-  product_id: number | null;
-  product_sku: string | null;
-  product_name: string | null;
-  match_method: string | null;
-  action: string;
-  messages: string[];
-  blocking: boolean;
-  current: Record<string, unknown> | null;
-  proposed: Record<string, unknown> | null;
-};
-
-type SkuImportPreviewResponse = {
-  parse_errors: string[];
-  rows: SkuImportPreviewRow[];
-  summary: { creates: number; updates: number; errors: number; blocking_errors: number };
-  can_apply: boolean;
 };
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
@@ -176,15 +150,6 @@ export function PlannerDefaultsMaintenance() {
   const [resSplit, setResSplit] = useState('0.5');
   const [editSkuId, setEditSkuId] = useState<number | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importPreview, setImportPreview] = useState<SkuImportPreviewResponse | null>(null);
-  const [importApplySummary, setImportApplySummary] = useState<{ applied_creates: number; applied_updates: number } | null>(
-    null
-  );
-  const [importConfirm, setImportConfirm] = useState(false);
-  const [importFileLabel, setImportFileLabel] = useState<string | null>(null);
-  const lastImportFileRef = useRef<File | null>(null);
-
   const planCurrencyHint = useMemo(() => {
     const raw = (plansForCcy?.[0]?.currency_code ?? '').trim();
     return raw || null;
@@ -218,38 +183,6 @@ export function PlannerDefaultsMaintenance() {
     void qc.invalidateQueries({ queryKey: ['plan-readiness'] });
     void qc.invalidateQueries({ queryKey: ['admin-products'] });
   };
-
-  const previewSkuImport = useMutation({
-    mutationFn: async (file: File) => {
-      const fd = new FormData();
-      fd.append('file', file);
-      return apiPostFormData<SkuImportPreviewResponse>('/api/v1/commercial-planner/sku-assumptions/import-preview', fd);
-    },
-    onSuccess: (data) => {
-      setImportPreview(data);
-      setImportApplySummary(null);
-      setImportConfirm(false);
-    },
-  });
-
-  const applySkuImport = useMutation({
-    mutationFn: async (file: File) => {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('confirm', 'true');
-      return apiPostFormData<{ applied_creates: number; applied_updates: number; summary: unknown }>(
-        '/api/v1/commercial-planner/sku-assumptions/import-apply',
-        fd
-      );
-    },
-    onSuccess: (data) => {
-      setImportApplySummary({ applied_creates: data.applied_creates, applied_updates: data.applied_updates });
-      setImportPreview(null);
-      setImportFileLabel(null);
-      setImportConfirm(false);
-      invalidateAll();
-    },
-  });
 
   const saveCustomerTerm = useMutation({
     mutationFn: async () => {
@@ -391,7 +324,7 @@ export function PlannerDefaultsMaintenance() {
           </Button>
         </Stack>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          One row per customer: default <strong>margin</strong> and <strong>rebate</strong> as fractions (0–1). Plan lines can still override
+          One row per customer: default <strong>margin</strong> and <strong>rebate</strong> as fractions (0-1). Plan lines can still override
           per line.
         </Typography>
         <TextField size="small" label="Filter" value={custQ} onChange={(e) => setCustQ(e.target.value)} sx={{ mb: 1, minWidth: 240 }} />
@@ -416,9 +349,7 @@ export function PlannerDefaultsMaintenance() {
             ) : (
               (customerTerms ?? []).map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell>
-                    {r.customer_code} — {r.customer_name}
-                  </TableCell>
+                  <TableCell>{r.customer_name}</TableCell>
                   <TableCell>{r.customer_margin_pct}</TableCell>
                   <TableCell>{r.customer_rebate_pct}</TableCell>
                   <TableCell align="right">
@@ -444,7 +375,7 @@ export function PlannerDefaultsMaintenance() {
           </Button>
         </Stack>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          One row per distributor: default <strong>distributor margin</strong> (0–1) applied in channel economics unless overridden on a
+          One row per distributor: default <strong>distributor margin</strong> (0-1) applied in channel economics unless overridden on a
           line.
         </Typography>
         <TextField size="small" label="Filter" value={distQ} onChange={(e) => setDistQ(e.target.value)} sx={{ mb: 1, minWidth: 240 }} />
@@ -468,9 +399,7 @@ export function PlannerDefaultsMaintenance() {
             ) : (
               (distributorTerms ?? []).map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell>
-                    {r.distributor_code} — {r.distributor_name}
-                  </TableCell>
+                  <TableCell>{r.distributor_name}</TableCell>
                   <TableCell>{r.distributor_margin_pct}</TableCell>
                   <TableCell align="right">
                     <Button size="small" onClick={() => openEditDistributor(r)}>
@@ -511,7 +440,7 @@ export function PlannerDefaultsMaintenance() {
         </Stack>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
           One row per product: <strong>controlled cost / PM bottom</strong> (amount +{' '}
-          <code>controlled_cost_currency_code</code>), <strong>VAT rate</strong> (0–1),{' '}
+          <code>controlled_cost_currency_code</code>), <strong>VAT rate</strong> (0-1),{' '}
           <strong>FX: plan currency units per 1 controlled-cost currency</strong>, total <strong>reserve %</strong>, and{' '}
           <strong>campaign/support reserve split</strong> (share of the reserve bucket). These inputs feed Plans & line economics.{' '}
           <strong>DAP evidence is not used as controlled cost.</strong> Margin is measured against controlled cost.
@@ -520,185 +449,23 @@ export function PlannerDefaultsMaintenance() {
         </Typography>
         <Alert severity="info" sx={{ mb: 1, py: 0.5 }} data-testid="planner-defaults-sku-economics-disclaimers">
           <Typography variant="caption" component="div">
-            DAP / sell-in evidence stays on the lineup and workbench — it does not populate SKU economics inputs. Landed
+            DAP / sell-in evidence stays on the lineup and workbench - it does not populate SKU economics inputs. Landed
             cost (logistics, duties) is separate from PM bottom and is not part of the margin.
           </Typography>
         </Alert>
-        <Alert severity="warning" sx={{ mb: 1, py: 0.5 }} data-testid="planner-defaults-sku-bulk-dap-copy">
-          <Typography variant="caption" component="div">
-            <strong>Controlled cost / PM bottom</strong> must come from an approved cost source. DAP and Rand landed evidence
-            are <strong>not</strong> used as controlled cost. Do not add DAP columns to this template.
-          </Typography>
-        </Alert>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          Bulk template: match products by <code>sku</code> first, then <code>part_number</code>, then a unique{' '}
-          <code>sales_model</code> + <code>model_name</code> pair. Percent fields accept decimals 0–1 (e.g. 0.15) or percent
-          points 1–100 (e.g. 15); values between 1 and 100 are divided by 100. Optional columns{' '}
-          <code>notes</code>, <code>source_reference</code>, <code>valid_from</code>, <code>valid_to</code> are ignored for
-          persistence.
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Costs are uploaded on the <Link component={NextLink} href="/costs">Costs page</Link>.
         </Typography>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-          <Button
-            size="small"
-            variant="outlined"
-            data-testid="sku-economics-download-template"
-            onClick={() =>
-              void apiDownloadBlob('/api/v1/commercial-planner/sku-assumptions/import-template', 'sku_economics_template.csv')
-            }
-          >
-            Download template
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            data-testid="sku-economics-upload-trigger"
-            disabled={previewSkuImport.isPending}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Upload SKU economics file
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = '';
-              if (!f) return;
-              lastImportFileRef.current = f;
-              setImportFileLabel(f.name);
-              previewSkuImport.mutate(f);
-            }}
-          />
-          {importFileLabel ? (
-            <Typography variant="caption" color="text.secondary">
-              Selected: {importFileLabel}
-            </Typography>
-          ) : null}
-        </Stack>
-        {previewSkuImport.isError ? (
-          <Alert severity="error" sx={{ mb: 1 }}>
-            Preview failed: {previewSkuImport.error instanceof Error ? previewSkuImport.error.message : 'Unknown error'}
-          </Alert>
-        ) : null}
-        {importApplySummary ? (
-          <Alert
-            severity="success"
-            sx={{ mb: 1 }}
-            onClose={() => setImportApplySummary(null)}
-            data-testid="sku-import-apply-summary"
-          >
-            Applied: {importApplySummary.applied_creates} created, {importApplySummary.applied_updates} updated.
-          </Alert>
-        ) : null}
-        {importPreview?.parse_errors?.length ? (
-          <Alert severity="error" sx={{ mb: 1 }}>
-            {importPreview.parse_errors.map((err) => (
-              <Typography key={err} variant="caption" display="block">
-                {err}
-              </Typography>
-            ))}
-          </Alert>
-        ) : null}
-        {importPreview && !importPreview.parse_errors.length ? (
-          <Stack spacing={1} sx={{ mb: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Preview: {importPreview.summary.creates} create(s), {importPreview.summary.updates} update(s),{' '}
-              {importPreview.summary.blocking_errors} blocking error(s).
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={importConfirm}
-                  onChange={(e) => setImportConfirm(e.target.checked)}
-                  disabled={!importPreview.can_apply || applySkuImport.isPending}
-                  data-testid="sku-import-confirm-checkbox"
-                />
-              }
-              label="I confirm applying these SKU economics changes to the database."
-            />
-            <Button
-              size="small"
-              variant="contained"
-              color="primary"
-              data-testid="sku-import-apply-btn"
-              disabled={
-                !importPreview.can_apply ||
-                !importConfirm ||
-                applySkuImport.isPending ||
-                !lastImportFileRef.current
-              }
-              onClick={() => {
-                const f = lastImportFileRef.current;
-                if (f) applySkuImport.mutate(f);
-              }}
-            >
-              Apply import
-            </Button>
-            {applySkuImport.isError ? (
-              <Alert severity="error">
-                Apply failed: {applySkuImport.error instanceof Error ? applySkuImport.error.message : ''}
-              </Alert>
-            ) : null}
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360 }}>
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Row</TableCell>
-                    <TableCell>Product</TableCell>
-                    <TableCell>Match</TableCell>
-                    <TableCell>Current CC</TableCell>
-                    <TableCell>Proposed CC</TableCell>
-                    <TableCell>FX</TableCell>
-                    <TableCell>VAT</TableCell>
-                    <TableCell>Reserves</TableCell>
-                    <TableCell>Action</TableCell>
-                    <TableCell>Messages</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {importPreview.rows.map((r) => (
-                    <TableRow key={r.source_row}>
-                      <TableCell>{r.source_row}</TableCell>
-                      <TableCell>{`${r.product_sku || r.sku || '—'} — ${r.product_name || ''}`}</TableCell>
-                      <TableCell>{r.match_method ?? '—'}</TableCell>
-                      <TableCell>
-                        {r.current
-                          ? `${String(r.current.controlled_cost_amount)} ${String(r.current.controlled_cost_currency_code)}`
-                          : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {r.proposed
-                          ? `${String(r.proposed.controlled_cost_amount)} ${String(r.proposed.controlled_cost_currency_code)}`
-                          : '—'}
-                      </TableCell>
-                      <TableCell>{r.proposed ? String(r.proposed.fx_plan_currency_per_cost_currency) : '—'}</TableCell>
-                      <TableCell>{r.proposed ? String(r.proposed.vat_rate_pct) : '—'}</TableCell>
-                      <TableCell>
-                        {r.proposed
-                          ? `${String(r.proposed.reserve_total_pct)} / ${String(r.proposed.promo_reserve_split_pct)}`
-                          : '—'}
-                      </TableCell>
-                      <TableCell>{r.action}</TableCell>
-                      <TableCell>{r.messages.join('; ') || '—'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Stack>
-        ) : null}
         <TextField size="small" label="Filter" value={skuQ} onChange={(e) => setSkuQ(e.target.value)} sx={{ mb: 1, minWidth: 240 }} />
         <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>Product</TableCell>
               <TableCell>PM bottom / controlled cost (amount + ccy)</TableCell>
-              <TableCell>VAT (0–1)</TableCell>
+              <TableCell>VAT (0-1)</TableCell>
               <TableCell>FX (plan per 1 cost ccy)</TableCell>
-              <TableCell>Reserve total (0–1)</TableCell>
-              <TableCell>Campaign / support split (0–1)</TableCell>
+              <TableCell>Reserve total (0-1)</TableCell>
+              <TableCell>Campaign / support split (0-1)</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -715,7 +482,7 @@ export function PlannerDefaultsMaintenance() {
               (skuAssumptions ?? []).map((r) => (
                 <TableRow key={r.id}>
                   <TableCell>
-                    {r.product_sku} — {r.product_name}
+                    {r.product_sku} - {r.product_name}
                   </TableCell>
                   <TableCell>
                     {r.controlled_cost_amount} {(r.controlled_cost_currency_code || 'USD').trim()}
@@ -749,17 +516,17 @@ export function PlannerDefaultsMaintenance() {
                 value={custPick}
                 onChange={setCustPick}
                 fetchOptions={fetchCustomers}
-                getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
+                getOptionLabel={(o) => `${o.customer_code} - ${o.customer_name}`}
                 disabled={saveCustomerTerm.isPending}
                 helperText="Search customers; only one default row is allowed per customer."
               />
             ) : (
               <Typography variant="body2" color="text.secondary">
-                Customer: {custPick ? `${custPick.customer_code} — ${custPick.customer_name}` : ''}
+                Customer: {custPick ? `${custPick.customer_code} - ${custPick.customer_name}` : ''}
               </Typography>
             )}
-            <TextField label="Customer margin (0–1)" value={custMargin} onChange={(e) => setCustMargin(e.target.value)} />
-            <TextField label="Customer rebate (0–1)" value={custRebate} onChange={(e) => setCustRebate(e.target.value)} />
+            <TextField label="Customer margin (0-1)" value={custMargin} onChange={(e) => setCustMargin(e.target.value)} />
+            <TextField label="Customer rebate (0-1)" value={custRebate} onChange={(e) => setCustRebate(e.target.value)} />
             {saveCustomerTerm.isError ? <Alert severity="error">Save failed. Check values and duplicates.</Alert> : null}
           </Stack>
         </DialogContent>
@@ -785,16 +552,16 @@ export function PlannerDefaultsMaintenance() {
                 value={distPick}
                 onChange={setDistPick}
                 fetchOptions={fetchDistributors}
-                getOptionLabel={(o) => `${o.distributor_code} — ${o.distributor_name}`}
+                getOptionLabel={(o) => `${o.distributor_code} - ${o.distributor_name}`}
                 disabled={saveDistTerm.isPending}
                 helperText="Search distributors; one default row per distributor."
               />
             ) : (
               <Typography variant="body2" color="text.secondary">
-                Distributor: {distPick ? `${distPick.distributor_code} — ${distPick.distributor_name}` : ''}
+                Distributor: {distPick ? `${distPick.distributor_code} - ${distPick.distributor_name}` : ''}
               </Typography>
             )}
-            <TextField label="Distributor margin (0–1)" value={distMargin} onChange={(e) => setDistMargin(e.target.value)} />
+            <TextField label="Distributor margin (0-1)" value={distMargin} onChange={(e) => setDistMargin(e.target.value)} />
             {saveDistTerm.isError ? <Alert severity="error">Save failed. Check values and duplicates.</Alert> : null}
           </Stack>
         </DialogContent>
@@ -816,17 +583,17 @@ export function PlannerDefaultsMaintenance() {
                 value={skuPick}
                 onChange={setSkuPick}
                 fetchOptions={fetchProducts}
-                getOptionLabel={(o) => `${o.sku || '—'} — ${o.name || ''}`}
+                getOptionLabel={(o) => `${o.sku || '-'} - ${o.name || ''}`}
                 disabled={saveSku.isPending}
                 helperText="Search products; one SKU assumption row per product."
               />
             ) : (
               <Typography variant="body2" color="text.secondary">
-                Product: {skuPick ? `${skuPick.sku} — ${skuPick.name}` : ''}
+                Product: {skuPick ? `${skuPick.sku} - ${skuPick.name}` : ''}
               </Typography>
             )}
             <Typography variant="body2" color="text.secondary">
-              <strong>Controlled cost / PM bottom</strong> is the internal SKU cost basis for economics — not from DAP
+              <strong>Controlled cost / PM bottom</strong> is the internal SKU cost basis for economics - not from DAP
               or lineup, and not logistics-inclusive landed cost.
             </Typography>
             <TextField
@@ -858,7 +625,7 @@ export function PlannerDefaultsMaintenance() {
                 inputProps={{ maxLength: 8 }}
               />
             ) : null}
-            <TextField label="VAT rate (0–1)" value={vat} onChange={(e) => setVat(e.target.value)} />
+            <TextField label="VAT rate (0-1)" value={vat} onChange={(e) => setVat(e.target.value)} />
             <TextField label={skuFxLabel} value={fx} onChange={(e) => setFx(e.target.value)} />
             <Typography variant="caption" color="text.secondary" display="block">
               {planCurrencyHint
@@ -868,12 +635,12 @@ export function PlannerDefaultsMaintenance() {
             <Alert severity="info" sx={{ py: 0.5 }} data-testid="planner-defaults-fx-manual-notice">
               <Typography variant="caption" component="div">
                 FX is manually entered and locked on this assumption until you change it. Latest-rate automation will
-                require an FX provider and an explicit accept/lock step — not silent refresh on every visit.
+                require an FX provider and an explicit accept/lock step - not silent refresh on every visit.
               </Typography>
             </Alert>
-            <TextField label="Reserve total (0–1)" value={resTot} onChange={(e) => setResTot(e.target.value)} />
+            <TextField label="Reserve total (0-1)" value={resTot} onChange={(e) => setResTot(e.target.value)} />
             <TextField
-              label="Campaign / support reserve split (0–1)"
+              label="Campaign / support reserve split (0-1)"
               value={resSplit}
               onChange={(e) => setResSplit(e.target.value)}
             />

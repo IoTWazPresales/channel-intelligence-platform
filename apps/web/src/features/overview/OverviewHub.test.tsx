@@ -102,14 +102,14 @@ describe('OverviewHub', () => {
     queryByKey.reports = { isLoading: false, isError: false, data: { items: [], count: 0 } };
   });
 
-  it('composes start work in prime, attention exceptions, and a compact dashboard link', () => {
+  it('composes start work in prime, attention exceptions, and a compact chart builder link', () => {
     renderHub();
     expect(screen.getByTestId('overview-surface')).toBeInTheDocument();
     expect(screen.getByTestId('start-work')).toBeInTheDocument();
     expect(screen.getByTestId('start-work-create-lineup')).toHaveAttribute('href', '/admin/imports?unified=1');
     expect(screen.getByTestId('dashboard-zone')).toBeInTheDocument();
     expect(screen.getByTestId('attention-zone')).toBeInTheDocument();
-    expect(screen.getByText(/Open Business dashboard/i)).toBeInTheDocument();
+    expect(screen.getByText(/Open Chart builder/i)).toBeInTheDocument();
     expect(screen.getByText(/No dashboard yet/i)).toBeInTheDocument();
     expect(screen.queryByText(/lab fixture/i)).toBeNull();
     expect(screen.getByText('Cover breaches')).toBeInTheDocument();

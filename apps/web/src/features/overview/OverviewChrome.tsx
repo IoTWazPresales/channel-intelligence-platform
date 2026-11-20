@@ -39,14 +39,14 @@ export function OverviewChrome({
 
   const crumbs =
     leaf === 'hub'
-      ? [{ label: OVERVIEW_TITLE }]
+      ? [{ label: OVERVIEW_TITLE }, { label: leafMeta?.label ?? leaf }]
       : [{ label: OVERVIEW_TITLE, href: '/brief' }, { label: leafMeta?.label ?? leaf }];
 
   return (
     <WorkbenchCanvas>
       <DomainHeader
         crumbs={crumbs}
-        title={title ?? OVERVIEW_TITLE}
+        title={title ?? leafMeta?.label ?? OVERVIEW_TITLE}
         description={description ?? OVERVIEW_DESCRIPTION}
         meta={metaOverride === undefined ? meta : metaOverride ?? undefined}
         actions={actions}
