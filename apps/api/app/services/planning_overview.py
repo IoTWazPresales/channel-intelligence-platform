@@ -9,10 +9,12 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant_scope import tenant_id_from_user
-from app.models.commercial_lineup import CommercialLineupCase
+from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.services.commercial_planner.lineup_period_canonical import (
     active_lineup_case_filters,
+    active_lineup_line_filters,
 )
+from app.services.customer_reporting import reporting_customer_ids_select
 
 logger = logging.getLogger(__name__)
 
@@ -42,22 +44,39 @@ def _period_caption(labels: list[str]) -> str:
     return text_labels
 
 
+_UNATTRIBUTED = "Unattributed"
+_TOP_CUSTOMERS = 8
+
+
 def _customer_plan_shipped(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Top customers by plan, then ONE separate ``Unattributed`` line for customer-less rows.
+
+    Rows with no customer are never mixed into a customer and never dropped: they are summed into
+    a single line appended after the top customers (so the top-N cap cannot cut it off).
+    """
     buckets: dict[Any, dict[str, Any]] = defaultdict(
-        lambda: {"customer": "Unattributed", "customer_id": None, "plan": 0.0, "shipped": 0.0}
+        lambda: {"customer": _UNATTRIBUTED, "customer_id": None, "plan": 0.0, "shipped": 0.0}
     )
+    unattributed = {"customer": _UNATTRIBUTED, "customer_id": None, "plan": 0.0, "shipped": 0.0}
     for r in rows:
         cid = r.get("customer_id")
-        label = (r.get("customer_label") or "").strip() or "Unattributed"
-        key = cid if cid is not None else f"t:{label}"
-        b = buckets[key]
-        b["customer"] = label
+        plan = float(r.get("planned_units") or 0)
+        shipped = float(r.get("shipped_units") or 0)
+        if cid is None:
+            unattributed["plan"] += plan
+            unattributed["shipped"] += shipped
+            continue
+        b = buckets[cid]
+        b["customer"] = (r.get("customer_label") or "").strip() or f"Customer #{cid}"
         b["customer_id"] = cid
-        b["plan"] += float(r.get("planned_units") or 0)
-        b["shipped"] += float(r.get("shipped_units") or 0)
+        b["plan"] += plan
+        b["shipped"] += shipped
     out = [v for v in buckets.values() if v["plan"] > 0 or v["shipped"] > 0]
     out.sort(key=lambda r: (-r["plan"], r["customer"]))
-    return out[:8]
+    out = out[:_TOP_CUSTOMERS]
+    if unattributed["plan"] > 0 or unattributed["shipped"] > 0:
+        out.append(unattributed)
+    return out
 
 
 async def _shipped_vs_plan(db: AsyncSession) -> dict[str, Any]:
@@ -83,6 +102,7 @@ async def _shipped_vs_plan(db: AsyncSession) -> dict[str, Any]:
         db,
         period_from=default_period,
         period_to=default_period,
+        reporting_only=True,
     )
     scorecard = compute_scorecard_from_execution_rows(rows)
     fill = scorecard.get("fill_rate")
@@ -97,12 +117,32 @@ async def _shipped_vs_plan(db: AsyncSession) -> dict[str, Any]:
     }
 
 
+def reporting_case_filter():
+    """A case counts when at least one of its active lines belongs to a reporting customer.
+
+    The reporting definition is the shared one (``customer_reporting``: reports expected, not
+    merged away); nothing here re-implements it.
+    """
+    return (
+        select(CommercialLineupLine.id)
+        .where(
+            CommercialLineupLine.case_id == CommercialLineupCase.id,
+            CommercialLineupLine.customer_id.in_(reporting_customer_ids_select()),
+            *active_lineup_line_filters(),
+        )
+        .exists()
+    )
+
+
 async def planning_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     tenant = tenant_id_from_user(user)
     dbname = (await db.execute(text("SELECT current_database()"))).scalar()
-    case_filters = active_lineup_case_filters()
+    case_filters = (*active_lineup_case_filters(), reporting_case_filter())
 
     try:
+        reporting_ids = sorted(
+            {int(c) for c in (await db.execute(reporting_customer_ids_select())).scalars().all()}
+        )
         cases = int(
             (
                 await db.execute(
@@ -155,8 +195,10 @@ async def planning_overview(db: AsyncSession, user: dict | None) -> dict[str, An
                     WHERE c.superseded_by_case_id IS NULL
                       AND c.commercial_status NOT IN {_ACTIVE_STATUS_SQL}
                       AND l.row_status IS DISTINCT FROM 'superseded'
+                      AND l.customer_id = ANY(:reporting_ids)
                     """
-                )
+                ),
+                {"reporting_ids": reporting_ids},
             )
         ).mappings().one()
 
@@ -251,8 +293,8 @@ async def planning_overview(db: AsyncSession, user: dict | None) -> dict[str, An
             "economics_flagged": "Economics flagged",
         },
         "captions": {
-            "cases": f"{lines} lineup lines on active cases ({period_text}).",
-            "plan_units": "Sum of planned units on active lineup cases.",
+            "cases": f"{lines} lineup lines of reporting customers on active cases ({period_text}).",
+            "plan_units": "Sum of planned units of reporting customers on active lineup cases.",
             "shipped_vs_plan": (
                 f"Fill rate min(shipped, planned)/planned on Execution vs plan grain "
                 f"({exec_period})"

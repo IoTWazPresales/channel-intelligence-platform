@@ -46,4 +46,7 @@ async def get_plan_vs_executed(
         drill_product_id=drill_product_id,
         drill_sales_model=drill_sales_model,
         drill_bu=drill_bu,
+        # Warren 2026-11-20: Execution vs plan counts reporting customers only; customer-less rows
+        # show as one separate "Unattributed" line.
+        reporting_only=True,
     )

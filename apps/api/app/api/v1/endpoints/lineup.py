@@ -29,9 +29,23 @@ from app.services.lineup.net_requirement import (
     build_net_requirement_rows,
 )
 from app.services.lineup.profit_reservation import compute_profit_with_reservation
-from app.services.lineup.reporting_gate import reporting_plan_items_clause
+from app.services.lineup.reporting_gate import (
+    customer_is_reporting,
+    not_reporting_detail,
+    reporting_plan_items_clause,
+)
 
 router = APIRouter()
+
+
+async def _refuse_if_not_reporting(db: AsyncSession, customer_id: int | None) -> None:
+    """Line-up WRITES act on reporting customers only (same definition the reads use).
+
+    A write for a non-reporting customer is refused with the shared reason and message; the
+    rows stay untouched.
+    """
+    if not await customer_is_reporting(db, customer_id):
+        raise HTTPException(status_code=409, detail=not_reporting_detail())
 
 
 class BudgetPositionBody(BaseModel):
@@ -258,6 +272,7 @@ async def group_approve_lineup_items(
     from app.services.budget_ledger import apply_lineup_approval
 
     actor = str(user["id"])
+    await _refuse_if_not_reporting(db, body.customer_id)
     res = await db.execute(
         select(FactLineupPlanItem)
         .where(
@@ -326,6 +341,7 @@ async def patch_lineup_item(
     row = await db.get(FactLineupPlanItem, item_id, with_for_update=True)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
+    await _refuse_if_not_reporting(db, row.customer_id)
     data = body.model_dump(exclude_unset=True)
     old_approval = row.approval_status
     approval_changed = False
@@ -384,6 +400,7 @@ async def delete_lineup_item(item_id: int, db: AsyncSession = Depends(get_db)):
     row = await db.get(FactLineupPlanItem, item_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
+    await _refuse_if_not_reporting(db, row.customer_id)
     try:
         await db.delete(row)
         await db.commit()
@@ -395,10 +412,11 @@ async def delete_lineup_item(item_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/items/clear-all", status_code=200)
 async def clear_lineup_items(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+    """Delete the line-up rows of reporting customers only; rows of other customers are kept."""
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm to true")
     try:
-        res = await db.execute(delete(FactLineupPlanItem))
+        res = await db.execute(delete(FactLineupPlanItem).where(reporting_plan_items_clause()))
         await db.commit()
     except IntegrityError:
         await db.rollback()
