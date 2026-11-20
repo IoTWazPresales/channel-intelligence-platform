@@ -66,7 +66,7 @@ SEARCH_NOT_USED = "not_used"
 
 
 class RequestError(ValueError):
-    """A Preview request that cannot be accepted. ``code`` is stable for the API and tests."""
+    """A Preview request that cannot be accepted."""
 
     def __init__(self, code: str, message: str = "") -> None:
         self.code = code
@@ -86,7 +86,7 @@ class PlanStore(Protocol):
     def load(self, tenant_id: str, preview_id: str) -> dict[str, Any] | None: ...
 
     def acquire(self, tenant_id: str, preview_id: str) -> str | None:
-        """None when this preview now holds the tenant's running lock, else the running preview id."""
+        """None when this preview holds the tenant lock, else the running preview id."""
         ...
 
     def release(self, tenant_id: str, preview_id: str) -> None: ...
@@ -108,7 +108,9 @@ class RedisPlanStore:
     def save(self, tenant_id: str, preview_id: str, plan: dict[str, Any]) -> None:
         try:
             self._client.set(
-                self._plan_key(tenant_id, preview_id), json.dumps(plan, default=str), ex=PLAN_TTL_SECONDS
+                self._plan_key(tenant_id, preview_id),
+                json.dumps(plan, default=str),
+                ex=PLAN_TTL_SECONDS,
             )
         except (redis.exceptions.RedisError, OSError) as exc:
             raise StoreUnavailable(type(exc).__name__) from exc
@@ -128,7 +130,12 @@ class RedisPlanStore:
 
     def acquire(self, tenant_id: str, preview_id: str) -> str | None:
         try:
-            if self._client.set(self._lock_key(tenant_id), preview_id, nx=True, ex=RUNNING_LOCK_SECONDS):
+            if self._client.set(
+                self._lock_key(tenant_id),
+                preview_id,
+                nx=True,
+                ex=RUNNING_LOCK_SECONDS,
+            ):
                 return None
             held = self._client.get(self._lock_key(tenant_id))
         except (redis.exceptions.RedisError, OSError) as exc:
@@ -187,8 +194,7 @@ def default_plan_store() -> PlanStore:
 
 
 def normalize_request(raw: dict[str, Any]) -> dict[str, Any]:
-    """The Preview request, cleaned. Raises ``RequestError`` (``scope_invalid``, ``domain_invalid``,
-    ``customer_required``)."""
+    """Clean a Preview request or raise a RequestError with a stable code."""
     scope = raw.get("scope")
     if scope not in SCOPES:
         raise RequestError("scope_invalid", f"scope must be one of {', '.join(SCOPES)}")
@@ -205,11 +211,21 @@ def normalize_request(raw: dict[str, Any]) -> dict[str, Any]:
             raise RequestError("domain_invalid", str(exc)) from exc
     if scope == SCOPE_UNLINKED:
         customer_id = raw.get("customer_id")
-        request["customer_id"] = customer_id if isinstance(customer_id, int) and not isinstance(customer_id, bool) else None
+        request["customer_id"] = (
+            customer_id
+            if isinstance(customer_id, int) and not isinstance(customer_id, bool)
+            else None
+        )
     return request
 
 
-def new_plan(tenant_id: str, preview_id: str, request: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+def new_plan(
+    tenant_id: str,
+    preview_id: str,
+    request: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     return {
         "preview_id": preview_id,
         "tenant_id": tenant_id,
@@ -230,7 +246,7 @@ def new_preview_id() -> str:
 
 
 def mark_failed(store: PlanStore, tenant_id: str, preview_id: str, error: str) -> None:
-    """Record a failed preview. ``error`` is a code or an exception class name, never a message."""
+    """Record a failed preview; error is a code or exception class, never a message."""
     plan = store.load(tenant_id, preview_id) or new_plan(tenant_id, preview_id, {})
     plan["status"] = STATUS_FAILED
     plan["error"] = error
@@ -242,7 +258,7 @@ def mark_failed(store: PlanStore, tenant_id: str, preview_id: str, error: str) -
 
 
 class SearchTracker:
-    """Wraps the search function to count queries and summarise the attempts for the result."""
+    """Wraps the search function to count queries and summarise attempts for the result."""
 
     def __init__(self, fn: Callable[[str], Any] | None, providers: list[str]) -> None:
         self._fn = fn
@@ -263,7 +279,14 @@ class SearchTracker:
             outcome = self._fn(query)
         except Exception as exc:  # noqa: BLE001 - a preview never fails because of search
             self._statuses.append("unavailable")
-            self._add_attempt({"provider": None, "status": "unavailable", "http_status": None, "reason": type(exc).__name__})
+            self._add_attempt(
+                {
+                    "provider": None,
+                    "status": "unavailable",
+                    "http_status": None,
+                    "reason": type(exc).__name__,
+                }
+            )
             return None
         status = str(getattr(outcome, "status", "unavailable"))
         self._statuses.append(status)
@@ -292,21 +315,29 @@ class SearchTracker:
             status = "unavailable"
         elif self.queries == 0:
             status = SEARCH_NOT_USED
-        elif any(s == "ok" for s in self._statuses):
+        elif any(status_value == "ok" for status_value in self._statuses):
             status = "ok"
-        elif any(s == "empty" for s in self._statuses):
+        elif any(status_value == "empty" for status_value in self._statuses):
             status = "empty"
         else:
             status = "unavailable"
         attempts = list(self._attempts)
         if self._providers and not available and not attempts:
-            attempts = [{"provider": None, "status": "unavailable", "http_status": None, "reason": "search_not_installed"}]
+            attempts = [
+                {
+                    "provider": None,
+                    "status": "unavailable",
+                    "http_status": None,
+                    "reason": "search_not_installed",
+                }
+            ]
         return {"status": status, "provider_used": self._used, "attempts": attempts}
 
 
-def default_search_fn(settings: DiscoverySettings, getter: Any, cache: Any) -> Callable[[str], Any] | None:
-    """The web search from ``web_discovery.search`` (slice S2), or None when it is not installed
-    or the tenant has set no provider."""
+def default_search_fn(
+    settings: DiscoverySettings, getter: Any, cache: Any
+) -> Callable[[str], Any] | None:
+    """Build the search callable from tenant settings, or None when search is off."""
     if not settings.search_providers:
         return None
     try:
@@ -314,37 +345,46 @@ def default_search_fn(settings: DiscoverySettings, getter: Any, cache: Any) -> C
     except ImportError:
         return None
     parameters = inspect.signature(web_search).parameters
-    takes_any = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+    takes_any = any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
+    )
     extra: dict[str, Any] = {}
     if settings.searxng_url and ("searxng_url" in parameters or takes_any):
         extra["searxng_url"] = settings.searxng_url
+    if "search_options" in parameters or takes_any:
+        extra["search_options"] = settings.search_options
 
     def run(query: str) -> Any:
-        return web_search(query, providers=list(settings.search_providers), getter=getter, cache=cache, **extra)
+        return web_search(
+            query,
+            providers=list(settings.search_providers),
+            getter=getter,
+            cache=cache,
+            **extra,
+        )
 
     return run
 
 
 def engine_hosts_for(settings: DiscoverySettings) -> frozenset[str]:
-    """Hosts that are search engines, never proposed as a customer's site: the ones the search
-    module declares, plus the tenant's own SearXNG host."""
+    """Search-engine hosts are never proposed as a customer's site."""
     hosts: set[str] = set()
     try:
         from app.services.listing_capture.web_discovery import search as search_module
 
-        hosts |= {str(h) for h in getattr(search_module, "SEARCH_ENGINE_HOSTS", ())}
+        hosts |= {str(host) for host in getattr(search_module, "SEARCH_ENGINE_HOSTS", ())}
     except ImportError:
         pass
     if settings.searxng_url:
         hosts.add(urlsplit(settings.searxng_url).hostname or "")
-    return frozenset(normalize_host(h) for h in hosts if h)
+    return frozenset(normalize_host(host) for host in hosts if host)
 
 
 # --------------------------------------------------------------------------- one customer
 
 
 def _site_state(host: str, ctx: cand.CustomerContext) -> tuple[str, str | None]:
-    """``("existing", site_key)`` when a listing site already uses this host, else ``("would_create", None)``."""
+    """An existing site key, or the state indicating Apply would create a site."""
     key = ctx.own_site_hosts.get(host) or ctx.other_site_hosts.get(host)
     return ("existing", key) if key else ("would_create", None)
 
@@ -391,7 +431,10 @@ def _candidate_entry(
         "domain": item.host,
         "outcome": outcome,
         "drop_reason": item.drop_reason if outcome == OUTCOME_DROPPED else None,
-        "proposed_site_key": site_key or discovery._site_key_from_origin(f"https://{item.host}"),  # noqa: SLF001
+        "proposed_site_key": (
+            site_key
+            or discovery._site_key_from_origin(f"https://{item.host}")  # noqa: SLF001
+        ),
         "evidence": evidence,
     }
     return entry
@@ -399,13 +442,30 @@ def _candidate_entry(
 
 def _order_and_limit(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Saved-on-Apply first, then the review queue ranked (at most 5), then the rest."""
-    queued = sorted((e for e in entries if e["outcome"] == OUTCOME_QUEUE), key=lambda e: rank_key(e["evidence"]))
+    queued = sorted(
+        (entry for entry in entries if entry["outcome"] == OUTCOME_QUEUE),
+        key=lambda entry: rank_key(entry["evidence"]),
+    )
     for extra in queued[MAX_QUEUED_PER_CUSTOMER:]:
         extra["outcome"] = OUTCOME_DROPPED
         extra["drop_reason"] = DROP_REVIEW_LIMIT
-    order = {OUTCOME_AUTO: 0, OUTCOME_USER: 0, OUTCOME_QUEUE: 1, OUTCOME_MONITORED: 2, OUTCOME_REJECTED: 3, OUTCOME_DROPPED: 4}
-    queue_rank = {id(e): i for i, e in enumerate(queued)}
-    return sorted(entries, key=lambda e: (order.get(e["outcome"], 5), queue_rank.get(id(e), 0), e["domain"]))
+    order = {
+        OUTCOME_AUTO: 0,
+        OUTCOME_USER: 0,
+        OUTCOME_QUEUE: 1,
+        OUTCOME_MONITORED: 2,
+        OUTCOME_REJECTED: 3,
+        OUTCOME_DROPPED: 4,
+    }
+    queue_rank = {id(entry): index for index, entry in enumerate(queued)}
+    return sorted(
+        entries,
+        key=lambda entry: (
+            order.get(entry["outcome"], 5),
+            queue_rank.get(id(entry), 0),
+            entry["domain"],
+        ),
+    )
 
 
 def preview_customer(
@@ -436,7 +496,15 @@ def preview_customer(
     entries: list[dict[str, Any]] = []
     for item in loaded:
         counter[0] += 1
-        entries.append(_candidate_entry(item, item_no=counter[0], customer=customer, ctx=ctx, settings=settings))
+        entries.append(
+            _candidate_entry(
+                item,
+                item_no=counter[0],
+                customer=customer,
+                ctx=ctx,
+                settings=settings,
+            )
+        )
     entries = _order_and_limit(entries)
 
     sites: list[dict[str, Any]] = []
@@ -449,13 +517,22 @@ def preview_customer(
             "domain": entry["domain"],
             "site_key": site_key or entry["proposed_site_key"],
             "state": state,
-            "search_pattern": {"value": stored, "how": "stored"} if stored else {"value": None, "how": "none"},
+            "search_pattern": (
+                {"value": stored, "how": "stored"} if stored else {"value": None, "how": "none"}
+            ),
             "fetch": {"stopped": None, "requests": 0},
             "pages": [],
         }
-        summary = getter.gate_summary(f"host:{entry['domain']}") if hasattr(getter, "gate_summary") else None
+        summary = (
+            getter.gate_summary(f"host:{entry['domain']}")
+            if hasattr(getter, "gate_summary")
+            else None
+        )
         if summary:
-            site["fetch"] = {"stopped": summary.get("stopped"), "requests": summary.get("requests", 0)}
+            site["fetch"] = {
+                "stopped": summary.get("stopped"),
+                "requests": summary.get("requests", 0),
+            }
         if find_pages is not None:
             site["pages"] = find_pages(session, customer, site, entry, getter, settings)
         sites.append(site)
@@ -473,22 +550,38 @@ def preview_customer(
 
 
 def _totals(customers: list[dict[str, Any]], listings: list[dict[str, Any]]) -> dict[str, int]:
-    candidates = [c for block in customers for c in block["candidates"]]
-    pages = [p for block in customers for s in block["sites"] for p in s.get("pages") or []]
+    candidates = [candidate for block in customers for candidate in block["candidates"]]
+    pages = [
+        page
+        for block in customers
+        for site in block["sites"]
+        for page in site.get("pages") or []
+    ]
     return {
-        "sites_auto": sum(1 for c in candidates if c["outcome"] in (OUTCOME_AUTO, OUTCOME_USER)),
-        "sites_review": sum(1 for c in candidates if c["outcome"] == OUTCOME_QUEUE),
-        "pages_auto": sum(1 for p in pages if p.get("outcome") == "auto_link"),
-        "pages_review": sum(1 for p in pages if p.get("outcome") == "steward_queue"),
-        "listings_auto": sum(1 for r in listings if r.get("outcome") == "auto_link"),
-        "listings_review": sum(1 for r in listings if r.get("outcome") == "steward_queue"),
+        "sites_auto": sum(
+            1 for candidate in candidates if candidate["outcome"] in (OUTCOME_AUTO, OUTCOME_USER)
+        ),
+        "sites_review": sum(
+            1 for candidate in candidates if candidate["outcome"] == OUTCOME_QUEUE
+        ),
+        "pages_auto": sum(1 for page in pages if page.get("outcome") == "auto_link"),
+        "pages_review": sum(1 for page in pages if page.get("outcome") == "steward_queue"),
+        "listings_auto": sum(1 for row in listings if row.get("outcome") == "auto_link"),
+        "listings_review": sum(1 for row in listings if row.get("outcome") == "steward_queue"),
     }
 
 
-def _load_customers(session: Session, tenant_id: str, request: dict[str, Any]) -> list[DimCustomer]:
+def _load_customers(
+    session: Session, tenant_id: str, request: dict[str, Any]
+) -> list[DimCustomer]:
     scope = request["scope"]
     if scope == SCOPE_REPORTING:
-        return [c for _cfg, c in discovery._reporting_customers(session, tenant_id)]  # noqa: SLF001
+        return [
+            customer
+            for _config, customer in discovery._reporting_customers(  # noqa: SLF001
+                session, tenant_id
+            )
+        ]
     if scope in (SCOPE_CUSTOMER, SCOPE_DOMAIN):
         customer = session.get(DimCustomer, int(request["customer_id"]))
         if not isinstance(customer, DimCustomer) or str(customer.tenant_id) != tenant_id:
@@ -513,16 +606,17 @@ def run_preview(
     link_listings: Callable[..., list[dict[str, Any]]] | None = None,
     now: Callable[[], datetime] | None = None,
 ) -> dict[str, Any]:
-    """Compute the preview and save it to the plan store. Returns the plan.
+    """Compute the preview and save it to the plan store.
 
-    The first statement is ``SET TRANSACTION READ ONLY``. The caller rolls the session back.
-    ``search`` is a ready query function; ``search_factory`` builds one from the loaded settings
-    (the worker uses it, because the providers come from the settings).
+    The first statement is SET TRANSACTION READ ONLY. The caller rolls the session back.
+    ``search_factory`` builds a query callable from the loaded tenant settings.
     """
     clock = now or (lambda: datetime.now(UTC))
     session.execute(text("SET TRANSACTION READ ONLY"))
 
-    plan = plan_store.load(tenant_id, preview_id) or new_plan(tenant_id, preview_id, request, now=clock())
+    plan = plan_store.load(tenant_id, preview_id) or new_plan(
+        tenant_id, preview_id, request, now=clock()
+    )
     plan["status"] = STATUS_RUNNING
     plan_store.save(tenant_id, preview_id, plan)
 
@@ -541,7 +635,11 @@ def run_preview(
     plan["settings_fingerprint"] = settings.fingerprint()
     plan_store.save(tenant_id, preview_id, plan)
 
-    search_fn = search if search is not None else (search_factory(settings) if search_factory else None)
+    search_fn = (
+        search
+        if search is not None
+        else (search_factory(settings) if search_factory else None)
+    )
     hosts = engine_hosts if engine_hosts is not None else engine_hosts_for(settings)
     tracker = SearchTracker(search_fn, settings.search_providers)
     search_for_customers: Callable[[str], Any] | None = tracker if tracker.enabled else None

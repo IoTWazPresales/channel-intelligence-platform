@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from collections.abc import Callable
 from typing import Any
@@ -26,13 +27,15 @@ KEY_DISCOVERY_SCHEDULE = "discovery.schedule_enabled"
 KEY_TENANT_COUNTRY = "tenant.country"
 KEY_TENANT_DOMAIN_ENDINGS = "tenant.domain_endings"
 KEY_DISCOVERY_SEARCH_PROVIDERS = "discovery.search_providers"
+KEY_DISCOVERY_SEARCH_OPTIONS = "discovery.search_options"
 KEY_DISCOVERY_SEARXNG_URL = "discovery.searxng_url"
 KEY_DISCOVERY_EXCLUDED_DOMAINS = "discovery.excluded_domains"
 KEY_DISCOVERY_BROWSER_FALLBACK = "discovery.browser_fallback_enabled"
 
-# The search providers a tenant may list. These are provider ids, not sites; the provider
-# implementations live in ``listing_capture.web_discovery.search``.
+# Keep ddg_lite readable for existing configurations. The adapter reports it unsupported:
+# ddgs has one DuckDuckGo HTML backend, not an independent Lite fallback.
 SEARCH_PROVIDER_IDS: tuple[str, ...] = ("ddg_html", "ddg_lite", "searxng")
+MAX_SEARCH_RESULTS = 10
 MAX_DOMAIN_ENDINGS = 20
 MAX_EXCLUDED_DOMAINS = 200
 
@@ -85,14 +88,77 @@ def _as_search_providers(value: Any) -> list[str]:
     return out
 
 
+def _as_search_options(value: Any) -> dict[str, Any]:
+    """Explicit search policy; no seeded interval, timeout, result count or country.
+
+    ``min_interval_seconds`` is the tenant's conservative minimum between guarded calls,
+    including robots requests. A robots Crawl-delay may increase it. ddgs owns its internal
+    requests, so this interval is enforced once at the library-call boundary.
+
+    Only supported ddgs options are exposed. Transport internals, headers, impersonation
+    and automatic backend selection cannot be overridden here.
+    """
+    required = {"min_interval_seconds", "max_results", "timeout_seconds"}
+    allowed = required | {"region"}
+    if not isinstance(value, dict) or not required <= set(value) or set(value) - allowed:
+        raise ValueError(
+            "search options require min_interval_seconds, max_results and timeout_seconds; "
+            "region is optional"
+        )
+
+    interval = value["min_interval_seconds"]
+    if (
+        isinstance(interval, bool)
+        or not isinstance(interval, (int, float))
+        or not math.isfinite(interval)
+        or interval <= 0
+    ):
+        raise ValueError("min_interval_seconds must be a finite positive number")
+
+    maximum = value["max_results"]
+    if (
+        isinstance(maximum, bool)
+        or not isinstance(maximum, int)
+        or not 1 <= maximum <= MAX_SEARCH_RESULTS
+    ):
+        raise ValueError(f"max_results must be an integer from 1 to {MAX_SEARCH_RESULTS}")
+
+    timeout = value["timeout_seconds"]
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+        raise ValueError("timeout_seconds must be a positive integer")
+
+    clean: dict[str, Any] = {
+        "min_interval_seconds": float(interval),
+        "max_results": maximum,
+        "timeout_seconds": timeout,
+    }
+    if "region" in value:
+        region = value["region"]
+        if (
+            not isinstance(region, str)
+            or not region.strip()
+            or len(region.strip()) > 64
+            or any(character.isspace() for character in region.strip())
+        ):
+            raise ValueError("region must be a non-empty search-region code without whitespace")
+        clean["region"] = region.strip()
+    return clean
+
+
 def _as_https_base_url(value: Any) -> str:
     if not isinstance(value, str):
         raise ValueError("the SearXNG address must be an https:// URL")
-    text = value.strip()
-    parts = urlsplit(text)
-    if parts.scheme != "https" or not parts.hostname or parts.query or parts.fragment or parts.username:
+    text_value = value.strip()
+    parts = urlsplit(text_value)
+    if (
+        parts.scheme != "https"
+        or not parts.hostname
+        or parts.query
+        or parts.fragment
+        or parts.username
+    ):
         raise ValueError("the SearXNG address must be an https:// URL with no query string")
-    return text.rstrip("/")
+    return text_value.rstrip("/")
 
 
 def _as_excluded_domains(value: Any) -> list[str]:
@@ -116,6 +182,7 @@ SETTING_VALIDATORS: dict[str, Callable[[Any], Any]] = {
     KEY_TENANT_COUNTRY: _as_country,
     KEY_TENANT_DOMAIN_ENDINGS: _as_domain_endings,
     KEY_DISCOVERY_SEARCH_PROVIDERS: _as_search_providers,
+    KEY_DISCOVERY_SEARCH_OPTIONS: _as_search_options,
     KEY_DISCOVERY_SEARXNG_URL: _as_https_base_url,
     KEY_DISCOVERY_EXCLUDED_DOMAINS: _as_excluded_domains,
     KEY_DISCOVERY_BROWSER_FALLBACK: _as_bool,
@@ -178,7 +245,10 @@ def tenants_with_true(session: Session, key: str) -> list[str]:
     try:
         with session.begin_nested():
             rows = session.execute(
-                text("SELECT tenant_id FROM tenant_setting WHERE key = :k AND value = 'true'::jsonb ORDER BY tenant_id"),
+                text(
+                    "SELECT tenant_id FROM tenant_setting "
+                    "WHERE key = :k AND value = 'true'::jsonb ORDER BY tenant_id"
+                ),
                 {"k": key},
             ).all()
         return [str(r[0]) for r in rows]

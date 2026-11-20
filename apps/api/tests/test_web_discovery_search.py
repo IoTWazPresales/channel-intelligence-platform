@@ -1,16 +1,16 @@
-"""S2 search contracts, saved responses only; no network and no database."""
+"""Search contracts with mocked ddgs and saved SearXNG responses; no network or database."""
 
 from __future__ import annotations
 
 import hashlib
-from dataclasses import replace
+import sys
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 import pytest
 from app.services import tenant_settings as ts
-from app.services.listing_capture.site_fetch import STOP_PAUSED, FetchPolicy
+from app.services.listing_capture.site_fetch import STOP_PAUSED, STOP_TIME_LIMIT, FetchPolicy
 from app.services.listing_capture.site_pause import MemorySitePauseStore, pause_site
 from app.services.listing_capture.web_discovery import candidates as cand
 from app.services.listing_capture.web_discovery import preview, search
@@ -20,14 +20,16 @@ from app.services.listing_capture.web_discovery.cache import (
     RobotsCache,
     SearchCache,
 )
-from app.services.listing_capture.web_discovery.polite import SEARCH_SPACING_SECONDS, PoliteGetter
+from app.services.listing_capture.web_discovery.polite import PoliteGetter
 from app.services.listing_capture.web_discovery.search_parsers import (
-    parse_ddg_html,
-    parse_ddg_lite,
+    ParsedHit,
     parse_searxng,
     unwrap_result_href,
 )
-from app.services.listing_capture.web_discovery.settings import load_discovery_settings
+from app.services.listing_capture.web_discovery.settings import (
+    load_discovery_settings,
+    settings_from_values,
+)
 from tests.web_discovery_support import (
     PUBLIC_IP,
     FakeWeb,
@@ -40,6 +42,14 @@ QUERY = '"ABC-123" Testland'
 SEARXNG_URL = "https://searx.example.test/instance"
 ALPHA = "alpha-shop.example.test"
 GAMMA = "gamma-store.example.test"
+DDG_KEY = "search:html.duckduckgo.com"
+DDG_ROBOTS = "https://html.duckduckgo.com/robots.txt"
+OPTIONS = {
+    "min_interval_seconds": 23.0,
+    "max_results": 10,
+    "timeout_seconds": 7,
+}
+_UNSET = object()
 
 
 class Clock:
@@ -69,7 +79,47 @@ class RecordingStore(MemorySitePauseStore):
         super().set(key, record, ttl_seconds=ttl_seconds)
 
 
-def _url(provider: str, query: str = QUERY, base: str = SEARXNG_URL) -> str:
+@pytest.fixture(autouse=True)
+def ddgs_stub(monkeypatch):
+    state = SimpleNamespace(
+        constructors=[],
+        calls=[],
+        rows=[
+            {
+                "href": f"https://www.{ALPHA}/products/abc-123",
+                "title": "Alpha Shop ABC-123",
+                "body": "The ABC-123 Widget in stock at Alpha Shop.",
+            },
+            {
+                "href": f"https://{GAMMA}/p/abc-123",
+                "title": "Gamma Store",
+                "body": "ABC-123",
+            },
+        ],
+        error=None,
+    )
+
+    class FakeDDGS:
+        def __init__(self, **kwargs):
+            state.constructors.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def text(self, query, **kwargs):
+            state.calls.append((query, kwargs))
+            if state.error is not None:
+                raise state.error
+            return state.rows
+
+    monkeypatch.setitem(sys.modules, "ddgs", SimpleNamespace(DDGS=FakeDDGS))
+    return state
+
+
+def _url(provider="searxng", query=QUERY, base=SEARXNG_URL):
     url = search.request_url(provider, query, base)
     assert url is not None
     return url
@@ -89,59 +139,300 @@ def _getter(pages=None, *, store=None, clock=None):
     return getter, web, store, clock
 
 
-def _run(getter, store, providers=("ddg_html",), *, query=QUERY, base=SEARXNG_URL):
+def _run(
+    getter,
+    store,
+    providers=("ddg_html",),
+    *,
+    query=QUERY,
+    base=SEARXNG_URL,
+    options=_UNSET,
+):
     return search.web_search(
         query,
         providers=providers,
         getter=getter,
         cache=SearchCache(store),
         searxng_url=base,
+        search_options=dict(OPTIONS) if options is _UNSET else options,
     )
 
 
-def test_ddg_html_fixture_unwraps_both_redirect_forms_and_skips_ads() -> None:
-    parsed = parse_ddg_html(fixture_text("ddg_html_results.html"))
-    assert parsed.status == "ok"
-    assert [hit.url for hit in parsed.hits] == [
-        "https://www.alpha-shop.example.test/products/abc-123?ref=search&v=2",
-        "http://Beta.Example.test/deals",
-        "https://gamma-store.example.test/p/abc-123",
-        "https://duckduckgo.com/duckduckgo-help-pages/",
+def test_ddgs_uses_only_supported_options_and_one_guarded_call(ddgs_stub):
+    getter, web, store, clock = _getter()
+    options = {**OPTIONS, "region": "zz-en", "max_results": 1}
+    outcome = _run(getter, store, options=options)
+
+    assert (outcome.status, outcome.provider) == ("ok", "ddg_html")
+    assert [(result.host, result.rank) for result in outcome.results] == [(ALPHA, 1)]
+    assert outcome.results[0].snippet == "The ABC-123 Widget in stock at Alpha Shop."
+    assert ddgs_stub.constructors == [{"timeout": OPTIONS["timeout_seconds"]}]
+    assert ddgs_stub.calls == [
+        (QUERY, {"backend": "duckduckgo", "max_results": 1, "region": "zz-en"})
     ]
-    assert parsed.hits[0].title == "Alpha Shop — ABC-123 Widget"
-    assert parsed.hits[0].snippet == ("The ABC-123 Widget in stock at Alpha Shop, Testland.")
-    results = search.build_results(parsed.hits)
-    assert [result.host for result in results] == [ALPHA, "beta.example.test", GAMMA]
-    assert [result.rank for result in results] == [1, 2, 3]
+    assert web.calls == [DDG_ROBOTS]
+    assert web.page_calls() == []
+    assert clock.waits == [OPTIONS["min_interval_seconds"]]
+    # One robots request and one library invocation, not an HTTP fetch followed by ddgs.
+    assert getter.gate(DDG_KEY).requests == 2
 
 
-def test_ddg_lite_fixture_keeps_snippets_paired_when_a_result_has_none() -> None:
-    parsed = parse_ddg_lite(fixture_text("ddg_lite_results.html"))
-    assert parsed.status == "ok"
-    assert [hit.url for hit in parsed.hits] == [
-        "https://www.alpha-shop.example.test/products/abc-123",
-        "https://delta-mart.example.test/",
-        "https://epsilon.example.test/abc",
+def test_region_is_optional_and_no_country_is_inserted_in_ddgs_options(ddgs_stub):
+    getter, _web, store, _clock = _getter()
+    assert _run(getter, store).status == "ok"
+    assert ddgs_stub.calls[0][1] == {
+        "backend": "duckduckgo",
+        "max_results": OPTIONS["max_results"],
+    }
+
+
+def test_repeated_queries_share_spacing_and_robots_delay_can_raise_it(ddgs_stub):
+    getter, web, store, clock = _getter(
+        {DDG_ROBOTS: "User-agent: *\nAllow: /\nCrawl-delay: 37\n"}
+    )
+    assert _run(getter, store).status == "ok"
+    assert _run(getter, store, query="another query").status == "ok"
+    assert len(ddgs_stub.calls) == 2
+    assert web.calls == [DDG_ROBOTS]
+    assert clock.waits == [37.0, 37.0]
+    assert getter.gate(DDG_KEY).spacing_seconds == 37.0
+
+
+def test_lite_is_explicitly_unsupported_and_never_repeats_the_html_backend(ddgs_stub):
+    ddgs_stub.error = RuntimeError("private detail")
+    getter, web, store, _clock = _getter(
+        {_url(): fixture_text("searxng_results.json")}
+    )
+    outcome = _run(getter, store, ("ddg_html", "ddg_lite", "searxng"))
+    assert (outcome.status, outcome.provider) == ("ok", "searxng")
+    assert [attempt["provider"] for attempt in outcome.attempts] == [
+        "ddg_html",
+        "ddg_lite",
+        "searxng",
     ]
-    assert [hit.title for hit in parsed.hits] == ["Alpha Shop ABC-123", "Delta Mart", "Epsilon"]
-    assert [hit.snippet for hit in parsed.hits] == [
-        "The ABC-123 Widget in stock at Alpha Shop.",
-        "",
-        "Epsilon sells widgets.",
+    assert outcome.attempts[1]["reason"] == "ddgs_lite_unsupported"
+    assert len(ddgs_stub.calls) == 1
+    assert web.page_calls() == [_url()]
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, OSError, TimeoutError, ValueError])
+def test_any_ddgs_error_is_unavailable_paused_uncached_and_sanitized(ddgs_stub, error_type):
+    ddgs_stub.error = error_type("secret diagnostic")
+    getter, web, store, clock = _getter()
+    outcome = _run(getter, store)
+    assert outcome.status == "unavailable" and outcome.results == []
+    assert outcome.attempts[0]["reason"] == f"ddgs_{error_type.__name__}"
+    assert "secret diagnostic" not in str(outcome)
+    record = store.get(DDG_KEY)
+    assert record["hours"] == 1
+    assert record["http_status"] == 0
+    assert datetime.fromisoformat(record["until"]) > clock.now()
+    assert getter.gate(DDG_KEY).stopped == STOP_PAUSED
+    assert SearchCache(store).get_outcome("ddg_html", QUERY) is None
+
+    again = _run(getter, store)
+    assert again.attempts[0]["status"] == "paused"
+    assert len(ddgs_stub.calls) == 1
+    assert web.calls == [DDG_ROBOTS]
+    assert store.get(DDG_KEY) == record
+
+    next_getter, next_web, _, _ = _getter(store=store, clock=clock)
+    assert _run(next_getter, store).attempts[0]["status"] == "paused"
+    assert next_web.calls == []
+
+
+@pytest.mark.parametrize("status", [202, 403, 429])
+def test_exposed_http_errors_pause_once_and_fall_back(ddgs_stub, status):
+    class StatusError(RuntimeError):
+        status_code = status
+
+    ddgs_stub.error = StatusError("secret")
+    getter, _web, store, _clock = _getter(
+        {_url(): fixture_text("searxng_results.json")}
+    )
+    outcome = _run(getter, store, ("ddg_html", "searxng"))
+    assert (outcome.status, outcome.provider) == ("ok", "searxng")
+    assert outcome.attempts[0] == {
+        "provider": "ddg_html",
+        "status": "blocked",
+        "http_status": status,
+        "reason": "ddgs_StatusError",
+    }
+    assert store.get(DDG_KEY)["http_status"] == status
+    assert store.get(DDG_KEY)["hours"] == 1
+
+
+def test_rate_limit_exception_records_429_without_exposing_message(ddgs_stub):
+    class RatelimitException(Exception):
+        pass
+
+    ddgs_stub.error = RatelimitException("private")
+    getter, _web, store, _clock = _getter()
+    outcome = _run(getter, store)
+    assert outcome.attempts[0]["http_status"] == 429
+    assert outcome.attempts[0]["status"] == "blocked"
+    assert store.get(DDG_KEY)["hours"] == 1
+
+
+def test_expired_pause_doubles_even_if_robots_200_clears_the_old_record(ddgs_stub):
+    ddgs_stub.error = RuntimeError("blocked internally")
+    getter, _web, store, clock = _getter({DDG_ROBOTS: "User-agent: *\nAllow: /\n"})
+    pause_site(store, DDG_KEY, http_status=429, now=clock.now() - timedelta(hours=2))
+    assert _run(getter, store).status == "unavailable"
+    assert store.get(DDG_KEY)["hours"] == 2
+
+
+@pytest.mark.parametrize(
+    "robots",
+    [
+        "User-agent: *\nDisallow: /html/\n",
+        (0, ""),
+        (503, ""),
+    ],
+)
+def test_robots_refusal_never_constructs_ddgs_and_allows_searxng_fallback(ddgs_stub, robots):
+    getter, web, store, _clock = _getter(
+        {
+            DDG_ROBOTS: robots,
+            _url(): fixture_text("searxng_results.json"),
+        }
+    )
+    outcome = _run(getter, store, ("ddg_html", "searxng"))
+    assert outcome.provider == "searxng"
+    assert outcome.attempts[0]["reason"] == "robots_disallowed"
+    assert ddgs_stub.constructors == []
+    assert web.page_calls() == [_url()]
+
+
+@pytest.mark.parametrize("status", [403, 429])
+def test_robots_http_refusal_uses_existing_gate_pause_once(ddgs_stub, status):
+    getter, _web, store, _clock = _getter({DDG_ROBOTS: (status, "")})
+    outcome = _run(getter, store)
+    assert outcome.status == "unavailable"
+    assert outcome.attempts[0]["http_status"] == status
+    assert store.get(DDG_KEY)["hours"] == 1
+    assert ddgs_stub.constructors == []
+
+
+def test_time_budget_refuses_library_call_before_it_starts(ddgs_stub):
+    getter, web, store, _clock = _getter()
+    getter.policy.time_limit_seconds = OPTIONS["min_interval_seconds"]
+    outcome = _run(getter, store)
+    assert outcome.status == "unavailable"
+    assert outcome.attempts[0]["reason"] == STOP_TIME_LIMIT
+    assert web.calls == [DDG_ROBOTS]
+    assert ddgs_stub.constructors == []
+
+
+def test_private_backend_resolution_refuses_library_call(ddgs_stub, monkeypatch):
+    getter, web, store, _clock = _getter()
+    monkeypatch.setattr(getter, "_resolve", lambda _host: ["127.0.0.1"])
+    outcome = _run(getter, store)
+    assert outcome.attempts[0]["reason"] == "private_address"
+    assert web.calls == []
+    assert ddgs_stub.constructors == []
+
+
+@pytest.mark.parametrize("rows", [[], None, "unexpected", [{}], [{"href": "javascript:bad"}]])
+def test_empty_answer_is_distinct_from_malformed_library_results(ddgs_stub, rows):
+    ddgs_stub.rows = rows
+    getter, _web, store, _clock = _getter()
+    outcome = _run(getter, store)
+    if rows == []:
+        assert (outcome.status, outcome.results) == ("empty", [])
+        assert SearchCache(store).get_outcome("ddg_html", QUERY)["status"] == "empty"
+        assert store.get(DDG_KEY) is None
+    else:
+        assert outcome.status == "unavailable"
+        assert store.get(DDG_KEY)["hours"] == 1
+        assert SearchCache(store).get_outcome("ddg_html", QUERY) is None
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_s1_search_cache_key_ttl_and_hit_without_network(ddgs_stub, empty):
+    if empty:
+        ddgs_stub.rows = []
+    getter, _web, store, clock = _getter()
+    first = _run(getter, store)
+    expected = "empty" if empty else "ok"
+    assert first.status == expected
+    digest = hashlib.sha256(QUERY.encode("utf-8")).hexdigest()
+    key = f"wd:search:ddg_html:{digest}"
+    assert store.get(key)["status"] == expected
+    assert store.ttls[key] == SEARCH_TTL_SECONDS == 7 * 24 * 3600
+
+    next_getter, next_web, _, _ = _getter(store=store, clock=clock)
+    second = _run(next_getter, store)
+    assert second.results == first.results
+    assert second.attempts[0]["reason"] == "cache"
+    assert len(ddgs_stub.calls) == 1
+    assert next_web.calls == []
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"region": "zz-en"},
+        {"max_results": 1},
+        {"min_interval_seconds": 31.0},
+        {"timeout_seconds": 9},
+    ],
+)
+def test_changed_search_options_do_not_reuse_a_different_configuration(ddgs_stub, changes):
+    getter, _web, store, _clock = _getter()
+    assert _run(getter, store).status == "ok"
+    second = _run(getter, store, options={**OPTIONS, **changes})
+    assert second.status == "ok"
+    assert second.attempts[0]["reason"] != "cache"
+    assert len(ddgs_stub.calls) == 2
+
+
+def test_legacy_hand_parsed_cache_cannot_bypass_the_new_adapter(ddgs_stub):
+    getter, _web, store, _clock = _getter()
+    SearchCache(store).put_outcome(
+        "ddg_html",
+        QUERY,
+        {"status": "ok", "results": [{"url": "https://legacy.example.test/"}]},
+    )
+    outcome = _run(getter, store)
+    assert [result.host for result in outcome.results] == [ALPHA, GAMMA]
+    assert len(ddgs_stub.calls) == 1
+
+
+def test_cache_failure_does_not_lose_successful_ddgs_results(monkeypatch):
+    getter, _web, store, _clock = _getter()
+    cache = SearchCache(store)
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("private cache error")
+
+    monkeypatch.setattr(cache, "get_outcome", broken)
+    monkeypatch.setattr(cache, "put_outcome", broken)
+    outcome = search.web_search(
+        QUERY,
+        providers=["ddg_html"],
+        getter=getter,
+        cache=cache,
+        search_options=OPTIONS,
+    )
+    assert outcome.status == "ok" and outcome.results
+
+
+def test_result_validation_deduplication_engine_filtering_and_rank_limit():
+    hits = [
+        ParsedHit("https://duckduckgo.com/help"),
+        ParsedHit("https://sub.searx.example.test/help"),
+        ParsedHit("https://user:password@private.example.test/"),
+        ParsedHit("https://shop.example.test:broken/"),
     ]
-
-
-@pytest.mark.parametrize("fixture", ["searxng_results.json", "searxng_results.html"])
-def test_searxng_fixtures_parse_json_or_html_and_filter_the_instance(fixture) -> None:
-    parsed = parse_searxng(fixture_text(fixture))
-    assert parsed.status == "ok"
+    hits += [ParsedHit(f"https://{ALPHA}/p/{index}") for index in range(12)]
+    hits.insert(5, hits[4])
     results = search.build_results(
-        parsed.hits, extra_engine_hosts=frozenset({"searx.example.test"})
+        hits, extra_engine_hosts=frozenset({"searx.example.test"})
     )
-    assert [result.host for result in results] == [ALPHA, GAMMA]
-    assert [result.rank for result in results] == [1, 2]
-    assert results[0].title == "Alpha Shop ABC-123"
-    assert results[0].snippet == "The ABC-123 Widget in stock at Alpha Shop."
+    assert len(results) == 10
+    assert [result.rank for result in results] == list(range(1, 11))
+    assert results[-1].url.endswith("/9")
 
 
 @pytest.mark.parametrize(
@@ -158,11 +449,36 @@ def test_searxng_fixtures_parse_json_or_html_and_filter_the_instance(fixture) ->
         "https://duckduckgo.com/y.js?ad_domain=ads.example.test",
     ],
 )
-def test_unusable_result_links_do_not_raise(href) -> None:
+def test_unusable_result_links_do_not_raise(href):
     assert unwrap_result_href(href) is None
 
 
-@pytest.mark.parametrize("parser", [parse_ddg_html, parse_ddg_lite, parse_searxng])
+@pytest.mark.parametrize("fixture", ["searxng_results.json", "searxng_results.html"])
+def test_searxng_fixtures_keep_json_and_html_parser_contracts(fixture):
+    parsed = parse_searxng(fixture_text(fixture))
+    assert parsed.status == "ok"
+    results = search.build_results(
+        parsed.hits, extra_engine_hosts=frozenset({"searx.example.test"})
+    )
+    assert [result.host for result in results] == [ALPHA, GAMMA]
+    assert [result.rank for result in results] == [1, 2]
+    assert results[0].title == "Alpha Shop ABC-123"
+    assert results[0].snippet == "The ABC-123 Widget in stock at Alpha Shop."
+
+
+@pytest.mark.parametrize("fixture", ["searxng_results.json", "searxng_results.html"])
+def test_searxng_keeps_own_http_through_polite_and_tenant_spacing(ddgs_stub, fixture):
+    url = _url()
+    parts = urlsplit(url)
+    robots_url = f"{parts.scheme}://{parts.netloc}/robots.txt"
+    getter, web, store, clock = _getter({url: fixture_text(fixture)})
+    outcome = _run(getter, store, ("searxng",))
+    assert (outcome.status, outcome.provider) == ("ok", "searxng")
+    assert web.calls == [robots_url, url]
+    assert clock.waits == [OPTIONS["min_interval_seconds"]]
+    assert ddgs_stub.calls == []
+
+
 @pytest.mark.parametrize(
     ("fixture", "status", "reason"),
     [
@@ -171,321 +487,151 @@ def test_unusable_result_links_do_not_raise(href) -> None:
         ("ddg_html_no_results.html", 202, "http_202"),
     ],
 )
-def test_challenges_and_202_take_precedence_over_empty_results(parser, fixture, status, reason):
-    parsed = parser(fixture_text(fixture), status)
+def test_searxng_challenge_detection_precedes_empty_markup(fixture, status, reason):
+    parsed = parse_searxng(fixture_text(fixture), status)
     assert (parsed.status, parsed.reason, parsed.hits) == ("blocked", reason, [])
 
 
-@pytest.mark.parametrize("parser", [parse_ddg_html, parse_ddg_lite, parse_searxng])
-def test_explicit_no_results_is_empty_but_a_blank_200_is_unrecognised(parser) -> None:
-    empty = parser(fixture_text("ddg_html_no_results.html"))
+@pytest.mark.parametrize("fixture", ["ddg_html_results.html", "ddg_lite_results.html"])
+def test_searxng_does_not_treat_other_engines_markup_as_its_results(fixture):
+    parsed = parse_searxng(fixture_text(fixture))
+    assert parsed.status == "unrecognised"
+    assert parsed.hits == []
+
+
+def test_searxng_explicit_empty_is_distinct_from_unknown_markup():
+    empty = parse_searxng(fixture_text("ddg_html_no_results.html"))
     assert (empty.status, empty.reason, empty.hits) == ("empty", "no_results", [])
-    unknown = parser(fixture_text("ddg_html_202_empty.html"))
-    assert unknown.status == "unrecognised"
+    blank = parse_searxng(fixture_text("ddg_html_202_empty.html"))
+    assert blank.status == "unrecognised"
+    empty_json = parse_searxng(fixture_text("searxng_no_results.json"))
+    assert (empty_json.status, empty_json.hits) == ("empty", [])
 
 
-def test_searxng_empty_json_is_a_successful_empty_answer() -> None:
-    parsed = parse_searxng(fixture_text("searxng_no_results.json"))
-    assert (parsed.status, parsed.reason, parsed.hits) == ("empty", "no_results", [])
-
-
-def test_result_limit_and_ranks_apply_after_engine_filtering() -> None:
-    parsed = parse_ddg_html(fixture_text("ddg_html_results.html"))
-    organic = parsed.hits[0]
-    hits = [parsed.hits[-1]] + [
-        replace(organic, url=f"{organic.url}#result-{index}") for index in range(12)
-    ]
-    results = search.build_results(hits)
-    assert len(results) == 10
-    assert [result.rank for result in results] == list(range(1, 11))
-    assert results[-1].url.endswith("#result-9")
-
-
-@pytest.mark.parametrize(
-    ("provider", "fixture", "hosts"),
-    [
-        ("ddg_html", "ddg_html_results.html", [ALPHA, "beta.example.test", GAMMA]),
-        (
-            "ddg_lite",
-            "ddg_lite_results.html",
-            [ALPHA, "delta-mart.example.test", "epsilon.example.test"],
-        ),
-        ("searxng", "searxng_results.json", [ALPHA, GAMMA]),
-        ("searxng", "searxng_results.html", [ALPHA, GAMMA]),
-    ],
-)
-def test_every_provider_fetches_via_polite_getter_with_search_spacing(provider, fixture, hosts):
-    url = _url(provider)
-    origin = urlsplit(url)
-    robots_url = f"{origin.scheme}://{origin.netloc}/robots.txt"
-    getter, web, store, clock = _getter(
-        {
-            url: fixture_text(fixture),
-            robots_url: fixture_text("robots_crawl_delay.txt"),
-        }
+@pytest.mark.parametrize("status", [200, 202, 403, 429])
+def test_searxng_blocks_pause_once_and_are_not_http_or_search_cached(status):
+    url = _url()
+    key = "search:searx.example.test"
+    getter, _web, store, _clock = _getter(
+        {url: (status, fixture_text("ddg_html_anomaly.html"))}
     )
-    outcome = _run(getter, store, (provider,))
-    assert (outcome.status, outcome.provider) == ("ok", provider)
-    assert [result.host for result in outcome.results] == hosts
-    assert web.calls == [robots_url, url]
-    assert clock.waits == [SEARCH_SPACING_SECONDS]
-    assert getter.gate(f"search:{origin.hostname}").spacing_seconds == SEARCH_SPACING_SECONDS
-
-
-def test_fallback_uses_tenant_order_and_continues_after_blocks() -> None:
-    providers = ("ddg_html", "ddg_lite", "searxng")
-    getter, web, store, _clock = _getter(
-        {
-            _url("ddg_html"): (202, fixture_text("ddg_html_202_empty.html")),
-            _url("ddg_lite"): fixture_text("ddg_html_anomaly.html"),
-            _url("searxng"): fixture_text("searxng_results.json"),
-        }
-    )
-    outcome = _run(getter, store, providers)
-    assert (outcome.status, outcome.provider) == ("ok", "searxng")
-    assert [attempt["provider"] for attempt in outcome.attempts] == list(providers)
-    assert [attempt["status"] for attempt in outcome.attempts] == ["blocked", "blocked", "ok"]
-    assert web.page_calls() == [_url(provider) for provider in providers]
-    assert store.get("search:html.duckduckgo.com")["hours"] == 1
-    assert store.get("search:lite.duckduckgo.com")["hours"] == 1
-
-
-@pytest.mark.parametrize(
-    ("provider", "fixture", "status"),
-    [
-        ("ddg_html", "ddg_html_anomaly.html", 200),
-        ("ddg_lite", "ddg_html_anomaly.html", 200),
-        ("ddg_html", "ddg_html_202_empty.html", 202),
-        ("ddg_lite", "ddg_html_202_empty.html", 202),
-        ("searxng", "ddg_html_anomaly.html", 200),
-    ],
-)
-def test_a_block_pauses_the_host_is_not_cached_and_is_not_retried(provider, fixture, status):
-    url = _url(provider)
-    key = f"search:{urlsplit(url).hostname}"
-    getter, web, store, clock = _getter({url: (status, fixture_text(fixture))})
-    outcome = _run(getter, store, (provider,))
-    assert outcome.status == "unavailable" and outcome.results == []
-    assert outcome.attempts[0]["status"] == "blocked"
-    record = store.get(key)
-    assert record["http_status"] == status and record["hours"] == 1
-    assert datetime.fromisoformat(record["until"]) > clock.now()
-    assert getter.gate(key).stopped == STOP_PAUSED
-    assert SearchCache(store).get_outcome(provider, QUERY) is None
+    outcome = _run(getter, store, ("searxng",))
+    assert outcome.status == "unavailable"
+    assert store.get(key)["hours"] == 1
+    assert SearchCache(store).get_outcome("searxng", QUERY) is None
     assert getter.cache.get_response(url) is None
 
-    calls = list(web.calls)
-    again = _run(getter, store, (provider,))
-    assert again.attempts[0]["status"] == "paused"
-    assert web.calls == calls and store.get(key) == record
 
-    next_getter, next_web, _, _ = _getter({url: fixture_text(fixture)}, store=store, clock=clock)
-    assert _run(next_getter, store, (provider,)).attempts[0]["status"] == "paused"
-    assert next_web.calls == []
-
-
-@pytest.mark.parametrize("status", [200, 202])
-def test_another_challenge_after_an_expired_pause_doubles_existing_backoff(status) -> None:
-    key = "search:html.duckduckgo.com"
-    getter, _web, store, clock = _getter(
-        {
-            _url("ddg_html"): (status, fixture_text("ddg_html_anomaly.html")),
-        }
-    )
-    pause_site(store, key, http_status=202, now=clock.now() - timedelta(hours=2))
-    assert _run(getter, store).attempts[0]["status"] == "blocked"
-    assert store.get(key)["hours"] == 2
-
-
-@pytest.mark.parametrize("status", [403, 429])
-def test_http_refusals_use_the_getters_existing_pause_once_and_fall_back(status) -> None:
+def test_searxng_cache_does_not_cross_instance_urls():
     getter, web, store, _clock = _getter(
-        {
-            _url("ddg_html"): (status, fixture_text("ddg_html_anomaly.html")),
-            _url("ddg_lite"): fixture_text("ddg_lite_results.html"),
-        }
-    )
-    outcome = _run(getter, store, ("ddg_html", "ddg_lite"))
-    assert outcome.status == "ok" and outcome.provider == "ddg_lite"
-    assert outcome.attempts[0] == {
-        "provider": "ddg_html",
-        "status": "blocked",
-        "http_status": status,
-        "reason": f"http_{status}",
-    }
-    assert store.get("search:html.duckduckgo.com")["hours"] == 1
-    assert web.page_calls() == [_url("ddg_html"), _url("ddg_lite")]
-
-
-def test_robots_disallowed_provider_is_skipped_without_fetching_search_page() -> None:
-    getter, web, store, _clock = _getter(
-        {
-            "https://html.duckduckgo.com/robots.txt": fixture_text("robots_wildcards.txt"),
-            _url("ddg_html"): fixture_text("ddg_html_results.html"),
-            _url("ddg_lite"): fixture_text("ddg_lite_results.html"),
-        }
-    )
-    outcome = _run(getter, store, ("ddg_html", "ddg_lite"))
-    assert outcome.provider == "ddg_lite"
-    assert outcome.attempts[0]["status"] == "robots"
-    assert outcome.attempts[0]["reason"] == "robots_disallowed"
-    assert web.page_calls() == [_url("ddg_lite")]
-
-
-@pytest.mark.parametrize("status", [0, 503])
-def test_unreachable_robots_is_skipped_fail_closed(status) -> None:
-    getter, web, store, _clock = _getter(
-        {
-            "https://html.duckduckgo.com/robots.txt": (
-                status,
-                fixture_text("ddg_html_202_empty.html"),
-            ),
-            _url("ddg_lite"): fixture_text("ddg_lite_results.html"),
-        }
-    )
-    outcome = _run(getter, store, ("ddg_html", "ddg_lite"))
-    assert outcome.provider == "ddg_lite"
-    assert outcome.attempts[0]["status"] == "robots"
-    assert web.page_calls() == [_url("ddg_lite")]
-
-
-@pytest.mark.parametrize(
-    ("provider", "fixture", "expected"),
-    [
-        ("ddg_html", "ddg_html_results.html", "ok"),
-        ("ddg_html", "ddg_html_no_results.html", "empty"),
-        ("searxng", "searxng_results.json", "ok"),
-        ("searxng", "searxng_no_results.json", "empty"),
-    ],
-)
-def test_successful_result_cache_has_spec_key_and_ttl_and_sends_no_request_on_hit(
-    provider, fixture, expected
-):
-    url = _url(provider)
-    getter, _web, store, clock = _getter({url: fixture_text(fixture)})
-    first = _run(getter, store, (provider,))
-    assert first.status == expected
-    digest = hashlib.sha256(QUERY.encode("utf-8")).hexdigest()
-    key = f"wd:search:{provider}:{digest}"
-    assert store.get(key)["status"] == expected
-    assert store.ttls[key] == SEARCH_TTL_SECONDS == 7 * 24 * 3600
-
-    next_getter, next_web, _, _ = _getter(store=store, clock=clock)
-    second = _run(next_getter, store, (provider,))
-    assert second.results == first.results and second.status == first.status
-    assert second.attempts[0]["reason"] == "cache"
-    assert next_web.calls == []
-
-
-def test_a_successful_empty_answer_does_not_query_the_next_provider() -> None:
-    getter, web, store, _clock = _getter(
-        {
-            _url("ddg_html"): fixture_text("ddg_html_no_results.html"),
-            _url("ddg_lite"): fixture_text("ddg_lite_results.html"),
-        }
-    )
-    outcome = _run(getter, store, ("ddg_html", "ddg_lite"))
-    assert (outcome.status, outcome.provider, outcome.results) == ("empty", "ddg_html", [])
-    assert web.page_calls() == [_url("ddg_html")]
-
-
-def test_searxng_cache_is_not_reused_after_the_tenant_changes_its_instance_url() -> None:
-    getter, web, store, _clock = _getter(
-        {
-            _url("searxng"): fixture_text("searxng_results.json"),
-        }
+        {_url(): fixture_text("searxng_results.json")}
     )
     assert _run(getter, store, ("searxng",)).status == "ok"
     other_base = "https://searx.example.test/other-instance"
-    other_url = _url("searxng", base=other_base)
+    other_url = _url(base=other_base)
     web.pages[other_url] = fixture_text("searxng_results.html")
     outcome = _run(getter, store, ("searxng",), base=other_base)
-    assert outcome.status == "ok" and outcome.attempts[0]["reason"] != "cache"
-    assert web.page_calls() == [_url("searxng"), other_url]
+    assert outcome.status == "ok"
+    assert outcome.attempts[0]["reason"] != "cache"
+    assert web.page_calls() == [_url(), other_url]
 
 
-def test_unrecognised_200_is_not_cached_as_empty_and_can_be_tried_in_a_later_run() -> None:
-    url = _url("ddg_html")
-    body = fixture_text("ddg_html_202_empty.html")
-    getter, _web, store, clock = _getter({url: (200, body)})
-    outcome = _run(getter, store)
+def test_searxng_unknown_markup_is_evicted_and_can_be_retried_next_run():
+    url = _url()
+    getter, _web, store, clock = _getter({url: "<html><body></body></html>"})
+    outcome = _run(getter, store, ("searxng",))
     assert outcome.status == "unavailable"
     assert outcome.attempts[0]["reason"] == "unrecognised_markup"
-    assert SearchCache(store).get_outcome("ddg_html", QUERY) is None
     assert getter.cache.get_response(url) is None
     next_getter, next_web, _, _ = _getter(
-        {url: fixture_text("ddg_html_results.html")}, store=store, clock=clock
+        {url: fixture_text("searxng_results.json")}, store=store, clock=clock
     )
-    assert _run(next_getter, store).status == "ok"
+    assert _run(next_getter, store, ("searxng",)).status == "ok"
     assert next_web.page_calls() == [url]
 
 
-def test_fetch_exception_falls_back_and_reports_only_the_exception_class(monkeypatch) -> None:
-    getter, web, store, _clock = _getter(
-        {
-            _url("ddg_lite"): fixture_text("ddg_lite_results.html"),
-        }
-    )
-
-    def raw_get(url):
-        if urlsplit(url).hostname == "html.duckduckgo.com":
-            raise OSError("private diagnostic must not appear in Preview")
-        return web(url)
-
-    monkeypatch.setattr(getter, "_raw_get", raw_get)
-    outcome = _run(getter, store, ("ddg_html", "ddg_lite"))
-    assert outcome.provider == "ddg_lite"
-    assert outcome.attempts[0]["reason"] == "OSError"
-    assert "private diagnostic" not in str(outcome)
-
-
-def test_cache_failure_does_not_lose_a_successful_search(monkeypatch) -> None:
-    getter, _web, store, _clock = _getter(
-        {
-            _url("ddg_html"): fixture_text("ddg_html_results.html"),
-        }
-    )
-    cache = SearchCache(store)
-
-    def broken(*_args, **_kwargs):
-        raise RuntimeError("cache failed")
-
-    monkeypatch.setattr(cache, "get_outcome", broken)
-    monkeypatch.setattr(cache, "put_outcome", broken)
-    outcome = search.web_search(QUERY, providers=["ddg_html"], getter=getter, cache=cache)
-    assert outcome.status == "ok" and outcome.results
-
-
-def test_search_off_and_missing_instance_have_no_implicit_provider_or_network() -> None:
+def test_search_off_missing_settings_and_unsupported_provider_have_no_network(ddgs_stub):
     getter, web, store, _clock = _getter()
     assert _run(getter, store, ()).status == "off"
+    missing = _run(getter, store, options=None)
+    assert missing.status == "unavailable"
+    assert missing.attempts[0]["reason"] == "search_options_not_set"
     assert _run(getter, store, ("searxng",), base="").status == "unavailable"
-    unknown = _run(getter, store, ("unknown",))
-    assert unknown.attempts[0]["reason"] == "unknown_provider"
+    assert _run(getter, store, ("unknown",)).attempts[0]["reason"] == "unknown_provider"
+    lite = _run(getter, store, ("ddg_lite",))
+    assert lite.attempts[0]["reason"] == "ddgs_lite_unsupported"
     assert web.calls == []
+    assert ddgs_stub.calls == []
 
 
-def test_s1_settings_factory_injects_search_into_candidates_with_four_query_limit(monkeypatch):
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"min_interval_seconds": 0},
+        {"min_interval_seconds": -1},
+        {"min_interval_seconds": True},
+        {"min_interval_seconds": float("nan")},
+        {"min_interval_seconds": float("inf")},
+        {"max_results": 0},
+        {"max_results": 11},
+        {"max_results": True},
+        {"timeout_seconds": 0},
+        {"timeout_seconds": 1.5},
+        {"timeout_seconds": False},
+        {"region": ""},
+        {"region": "two words"},
+        {"backend": "auto"},
+        {"headers": {"User-Agent": "override"}},
+    ],
+)
+def test_invalid_search_options_are_rejected_without_network(ddgs_stub, changes):
+    options = {**OPTIONS, **changes}
+    with pytest.raises(ValueError):
+        ts.SETTING_VALIDATORS[ts.KEY_DISCOVERY_SEARCH_OPTIONS](options)
+    getter, web, store, _clock = _getter()
+    outcome = _run(getter, store, options=options)
+    assert outcome.status == "unavailable"
+    assert outcome.attempts[0]["reason"] == "search_options_invalid"
+    assert web.calls == []
+    assert ddgs_stub.calls == []
+
+
+def test_search_options_are_loaded_fingerprinted_and_not_a_preview_prerequisite(monkeypatch):
+    values = settings_values(**{ts.KEY_DISCOVERY_SEARCH_OPTIONS: dict(OPTIONS)})
+    monkeypatch.setattr(ts, "list_settings", lambda _session, _tenant: values)
+    settings = load_discovery_settings(object(), "s3c-test-tenant")
+    assert settings.search_options == OPTIONS
+    assert settings.public()["search_options"] == OPTIONS
+    changed = settings_from_values(
+        {**values, ts.KEY_DISCOVERY_SEARCH_OPTIONS: {**OPTIONS, "region": "zz-en"}}
+    )
+    assert settings.fingerprint() != changed.fingerprint()
+
+    missing = make_settings()
+    assert missing.search_options is None
+    assert missing.missing_for("customer") == []
+
+
+def test_settings_factory_passes_options_without_changing_candidate_call_interface(
+    monkeypatch, ddgs_stub
+):
     values = settings_values(
         **{
-            ts.KEY_DISCOVERY_SEARCH_PROVIDERS: ["searxng", "ddg_lite"],
-            ts.KEY_DISCOVERY_SEARXNG_URL: SEARXNG_URL,
+            ts.KEY_DISCOVERY_SEARCH_PROVIDERS: ["ddg_html"],
+            ts.KEY_DISCOVERY_SEARCH_OPTIONS: dict(OPTIONS),
         }
     )
     monkeypatch.setattr(ts, "list_settings", lambda _session, _tenant: values)
-    settings = load_discovery_settings(object(), "s2-test-tenant")
+    settings = load_discovery_settings(object(), "s3c-test-tenant")
     ctx = cand.CustomerContext(
         customer_id=1,
         name="Alpha Gadgets",
-        products=[cand.ProductInfo(id=i, sales_model_name=f"ABC-{i}") for i in range(1, 6)],
+        products=[
+            cand.ProductInfo(id=index, sales_model_name=f"ABC-{index}")
+            for index in range(1, 6)
+        ],
     )
-    queries = [
-        cand.product_query(product, settings.country_name)
-        for product in cand.choose_products(ctx.products)
-    ] + [cand.name_query(ctx.name, settings.country_name)]
-    getter, web, store, _clock = _getter(
-        {_url("searxng", query): fixture_text("searxng_results.json") for query in queries}
-    )
+    getter, _web, store, _clock = _getter()
     fn = preview.default_search_fn(settings, getter, SearchCache(store))
     assert fn is not None
     tracker = preview.SearchTracker(fn, settings.search_providers)
@@ -496,48 +642,39 @@ def test_s1_settings_factory_injects_search_into_candidates_with_four_query_limi
         resolve=lambda _host: [],
         engine_hosts=preview.engine_hosts_for(settings),
     )
-    assert web.page_calls() == [_url("searxng", query) for query in queries]
     assert tracker.queries == 4
-    assert tracker.summary()["provider_used"] == "searxng"
+    assert len(ddgs_stub.calls) == 4
+    assert tracker.summary()["provider_used"] == "ddg_html"
     assert {item.host for item in found} == {ALPHA, GAMMA}
     assert all(item.sources == {"product_search", "name_search"} for item in found)
-    assert all([hit["product_id"] for hit in item.product_hits] == [1, 2, 3] for item in found)
-
-
-def test_s1_settings_with_search_unset_keep_other_candidate_sources(monkeypatch) -> None:
-    values = settings_values(**{ts.KEY_DISCOVERY_SEARCH_PROVIDERS: None})
-    monkeypatch.setattr(ts, "list_settings", lambda _session, _tenant: values)
-    settings = load_discovery_settings(object(), "s2-test-tenant")
-    getter, web, store, _clock = _getter()
-    fn = preview.default_search_fn(settings, getter, SearchCache(store))
-    assert fn is None
-    ctx = cand.CustomerContext(customer_id=1, name="Alpha Gadgets", seed_host=ALPHA)
-    found = cand.assemble_candidates(ctx, settings, search=fn, resolve=lambda _host: [])
-    assert [(item.host, item.sources) for item in found] == [(ALPHA, {"on_file"})]
-    assert web.calls == []
-
-
-def test_all_search_providers_fail_but_preview_finishes_with_search_unavailable(monkeypatch):
-    settings = make_settings()
-    ctx = cand.CustomerContext(customer_id=1, name="Alpha Gadgets", seed_host=ALPHA)
-    getter, _web, store, _clock = _getter(
-        {
-            _url("ddg_html", cand.name_query(ctx.name, settings.country_name)): (
-                202,
-                fixture_text("ddg_html_202_empty.html"),
-            ),
-            _url("ddg_lite", cand.name_query(ctx.name, settings.country_name)): (
-                200,
-                fixture_text("ddg_html_anomaly.html"),
-            ),
-            f"https://{ALPHA}/": fixture_text("home_org_jsonld.html"),
-        }
+    assert all(
+        [hit["product_id"] for hit in item.product_hits] == [1, 2, 3] for item in found
     )
-    customer = SimpleNamespace(id=ctx.customer_id, name=ctx.name, tenant_id="s2-test-tenant")
+
+
+@pytest.mark.parametrize("configured", [True, False])
+def test_preview_finishes_and_other_candidate_sources_survive_search_failure(
+    monkeypatch, ddgs_stub, configured
+):
+    ddgs_stub.error = RuntimeError("private upstream failure")
+    values = {
+        ts.KEY_DISCOVERY_SEARCH_OPTIONS: dict(OPTIONS) if configured else None,
+    }
+    settings = make_settings(**values)
+    ctx = cand.CustomerContext(
+        customer_id=1,
+        name="Alpha Gadgets",
+        seed_host=ALPHA,
+        contact_domains=["contact-shop.example.test"],
+    )
+    getter, _web, store, _clock = _getter(
+        {f"https://{ALPHA}/": fixture_text("home_org_jsonld.html")}
+    )
+    customer = SimpleNamespace(id=1, name=ctx.name, tenant_id="s3c-test-tenant")
     monkeypatch.setattr(preview, "load_discovery_settings", lambda *_args: settings)
     monkeypatch.setattr(preview, "_load_customers", lambda *_args: [customer])
     monkeypatch.setattr(cand, "read_context", lambda *_args: ctx)
-    statements: list[str] = []
+    statements = []
 
     class ReadOnlySession:
         def execute(self, statement):
@@ -547,19 +684,23 @@ def test_all_search_providers_fail_but_preview_finishes_with_search_unavailable(
     plan = preview.run_preview(
         ReadOnlySession(),
         tenant_id=customer.tenant_id,
-        preview_id="s2-test-preview",
+        preview_id="s3c-test-preview",
         request={"scope": "customer", "customer_id": customer.id},
         getter=getter,
-        resolve=lambda _host: [],
+        resolve=lambda _host: [PUBLIC_IP],
         plan_store=preview.MemoryPlanStore(),
-        search_factory=lambda loaded: preview.default_search_fn(loaded, getter, SearchCache(store)),
+        search_factory=lambda loaded: preview.default_search_fn(
+            loaded, getter, SearchCache(store)
+        ),
     )
     assert statements == ["SET TRANSACTION READ ONLY"]
     assert plan["status"] == "done"
     assert plan["result"]["search"]["status"] == "unavailable"
-    assert [attempt["status"] for attempt in plan["result"]["search"]["attempts"]] == [
-        "blocked",
-        "blocked",
-    ]
-    assert plan["result"]["customers"][0]["candidates"][0]["domain"] == ALPHA
     assert plan["progress"] == {"done": 1, "total": 1}
+    domains = {
+        item["domain"] for item in plan["result"]["customers"][0]["candidates"]
+    }
+    assert {ALPHA, "contact-shop.example.test"} <= domains
+    assert any(domain.endswith(".zz") for domain in domains)
+    assert "private upstream failure" not in str(plan)
+    assert len(ddgs_stub.calls) == (1 if configured else 0)

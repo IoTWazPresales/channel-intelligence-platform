@@ -22,8 +22,8 @@ SCOPE_DOMAIN = "domain"
 SCOPE_UNLINKED = "unlinked_listings"
 SCOPES = (SCOPE_CUSTOMER, SCOPE_REPORTING, SCOPE_DOMAIN, SCOPE_UNLINKED)
 
-# The settings a scope cannot run without. "domain" needs the country (the page-locale and search
-# evidence); the ending list is optional there and shows as "not set".
+# Search configuration is deliberately not a Preview prerequisite: unavailable search must
+# leave the other candidate sources usable.
 REQUIRED_BY_SCOPE: dict[str, tuple[str, ...]] = {
     SCOPE_CUSTOMER: (ts.KEY_TENANT_COUNTRY, ts.KEY_TENANT_DOMAIN_ENDINGS),
     SCOPE_REPORTING: (ts.KEY_TENANT_COUNTRY, ts.KEY_TENANT_DOMAIN_ENDINGS),
@@ -36,6 +36,7 @@ FINGERPRINT_KEYS = (
     ts.KEY_TENANT_COUNTRY,
     ts.KEY_TENANT_DOMAIN_ENDINGS,
     ts.KEY_DISCOVERY_SEARCH_PROVIDERS,
+    ts.KEY_DISCOVERY_SEARCH_OPTIONS,
     ts.KEY_DISCOVERY_SEARXNG_URL,
     ts.KEY_DISCOVERY_EXCLUDED_DOMAINS,
     ts.KEY_DISCOVERY_BROWSER_FALLBACK,
@@ -53,6 +54,7 @@ class DiscoverySettings:
     # The keys a customer-scope Discover needs and the tenant has not set.
     missing: list[str] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
+    search_options: dict[str, Any] | None = None
 
     @property
     def country_code(self) -> str | None:
@@ -75,7 +77,7 @@ class DiscoverySettings:
         return out
 
     def fingerprint(self) -> str:
-        """sha256 of the discovery keys, so Apply can tell the settings changed after the Preview."""
+        """sha256 of the discovery keys, so Apply can tell settings changed after Preview."""
         payload = {key: self.raw.get(key) for key in FINGERPRINT_KEYS}
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
@@ -86,6 +88,7 @@ class DiscoverySettings:
             "country": dict(self.country) if self.country else None,
             "domain_endings": list(self.domain_endings),
             "search_providers": list(self.search_providers),
+            "search_options": dict(self.search_options) if self.search_options else None,
         }
 
 
@@ -100,19 +103,31 @@ def _clean(key: str, value: Any) -> Any | None:
 
 
 def settings_from_values(values: dict[str, Any]) -> DiscoverySettings:
-    """Build settings from a ``{key: stored value}`` mapping (what ``list_settings`` returns)."""
+    """Build settings from a ``{key: stored value}`` mapping."""
     country = _clean(ts.KEY_TENANT_COUNTRY, values.get(ts.KEY_TENANT_COUNTRY))
     endings = _clean(ts.KEY_TENANT_DOMAIN_ENDINGS, values.get(ts.KEY_TENANT_DOMAIN_ENDINGS)) or []
-    providers = _clean(ts.KEY_DISCOVERY_SEARCH_PROVIDERS, values.get(ts.KEY_DISCOVERY_SEARCH_PROVIDERS)) or []
+    providers = (
+        _clean(ts.KEY_DISCOVERY_SEARCH_PROVIDERS, values.get(ts.KEY_DISCOVERY_SEARCH_PROVIDERS))
+        or []
+    )
+    search_options = _clean(
+        ts.KEY_DISCOVERY_SEARCH_OPTIONS, values.get(ts.KEY_DISCOVERY_SEARCH_OPTIONS)
+    )
     searxng_url = _clean(ts.KEY_DISCOVERY_SEARXNG_URL, values.get(ts.KEY_DISCOVERY_SEARXNG_URL))
     if "searxng" in providers and not searxng_url:
-        providers = [p for p in providers if p != "searxng"]
-    excluded = _clean(ts.KEY_DISCOVERY_EXCLUDED_DOMAINS, values.get(ts.KEY_DISCOVERY_EXCLUDED_DOMAINS)) or []
-    fallback = _clean(ts.KEY_DISCOVERY_BROWSER_FALLBACK, values.get(ts.KEY_DISCOVERY_BROWSER_FALLBACK))
+        providers = [provider for provider in providers if provider != "searxng"]
+    excluded = (
+        _clean(ts.KEY_DISCOVERY_EXCLUDED_DOMAINS, values.get(ts.KEY_DISCOVERY_EXCLUDED_DOMAINS))
+        or []
+    )
+    fallback = _clean(
+        ts.KEY_DISCOVERY_BROWSER_FALLBACK, values.get(ts.KEY_DISCOVERY_BROWSER_FALLBACK)
+    )
     cleaned_raw = {
         ts.KEY_TENANT_COUNTRY: country,
         ts.KEY_TENANT_DOMAIN_ENDINGS: endings or None,
         ts.KEY_DISCOVERY_SEARCH_PROVIDERS: providers or None,
+        ts.KEY_DISCOVERY_SEARCH_OPTIONS: search_options,
         ts.KEY_DISCOVERY_SEARXNG_URL: searxng_url,
         ts.KEY_DISCOVERY_EXCLUDED_DOMAINS: excluded or None,
         ts.KEY_DISCOVERY_BROWSER_FALLBACK: fallback,
@@ -121,6 +136,7 @@ def settings_from_values(values: dict[str, Any]) -> DiscoverySettings:
         country=country,
         domain_endings=list(endings),
         search_providers=list(providers),
+        search_options=search_options,
         searxng_url=searxng_url,
         excluded_domains=list(excluded),
         browser_fallback_enabled=bool(fallback),
@@ -130,5 +146,5 @@ def settings_from_values(values: dict[str, Any]) -> DiscoverySettings:
 
 
 def load_discovery_settings(session: Session, tenant_id: str) -> DiscoverySettings:
-    """The tenant's discovery settings. ``missing`` lists what a customer-scope Discover needs."""
+    """The tenant's discovery settings."""
     return settings_from_values(ts.list_settings(session, tenant_id))

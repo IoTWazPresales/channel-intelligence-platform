@@ -3,16 +3,16 @@
 For each request it:
 
 1. checks the 24 h HTTP cache (a hit sends nothing),
-2. checks robots.txt for the host (own RFC 9309 matcher; a disallowed URL sends no request),
-3. sends through the shared ``SiteFetchGate`` (the #100 spacing and the 403/429 pause) under a
-   gate key: an existing site's ``site_key``, ``host:<host>`` for a candidate host, or
-   ``search:<host>`` for a search engine,
-4. follows redirects itself (at most 5 hops), checking robots and the gate on every hop, and
-   returns the final URL.
+2. checks robots.txt for the host (a disallowed URL sends no request),
+3. sends through the shared ``SiteFetchGate`` under a gate key,
+4. follows redirects itself, checking robots and the gate on every hop.
 
-No CAPTCHA solving, no proxy or IP rotation, no fingerprint evasion (D-0063). A block is a stop.
-A host that resolves to a private, loopback or link-local address is refused, so a search result
-or a guessed name cannot point the worker at an internal service.
+``guarded_call`` applies the same robots, spacing, pause and time-budget policy once at a
+third-party client's call boundary. Such a client owns its internal HTTP requests; those
+requests are not individually intercepted or cached here.
+
+A host that resolves to a private, loopback or link-local address is refused, so a search
+result or a guessed name cannot point the worker at an internal service.
 
 ``raw_get`` sends ONE request without following redirects and returns ``(status, body,
 location)``. Tests inject a fake with that shape.
@@ -45,8 +45,6 @@ from app.services.listing_capture.web_discovery.robots import (
     rules_from_response,
 )
 
-# Spacing between two requests to a search engine: higher than the 5 s site default.
-SEARCH_SPACING_SECONDS = 10.0
 DEFAULT_SPACING_SECONDS = float(DEFAULT_RATE_LIMIT_SECONDS)
 MAX_REDIRECT_HOPS = 5
 MAX_BODY_BYTES = 2 * 1024 * 1024
@@ -68,10 +66,16 @@ class Fetched:
     status: int
     body: str
     final_url: str
-    # Why nothing was sent or the answer was withheld: robots, site_paused, time_limit,
-    # private_address, bad_url, too_many_redirects. None for any real HTTP answer (or none).
+    # Why nothing was sent or the answer was withheld.
     refused: str | None = None
     from_cache: bool = False
+
+
+@dataclass(frozen=True)
+class GuardedCall:
+    status: int
+    value: Any = None
+    refused: str | None = None
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -80,10 +84,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def fetch_hop(url: str) -> tuple[int, str, str | None]:
-    """One GET with the shared browser User-Agent, no redirect following. ``(status, body, location)``.
-
-    Same headers and timeout as ``observation.default_http_get``. The body is capped at 2 MB.
-    """
+    """One GET with the shared User-Agent, no redirect following and a 2 MB body cap."""
     request = urllib.request.Request(
         url,
         headers={
@@ -110,7 +111,7 @@ def fetch_hop(url: str) -> tuple[int, str, str | None]:
 
 
 def dns_resolve(host: str) -> list[str]:
-    """The IP addresses ``host`` resolves to (empty when it does not), within 3 seconds."""
+    """The IP addresses ``host`` resolves to, within 3 seconds."""
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         future = executor.submit(socket.getaddrinfo, host, None)
@@ -136,7 +137,7 @@ def is_public_address(address: str) -> bool:
 
 
 class PoliteGetter:
-    """``get(url, gate_key=..., spacing=...)`` under robots, the shared gate and the HTTP cache."""
+    """Discovery HTTP and library calls under robots, spacing and the shared pause policy."""
 
     def __init__(
         self,
@@ -177,11 +178,56 @@ class PoliteGetter:
         return gate.summary() if gate is not None else None
 
     def paused(self, gate_key: str) -> bool:
-        """True when the key is paused: remembered from an earlier run, or by a 403/429 in this one."""
+        """True when this key is paused by an earlier run or this one."""
         gate = self.gate(gate_key)
         return gate.check_pause() or gate.stopped == STOP_PAUSED
 
     # ------------------------------------------------------------------ public API
+
+    def guarded_call(
+        self,
+        url: str,
+        operation: Callable[[], tuple[int, Any]],
+        *,
+        gate_key: str,
+        spacing: float,
+    ) -> GuardedCall:
+        """Run one library operation under the existing gate.
+
+        ``url`` is the actual backend endpoint used for the robots check. The operation
+        returns a status and a value; exceptions propagate to the provider adapter, which
+        records a search pause even when the library does not expose an HTTP status.
+        SiteFetchGate records completion time in its finally block for errors as well.
+        """
+        try:
+            parts = urlsplit(url)
+            host = (parts.hostname or "").lower()
+            port = parts.port
+        except ValueError:
+            return GuardedCall(0, refused=REFUSED_BAD_URL)
+        if (
+            parts.scheme not in ("http", "https")
+            or not host
+            or port not in _ALLOWED_PORTS
+            or parts.username is not None
+            or parts.password is not None
+        ):
+            return GuardedCall(0, refused=REFUSED_BAD_URL)
+        gate = self.gate(gate_key, spacing)
+        if not gate.can_send():
+            return GuardedCall(int(gate.refused_status or 0), refused=gate.stopped)
+        if not self._host_is_public(host):
+            return GuardedCall(0, refused=REFUSED_PRIVATE)
+        rules = self._rules_for(parts.scheme, parts.netloc, host, gate)
+        if gate.stopped is not None:
+            return GuardedCall(int(gate.refused_status or 0), refused=gate.stopped)
+        if not rules.allowed(url):
+            return GuardedCall(0, refused=REFUSED_ROBOTS)
+        self.requests += 1
+        status, value = gate.get(lambda _url: operation(), url)
+        if gate.stopped is not None:
+            return GuardedCall(int(status or 0), refused=gate.stopped)
+        return GuardedCall(int(status or 0), value)
 
     def get(self, url: str, *, gate_key: str, spacing: float | None = None) -> Fetched:
         cached = self.cache.get_response(url)
@@ -255,7 +301,6 @@ class PoliteGetter:
         if rules is None:
             status, body = self._fetch_robots(scheme, netloc, gate)
             if gate.stopped is not None:
-                # Paused, or out of time: the caller refuses this URL. Nothing is remembered.
                 return RobotsRules(mode=MODE_DISALLOW_ALL)
             rules = rules_from_response(status, body)
             if rules.mode != MODE_DISALLOW_ALL:
@@ -273,7 +318,10 @@ class PoliteGetter:
             if status in _REDIRECT_STATUSES and location:
                 target = urljoin(url, location)
                 target_host = (urlsplit(target).hostname or "").lower()
-                if urlsplit(target).scheme not in ("http", "https") or not self._host_is_public(target_host):
+                if (
+                    urlsplit(target).scheme not in ("http", "https")
+                    or not self._host_is_public(target_host)
+                ):
                     return 0, ""
                 url = target
                 continue
