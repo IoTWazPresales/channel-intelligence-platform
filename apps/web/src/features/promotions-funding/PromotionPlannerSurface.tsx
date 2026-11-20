@@ -335,7 +335,8 @@ function PlannerList({
       label: 'Low stock risk',
       value: null,
       state: 'unavailable',
-      caption: 'Needs the customer’s sell-through stock cover per promotion line; no source feeds it yet.',
+      caption:
+        'Sell-through stock cover is used when proposing lines, but no per-promotion low-stock figure is read here yet.',
     },
     {
       key: 'funding-gaps',
@@ -406,7 +407,7 @@ function PlannerList({
               </Typography>
             </Box>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Tooltip title="Propose lines from a customer and period. Uses that customer’s lineup or their own history — never other customers." arrow>
+              <Tooltip title="Propose lines from the customer’s own sell-through (products, price, run rate); never other customers." arrow>
                 <span>
                   <Button
                     size="small"

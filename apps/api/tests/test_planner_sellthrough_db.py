@@ -76,7 +76,7 @@ async def world(monkeypatch):
             customer_id=customer.id,
             product_id=product.id,
             url=f"https://example.invalid/{tag}",
-            marketplace="fixture",
+            marketplace="shop-a",
         )
         db.add_all([rival, lineup, earlier, listing])
         await db.flush()
