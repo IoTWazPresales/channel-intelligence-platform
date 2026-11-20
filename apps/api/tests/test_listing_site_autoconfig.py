@@ -958,7 +958,7 @@ def _declared_site_keys() -> set[str]:
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not path.is_file() or any(part in _CONFIG_SKIP_DIRS for part in path.parts):
+            if not path.is_file() or any(part in _CONFIG_SKIP_DIRS for part in path.relative_to(repo).parts):
                 continue
             if path.suffix.lower() not in {".json", ".yaml", ".yml"}:
                 continue
