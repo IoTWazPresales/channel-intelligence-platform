@@ -4,13 +4,13 @@ import { Box, Button, Link as MuiLink, Skeleton, Typography } from '@mui/materia
 import { alpha, useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 import NextLink from 'next/link';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { buildOnTheWaterUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
+import { DEFAULT_MAP_SIZE, MapAside, MapCanvas, MapLayout, MapPanel } from '@/features/maps/MapCanvas';
 import { apiGet, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
-import { BASEMAP_DOTS, BASEMAP_SIZE } from './basemapDots';
 import { badgeText, daysText, fmtDay, fmtDayYear, fmtMoney, fmtUnits, historyText, nameUnits, slipShort } from './format';
 import { LABEL_HEIGHT_PX, clusterChip, clusterVessels, labelWidthPx, placeLabels, portNameBox, portsInUse, type Cluster } from './layout';
 import type { OnTheWaterData, PortRow, Vessel } from './types';
@@ -44,20 +44,9 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
   const [hoverId, setHoverId] = useState<string | null>(null);
   const { data, isLoading, isError, error, refetch } = useOnTheWater(filterParams);
   // Labels are a fixed size in pixels, so their size on the map follows the map's real size (a phone is not a desk).
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const [mapPx, setMapPx] = useState({ w: 1000, h: 646 });
+  const [mapPx, setMapPx] = useState(DEFAULT_MAP_SIZE);
   // Phone-width map: a port nobody is sailing to or from is a dot that shows its name when tapped.
   const [tappedPort, setTappedPort] = useState<string | null>(null);
-  const hasData = Boolean(data);
-  useEffect(() => {
-    const el = mapRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const measure = () => setMapPx({ w: el.clientWidth || 1000, h: el.clientHeight || 646 });
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [view, hasData]);
 
   const card = {
     bgcolor: t.bg.surface,
@@ -272,13 +261,8 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
             ))}
           </Box>
 
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'stretch' }}>
-            <Box
-              sx={{
-                flex: '999 1 600px', minWidth: 0, ...card, p: 1.75, display: 'flex', flexDirection: 'column', gap: 1.25,
-                background: theme.palette.mode === 'dark' ? 'radial-gradient(ellipse at 60% 55%, #18222c 0%, #121519 70%)' : 'radial-gradient(ellipse at 60% 55%, #e6eef3 0%, #f6f9fb 70%)',
-              }}
-            >
+          <MapLayout>
+            <MapPanel>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.75, alignItems: 'center', justifyContent: 'space-between', px: 0.5 }}>
                 <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Vessels and lanes</Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.75, fontSize: 12, color: t.text.secondary }}>
@@ -288,14 +272,12 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                 </Box>
               </Box>
 
-              <Box ref={mapRef} data-testid="otw-map" sx={{ position: 'relative', width: '100%', aspectRatio: `${BASEMAP_SIZE.width} / ${BASEMAP_SIZE.height}`, borderRadius: 1, overflow: 'hidden' }}>
-                <svg
-                  viewBox={`0 0 ${BASEMAP_SIZE.width} ${BASEMAP_SIZE.height}`}
-                  role="img"
-                  aria-label="Map from Western Europe to East Asia showing the sea lanes into Durban"
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
-                >
-                  <path d={BASEMAP_DOTS} fill="none" stroke={theme.palette.mode === 'dark' ? 'rgba(160,185,205,0.28)' : 'rgba(40,70,95,0.30)'} strokeWidth="2.4" strokeLinecap="round" />
+              <MapCanvas
+                data-testid="otw-map"
+                label="Map from Western Europe to East Asia showing the sea lanes into Durban"
+                onSizeChange={setMapPx}
+                svgChildren={
+                  <>
                   {data.map.lanes.map((l) =>
                     l.kind === 'sea' ? (
                       <g key={l.id}>
@@ -306,8 +288,9 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                       <path key={l.id} d={l.d} fill="none" stroke={amber} strokeOpacity="0.9" strokeWidth="1.8" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" />
                     ),
                   )}
-                </svg>
-
+                  </>
+                }
+              >
                 {data.map.ports.map((p) => {
                   const named = portNamed(p.id);
                   // Only a port that is a bare dot on a phone-width map can be tapped; it is a 44 px target under the vessels.
@@ -379,14 +362,14 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                 {noVessels ? (
                   <Typography sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: t.text.secondary }}>No vessels at sea in this view.</Typography>
                 ) : null}
-              </Box>
+              </MapCanvas>
               <Box sx={{ px: 0.5, pt: narrow ? 0 : 0.75, display: 'flex', flexDirection: 'column', gap: 0.75, alignItems: 'flex-start' }}>
                 {narrow ? <DurbanNote /> : null}
                 <MapCaption />
               </Box>
-            </Box>
+            </MapPanel>
 
-            <Box sx={{ flex: '1 1 360px', minWidth: 'min(360px, 100%)', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <MapAside>
               {panel ? <SelectedPanel vessel={panel} picked={Boolean(picked)} t={t} amber={amber} /> : null}
               <Box sx={{ ...card, p: 1 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, p: 1 }}>Arriving next</Typography>
@@ -414,8 +397,8 @@ export function OnTheWater({ filterParams, selectedKey, onSelectVessel, onOpenNe
                   </Box>
                 ))}
               </Box>
-            </Box>
-          </Box>
+            </MapAside>
+          </MapLayout>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 1.5 }}>
             <PortConditions rows={data.port_rows} t={t} amber={amber} card={card} />

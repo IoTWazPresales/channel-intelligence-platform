@@ -150,9 +150,8 @@ export function SellThroughOverview() {
         role="toolbar"
         aria-label="Sell-through filters"
         sx={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 3,
+          // Stay in flow: a wrapping sticky bar covers the map when the page scrolls.
+          position: 'static',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',

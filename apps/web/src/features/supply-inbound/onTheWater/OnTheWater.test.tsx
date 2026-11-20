@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
+import { StoreMap } from '@/features/store-dc/StoreMap';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { placeLabels, portNameBox } from './layout';
@@ -14,9 +15,11 @@ const hoisted = vi.hoisted(() => ({ body: null as unknown, urls: [] as string[] 
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async (url: string) => {
+    if (url === '/api/v1/store-dc/map') return { customers: [], stores: [] };
     hoisted.urls.push(url);
     return hoisted.body;
   }),
+  apiPost: vi.fn(),
   safeDisplayError: (e: unknown) => String(e),
 }));
 vi.mock('next/link', () => ({ default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => <a href={href} {...rest}>{children}</a> }));
@@ -82,6 +85,38 @@ function setup(body: OnTheWaterData | unknown, props: Partial<Parameters<typeof 
 }
 
 describe('OnTheWater', () => {
+  it('shares the basemap, box size, theme and wrapping columns with StoreMap', async () => {
+    setup(payload());
+    renderWithProviders(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <StoreMap />
+      </QueryClientProvider>,
+    );
+    const shipment = await screen.findByTestId('otw-map');
+    const store = screen.getByTestId('store-map-canvas');
+    for (const map of [shipment, store]) {
+      expect(map).toHaveAttribute('data-map-canvas');
+      expect(getComputedStyle(map).aspectRatio).toMatch(/^1000\s*\/\s*646$/);
+      expect(getComputedStyle(map).width).toBe('100%');
+      expect(within(map).getByRole('img')).toHaveAttribute('viewBox', '0 0 1000 646');
+    }
+    const shipmentLand = shipment.querySelector('svg > path')!;
+    const storeLand = store.querySelector('svg > path')!;
+    expect(storeLand.getAttribute('d')).toBe(shipmentLand.getAttribute('d'));
+    expect(storeLand.getAttribute('stroke')).toBe(shipmentLand.getAttribute('stroke'));
+    const shipmentPanel = getComputedStyle(shipment.closest('[data-map-panel]')!);
+    const storePanel = getComputedStyle(store.closest('[data-map-panel]')!);
+    expect(storePanel.flex).toBe(shipmentPanel.flex);
+    expect(storePanel.padding).toBe(shipmentPanel.padding);
+    expect(storePanel.background).toBe(shipmentPanel.background);
+    for (const map of [shipment, store]) {
+      const columns = getComputedStyle(map.closest('[data-map-layout]')!);
+      expect(columns.display).toBe('flex');
+      expect(columns.flexWrap).toBe('wrap');
+      expect(columns.gap).toBe('16px');
+    }
+  });
+
   it('shows the four tiles with the per-currency value, the air sub-line and the ETA history', async () => {
     setup(payload());
     expect(await screen.findByTestId('otw-tile-at-sea')).toHaveTextContent('15,009');
