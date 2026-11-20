@@ -130,6 +130,7 @@ from app.api.v1.endpoints import (
     steward_audit,
     stock_leaves,
     store_dc,
+    tenant_settings,
     supply,
 )
 
@@ -175,6 +176,7 @@ api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"]
 api_router.include_router(supply.router, prefix="/supply", tags=["supply"])
 api_router.include_router(stock_leaves.router, prefix="/stock", tags=["stock"])
 api_router.include_router(store_dc.router, prefix="/store-dc", tags=["store-dc"])
+api_router.include_router(tenant_settings.router, prefix="/tenant-settings", tags=["tenant-settings"])
 api_router.include_router(planning.router, prefix="/planning", tags=["planning"])
 api_router.include_router(administration.router, prefix="/administration", tags=["administration"])
 api_router.include_router(

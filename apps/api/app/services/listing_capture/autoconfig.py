@@ -123,6 +123,7 @@ def autoconfigure_sites(
     session: Session,
     *,
     tenant_id: str | None = None,
+    tenant_ids: list[str] | None = None,
     http_get: _HttpGet | None = None,
     run_store=None,
     time_limit_seconds: float | None = None,
@@ -156,7 +157,7 @@ def autoconfigure_sites(
         policy.time_limit_seconds = float(time_limit_seconds)
     _advisory_lock(session)
     entries: list[dict[str, Any]] = []
-    tenants = _tenant_ids(session, tenant_id)
+    tenants = [str(t) for t in tenant_ids] if tenant_ids is not None else _tenant_ids(session, tenant_id)
     # A scheduled run (every tenant) shares one discovery budget, so the tenants rotate:
     # the next run starts at the first tenant after this run's starting tenant whose
     # discovery the budget cut short. If only the starting tenant was cut short, the next

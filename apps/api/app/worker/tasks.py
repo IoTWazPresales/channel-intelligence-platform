@@ -882,10 +882,25 @@ def listing_capture_autoconfigure_sites_task(
         return {"skipped": True, "reason": "dev_beat_disabled"}
 
     live = _listing_live_fetch_enabled()
+    if not on_demand:
+        # Scheduled run: discovery runs only for tenants whose user switched
+        # ``discovery.schedule_enabled`` on in the app. Off by default; unreadable reads as off.
+        from app.services.tenant_settings import KEY_DISCOVERY_SCHEDULE, tenants_with_true
+
+        with SessionLocal() as gate_session:
+            enabled = tenants_with_true(gate_session, KEY_DISCOVERY_SCHEDULE)
+        if tenant_id is not None:
+            enabled = [t for t in enabled if t == tenant_id]
+        if not enabled:
+            return {"skipped": True, "reason": "discovery_schedule_off"}
+        scheduled_tenants = enabled
+    else:
+        scheduled_tenants = None
     with SessionLocal() as session:
         report = autoconfigure_sites(
             session,
             tenant_id=tenant_id,
+            tenant_ids=scheduled_tenants,
             http_get=default_http_get if live else None,
         )
         session.commit()
