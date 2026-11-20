@@ -49,7 +49,7 @@ Rules this design keeps (Warren): it reuses existing code and adds no parallel s
 - `/listing-capture` page. Lenses come from `features/market-listings/MarketChrome.tsx:17-42` (`MarketLens` union + `LENSES`) and are rendered in `MarketSurface.tsx:1650-1653`.
 - `ListingSitesLens.tsx:123-209` has the "Customer with no site" onboarding form, `EntitySearchAutocomplete` customer picker, and `fetchCustomers` from `/api/v1/customers`. `ListingLinksLens.tsx` is the link queue.
 - Settings page: `app/(app)/settings/page.tsx`, with panels from `features/settings/*` mounted at `:459-468`.
-- UI stack: MUI 6 + TanStack Query (`apps/web/package.json:24-30`). No new UI or chart libraries.
+- UI stack: MUI 6 + TanStack Query (`apps/web/package.json:24-30`). Libraries rule (Warren, 2026-11-20): prefer a well-established, maintained, permissively licensed library over hand-built code for anything non-trivial, name it in the PR, one library per job, and never use fuzzy-matching libraries to link records.
 
 ### 1.6 Playwright
 - **Web:** `@playwright/test ^1.49.0` (`apps/web/package.json:42`) is installed (`apps/web/node_modules/@playwright/test`). Config: `apps/web/playwright.config.ts` (Desktop Chrome, `e2e/`, live API via `CIP_E2E_API_URL`/`CIP_E2E_LIVE_API`).
