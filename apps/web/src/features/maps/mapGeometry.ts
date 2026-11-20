@@ -46,14 +46,26 @@ export function mapBoundsForPoints(points: Coordinates[]): MapBounds {
 }
 
 const BASEMAP_DOT_STROKE = 2.4;
+// A zoomed-in view spreads the same dots further apart, so the dots grow (more slowly than the
+// zoom) to keep the continent outline readable instead of sparse; never past this on-screen size.
+const BASEMAP_DOT_ZOOM_EXPONENT = 0.75;
+const BASEMAP_DOT_MAX_ON_SCREEN = 7;
 
 /**
- * Basemap dot size in viewBox units. A zoomed-in view magnifies the viewBox, so the stroke is
- * divided by the zoom to keep each dot the same size on screen as on the Shipments map.
+ * Basemap dot size in viewBox units. At the Shipments extent a dot is 2.4 units. A zoomed-in view
+ * magnifies the viewBox, so the stroke is divided by the zoom, then multiplied back by a
+ * sub-linear growth so the dots get a little larger on screen instead of vanishing.
  */
 export function basemapStrokeWidth(bounds: MapBounds = BASEMAP_BOUNDS): number {
-  const zoom = (BASEMAP_BOUNDS.maxLon - BASEMAP_BOUNDS.minLon) / (bounds.maxLon - bounds.minLon);
-  return BASEMAP_DOT_STROKE / Math.max(1, zoom);
+  const zoom = Math.max(
+    1,
+    (BASEMAP_BOUNDS.maxLon - BASEMAP_BOUNDS.minLon) / (bounds.maxLon - bounds.minLon)
+  );
+  const onScreen = Math.min(
+    BASEMAP_DOT_MAX_ON_SCREEN,
+    BASEMAP_DOT_STROKE * zoom ** BASEMAP_DOT_ZOOM_EXPONENT
+  );
+  return onScreen / zoom;
 }
 
 export function mapViewBox(bounds: MapBounds = BASEMAP_BOUNDS): string {

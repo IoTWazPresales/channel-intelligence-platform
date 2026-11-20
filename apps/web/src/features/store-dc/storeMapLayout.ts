@@ -16,6 +16,9 @@ const BASE_LON_SPAN = BASEMAP_BOUNDS.maxLon - BASEMAP_BOUNDS.minLon;
 export const DEFAULT_MIN_LON_SPAN = 60;
 // Generous room so the outline, not the pins, is the focus of the box.
 const FIT_PADDING = 1.5;
+// Tightest view in degrees of longitude (about a city): zooming into a cluster stops here, and
+// pins that still overlap are fanned out on screen.
+export const STORE_MIN_LON_SPAN = 0.3;
 
 /** Real coordinates, or null. Missing, blank, non-numeric, out of range and 0,0 are not a place. */
 export function finiteCoordinates(latitude: unknown, longitude: unknown): Coordinates | null {
@@ -34,7 +37,11 @@ export function finiteCoordinates(latitude: unknown, longitude: unknown): Coordi
  * degrees-per-pixel ratio so the dots are not distorted, and never past the world. The
  * projection stays shared by the basemap, the pins and dragging.
  */
-export function storeMapBounds<T extends Coordinates>(points: readonly T[]): MapBounds {
+export function storeMapBounds<T extends Coordinates>(
+  points: readonly T[],
+  minLonSpan: number = DEFAULT_MIN_LON_SPAN,
+  padding: number = FIT_PADDING
+): MapBounds {
   if (points.length === 0) return BASEMAP_BOUNDS;
   let minLat = Infinity;
   let maxLat = -Infinity;
@@ -47,9 +54,9 @@ export function storeMapBounds<T extends Coordinates>(points: readonly T[]): Map
     maxLon = Math.max(maxLon, point.longitude);
   }
   const lonSpan = Math.max(
-    DEFAULT_MIN_LON_SPAN,
-    (maxLon - minLon) * FIT_PADDING,
-    (maxLat - minLat) * FIT_PADDING * (BASE_LON_SPAN / BASE_LAT_SPAN)
+    minLonSpan,
+    (maxLon - minLon) * padding,
+    (maxLat - minLat) * padding * (BASE_LON_SPAN / BASE_LAT_SPAN)
   );
   const latSpan = (lonSpan / BASE_LON_SPAN) * BASE_LAT_SPAN;
   const lat = (minLat + maxLat) / 2;
