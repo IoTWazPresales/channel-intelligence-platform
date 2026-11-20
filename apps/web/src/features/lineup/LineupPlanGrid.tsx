@@ -1,10 +1,9 @@
 'use client';
 
-import { Box, Button, Stack, Typography } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
+import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ColDef, GridOptions } from 'ag-grid-community';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import {
@@ -15,13 +14,12 @@ import {
 } from '@/features/lineup/lineupTypes';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { StatusChip } from '@/features/workbench-ui/controls';
-import { apiPatch } from '@/lib/api';
+import { apiPatch, safeDisplayError } from '@/lib/api';
 
-function buFromRow(row: LineupPlanRow): string {
-  const sku = row.sku ?? '';
-  const prefix = sku.split('-')[0];
-  if (prefix && prefix.length <= 4) return prefix;
-  return row.channel_code ?? '—';
+function businessUnitLabel(row: LineupPlanRow): string {
+  const productLine = row.product_line?.trim();
+  if (productLine) return productLine;
+  return `Not set: ${row.business_unit_reason || 'Product Master product line is unavailable'}`;
 }
 
 function approvalTone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -37,180 +35,158 @@ type Props = {
 };
 
 export function LineupPlanGrid({ rows, pendingOnly }: Props) {
-  const theme = useTheme();
   const qc = useQueryClient();
-  const [patchMsg, setPatchMsg] = useState<string | null>(null);
   const lineId = useLineIdentifierPreference();
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   const filtered = useMemo(
-    () => (pendingOnly ? rows.filter((r) => isPendingApproval(r.approval_status)) : rows),
+    () => pendingOnly ? rows.filter((row) => isPendingApproval(row.approval_status)) : rows,
     [pendingOnly, rows],
   );
 
-  const patchApproval = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
-      apiPatch(`/api/v1/lineup/items/${id}`, { approval_status: status }),
+  const patch = useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: number;
+      body: { approval_status: string } | { planned_volume_units: number };
+    }) => apiPatch(`/api/v1/lineup/items/${id}`, body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['lineup-items'] }),
   });
 
-  const patchPlanned = useMutation({
-    mutationFn: ({ id, planned_volume_units }: { id: number; planned_volume_units: number }) =>
-      apiPatch(`/api/v1/lineup/items/${id}`, { planned_volume_units }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['lineup-items'] }),
-  });
+  const columns: ColDef<LineupPlanRow>[] = [
+    {
+      colId: 'customer_name',
+      field: 'customer_name',
+      headerName: 'Customer',
+      minWidth: 160,
+      valueGetter: (p) => p.data?.customer_name?.trim() || 'Customer name not set',
+    },
+    {
+      colId: 'customer_code',
+      field: 'customer_code',
+      headerName: 'Customer code',
+      minWidth: 130,
+    },
+    ...lineId.columns<LineupPlanRow>(
+      { sku: 'sku', salesModel: 'sales_model_name' },
+      { minWidth: 140 },
+    ),
+    {
+      colId: 'period',
+      field: 'period_label',
+      headerName: 'Period',
+      minWidth: 110,
+      valueGetter: (p) => p.data?.period_label || p.data?.period_start,
+    },
+    {
+      colId: 'planned_volume_units',
+      field: 'planned_volume_units',
+      headerName: 'Planned',
+      minWidth: 120,
+      type: 'numericColumn',
+      editable: (p) => !patch.isPending && isPendingApproval(p.data?.approval_status ?? ''),
+      valueFormatter: (p) => formatUnits(Number(p.value ?? 0)),
+    },
+    {
+      colId: 'product_line',
+      field: 'product_line',
+      headerName: 'BU',
+      minWidth: 240,
+      valueGetter: (p) => p.data ? businessUnitLabel(p.data) : '',
+    },
+    {
+      colId: 'approval_status',
+      field: 'approval_status',
+      headerName: 'Approval',
+      minWidth: 130,
+      cellRenderer: ({ data }: { data?: LineupPlanRow }) => data ? (
+        <StatusChip
+          label={approvalBadgeLabel(data.approval_status)}
+          tone={approvalTone(data.approval_status)}
+        />
+      ) : null,
+    },
+    {
+      colId: 'actions',
+      headerName: 'Actions',
+      minWidth: 190,
+      sortable: false,
+      filter: false,
+      cellRenderer: ({ data }: { data?: LineupPlanRow }) => {
+        if (!data || !isPendingApproval(data.approval_status)) return null;
+        return (
+          <Stack direction="row" spacing={0.75}>
+            <Button
+              size="small"
+              color="success"
+              disabled={patch.isPending}
+              data-testid={`lineup-approve-${data.id}`}
+              onClick={() => patch.mutate({ id: data.id, body: { approval_status: 'approved' } })}
+            >
+              Approve
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              disabled={patch.isPending}
+              data-testid={`lineup-reject-${data.id}`}
+              onClick={() => patch.mutate({ id: data.id, body: { approval_status: 'rejected' } })}
+            >
+              Reject
+            </Button>
+          </Stack>
+        );
+      },
+    },
+  ];
 
-  const onApprove = useCallback((id: number) => void patchApproval.mutate({ id, status: 'approved' }), [patchApproval]);
-  const onReject = useCallback((id: number) => void patchApproval.mutate({ id, status: 'rejected' }), [patchApproval]);
+  const options: GridOptions<LineupPlanRow> = {
+    getRowId: (p) => String(p.data.id),
+    singleClickEdit: true,
+    // Keep query data unchanged until the existing API has accepted the edit.
+    readOnlyEdit: true,
+    onCellEditRequest: (event) => {
+      if (
+        !event.data ||
+        event.colDef.field !== 'planned_volume_units' ||
+        !isPendingApproval(event.data.approval_status) ||
+        event.oldValue === event.newValue
+      ) return;
 
-  const colDefs: ColDef<LineupPlanRow>[] = useMemo(
-    () => [
-      {
-        field: 'customer_name',
-        headerName: 'Customer',
-        minWidth: 140,
-        valueGetter: (p) => p.data?.customer_name || p.data?.customer_code || '—',
-      },
-      ...lineId.columns<LineupPlanRow>(
-        { sku: 'sku', salesModel: 'sales_model_name' },
-        { minWidth: 140, cellClass: 'lineup-sku-cell' },
-      ),
-      { field: 'period_label', headerName: 'Period', minWidth: 100 },
-      {
-        field: 'planned_volume_units',
-        headerName: 'Planned',
-        minWidth: 110,
-        type: 'numericColumn',
-        editable: (p) => isPendingApproval(p.data?.approval_status ?? ''),
-        cellClass: (p) => (isPendingApproval(p.data?.approval_status ?? '') ? 'lineup-planned-edit' : ''),
-        valueFormatter: (p) => formatUnits(Number(p.value ?? 0)),
-      },
-      {
-        headerName: 'BU',
-        minWidth: 70,
-        valueGetter: (p) => (p.data ? buFromRow(p.data) : '—'),
-        cellClass: 'lineup-bu-cell',
-      },
-      {
-        field: 'approval_status',
-        headerName: 'Approval',
-        minWidth: 130,
-        cellRenderer: (p: { data?: LineupPlanRow }) =>
-          p.data ? (
-            <StatusChip label={approvalBadgeLabel(p.data.approval_status)} tone={approvalTone(p.data.approval_status)} />
-          ) : null,
-      },
-      {
-        headerName: '',
-        minWidth: 150,
-        cellRenderer: (p: { data?: LineupPlanRow }) => {
-          const row = p.data;
-          if (!row || !isPendingApproval(row.approval_status)) return null;
-          return (
-            <Stack direction="row" spacing={0.75} justifyContent="flex-end">
-              <Button
-                size="small"
-                data-testid={`lineup-approve-${row.id}`}
-                onClick={() => onApprove(row.id)}
-                sx={{
-                  fontSize: '11px',
-                  py: 0.5,
-                  px: 1,
-                  minWidth: 0,
-                  color: 'success.main',
-                  borderColor: alpha(theme.palette.success.main, 0.4),
-                }}
-                variant="outlined"
-              >
-                Approve
-              </Button>
-              <Button
-                size="small"
-                data-testid={`lineup-reject-${row.id}`}
-                onClick={() => onReject(row.id)}
-                sx={{
-                  fontSize: '11px',
-                  py: 0.5,
-                  px: 1,
-                  minWidth: 0,
-                  color: 'error.main',
-                  borderColor: alpha(theme.palette.error.main, 0.4),
-                }}
-                variant="outlined"
-              >
-                Reject
-              </Button>
-            </Stack>
-          );
-        },
-      },
-    ],
-    [onApprove, onReject, theme, lineId],
-  );
-
-  const gridOptions: GridOptions<LineupPlanRow> = useMemo(
-    () => ({
-      singleClickEdit: true,
-      onCellValueChanged: async (e) => {
-        const id = e.data?.id;
-        if (id == null || e.colDef.field !== 'planned_volume_units' || e.oldValue === e.newValue) return;
-        const val = Number(e.newValue);
-        if (!Number.isFinite(val) || val < 0) return;
-        try {
-          await patchPlanned.mutateAsync({ id, planned_volume_units: val });
-        } catch (err) {
-          setPatchMsg(err instanceof Error ? err.message : String(err));
-        }
-      },
-    }),
-    [patchPlanned],
-  );
+      const raw = String(event.newValue ?? '').trim();
+      const value = Number(raw);
+      if (!raw || !Number.isFinite(value) || value < 0) {
+        setValidationMessage('Planned units must be a number greater than or equal to zero.');
+        return;
+      }
+      setValidationMessage(null);
+      patch.mutate({ id: event.data.id, body: { planned_volume_units: value } });
+    },
+  };
 
   return (
-    <Box data-testid="lineup-plan-grid" sx={{ flex: 1, minHeight: 320 }}>
+    <Box data-testid="lineup-plan-grid" sx={{ minWidth: 0 }}>
       {pendingOnly ? (
-        <Typography data-testid="lineup-pending-directive" sx={{ fontSize: '12px', color: alpha(theme.palette.text.primary, 0.75), px: 2.75, py: 1 }}>
-          {filtered.length} lineup item{filtered.length === 1 ? '' : 's'} await approval — Approve or Reject each row before Stock can trust Execution vs plan.
+        <Typography data-testid="lineup-pending-directive" variant="body2" sx={{ px: 2.75, pb: 1 }}>
+          {filtered.length} pending line{filtered.length === 1 ? '' : 's'} in this line-up.
         </Typography>
       ) : null}
-      {patchMsg ? (
-        <Typography color="warning.main" sx={{ px: 2.75, py: 0.5, fontSize: '12px' }}>
-          {patchMsg}
-        </Typography>
-      ) : null}
-      <Box
-        sx={{
-          px: 2.75,
-          '& .lineup-sku-cell': { fontFamily: '"IBM Plex Mono", monospace', fontSize: '11.5px' },
-          '& .lineup-bu-cell': { fontFamily: '"IBM Plex Mono", monospace', fontSize: '11px' },
-          '& .lineup-planned-edit': {
-            cursor: 'text',
-            '& .ag-cell-value': { borderBottom: `1px dashed ${alpha(theme.palette.primary.main, 0.45)}` },
-          },
-        }}
-      >
-        <EnterpriseDataGrid rowData={filtered} columnDefs={colDefs} gridOptions={gridOptions} />
+      {validationMessage ? <Alert severity="warning">{validationMessage}</Alert> : null}
+      {patch.isError ? <Alert severity="error">{safeDisplayError(patch.error)}</Alert> : null}
+      <Box sx={{ px: 2.75 }}>
+        <EnterpriseDataGrid rowData={filtered} columnDefs={columns} gridOptions={options} />
       </Box>
-      <Box
+      <Typography
         data-testid="lineup-grid-footer"
-        sx={{
-          display: 'flex',
-          gap: 2.25,
-          px: 2.75,
-          py: 1,
-          borderTop: `1px solid ${theme.palette.divider}`,
-          fontFamily: '"IBM Plex Mono", monospace',
-          fontSize: '11px',
-          color: alpha(theme.palette.text.primary, 0.45),
-        }}
+        variant="body2"
+        color="text.secondary"
+        sx={{ px: 2.75, py: 1 }}
       >
-        <span>
-          1–{filtered.length} of {rows.length}
-        </span>
-        <span>
-          {rows.filter((r) => isPendingApproval(r.approval_status)).length} pending approval
-        </span>
-        {pendingOnly ? <span style={{ marginLeft: 'auto' }}>Clear filter to return to full lineup</span> : <span style={{ marginLeft: 'auto' }}>Sorted by customer, period</span>}
-      </Box>
+        {filtered.length} of {rows.length} lines ·{' '}
+        {rows.filter((row) => isPendingApproval(row.approval_status)).length} pending approval
+      </Typography>
     </Box>
   );
 }

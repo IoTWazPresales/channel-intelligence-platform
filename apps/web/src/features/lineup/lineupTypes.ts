@@ -10,6 +10,9 @@ export type LineupPlanRow = {
   sku: string | null;
   sales_model_name?: string | null;
   product_name?: string | null;
+  /** BU comes from the linked dim_product.product_line. */
+  product_line?: string | null;
+  business_unit_reason?: string | null;
   planned_volume_units: number;
   approval_status: string;
   notes?: string | null;

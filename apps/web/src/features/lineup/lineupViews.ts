@@ -1,3 +1,5 @@
+import { isPendingApproval } from './lineupTypes';
+
 export type LineupApprovalFilter = 'all' | 'pending';
 
 export type LineupScope = {
@@ -16,7 +18,7 @@ export function parseLineupApprovalFilter(raw: string | null | undefined): Lineu
   return raw === 'pending' ? 'pending' : 'all';
 }
 
-/** Cover deep-link `?product=` — integer product_id only. Missing or non-integer → no filter. */
+/** Cover deep-link `?product=` - integer product_id only. Missing or non-integer means no filter. */
 export function parseExactLineupProductId(raw: string | null | undefined): number | null {
   if (raw == null) return null;
   const trimmed = raw.trim();
@@ -76,8 +78,6 @@ export type LineupGroup = {
   plannedUnits: number;
 };
 
-const PENDING = new Set(['draft', 'pending_approval', 'submitted']);
-
 /** One group per customer and period, newest period first, then customer name. Rows without a customer id are skipped. */
 export function groupLineupRows(
   rows: Array<{
@@ -99,7 +99,7 @@ export function groupLineupRows(
       g = {
         key,
         customerId: r.customer_id,
-        customerName: r.customer_name || r.customer_code || `Customer ${r.customer_id}`,
+        customerName: r.customer_name?.trim() || 'Customer name not set',
         periodStart: r.period_start,
         periodLabel: r.period_label || r.period_start,
         lines: 0,
@@ -111,7 +111,7 @@ export function groupLineupRows(
       groups.set(key, g);
     }
     g.lines += 1;
-    if (PENDING.has(r.approval_status)) g.pending += 1;
+    if (isPendingApproval(r.approval_status)) g.pending += 1;
     else if (r.approval_status === 'approved') g.approved += 1;
     else if (r.approval_status === 'rejected') g.rejected += 1;
     g.plannedUnits += Number(r.planned_volume_units) || 0;
