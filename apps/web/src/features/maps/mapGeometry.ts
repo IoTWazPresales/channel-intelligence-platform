@@ -45,6 +45,17 @@ export function mapBoundsForPoints(points: Coordinates[]): MapBounds {
   };
 }
 
+const BASEMAP_DOT_STROKE = 2.4;
+
+/**
+ * Basemap dot size in viewBox units. A zoomed-in view magnifies the viewBox, so the stroke is
+ * divided by the zoom to keep each dot the same size on screen as on the Shipments map.
+ */
+export function basemapStrokeWidth(bounds: MapBounds = BASEMAP_BOUNDS): number {
+  const zoom = (BASEMAP_BOUNDS.maxLon - BASEMAP_BOUNDS.minLon) / (bounds.maxLon - bounds.minLon);
+  return BASEMAP_DOT_STROKE / Math.max(1, zoom);
+}
+
 export function mapViewBox(bounds: MapBounds = BASEMAP_BOUNDS): string {
   const topLeft = projectMapPoint({ latitude: bounds.maxLat, longitude: bounds.minLon });
   const bottomRight = projectMapPoint({ latitude: bounds.minLat, longitude: bounds.maxLon });

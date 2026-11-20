@@ -8,6 +8,7 @@ import { useState, type ReactNode } from 'react';
 
 import { buildOnTheWaterUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
 import { DEFAULT_MAP_SIZE, MapAside, MapCanvas, MapLayout, MapPanel } from '@/features/maps/MapCanvas';
+import { MapMarker } from '@/features/maps/MapMarker';
 import { apiGet, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
@@ -450,10 +451,14 @@ function ClusterMarker({
   const aria = multi
     ? `${cluster.vessels.length} vessels near ${fmtDay(lead.eta)} ETA at port, ${fmtUnits(cluster.vessels.reduce((s, v) => s + v.units, 0))} units`
     : `${lead.forwarder}, ETA at port ${fmtDay(lead.eta)}, ${fmtUnits(lead.units)} units${lead.overdue ? `, ${daysText(lead)}` : ''}`;
+  // The same marker the Sell-through store map draws its pins with.
   return (
-    <Box
-      component="button"
-      type="button"
+    <MapMarker
+      x={cluster.x}
+      y={cluster.y}
+      color={color}
+      size={size}
+      selected={on}
       aria-label={aria}
       aria-pressed={on}
       data-testid="otw-vessel"
@@ -463,16 +468,9 @@ function ClusterMarker({
       onMouseLeave={() => onHover(null)}
       onFocus={() => onHover(lead.id)}
       onBlur={() => onHover(null)}
-      sx={{
-        position: 'absolute', left: `${cluster.x}%`, top: `${cluster.y}%`, transform: 'translate(-50%, -50%)', width: 44, height: 44, p: 0, border: 0, bgcolor: 'transparent',
-        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.text.primary,
-        '&:focus-visible': { outline: `2px solid ${t.accent.primary}`, outlineOffset: 2, borderRadius: '50%' },
-      }}
     >
-      <Box component="span" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, borderRadius: '50%', bgcolor: color, fontSize: 10, fontWeight: 700, color: t.bg.default, boxShadow: `0 0 0 ${on ? 6 : 4}px ${alpha(color, on ? 0.28 : 0.18)}, 0 0 18px ${color}` }}>
-        {multi ? cluster.vessels.length : null}
-      </Box>
-    </Box>
+      {multi ? cluster.vessels.length : null}
+    </MapMarker>
   );
 }
 

@@ -2,12 +2,19 @@
 
 import { Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  type HTMLAttributes,
+  type ReactNode,
+} from 'react';
 
 import { tokensFor } from '@/theme/cipTokens';
 
 import { BASEMAP_DOTS, BASEMAP_SIZE } from './basemapDots';
-import { MAP_ASPECT_RATIO, mapViewBox, type MapBounds } from './mapGeometry';
+import { MAP_ASPECT_RATIO, basemapStrokeWidth, mapViewBox, type MapBounds } from './mapGeometry';
 
 export type MapSize = { w: number; h: number };
 export const DEFAULT_MAP_SIZE: MapSize = { w: BASEMAP_SIZE.width, h: BASEMAP_SIZE.height };
@@ -57,11 +64,17 @@ type MapCanvasProps = {
   svgChildren?: ReactNode;
   children?: ReactNode;
   onSizeChange?: (size: MapSize) => void;
+  /** Click-and-drag on the background pans the view: pointer handlers from `useMapView`. */
+  panHandlers?: Pick<
+    HTMLAttributes<HTMLDivElement>,
+    'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel'
+  >;
+  grabbing?: boolean;
 };
 
 /** One basemap and one box ratio; SVG and HTML overlays share the same projection. */
 export const MapCanvas = forwardRef<HTMLDivElement, MapCanvasProps>(function MapCanvas(
-  { label, bounds, svgChildren, children, onSizeChange, 'data-testid': testId }, ref,
+  { label, bounds, svgChildren, children, onSizeChange, panHandlers, grabbing, 'data-testid': testId }, ref,
 ) {
   const theme = useTheme();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -85,7 +98,11 @@ export const MapCanvas = forwardRef<HTMLDivElement, MapCanvasProps>(function Map
       ref={canvasRef}
       data-testid={testId}
       data-map-canvas
-      sx={{ position: 'relative', width: '100%', aspectRatio: MAP_ASPECT_RATIO, borderRadius: 1, overflow: 'hidden' }}
+      {...panHandlers}
+      sx={{
+        position: 'relative', width: '100%', aspectRatio: MAP_ASPECT_RATIO, borderRadius: 1, overflow: 'hidden',
+        ...(panHandlers ? { cursor: grabbing ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none' } : {}),
+      }}
     >
       <svg
         viewBox={mapViewBox(bounds)}
@@ -93,7 +110,7 @@ export const MapCanvas = forwardRef<HTMLDivElement, MapCanvasProps>(function Map
         aria-label={label}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }}
       >
-        <path d={BASEMAP_DOTS} fill="none" stroke={theme.palette.mode === 'dark' ? 'rgba(160,185,205,0.28)' : 'rgba(40,70,95,0.30)'} strokeWidth="2.4" strokeLinecap="round" />
+        <path d={BASEMAP_DOTS} fill="none" stroke={theme.palette.mode === 'dark' ? 'rgba(160,185,205,0.28)' : 'rgba(40,70,95,0.30)'} strokeWidth={basemapStrokeWidth(bounds)} strokeLinecap="round" />
         {svgChildren}
       </svg>
       {children}
