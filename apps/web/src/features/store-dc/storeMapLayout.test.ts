@@ -32,8 +32,8 @@ describe('store map layout', () => {
     const bounds = storeMapBounds(points);
     const [, , width, height] = mapViewBox(bounds).split(' ').map(Number);
     expect(width / height).toBeCloseTo(1000 / 646);
-    // Continent scale, not a country crop: at least 60 degrees wide, much wider than the pins.
-    expect(bounds.maxLon - bounds.minLon).toBeGreaterThanOrEqual(60);
+    // Continent scale, not a country crop: at least 80 degrees wide, much wider than the pins.
+    expect(bounds.maxLon - bounds.minLon).toBeGreaterThanOrEqual(80);
     expect(bounds.maxLon - bounds.minLon).toBeGreaterThan(3 * 16);
     for (const pin of projectStores(points, bounds)) {
       // Generous padding: every pin sits well inside the box.
@@ -71,7 +71,7 @@ describe('store map layout', () => {
 
   it('does not zoom absurdly far in on a lone pin or a tight group', () => {
     const lone = storeMapBounds([{ id: 'one', latitude: 3, longitude: 4 }]);
-    expect(lone.maxLon - lone.minLon).toBeGreaterThanOrEqual(60);
+    expect(lone.maxLon - lone.minLon).toBeGreaterThanOrEqual(80);
     const [pin] = projectStores([{ id: 'one', latitude: 3, longitude: 4 }], lone);
     expect(pin.x).toBeCloseTo(50);
     expect(pin.y).toBeCloseTo(50);
@@ -79,7 +79,7 @@ describe('store map layout', () => {
       { id: 'a', latitude: 3, longitude: 4 },
       { id: 'b', latitude: 3.001, longitude: 4.001 },
     ]);
-    expect(tight.maxLon - tight.minLon).toBeGreaterThanOrEqual(60);
+    expect(tight.maxLon - tight.minLon).toBeGreaterThanOrEqual(80);
   });
 
   it('shows the continent around a country of hundreds of stores, not a crop of the stores', () => {
@@ -90,7 +90,7 @@ describe('store map layout', () => {
       longitude: 17 + Math.floor(index / 12) * 0.8,
     }));
     const bounds = storeMapBounds(points);
-    expect(bounds.maxLon - bounds.minLon).toBeGreaterThanOrEqual(60);
+    expect(bounds.maxLon - bounds.minLon).toBeGreaterThanOrEqual(80);
     // Every store sits in the middle of the box with the dotted outline all around it.
     for (const pin of projectStores(points, bounds)) {
       expect(pin.x).toBeGreaterThan(25);
