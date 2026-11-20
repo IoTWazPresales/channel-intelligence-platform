@@ -30,7 +30,8 @@ class _Result:
 def _db():
     results = [
         _Result(scalar="cip_test"),  # current_database()
-        _Result(scalar=3),  # active case count
+        _Result(scalars=[1, 2]),  # reporting customer ids (the shared definition)
+        _Result(scalar=3),  # active case count (reporting customers only)
         _Result(scalars=["26Q1", "26Q2"]),  # period labels
         _Result(
             mapping={
@@ -62,7 +63,9 @@ def test_not_ready_comes_from_the_single_line_scan():
     with patch.object(mod, "_shipped_vs_plan", AsyncMock(return_value=execution)):
         out = asyncio.run(mod.planning_overview(db, None))
     assert out["data_unavailable"] is False
-    assert db.execute.await_count == 5  # was 6: a second full scan of the lines for "not ready"
+    # was 6 before T1a (a second full scan of the lines for "not ready"); +1 for the one
+    # reporting-customer-ids read the reporting-only rule needs.
+    assert db.execute.await_count == 6
     assert out["readiness_missing"] == 35
     assert out["readiness_ok"] == 65
     assert out["lines"] == 100

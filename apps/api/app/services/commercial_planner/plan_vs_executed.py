@@ -29,6 +29,7 @@ from app.services.commercial_planner.po_management import (
     coverage,
     product_row_matches_group_line,
 )
+from app.services.customer_reporting import reporting_customer_ids_select
 from app.services.grid_fields import customer_labels
 from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
@@ -811,17 +812,43 @@ async def _linked_cases(db: AsyncSession) -> list[CommercialLineupCase]:
     return list(rows)
 
 
+UNATTRIBUTED_LABEL = "Unattributed"
+
+
+def apply_reporting_only(rows: list[dict[str, Any]], reporting_ids: set[int]) -> list[dict[str, Any]]:
+    """Keep execution rows of reporting customers, plus the rows that have no customer.
+
+    Rows of a customer that is not reporting are dropped (the shared definition in
+    ``customer_reporting``). Rows with NO customer are not dropped and not mixed into a
+    customer: they are kept as they are, labelled ``Unattributed``, so the screen shows them as
+    ONE separate line.
+    """
+    kept: list[dict[str, Any]] = []
+    for row in rows:
+        cid = row.get("customer_id")
+        if cid is None:
+            kept.append({**row, "customer_label": UNATTRIBUTED_LABEL})
+        elif int(cid) in reporting_ids:
+            kept.append(row)
+    return kept
+
+
 async def collect_execution_rows(
     db: AsyncSession,
     *,
     period_from: str | None = None,
     period_to: str | None = None,
     product_line: str | None = None,
+    reporting_only: bool = False,
 ) -> list[dict[str, Any]]:
     """Union reconcile_case product rows for linked cases in the period range.
 
     Every in-range case is reconciled in ONE batched call (``reconcile_cases``), not one
     multi-query reconciliation per case.
+
+    ``reporting_only`` (opt-in, default off) keeps only the rows of reporting customers
+    (``customer_reporting``: reports expected and not merged away) plus the customer-less rows as
+    one ``Unattributed`` line (see ``apply_reporting_only``).
     """
     fy, fq, ty, tq = _parse_period_bounds(period_from, period_to)
     out: list[dict[str, Any]] = []
@@ -866,6 +893,9 @@ async def collect_execution_rows(
                     customer_labels=label_by_customer,
                 )
             )
+    if reporting_only:
+        reporting_ids = {int(c) for c in (await db.execute(reporting_customer_ids_select())).scalars().all()}
+        out = apply_reporting_only(out, reporting_ids)
     await _attach_product_catalog_fields(db, out)
     return out
 
@@ -1185,6 +1215,7 @@ async def plan_vs_executed_read_model(
     drill_product_id: int | None = None,
     drill_sales_model: str | None = None,
     drill_bu: str | None = None,
+    reporting_only: bool = False,
 ) -> dict[str, Any]:
     # The duplicate-ingestion audit is independent of the period / rows (it reads its own sync
     # session in a worker thread), so it overlaps with the reconciliation instead of following it.
@@ -1202,6 +1233,7 @@ async def plan_vs_executed_read_model(
             drill_product_id=drill_product_id,
             drill_sales_model=drill_sales_model,
             drill_bu=drill_bu,
+            reporting_only=reporting_only,
         )
     finally:
         if not dup_task.done():
@@ -1221,6 +1253,7 @@ async def _plan_vs_executed_read_model(
     drill_product_id: int | None = None,
     drill_sales_model: str | None = None,
     drill_bu: str | None = None,
+    reporting_only: bool = False,
 ) -> dict[str, Any]:
     try:
         cov = await coverage(db)
@@ -1240,6 +1273,7 @@ async def _plan_vs_executed_read_model(
             period_from=effective_from,
             period_to=effective_to,
             product_line=bu_filter,
+            reporting_only=reporting_only,
         )
     except Exception:
         logger.exception("plan_vs_executed collect failed")

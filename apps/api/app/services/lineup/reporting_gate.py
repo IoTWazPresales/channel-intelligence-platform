@@ -18,9 +18,12 @@ from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import ColumnElement
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.dimensions import DimCustomer
 from app.models.lineup import FactLineupPlanItem
 from app.services.customer_reporting import WHERE_THE_FLAG_IS_SET, reporting_customer_ids_select
+
 
 def reporting_plan_items_clause() -> ColumnElement[bool]:
     """WHERE clause for READS of ``fact_lineup_plan_item``: the row's customer is reporting.
@@ -38,6 +41,25 @@ REFUSAL_MESSAGE = (
     "accepted for it. Mark the customer as reporting first "
     f"({WHERE_THE_FLAG_IS_SET})."
 )
+
+
+def not_reporting_detail() -> dict[str, str]:
+    """The structured refusal a line-up WRITE endpoint returns for a non-reporting customer."""
+    return {"code": REASON_NOT_REPORTING, "message": REFUSAL_MESSAGE}
+
+
+async def customer_is_reporting(db: AsyncSession, customer_id: int | None) -> bool:
+    """True when ``customer_id`` is a reporting customer (the shared definition).
+
+    A missing customer id is not reporting. Used by the line-up write endpoints so a write never
+    acts on a customer the read paths hide.
+    """
+    if customer_id is None:
+        return False
+    found = await db.execute(
+        reporting_customer_ids_select().where(DimCustomer.id == int(customer_id)).limit(1)
+    )
+    return found.scalars().first() is not None
 # The count is always exact; only the listed rows are capped (keeps job results small).
 MAX_REFUSED_ROWS_REPORTED = 200
 
