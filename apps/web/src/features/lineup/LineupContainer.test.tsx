@@ -25,15 +25,35 @@ vi.mock('@/lib/api', () => ({
   safeDisplayError: (error: unknown) => String(error),
 }));
 
-// Keep the container, workspace, scope bar and grid filtering real.
-vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: ({ rowData }: { rowData: LineupPlanRow[] }) => (
-    <div data-testid="rendered-plan-ids">{rowData.map((row) => row.id).join(',')}</div>
+// Container tests verify scope propagation and headlines. The real group grid,
+// expansion and decisions are covered in LineupGroupsPanel.test.tsx.
+vi.mock('@/features/lineup/LineupGroupsPanel', () => ({
+  LineupGroupsPanel: ({
+    rows,
+    pendingOnly,
+    productId,
+  }: {
+    rows: LineupPlanRow[];
+    pendingOnly: boolean;
+    productId: number | null;
+  }) => (
+    <div data-testid="group-panel">
+      <div data-testid="panel-source-ids">{rows.map((row) => row.id).join(',')}</div>
+      <div data-testid="rendered-plan-ids">
+        {rows
+          .filter((row) => productId == null || row.product_id === productId)
+          .filter((row) => !pendingOnly || ['draft', 'pending_approval', 'submitted'].includes(row.approval_status))
+          .map((row) => row.id)
+          .join(',')}
+      </div>
+    </div>
   ),
 }));
-vi.mock('@/features/tenant/useLineIdentifierPreference', () => ({
-  useLineIdentifierPreference: () => ({ columns: () => [] }),
+
+vi.mock('@/features/lineup/LineupPlanGrid', () => ({
+  LineupPlanGrid: () => <div data-testid="separate-plan-grid" />,
 }));
+
 vi.mock('@/features/lineup/LineupPlanActionBar', () => ({
   LineupPlanActionBar: () => null,
 }));
@@ -95,8 +115,14 @@ function expectFigure(testId: string, value: string) {
   expect(within(screen.getByTestId(testId)).getByText(value, { exact: true })).toBeInTheDocument();
 }
 
-describe('LineupContainer customer/period scope (PR #115 B1)', () => {
+describe('LineupContainer customer/period scope', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('renders the group panel without a second plan grid', () => {
+    renderPage();
+    expect(screen.getByTestId('group-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('separate-plan-grid')).not.toBeInTheDocument();
+  });
 
   it('matches the displayed slice and excludes other customers and periods from headlines', () => {
     renderPage();
@@ -110,8 +136,9 @@ describe('LineupContainer customer/period scope (PR #115 B1)', () => {
     expect(screen.getByText('Master scope; shipped against lineup')).toBeInTheDocument();
   });
 
-  it('intersects a slice with the product filter for rows, counts and units', () => {
+  it('keeps complete groups available while intersecting product detail and headlines', () => {
     renderPage(`${sliceQuery}&product=11`);
+    expect(screen.getByTestId('panel-source-ids')).toHaveTextContent(/^1,2$/);
     expect(screen.getByTestId('rendered-plan-ids')).toHaveTextContent(/^1$/);
     expectSummary('1 of 2 plan lines');
     expectFigure('lineup-planned-units', '4');
@@ -148,11 +175,12 @@ describe('LineupContainer customer/period scope (PR #115 B1)', () => {
     expect(screen.getByTestId('lineup-pending-approval')).not.toHaveTextContent(/[0-9]/);
   });
 
-  it('restores master rows and figures when all filters are cleared', () => {
+  it('restores master scope when all filters are cleared', () => {
     const refresh = renderPage(`${sliceQuery}&product=11&approval=pending`);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect(navigation.replace).toHaveBeenCalledWith('/lineup/cases', { scroll: false });
     refresh();
+    expect(screen.getByTestId('panel-source-ids')).toHaveTextContent(/^1,2,3,4$/);
     expect(screen.getByTestId('rendered-plan-ids')).toHaveTextContent(/^1,2,3,4$/);
     expectSummary('4 plan lines');
     expectFigure('lineup-planned-units', '310');
@@ -161,18 +189,13 @@ describe('LineupContainer customer/period scope (PR #115 B1)', () => {
   });
 });
 
-describe('LineupContainer reporting-only scope (Warren 2026-11-19)', () => {
+describe('LineupContainer reporting-only source', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('says in one line that line-ups cover reporting customers only, whatever the scope', () => {
+  it('labels reporting scope and totals exactly the API-returned rows', () => {
     renderPage('');
-    const note = screen.getByTestId('lineup-reporting-note');
-    expect(note).toHaveTextContent('Reporting customers only.');
     expect(screen.getAllByTestId('lineup-reporting-note')).toHaveLength(1);
-  });
-
-  it('totals and pending counts come straight from the rows the API returns', () => {
-    renderPage('');
+    expect(screen.getByTestId('lineup-reporting-note')).toHaveTextContent('Reporting customers only.');
     expectSummary('4 plan lines');
     expectFigure('lineup-pending-approval', '2');
     expect(screen.getByTestId('lineup-planned-units')).toHaveTextContent('4 plan lines (all statuses)');

@@ -181,6 +181,15 @@ async def list_lineup_items(
         prod: DimProduct | None = r.product
         pred: DimProduct | None = r.predecessor_product
         succ: DimProduct | None = r.successor_product
+        # The line's BU is the linked product's product_line, never a SKU prefix or channel.
+        product_line = (prod.product_line or "").strip() or None if prod else None
+        business_unit_reason = None
+        if product_line is None:
+            business_unit_reason = (
+                "Product Master product line is empty"
+                if prod
+                else "Product is not linked to Product Master"
+            )
         out.append(
             {
                 "id": r.id,
@@ -194,6 +203,8 @@ async def list_lineup_items(
                 "sku": prod.sku if prod else None,
                 "sales_model_name": prod.sales_model_name if prod else None,
                 "product_name": prod.name if prod else None,
+                "product_line": product_line,
+                "business_unit_reason": business_unit_reason,
                 "predecessor_sku": pred.sku if pred else None,
                 "successor_sku": succ.sku if succ else None,
                 "current_range_summary": r.current_range_summary,
@@ -443,7 +454,7 @@ async def get_lineup_net_requirement(
     limit: int = Query(default=200, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
 ):
-    """B2 — net requirement at distributor × product (stock subtract at that grain).
+    """B2 - net requirement at distributor × product (stock subtract at that grain).
 
     Customer shares are allocation hints only. Optional A1 bias correction (B2-02).
     """
@@ -491,7 +502,7 @@ async def post_lineup_builder_economics(
     body: BuilderEconomicsBody,
     db: AsyncSession = Depends(get_db),
 ):
-    """B2-02 — profit + embedded reservation + 50/50 treatments for a net-requirement qty.
+    """B2-02 - profit + embedded reservation + 50/50 treatments for a net-requirement qty.
 
     Q-002 interim: reservation derived from SKU ``reserve_total_pct`` (not explicit column).
     """
@@ -505,7 +516,7 @@ async def post_lineup_builder_economics(
     if sku is None:
         raise HTTPException(
             status_code=404,
-            detail="No commercial_sku_assumption for product — set PM bottom / reserve first",
+            detail="No commercial_sku_assumption for product - set PM bottom / reserve first",
         )
     srp = body.target_srp_local
     if srp is None or srp <= 0:
@@ -528,7 +539,7 @@ async def get_lineup_budget_position(
     period_label: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    """B2-02 — dual-track budget position (money + support-%); no hard enforce."""
+    """B2-02 - dual-track budget position (money + support-%); no hard enforce."""
     return await build_budget_position(db, period_label=period_label)
 
 
@@ -537,7 +548,7 @@ async def post_lineup_budget_position(
     body: BudgetPositionBody,
     db: AsyncSession = Depends(get_db),
 ):
-    """B2-02 — budget position with caller-supplied planned reservations."""
+    """B2-02 - budget position with caller-supplied planned reservations."""
     return await build_budget_position(
         db,
         planned_reservations=body.planned_reservations,
@@ -554,7 +565,7 @@ async def export_lineup_net_requirement_csv(
     limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
 ):
-    """B2 — CSV export skeleton of net-requirement (tenant-format on-ramp)."""
+    """B2 - CSV export skeleton of net-requirement (tenant-format on-ramp)."""
     product_bu: dict[int, str] = {}
     for pid, pl, bu in (
         await db.execute(select(DimProduct.id, DimProduct.product_line, DimProduct.business_unit))
@@ -595,7 +606,7 @@ async def export_lineup_net_requirement_xlsx(
     limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
 ):
-    """B2-3 — tenant workbook on-ramp (NetRequirement + DraftLineup sheets; titles from tenant profile)."""
+    """B2-3 - tenant workbook on-ramp (NetRequirement + DraftLineup sheets; titles from tenant profile)."""
     data = await build_tenant_workbook_export(
         db,
         period_start=period_start,
@@ -618,13 +629,13 @@ async def get_half_year_periods(
     year: int = Query(..., ge=2020, le=2100),
     half: int = Query(..., ge=1, le=2),
 ):
-    """B2-03 — 1H → Q1+Q2 (uniform_half) period starts."""
+    """B2-03 - 1H → Q1+Q2 (uniform_half) period starts."""
     slots = half_year_period_starts(year, half)
     return {
         "year": year,
         "half": half,
         "periods": [{"period_start": d.isoformat(), "period_label": lbl} for d, lbl in slots],
-        "rule": "uniform_half — steward override later",
+        "rule": "uniform_half - steward override later",
     }
 
 
@@ -633,7 +644,7 @@ async def post_apply_net_requirement(
     body: ApplyNetRequirementBody,
     db: AsyncSession = Depends(get_db),
 ):
-    """B2-03 — write customer-allocated net requirement into draft lineup items."""
+    """B2-03 - write customer-allocated net requirement into draft lineup items."""
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm to true")
     try:
