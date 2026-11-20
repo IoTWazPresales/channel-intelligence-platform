@@ -90,7 +90,11 @@ def test_autoconfigure_entry_points_run_discovery(monkeypatch, trigger, live):
     if trigger == "scheduled":
         from app.db import session_sync
 
+        from app.services import tenant_settings
+
         monkeypatch.setattr(session_sync, "SessionLocal", factory)
+        # The scheduled run needs the tenant's own switch on (off by default).
+        monkeypatch.setattr(tenant_settings, "tenants_with_true", lambda *a, **k: [TENANT])
         report = tasks.listing_capture_autoconfigure_sites_task.run(tenant_id=TENANT)
         assert report["skipped"] is False
     else:
