@@ -12,8 +12,10 @@ export type Projected = { id: string; x: number; y: number };
 
 const BASE_LAT_SPAN = BASEMAP_BOUNDS.maxLat - BASEMAP_BOUNDS.minLat;
 const BASE_LON_SPAN = BASEMAP_BOUNDS.maxLon - BASEMAP_BOUNDS.minLon;
-// Continent scale: a country, or one pin, still shows the dotted continent around it.
-export const DEFAULT_MIN_LON_SPAN = 60;
+// Continent scale: a country, or one pin, still shows the whole dotted continent around it (Africa
+// is about 70 degrees wide). The default view never goes tighter than this; only a click on a
+// cluster, or +, zooms in further.
+export const DEFAULT_MIN_LON_SPAN = 80;
 // Generous room so the outline, not the pins, is the focus of the box.
 const FIT_PADDING = 1.5;
 // Tightest view in degrees of longitude (about a city): zooming into a cluster stops here, and
@@ -33,7 +35,8 @@ export function finiteCoordinates(latitude: unknown, longitude: unknown): Coordi
 
 /**
  * With no pins, keep the Shipments extent. Otherwise fit the continent or region the pins are in
- * inside the same box: padded generously, at least 60 degrees wide, with the basemap's own
+ * inside the same box: padded generously, at least 80 degrees wide by default (centred on the
+ * extent of the pins; wider when the pins spread further), with the basemap's own
  * degrees-per-pixel ratio so the dots are not distorted, and never past the world. The
  * projection stays shared by the basemap, the pins and dragging.
  */

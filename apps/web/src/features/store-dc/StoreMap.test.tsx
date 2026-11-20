@@ -626,7 +626,7 @@ describe('StoreMap', () => {
     fireEvent.pointerUp(pin, { pointerId: 1, clientX: 600, clientY: 200 });
     // A lone pin gets the minimum continent-scale view centred on it: a 10% drag of its span.
     const view = storeMapBounds([{ latitude: -33.9, longitude: 18.4 }]);
-    expect(view.maxLon - view.minLon).toBeGreaterThanOrEqual(60);
+    expect(view.maxLon - view.minLon).toBeGreaterThanOrEqual(80);
     expect(Number(pin.dataset.latitude)).toBeCloseTo(-33.9 + 0.1 * (view.maxLat - view.minLat), 5);
     expect(Number(pin.dataset.longitude)).toBeCloseTo(18.4 + 0.1 * (view.maxLon - view.minLon), 5);
     expect(hoisted.posted).toEqual([]);
@@ -828,6 +828,43 @@ describe('StoreMap', () => {
       for (const label of ['Near A', 'Near B', 'Near C']) expect(card).toHaveTextContent(label);
       fireEvent.mouseLeave(screen.getByTestId('store-cluster'));
       expect(screen.queryByTestId('store-map-cluster-hover')).toBeNull();
+    });
+
+    it('opens continent-sized however tightly the pins are grouped, and Reset view returns to it', async () => {
+      // One country: every store within about 6 degrees. The default must not crop to them.
+      hoisted.payload = {
+        ...payload(),
+        stores: [store('Tight A', 10, 20), store('Tight B', 14, 26), store('Tight C', 12, 23)],
+      };
+      wrap(<StoreMap />);
+      await screen.findAllByTestId(/^store-(dot|cluster)/);
+      const opening = viewBoxOf();
+      // 80 degrees of the 158-degree basemap is 80/158 of the 1000-unit box.
+      expect(opening[2]).toBeCloseTo((80 / 158) * 1000, 3);
+      expect(opening[2] / opening[3]).toBeCloseTo(1000 / 646);
+      // Centred on the pins: 20..26 east, 10..14 north.
+      const centreX = opening[0] + opening[2] / 2;
+      const centreY = opening[1] + opening[3] / 2;
+      const [x, y] = [(23 - -22) / 158 * 1000, (58 - 12) / 102 * 646];
+      expect(centreX).toBeCloseTo(x, 3);
+      expect(centreY).toBeCloseTo(y, 3);
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+      expect(viewBoxOf()[2]).toBeLessThan(opening[2]);
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+      expect(viewBoxOf()[2]).toBeCloseTo(opening[2]);
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
+      expect(viewBoxOf()).toEqual(opening);
+    });
+
+    it('widens the opening view for pins spread over more than a continent', async () => {
+      hoisted.payload = {
+        ...payload(),
+        stores: [store('Europe', 50, -5), store('Asia Pacific', -30, 120)],
+      };
+      wrap(<StoreMap />);
+      await screen.findAllByTestId(/^store-(dot|cluster)/);
+      expect(viewBoxOf()[2]).toBeGreaterThan((80 / 158) * 1000);
     });
 
     it('zooms the view to fit the cluster on click, and the cluster dissolves into its pins', async () => {
