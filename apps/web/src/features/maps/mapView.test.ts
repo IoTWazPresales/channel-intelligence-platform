@@ -62,12 +62,28 @@ describe('map view', () => {
     expect(world).toEqual(WORLD_BOUNDS);
   });
 
-  it('keeps basemap dots the same size on screen when zoomed in', () => {
+  it('grows basemap dots a little on screen when zoomed in, so the outline does not look sparse', () => {
     expect(basemapStrokeWidth()).toBe(2.4);
     expect(basemapStrokeWidth(BASEMAP_BOUNDS)).toBe(2.4);
-    expect(basemapStrokeWidth(zoomMapView(view, 0.25))).toBeLessThan(2.4);
+    // On screen a dot is its stroke times the zoom: bigger than the Shipments dot, but sub-linear.
+    const lonZoom = (bounds: typeof view) => (BASEMAP_BOUNDS.maxLon - BASEMAP_BOUNDS.minLon) / lonSpanOf(bounds);
+    const continent = { minLat: -20, maxLat: 20, minLon: 0, maxLon: 60 };
+    const onScreen = basemapStrokeWidth(continent) * lonZoom(continent);
+    expect(onScreen).toBeGreaterThan(2.4);
+    expect(onScreen).toBeLessThan(2.4 * lonZoom(continent));
+    expect(basemapStrokeWidth(continent)).toBeLessThan(2.4);
+    // Never a huge blob however far in.
+    const city = { minLat: 0, maxLat: 0.2, minLon: 0, maxLon: 0.3 };
+    expect(basemapStrokeWidth(city) * lonZoom(city)).toBeLessThanOrEqual(7 + 1e-9);
     // Zooming out past the basemap never makes the dots bigger.
     expect(basemapStrokeWidth(WORLD_BOUNDS)).toBe(2.4);
+  });
+
+  it('zooms in as far as the caller allows, and no further', () => {
+    expect(lonSpanOf(zoomMapView(view, 0.001))).toBeCloseTo(MIN_VIEW_LON_SPAN);
+    const close = zoomMapView(view, 0.001, WORLD_BOUNDS, 0.3);
+    expect(lonSpanOf(close)).toBeCloseTo(0.3);
+    expect(lonSpanOf(close) / latSpanOf(close)).toBeCloseTo(lonSpanOf(view) / latSpanOf(view));
   });
 
   it('projects a pin identically for the same view whatever panned it there', () => {

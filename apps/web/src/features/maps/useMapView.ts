@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import type { PointerEvent, RefObject } from 'react';
 
 import type { MapBounds } from './mapGeometry';
-import { latSpanOf, lonSpanOf, panMapView, zoomMapView } from './mapView';
+import { clampMapView, latSpanOf, lonSpanOf, panMapView, zoomMapView } from './mapView';
 
 const ZOOM_STEP = 1.6;
 // A click that wobbles a pixel or two is still a click.
@@ -27,15 +27,17 @@ type Gesture = {
 export function useMapView(
   fit: MapBounds,
   limits: MapBounds,
-  canvasRef: RefObject<HTMLElement | null>
+  canvasRef: RefObject<HTMLElement | null>,
+  /** Tightest view in degrees of longitude; Shipments-scale maps keep the default. */
+  minLonSpan?: number
 ) {
   const [view, setView] = useState<MapBounds | null>(null);
   const [grabbing, setGrabbing] = useState(false);
   const gesture = useRef<Gesture | null>(null);
   const bounds = view ?? fit;
 
-  const zoomedIn = zoomMapView(bounds, 1 / ZOOM_STEP, limits);
-  const zoomedOut = zoomMapView(bounds, ZOOM_STEP, limits);
+  const zoomedIn = zoomMapView(bounds, 1 / ZOOM_STEP, limits, minLonSpan);
+  const zoomedOut = zoomMapView(bounds, ZOOM_STEP, limits, minLonSpan);
 
   function onPointerDown(event: PointerEvent<HTMLElement>) {
     if (event.button !== 0 || gesture.current) return;
@@ -95,6 +97,8 @@ export function useMapView(
     zoomIn: () => setView(zoomedIn),
     zoomOut: () => setView(zoomedOut),
     reset: () => setView(null),
+    /** Move the view to a window the caller computed (for example a cluster's extent). */
+    fitTo: (next: MapBounds) => setView(clampMapView(next, limits)),
     panHandlers: {
       onPointerDown,
       onPointerMove,

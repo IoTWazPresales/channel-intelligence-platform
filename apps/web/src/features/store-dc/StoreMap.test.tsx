@@ -105,8 +105,9 @@ function payload(): StoreMapPayload {
         customer_name: 'SDC-C2',
         site_label: 'SDC-SITE-A',
         place_name: null,
+        // Far enough from customer 1's site that the two pins are not one cluster.
         latitude: 1.5,
-        longitude: 2.5,
+        longitude: 12.5,
         pinned: true,
         last_week_units: 1,
         stock_on_hand: 9,
@@ -487,11 +488,14 @@ describe('StoreMap', () => {
   describe('proposed pins review', () => {
     function manyProposals(): StoreMapPayload {
       const base = suggestedPayload();
+      // Ten degrees apart, so each proposal is its own pin rather than one cluster.
+      let nextLongitude = 25;
       const proposal = (label: string, confidence: number, place: string, over = {}) => ({
         ...base.stores[2],
         site_label: label,
         location_suggestion: {
-          outcome: 'suggest' as const, reason: 'match' as const, place, latitude: -30, longitude: 25,
+          outcome: 'suggest' as const, reason: 'match' as const, place, latitude: -30,
+          longitude: (nextLongitude += 10),
           licence: 'GeoNames CC BY 4.0', method: 'contained' as const, confidence, ambiguous: false,
           alternatives: [], ...over,
         },
@@ -758,5 +762,177 @@ describe('StoreMap', () => {
     expect(solid).toHaveAttribute('aria-pressed', 'true');
     expect(getComputedStyle(dotOf(solid)).width).toBe('16px');
     expect(dotOf(solid).parentElement).toBe(solid);
+  });
+
+  describe('clustering', () => {
+    const viewBoxOf = () => (within(screen.getByTestId('store-map-canvas')).getByRole('img').getAttribute('viewBox') ?? '')
+      .split(' ').map(Number);
+
+    function store(label: string, latitude: number, longitude: number, over: Partial<StoreMapPayload['stores'][number]> = {}) {
+      return {
+        ...payload().stores[0],
+        site_label: label,
+        latitude,
+        longitude,
+        ...over,
+      };
+    }
+
+    // Three stores within half a degree (a few px at continent scale) and one far away.
+    function crowded(): StoreMapPayload {
+      return {
+        ...payload(),
+        stores: [
+          store('Near A', 10, 20, { sell_through: 1 }),
+          store('Near B', 10.2, 20.2, { sell_through: 0 }),
+          store('Near C', 10.1, 20.1, { sell_through: 0.5 }),
+          store('Far', -20, 50),
+        ],
+      };
+    }
+
+    it('groups pins in one screen cell into one numbered marker at their centroid', async () => {
+      hoisted.payload = crowded();
+      wrap(<StoreMap />);
+      const cluster = await screen.findByTestId('store-cluster');
+      expect(cluster).toHaveAttribute('data-cluster-count', '3');
+      expect(cluster).toHaveTextContent('3');
+      expect(Number(cluster.dataset.latitude)).toBeCloseTo(10.1, 5);
+      expect(Number(cluster.dataset.longitude)).toBeCloseTo(20.1, 5);
+      // The members are not drawn on their own; the far store is a normal single pin.
+      expect(screen.getAllByTestId('store-dot')).toHaveLength(1);
+      expect(screen.getAllByTestId('store-dot')[0]).toHaveAttribute('data-latitude', '-20');
+      expect(cluster).toHaveAttribute('data-pin-state', 'confirmed');
+      expect(dotOf(cluster)).toHaveAttribute('data-hollow', 'false');
+    });
+
+    it('draws the Shipments marker size and never a click target over 44px', async () => {
+      hoisted.payload = crowded();
+      wrap(<StoreMap />);
+      await screen.findByTestId('store-cluster');
+      const single = screen.getByTestId('store-dot');
+      // Shipments' 11px dot, not the old ~26px pin; 44px click target only where there is room.
+      expect(getComputedStyle(dotOf(single)).width).toBe('11px');
+      expect(parseFloat(getComputedStyle(single).width)).toBeLessThanOrEqual(44);
+      const cluster = screen.getByTestId('store-cluster');
+      expect(getComputedStyle(dotOf(cluster)).width).toBe('16px');
+      expect(parseFloat(getComputedStyle(cluster).width)).toBeLessThanOrEqual(44);
+    });
+
+    it('shows a card with the first stores and the count while hovering a cluster', async () => {
+      hoisted.payload = crowded();
+      wrap(<StoreMap />);
+      fireEvent.mouseEnter(await screen.findByTestId('store-cluster'));
+      const card = screen.getByTestId('store-map-cluster-hover');
+      expect(card).toHaveTextContent('3 stores here');
+      for (const label of ['Near A', 'Near B', 'Near C']) expect(card).toHaveTextContent(label);
+      fireEvent.mouseLeave(screen.getByTestId('store-cluster'));
+      expect(screen.queryByTestId('store-map-cluster-hover')).toBeNull();
+    });
+
+    it('zooms the view to fit the cluster on click, and the cluster dissolves into its pins', async () => {
+      hoisted.payload = crowded();
+      wrap(<StoreMap />);
+      fireEvent.click(await screen.findByTestId('store-cluster'));
+      expect(viewBoxOf()[2]).toBeLessThan(20);
+      expect(screen.queryByTestId('store-cluster')).toBeNull();
+      expect(screen.getAllByTestId('store-dot')).toHaveLength(4);
+      expect(screen.getByTestId('map-reset-view')).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
+      expect(screen.getByTestId('store-cluster')).toHaveAttribute('data-cluster-count', '3');
+    });
+
+    it('dissolves a cluster as the steward zooms in with the buttons', async () => {
+      hoisted.payload = {
+        ...payload(),
+        stores: [store('Twin A', 10, 20), store('Twin B', 10.4, 20), store('Far', -20, 50)],
+      };
+      wrap(<StoreMap />);
+      expect(await screen.findByTestId('store-cluster')).toHaveAttribute('data-cluster-count', '2');
+      for (let step = 0; step < 4; step += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+      expect(screen.queryByTestId('store-cluster')).toBeNull();
+      expect(screen.getAllByTestId('store-dot')).toHaveLength(3);
+    });
+
+    it('draws a cluster with a proposed pin as a dashed ring', async () => {
+      hoisted.payload = {
+        ...payload(),
+        stores: [
+          store('Saved', 10, 20),
+          store('Proposed', 0, 0, {
+            pinned: false,
+            latitude: null,
+            longitude: null,
+            location_suggestion: {
+              outcome: 'suggest', reason: 'match', place: 'Example Place',
+              latitude: 10.1, longitude: 20.1, licence: 'GeoNames CC BY 4.0',
+            },
+          }),
+        ],
+      };
+      wrap(<StoreMap />);
+      const cluster = await screen.findByTestId('store-cluster');
+      expect(cluster).toHaveAttribute('data-pin-state', 'proposed');
+      expect(dotOf(cluster)).toHaveAttribute('data-hollow', 'true');
+      expect(getComputedStyle(dotOf(cluster)).borderStyle).toBe('dashed');
+      expect(cluster).toHaveTextContent('2');
+      fireEvent.mouseEnter(cluster);
+      expect(screen.getByTestId('store-map-cluster-hover')).toHaveTextContent('(proposed)');
+    });
+
+    it('stops clustering at the tightest zoom and fans out pins that still overlap', async () => {
+      hoisted.payload = {
+        ...payload(),
+        stores: [store('Same A', 10, 20), store('Same B', 10, 20), store('Far', -20, 50)],
+      };
+      wrap(<StoreMap />);
+      fireEvent.click(await screen.findByTestId('store-cluster'));
+      // Identical coordinates cannot separate: the view stops at about 0.3 degrees of longitude.
+      expect(viewBoxOf()[2]).toBeCloseTo((0.3 / 158) * 1000, 3);
+      expect(screen.getByRole('button', { name: 'Zoom in' })).toBeDisabled();
+      expect(screen.queryByTestId('store-cluster')).toBeNull();
+      const dots = screen.getAllByTestId('store-dot');
+      expect(dots).toHaveLength(3);
+      // Each keeps its real coordinates; only the on-screen position is fanned out.
+      expect(dots.filter((dot) => dot.dataset.latitude === '10')).toHaveLength(2);
+    });
+
+    it('reaches a proposed pin inside a cluster by zooming in, then confirms it as usual', async () => {
+      hoisted.payload = {
+        ...payload(),
+        stores: [
+          store('Saved', 10, 20),
+          store('Proposed', 0, 0, {
+            pinned: false,
+            latitude: null,
+            longitude: null,
+            location_suggestion: {
+              outcome: 'suggest', reason: 'match', place: 'Example Place',
+              latitude: 10.1, longitude: 20.1, licence: 'GeoNames CC BY 4.0',
+            },
+          }),
+        ],
+      };
+      wrap(<StoreMap />);
+      fireEvent.click(await screen.findByTestId('store-cluster'));
+      const pin = await screen.findByTestId('store-dot-unconfirmed');
+      fireEvent.click(pin);
+      expect(screen.getByTestId('store-pin-actions')).toBeInTheDocument();
+      expect(screen.getByTestId('store-dot-unconfirmed')).toHaveAttribute('data-latitude', '10.1');
+    });
+
+    it('keeps the selected pin a single pin at its real position when zoomed back out', async () => {
+      hoisted.payload = crowded();
+      wrap(<StoreMap />);
+      fireEvent.click(await screen.findByTestId('store-cluster'));
+      fireEvent.click(screen.getByRole('button', { name: /Near A/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
+      // The other two still cluster; the one being read stays on its own.
+      expect(screen.getByTestId('store-cluster')).toHaveAttribute('data-cluster-count', '2');
+      const selected = screen.getByRole('button', { name: /Near A/ });
+      expect(selected).toHaveAttribute('aria-pressed', 'true');
+      expect(selected).toHaveAttribute('data-latitude', '10');
+      expect(screen.getByTestId('store-map-lines')).toBeInTheDocument();
+    });
   });
 });

@@ -71,9 +71,10 @@ export function panMapView(
 export function zoomMapView(
   view: MapBounds,
   factor: number,
-  limits: MapBounds = WORLD_BOUNDS
+  limits: MapBounds = WORLD_BOUNDS,
+  minLonSpan: number = MIN_VIEW_LON_SPAN
 ): MapBounds {
-  const next = Math.max(MIN_VIEW_LON_SPAN, lonSpanOf(view) * factor);
+  const next = Math.max(minLonSpan, lonSpanOf(view) * factor);
   const k = next / lonSpanOf(view);
   const lat = (view.minLat + view.maxLat) / 2;
   const lon = (view.minLon + view.maxLon) / 2;

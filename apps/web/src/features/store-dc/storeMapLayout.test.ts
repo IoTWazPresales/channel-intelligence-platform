@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BASEMAP_BOUNDS, mapViewBox } from '@/features/maps/mapGeometry';
 
 import {
+  STORE_MIN_LON_SPAN,
   finiteCoordinates,
   projectStores,
   sellThroughColor,
@@ -79,6 +80,43 @@ describe('store map layout', () => {
       { id: 'b', latitude: 3.001, longitude: 4.001 },
     ]);
     expect(tight.maxLon - tight.minLon).toBeGreaterThanOrEqual(60);
+  });
+
+  it('shows the continent around a country of hundreds of stores, not a crop of the stores', () => {
+    // One country, ~300 stores over about 20 x 12 degrees.
+    const points = Array.from({ length: 300 }, (_, index) => ({
+      id: `s${index}`,
+      latitude: -34 + (index % 12),
+      longitude: 17 + Math.floor(index / 12) * 0.8,
+    }));
+    const bounds = storeMapBounds(points);
+    expect(bounds.maxLon - bounds.minLon).toBeGreaterThanOrEqual(60);
+    // Every store sits in the middle of the box with the dotted outline all around it.
+    for (const pin of projectStores(points, bounds)) {
+      expect(pin.x).toBeGreaterThan(25);
+      expect(pin.x).toBeLessThan(75);
+      expect(pin.y).toBeGreaterThan(25);
+      expect(pin.y).toBeLessThan(75);
+    }
+  });
+
+  it('fits a cluster of stores to the tightest view with room around them', () => {
+    const members = [
+      { latitude: 10, longitude: 20 },
+      { latitude: 10.1, longitude: 20.2 },
+    ];
+    const bounds = storeMapBounds(members, STORE_MIN_LON_SPAN, 1.8);
+    expect(bounds.maxLon - bounds.minLon).toBeLessThan(2);
+    for (const member of members) {
+      const { x, y } = projectStores([{ id: 'm', ...member }], bounds)[0];
+      expect(x).toBeGreaterThan(10);
+      expect(x).toBeLessThan(90);
+      expect(y).toBeGreaterThan(10);
+      expect(y).toBeLessThan(90);
+    }
+    // Identical coordinates cannot be separated: the view stops at the minimum span.
+    const same = storeMapBounds([members[0], members[0]], STORE_MIN_LON_SPAN, 1.8);
+    expect(same.maxLon - same.minLon).toBeCloseTo(STORE_MIN_LON_SPAN);
   });
 
   it('treats missing, blank, non-numeric, out of range and 0,0 coordinates as no place', () => {

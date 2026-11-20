@@ -15,7 +15,7 @@ import {
 } from '@/features/maps/MapCanvas';
 import { MapMarker } from '@/features/maps/MapMarker';
 import { MapViewControls } from '@/features/maps/MapViewControls';
-import { panLimits } from '@/features/maps/mapView';
+import { lonSpanOf, panLimits } from '@/features/maps/mapView';
 import { useMapView } from '@/features/maps/useMapView';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
@@ -24,7 +24,9 @@ import { PinLegend } from './pins/PinLegend';
 import { proposedStores } from './pins/pinProposals';
 import { ProposedPinsPanel } from './pins/ProposedPinsPanel';
 import { useProposalConfirm } from './pins/useProposalConfirm';
+import { MAX_HIT_PX, clusterPins, meanSellThrough, type PinGroup } from './storeMapClusters';
 import {
+  STORE_MIN_LON_SPAN,
   finiteCoordinates,
   projectStores,
   sellThroughColor,
@@ -51,11 +53,28 @@ function storePlace(store: StoreMapStore): string {
 type Coordinates = { latitude: number; longitude: number };
 type MapBounds = ReturnType<typeof storeMapBounds>;
 
-// Overlap spacing and click target for pins: dense metros keep every pin reachable.
+// At the tightest zoom, pins that still overlap fan out on screen by this much.
 const PIN_SPREAD_PX = 16;
-const PIN_HIT_PX = 22;
-// Past this many pins the glow around each marker would blur into one blob.
+// Click target of a fanned pin, and of the pin being read or dragged.
+const SPREAD_HIT_PX = 16;
+const OPEN_HIT_PX = 22;
+// The Shipments marker: 11px dot (16 selected); a cluster is 16px plus 4 per extra digit.
+const PIN_SIZE = 11;
+const PIN_SIZE_SELECTED = 16;
+// Room around a cluster's members when clicking it zooms the view to fit them.
+const CLUSTER_FIT_PADDING = 1.8;
+const CLUSTER_CARD_STORES = 5;
+// Past this many markers the glow around each would blur into one blob.
 const GLOW_PIN_LIMIT = 60;
+
+/** Click target: the Shipments 44px where there is room, smaller where neighbours are closer. */
+function hitFor(size: number, nearestPx: number): number {
+  return Math.max(size + 2, Math.min(MAX_HIT_PX, Math.floor(nearestPx)));
+}
+
+function clusterSize(count: number): number {
+  return PIN_SIZE_SELECTED + (String(count).length - 1) * 4;
+}
 
 export function StoreMap() {
   const theme = useTheme();
@@ -64,6 +83,7 @@ export function StoreMap() {
   const proposalConfirm = useProposalConfirm();
   const [customerId, setCustomerId] = useState<number | 'all'>('all');
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [hoverClusterId, setHoverClusterId] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [pinFor, setPinFor] = useState<string | null>(null);
   const [latitude, setLatitude] = useState('');
@@ -141,11 +161,44 @@ export function StoreMap() {
   // The default view fits the continent the pins are in; the steward can pan and zoom away from
   // it. A pin drag freezes whichever view it started in.
   const fit = storeMapBounds(points);
-  const mapView = useMapView(fit, panLimits(fit, points), canvasRef);
+  const mapView = useMapView(fit, panLimits(fit, points), canvasRef, STORE_MIN_LON_SPAN);
   const bounds = dragBounds ?? mapView.bounds;
   const projected = projectStores(points, bounds);
-  const placed = spreadOverlaps(projected, mapPx, PIN_SPREAD_PX);
-  const placeOf = new Map(placed.map((pin) => [pin.id, pin]));
+  // Pins in one screen cell become a numbered cluster at their centroid; zooming in dissolves
+  // them. The pin being dragged or read stays a single pin at its real position. At the tightest
+  // zoom nothing is clustered and pins that still overlap fan out on screen.
+  const atMaxZoom = lonSpanOf(bounds) <= STORE_MIN_LON_SPAN * 1.05;
+  const stayOpen = new Set([activePinKey, selectedKey]);
+  const groups = atMaxZoom
+    ? []
+    : clusterPins(
+        projected
+          .filter((pin) => !stayOpen.has(pin.id))
+          .map((pin) => ({ ...pin, ...pointOf.get(pin.id)! })),
+        mapPx
+      );
+  const singles = atMaxZoom
+    ? spreadOverlaps(projected, mapPx, PIN_SPREAD_PX).map((pin) => ({ ...pin, hit: SPREAD_HIT_PX }))
+    : [
+        ...projected
+          .filter((pin) => stayOpen.has(pin.id))
+          .map((pin) => ({ ...pin, dx: 0, dy: 0, hit: OPEN_HIT_PX })),
+        ...groups
+          .filter((group) => group.members.length === 1)
+          .map((group) => ({
+            id: group.id,
+            x: group.x,
+            y: group.y,
+            dx: 0,
+            dy: 0,
+            hit: hitFor(PIN_SIZE, group.nearestPx),
+          })),
+      ];
+  const clusters = groups.filter((group) => group.members.length > 1);
+  const placeOf = new Map(singles.map((pin) => [pin.id, pin]));
+  const storeByKey = new Map(mapStores.map((store) => [storeKey(store), store]));
+  const hoverCluster = clusters.find((group) => group.id === hoverClusterId) ?? null;
+  const glow = mapStores.length <= GLOW_PIN_LIMIT;
   const selected = visible.find((store) => storeKey(store) === selectedKey) ?? null;
   const hover = mapStores.find((store) => storeKey(store) === hoverKey) ?? null;
   const activePin = suggestions.find((store) => storeKey(store) === activePinKey) ?? null;
@@ -155,6 +208,14 @@ export function StoreMap() {
   function chooseCustomer(next: number | 'all') {
     setCustomerId(next);
     mapView.reset();
+  }
+
+  // Zoom the view to fit a cluster's members; they separate into single pins or smaller clusters.
+  function zoomToCluster(group: PinGroup) {
+    setHoverClusterId(null);
+    const next = storeMapBounds(group.members, STORE_MIN_LON_SPAN, CLUSTER_FIT_PADDING);
+    if (lonSpanOf(next) < lonSpanOf(bounds)) mapView.fitTo(next);
+    else mapView.zoomIn();
   }
 
   function startDrag(event: PointerEvent<HTMLButtonElement>, key: string) {
@@ -386,12 +447,12 @@ export function StoreMap() {
                   x={pin.x}
                   y={pin.y}
                   offset={{ dx: pin.dx, dy: pin.dy }}
-                  hit={PIN_HIT_PX}
+                  hit={pin.hit}
                   color={color}
-                  size={on ? 16 : 11}
+                  size={on ? PIN_SIZE_SELECTED : PIN_SIZE}
                   selected={on}
                   hollow={unconfirmed}
-                  glow={mapStores.length <= GLOW_PIN_LIMIT}
+                  glow={glow}
                   zIndex={on ? 1 : undefined}
                   cursor={unconfirmed ? 'grab' : 'pointer'}
                   touchAction={unconfirmed ? 'none' : 'auto'}
@@ -413,6 +474,48 @@ export function StoreMap() {
                   onPointerCancel={unconfirmed ? (event) => endDrag(event, true) : undefined}
                   onLostPointerCapture={unconfirmed ? (event) => endDrag(event, true) : undefined}
                 />
+              );
+            })}
+            {clusters.map((group) => {
+              const members = group.members.map((member) => storeByKey.get(member.id)!);
+              const count = members.length;
+              const proposed = members.some((store) => suggestedKeys.has(storeKey(store)));
+              const color = sellThroughColor(
+                meanSellThrough(members.map((store) => store.sell_through)),
+                tokens.semantic.success,
+                tokens.semantic.danger
+              );
+              const size = clusterSize(count);
+              // The Shipments cluster marker: the same dot with the count in it; a dashed ring
+              // when any member is only a proposal.
+              return (
+                <MapMarker
+                  key={group.id}
+                  x={group.x}
+                  y={group.y}
+                  hit={hitFor(size, group.nearestPx)}
+                  color={color}
+                  size={size}
+                  hollow={proposed}
+                  glow={glow}
+                  data-testid="store-cluster"
+                  data-cluster-count={count}
+                  data-pin-state={proposed ? 'proposed' : 'confirmed'}
+                  data-latitude={group.latitude}
+                  data-longitude={group.longitude}
+                  aria-label={`${count} stores near ${storePlace(members[0])}. Click to zoom in.`}
+                  onMouseEnter={() => setHoverClusterId(group.id)}
+                  onMouseLeave={() =>
+                    setHoverClusterId((current) => (current === group.id ? null : current))
+                  }
+                  onFocus={() => setHoverClusterId(group.id)}
+                  onBlur={() =>
+                    setHoverClusterId((current) => (current === group.id ? null : current))
+                  }
+                  onClick={() => zoomToCluster(group)}
+                >
+                  <span style={proposed ? { color } : undefined}>{count}</span>
+                </MapMarker>
               );
             })}
             <MapViewControls
@@ -475,6 +578,39 @@ export function StoreMap() {
                   >
                     {pinError}
                   </Typography>
+                ) : null}
+              </Box>
+            ) : null}
+            {hoverCluster ? (
+              <Box
+                data-testid="store-map-cluster-hover"
+                sx={{
+                  position: 'absolute',
+                  left: 8,
+                  bottom: 8,
+                  maxWidth: '90%',
+                  px: 1,
+                  py: 0.75,
+                  borderRadius: 1,
+                  bgcolor: tokens.bg.elevated,
+                  border: `1px solid ${tokens.border.strong}`,
+                  color: tokens.text.primary,
+                  fontSize: 12,
+                  pointerEvents: 'none',
+                }}
+              >
+                <div>{hoverCluster.members.length} stores here · click to zoom in</div>
+                {hoverCluster.members.slice(0, CLUSTER_CARD_STORES).map((member) => {
+                  const store = storeByKey.get(member.id)!;
+                  return (
+                    <div key={member.id}>
+                      {storePlace(store)} · {store.customer_name}
+                      {suggestedKeys.has(member.id) ? ' (proposed)' : ''}
+                    </div>
+                  );
+                })}
+                {hoverCluster.members.length > CLUSTER_CARD_STORES ? (
+                  <div>+{hoverCluster.members.length - CLUSTER_CARD_STORES} more</div>
                 ) : null}
               </Box>
             ) : null}
