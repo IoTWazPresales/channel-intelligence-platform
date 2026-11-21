@@ -50,7 +50,10 @@ export function middleware(request: NextRequest) {
       ''
     ).trim().toLowerCase();
     if (legacyCoverPath || !lens || lens === 'cover') {
-      const url = new URL(request.nextUrl.toString());
+      const url = new URL(request.url);
+      // Next's internal URL can use the bound listener instead of the incoming authority.
+      const host = request.headers.get('host');
+      if (host) url.host = host;
       url.pathname = '/inventory';
       url.searchParams.delete('lens');
       if (url.searchParams.get('tab')?.trim().toLowerCase() === 'cover') {
