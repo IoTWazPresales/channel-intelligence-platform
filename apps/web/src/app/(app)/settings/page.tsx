@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { AdminChrome } from '@/features/administration/AdminChrome';
 import { BusinessCalendarPanel } from '@/features/settings/BusinessCalendarPanel';
+import { MapSettingsPanel } from '@/features/settings/MapSettingsPanel';
 import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { ShippingDigestRecipientsPanel } from '@/features/shipping-mailer';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
@@ -91,7 +92,7 @@ const REPORTING_CADENCE_OPTIONS: ReportingCadence[] = [
 export default function SettingsPage() {
   const apiDisplay =
     getApiBase() ||
-    'Same-origin /api/… (rewritten to FastAPI in next dev when NEXT_PUBLIC_API_URL is unset)';
+    'Same-origin /api/. (rewritten to FastAPI in next dev when NEXT_PUBLIC_API_URL is unset)';
   const density = useUiStore((s) => s.density);
   const colorMode = useUiStore((s) => s.colorMode);
   const qc = useQueryClient();
@@ -202,7 +203,7 @@ export default function SettingsPage() {
         </Typography>
         <Typography variant="caption" color="text.disabled">
           Set <code>NEXT_PUBLIC_API_URL</code> before <code>pnpm build</code> or in Docker build args to pin the API
-          host. Leave it unset in <code>next dev</code> to use same-origin <code>/api/v1/…</code> (proxied by{' '}
+          host. Leave it unset in <code>next dev</code> to use same-origin <code>/api/v1/.</code> (proxied by{' '}
           <code>src/app/api/v1/[[...path]]/route.ts</code> to FastAPI on <code>127.0.0.1:8000</code> by default).
         </Typography>
         <Divider sx={{ my: 3 }} />
@@ -211,7 +212,7 @@ export default function SettingsPage() {
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="body2" color="text.secondary">
-            Current: <strong>{density}</strong> — toggle from the toolbar (compact rows icon).
+            Current: <strong>{density}</strong> - toggle from the toolbar (compact rows icon).
           </Typography>
         </Stack>
         <Divider sx={{ my: 3 }} />
@@ -220,7 +221,7 @@ export default function SettingsPage() {
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="body2" color="text.secondary" data-testid="settings-color-mode">
-            Current: <strong>{colorMode}</strong> — toggle from the toolbar (sun / moon icon). Preference is kept in this browser.
+            Current: <strong>{colorMode}</strong> - toggle from the toolbar (sun / moon icon). Preference is kept in this browser.
           </Typography>
         </Stack>
 
@@ -230,7 +231,7 @@ export default function SettingsPage() {
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Tenant-variable commercial policy (BACKLOG-096). These four answers are onboarding
-          decisions, not application law — do not assume they match another tenant. Saved
+          decisions, not application law - do not assume they match another tenant. Saved
           overrides persist to <code>tenant_profiles/&lt;tenant_id&gt;.json</code> on the API host;
           unset fields fall back to the module defaults shown below.
         </Typography>
@@ -241,17 +242,13 @@ export default function SettingsPage() {
         ) : (
           <Stack spacing={2} maxWidth={480} data-testid="tenant-profile-form">
             {profileSaveError ? (
-              <Alert severity="error" data-testid="tenant-profile-save-error">
-                {profileSaveError}
-              </Alert>
+              <Alert severity="error" data-testid="tenant-profile-save-error">{profileSaveError}</Alert>
             ) : null}
             {profileSaveOk ? (
-              <Alert severity="success" data-testid="tenant-profile-save-ok">
-                {profileSaveOk}
-              </Alert>
+              <Alert severity="success" data-testid="tenant-profile-save-ok">{profileSaveOk}</Alert>
             ) : null}
             {!isAdmin ? (
-              <Alert severity="info">Admin role required to edit — showing current values read-only.</Alert>
+              <Alert severity="info">Admin role required to edit - showing current values read-only.</Alert>
             ) : null}
             <FormControl fullWidth disabled={!isAdmin}>
               <InputLabel id="tenant-profile-constraint-axis-label">Constraint axis (Q-001)</InputLabel>
@@ -262,11 +259,7 @@ export default function SettingsPage() {
                 onChange={(ev) => setConstraintAxis(ev.target.value as ConstraintAxis)}
                 inputProps={{ 'data-testid': 'tenant-profile-constraint-axis' }}
               >
-                {CONSTRAINT_AXIS_OPTIONS.map((v) => (
-                  <MenuItem key={v} value={v}>
-                    {v}
-                  </MenuItem>
-                ))}
+                {CONSTRAINT_AXIS_OPTIONS.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
               </Select>
             </FormControl>
             <FormControl fullWidth disabled={!isAdmin}>
@@ -278,43 +271,31 @@ export default function SettingsPage() {
                 onChange={(ev) => setOverBudgetAction(ev.target.value as OverBudgetAction)}
                 inputProps={{ 'data-testid': 'tenant-profile-over-budget-action' }}
               >
-                {OVER_BUDGET_ACTION_OPTIONS.map((v) => (
-                  <MenuItem key={v} value={v}>
-                    {v}
-                  </MenuItem>
-                ))}
+                {OVER_BUDGET_ACTION_OPTIONS.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
               </Select>
             </FormControl>
             <FormControl fullWidth disabled={!isAdmin}>
-              <InputLabel id="tenant-profile-reservation-source-label">Reservation source (Q-002)</InputLabel>
+              <InputLabel id="tenant-profile-reservation-source-label">Reservation source</InputLabel>
               <Select
                 labelId="tenant-profile-reservation-source-label"
-                label="Reservation source (Q-002)"
+                label="Reservation source"
                 value={reservationSource}
                 onChange={(ev) => setReservationSource(ev.target.value as ReservationSource)}
                 inputProps={{ 'data-testid': 'tenant-profile-reservation-source' }}
               >
-                {RESERVATION_SOURCE_OPTIONS.map((v) => (
-                  <MenuItem key={v} value={v}>
-                    {v}
-                  </MenuItem>
-                ))}
+                {RESERVATION_SOURCE_OPTIONS.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
               </Select>
             </FormControl>
             <FormControl fullWidth disabled={!isAdmin}>
-              <InputLabel id="tenant-profile-pm-attribution-mode-label">PM attribution mode (Q-009)</InputLabel>
+              <InputLabel id="tenant-profile-pm-attribution-mode-label">PM attribution mode</InputLabel>
               <Select
                 labelId="tenant-profile-pm-attribution-mode-label"
-                label="PM attribution mode (Q-009)"
+                label="PM attribution mode"
                 value={pmAttributionMode}
                 onChange={(ev) => setPmAttributionMode(ev.target.value as PmAttributionMode)}
                 inputProps={{ 'data-testid': 'tenant-profile-pm-attribution-mode' }}
               >
-                {PM_ATTRIBUTION_MODE_OPTIONS.map((v) => (
-                  <MenuItem key={v} value={v}>
-                    {v}
-                  </MenuItem>
-                ))}
+                {PM_ATTRIBUTION_MODE_OPTIONS.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
               </Select>
             </FormControl>
             <FormControl fullWidth disabled={!isAdmin}>
@@ -323,16 +304,10 @@ export default function SettingsPage() {
                 labelId="tenant-profile-line-identifier-label"
                 label="Line identifier"
                 value={lineIdentifierPreference}
-                onChange={(ev) =>
-                  setLineIdentifierPreference(ev.target.value as LineIdentifierPreference)
-                }
+                onChange={(ev) => setLineIdentifierPreference(ev.target.value as LineIdentifierPreference)}
                 inputProps={{ 'data-testid': 'tenant-profile-line-identifier' }}
               >
-                {LINE_IDENTIFIER_OPTIONS.map((v) => (
-                  <MenuItem key={v} value={v}>
-                    {LINE_IDENTIFIER_LABELS[v]}
-                  </MenuItem>
-                ))}
+                {LINE_IDENTIFIER_OPTIONS.map((v) => <MenuItem key={v} value={v}>{LINE_IDENTIFIER_LABELS[v]}</MenuItem>)}
               </Select>
             </FormControl>
             <FormControl fullWidth disabled={!isAdmin}>
@@ -344,11 +319,7 @@ export default function SettingsPage() {
                 onChange={(ev) => setReportingCadence(ev.target.value as ReportingCadence)}
                 inputProps={{ 'data-testid': 'tenant-profile-reporting-cadence' }}
               >
-                {REPORTING_CADENCE_OPTIONS.map((v) => (
-                  <MenuItem key={v} value={v}>
-                    {v}
-                  </MenuItem>
-                ))}
+                {REPORTING_CADENCE_OPTIONS.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
               </Select>
             </FormControl>
             <TextField
@@ -358,11 +329,11 @@ export default function SettingsPage() {
               onChange={(ev) => setWocMinVelocityDays(Number(ev.target.value))}
               disabled={!isAdmin}
               fullWidth
-              helperText="Thin history below this writes NULL cover (clamp 28–90). Default 90."
+              helperText="Thin history below this writes NULL cover (clamp 28-90). Default 90."
               inputProps={{ 'data-testid': 'tenant-profile-woc-min-velocity-days', min: 28, max: 90 }}
             />
             <TextField
-              label="Lineup export — Net requirement sheet"
+              label="Lineup export - Net requirement sheet"
               value={exportNetReqSheet}
               onChange={(ev) => setExportNetReqSheet(ev.target.value)}
               disabled={!isAdmin}
@@ -371,7 +342,7 @@ export default function SettingsPage() {
               inputProps={{ 'data-testid': 'tenant-profile-export-net-req-sheet' }}
             />
             <TextField
-              label="Lineup export — Draft lineup sheet"
+              label="Lineup export - Draft lineup sheet"
               value={exportDraftSheet}
               onChange={(ev) => setExportDraftSheet(ev.target.value)}
               disabled={!isAdmin}
@@ -384,13 +355,7 @@ export default function SettingsPage() {
             </Typography>
             {exportColumns.map((col, idx) => (
               <Stack key={col.field} direction="row" spacing={1} alignItems="center">
-                <TextField
-                  size="small"
-                  label="Field"
-                  value={col.field}
-                  disabled
-                  sx={{ width: 200 }}
-                />
+                <TextField size="small" label="Field" value={col.field} disabled sx={{ width: 200 }} />
                 <TextField
                   size="small"
                   label="Header"
@@ -413,9 +378,7 @@ export default function SettingsPage() {
                     [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
                     setExportColumns(next);
                   }}
-                >
-                  Up
-                </Button>
+                >Up</Button>
                 <Button
                   size="small"
                   disabled={!isAdmin || idx === exportColumns.length - 1}
@@ -425,9 +388,7 @@ export default function SettingsPage() {
                     [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
                     setExportColumns(next);
                   }}
-                >
-                  Down
-                </Button>
+                >Down</Button>
               </Stack>
             ))}
             {isAdmin ? (
@@ -442,7 +403,7 @@ export default function SettingsPage() {
                   }}
                   data-testid="tenant-profile-save"
                 >
-                  {tenantProfileMutation.isPending ? 'Saving…' : 'Save tenant profile'}
+                  {tenantProfileMutation.isPending ? 'Saving.' : 'Save tenant profile'}
                 </Button>
               </Box>
             ) : null}
@@ -456,6 +417,9 @@ export default function SettingsPage() {
           </Stack>
         )}
 
+        <Divider sx={{ my: 3 }} />
+        <MapSettingsPanel />
+
         {isAdmin ? (
           <>
             <Divider sx={{ my: 3 }} />
@@ -468,18 +432,14 @@ export default function SettingsPage() {
         ) : null}
 
         <Divider sx={{ my: 3 }} />
-        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-          Developer: wipe database
-        </Typography>
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>Developer: wipe database</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Removes <strong>every row</strong> in all application tables (same as{' '}
           <code>python scripts/wipe_database.py</code> in the API repo). Schema stays; upload files on disk are
           unchanged. Restart the Celery worker after a wipe if you use background jobs.
         </Typography>
         {wipeStatusPending ? (
-          <Typography variant="body2" color="text.secondary">
-            Checking whether database wipe is available on this API…
-          </Typography>
+          <Typography variant="body2" color="text.secondary">Checking whether database wipe is available on this API.</Typography>
         ) : wipeStatus?.fetch_error ? (
           <Stack spacing={2}>
             <Alert severity="error">
@@ -511,9 +471,7 @@ export default function SettingsPage() {
               Wipe is <strong>enabled</strong> on this API (<code>ALLOW_DB_WIPE=true</code>). Do not use on shared or
               production databases.
             </Alert>
-            <Button variant="outlined" color="error" onClick={() => setWipeOpen(true)}>
-              Open wipe confirmation…
-            </Button>
+            <Button variant="outlined" color="error" onClick={() => setWipeOpen(true)}>Open wipe confirmation.</Button>
           </>
         ) : (
           <Alert severity="warning">
@@ -532,9 +490,7 @@ export default function SettingsPage() {
             This cannot be undone. Type the following phrase exactly (case-sensitive) to enable the button:
           </Typography>
           <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: 'action.hover' }}>
-            <Typography variant="body2" fontFamily="monospace">
-              {WIPE_CONFIRM_PHRASE}
-            </Typography>
+            <Typography variant="body2" fontFamily="monospace">{WIPE_CONFIRM_PHRASE}</Typography>
           </Paper>
           <TextField
             fullWidth
@@ -551,16 +507,14 @@ export default function SettingsPage() {
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setWipeOpen(false)} disabled={wipeMutation.isPending}>
-            Cancel
-          </Button>
+          <Button onClick={() => setWipeOpen(false)} disabled={wipeMutation.isPending}>Cancel</Button>
           <Button
             variant="contained"
             color="error"
             disabled={!phraseOk || wipeMutation.isPending}
             onClick={() => wipeMutation.mutate()}
           >
-            {wipeMutation.isPending ? 'Wiping…' : 'Wipe database'}
+            {wipeMutation.isPending ? 'Wiping.' : 'Wipe database'}
           </Button>
         </DialogActions>
       </Dialog>
