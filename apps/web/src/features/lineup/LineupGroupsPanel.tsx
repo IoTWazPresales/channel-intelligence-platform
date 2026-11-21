@@ -33,6 +33,8 @@ type GroupGridRow = {
   detailRows?: LineupPlanRow[];
 };
 
+const COLUMN_PADDING = { paddingLeft: '8px', paddingRight: '8px' };
+
 /** Existing customer/period grouping and approval flow, hosted by the shared grid. */
 export function LineupGroupsPanel({
   rows,
@@ -95,38 +97,65 @@ export function LineupGroupsPanel({
     }
   };
 
+  // Explicit widths avoid AG Grid's 200px default for every non-flex column.
+  // The minimum total is 924px, leaving room for the rail, page padding and
+  // scrollbars at a 1280px viewport. Only Customer expands into spare space.
   const columns: ColDef<GroupGridRow>[] = [
     {
       colId: 'customer',
       headerName: 'Customer',
-      minWidth: 180,
+      width: 160,
+      minWidth: 160,
       flex: 1,
+      headerStyle: COLUMN_PADDING,
+      cellStyle: COLUMN_PADDING,
       valueGetter: (p) => p.data?.group.customerName,
     },
     {
       colId: 'period',
       headerName: 'Period',
-      minWidth: 110,
+      width: 96,
+      minWidth: 96,
+      headerStyle: COLUMN_PADDING,
+      cellStyle: COLUMN_PADDING,
       valueGetter: (p) => p.data?.group.periodLabel,
     },
     ...([
-      ['lines', 'Lines'],
-      ['plannedUnits', 'Units'],
-      ['pending', 'Pending'],
-      ['approved', 'Approved'],
-      ['rejected', 'Rejected'],
-    ] as const).map(([field, headerName]): ColDef<GroupGridRow> => ({
+      ['lines', 'Lines', 72],
+      ['plannedUnits', 'Units', 96],
+      ['pending', 'Pending', 88],
+      ['approved', 'Approved', 100],
+      ['rejected', 'Rejected', 96],
+    ] as const).map(([field, headerName, width]): ColDef<GroupGridRow> => ({
       colId: field,
       headerName,
-      minWidth: 100,
+      width,
+      minWidth: width,
       type: 'numericColumn',
+      headerStyle: COLUMN_PADDING,
+      // EnterpriseDataGrid makes cells flex containers. Match numericColumn's
+      // right-aligned header with both flex and text alignment in the body.
+      cellStyle: {
+        ...COLUMN_PADDING,
+        justifyContent: 'flex-end',
+        textAlign: 'right',
+        fontVariantNumeric: 'tabular-nums',
+      },
       valueGetter: (p) => p.data?.group[field],
       valueFormatter: (p) => formatUnits(Number(p.value ?? 0)),
     })),
     {
       colId: 'actions',
       headerName: 'Actions',
-      minWidth: 260,
+      width: 216,
+      minWidth: 216,
+      maxWidth: 216,
+      pinned: 'right',
+      lockPinned: true,
+      resizable: false,
+      suppressSizeToFit: true,
+      headerStyle: COLUMN_PADDING,
+      cellStyle: COLUMN_PADDING,
       sortable: false,
       filter: false,
       cellRenderer: ({ data }: { data?: GroupGridRow }) => {
@@ -137,6 +166,7 @@ export function LineupGroupsPanel({
           <Stack
             direction="row"
             spacing={0.5}
+            sx={{ '& .MuiButton-root': { minWidth: 0, px: 1, flexShrink: 0 } }}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
@@ -176,6 +206,7 @@ export function LineupGroupsPanel({
 
   const options: GridOptions<GroupGridRow> = {
     getRowId: (p) => p.data.key,
+    suppressMovableColumns: true,
     onRowClicked: (event) => {
       if (event.data && !event.data.detailRows) toggleGroup(event.data.group);
     },
