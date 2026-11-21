@@ -14,6 +14,7 @@ import json
 import logging
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -21,6 +22,9 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 KEY_DISCOVERY_SCHEDULE = "discovery.schedule_enabled"
+KEY_MAP_TILEJSON = "map.tilejson_url"
+KEY_MAP_GLYPHS = "map.glyphs_url"
+KEY_MAP_ATTRIBUTION = "map.attribution"
 
 
 def _as_bool(value: Any) -> bool:
@@ -29,9 +33,64 @@ def _as_bool(value: Any) -> bool:
     raise ValueError("value must be true or false")
 
 
-# key -> validator returning the cleaned value. Later features register their own keys here.
+def _optional_text(value: Any, *, limit: int) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("value must be text or null")
+    clean = value.strip()
+    if not clean:
+        return None
+    if len(clean) > limit or any(ord(char) < 32 for char in clean):
+        raise ValueError(f"value must be at most {limit} characters without control characters")
+    return clean
+
+
+def _map_url(value: Any) -> str | None:
+    """Validate stored configuration only; the API never fetches these URLs."""
+    clean = _optional_text(value, limit=2048)
+    if clean is None:
+        return None
+    try:
+        parsed = urlsplit(clean)
+        valid = (
+            parsed.scheme in {"http", "https"}
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.fragment
+            and not any(char.isspace() for char in clean)
+        )
+        # Accessing port also validates malformed/out-of-range ports.
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError("use an absolute HTTP(S) URL without credentials or a fragment") from exc
+    if not valid:
+        raise ValueError("use an absolute HTTP(S) URL without credentials or a fragment")
+    return clean
+
+
+def _map_glyphs_url(value: Any) -> str | None:
+    clean = _map_url(value)
+    if clean is not None and ("{fontstack}" not in clean or "{range}" not in clean):
+        raise ValueError("glyph URL must contain {fontstack} and {range}")
+    return clean
+
+
+def _map_attribution(value: Any) -> str | None:
+    clean = _optional_text(value, limit=1000)
+    if clean is not None and ("<" in clean or ">" in clean):
+        raise ValueError("attribution must be plain text, without HTML")
+    return clean
+
+
+# No map defaults or provider URLs are stored or supplied here.
+# PMTiles is deliberately not registered until a client protocol implementation exists.
 SETTING_VALIDATORS: dict[str, Callable[[Any], Any]] = {
     KEY_DISCOVERY_SCHEDULE: _as_bool,
+    KEY_MAP_TILEJSON: _map_url,
+    KEY_MAP_GLYPHS: _map_glyphs_url,
+    KEY_MAP_ATTRIBUTION: _map_attribution,
 }
 
 
@@ -77,7 +136,10 @@ def tenants_with_true(session: Session, key: str) -> list[str]:
     try:
         with session.begin_nested():
             rows = session.execute(
-                text("SELECT tenant_id FROM tenant_setting WHERE key = :k AND value = 'true'::jsonb ORDER BY tenant_id"),
+                text(
+                    "SELECT tenant_id FROM tenant_setting "
+                    "WHERE key = :k AND value = 'true'::jsonb ORDER BY tenant_id"
+                ),
                 {"k": key},
             ).all()
         return [str(r[0]) for r in rows]

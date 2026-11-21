@@ -1,9 +1,9 @@
 'use client';
 
-import { Box, Button, TextField, Typography } from '@mui/material';
+import { Box, Button, FormControlLabel, Switch, TextField, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 
 import {
@@ -34,10 +34,15 @@ import {
   storeMapBounds,
   unprojectStore,
 } from './storeMapLayout';
-import type { StoreMapPayload, StoreMapStore } from './types';
+import type { PinConfirmItem, StoreMapPayload, StoreMapStore } from './types';
+import { useMapPrototype } from './useMapPrototype';
+
+const StoreMapPrototype = lazy(() => import('./StoreMapPrototype').then((module) => ({
+  default: module.StoreMapPrototype,
+})));
 
 function fmt(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return '—';
+  if (value == null || Number.isNaN(value)) return '-';
   return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
@@ -53,21 +58,15 @@ function storePlace(store: StoreMapStore): string {
 type Coordinates = { latitude: number; longitude: number };
 type MapBounds = ReturnType<typeof storeMapBounds>;
 
-// At the tightest zoom, pins that still overlap fan out on screen by this much.
 const PIN_SPREAD_PX = 16;
-// Click target of a fanned pin, and of the pin being read or dragged.
 const SPREAD_HIT_PX = 16;
 const OPEN_HIT_PX = 22;
-// The Shipments marker: 11px dot (16 selected); a cluster is 16px plus 4 per extra digit.
 const PIN_SIZE = 11;
 const PIN_SIZE_SELECTED = 16;
-// Room around a cluster's members when clicking it zooms the view to fit them.
 const CLUSTER_FIT_PADDING = 1.8;
 const CLUSTER_CARD_STORES = 5;
-// Past this many markers the glow around each would blur into one blob.
 const GLOW_PIN_LIMIT = 60;
 
-/** Click target: the Shipments 44px where there is room, smaller where neighbours are closer. */
 function hitFor(size: number, nearestPx: number): number {
   return Math.max(size + 2, Math.min(MAX_HIT_PX, Math.floor(nearestPx)));
 }
@@ -81,6 +80,7 @@ export function StoreMap() {
   const tokens = tokensFor(theme.palette.mode);
   const queryClient = useQueryClient();
   const proposalConfirm = useProposalConfirm();
+  const [prototype, setPrototype] = useMapPrototype();
   const [customerId, setCustomerId] = useState<number | 'all'>('all');
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [hoverClusterId, setHoverClusterId] = useState<string | null>(null);
@@ -121,8 +121,6 @@ export function StoreMap() {
   const stores = mapQuery.data?.stores ?? [];
   const visible =
     customerId === 'all' ? stores : stores.filter((store) => store.customer_id === customerId);
-  // A store with no usable coordinates is never drawn (not at a corner, not at 0,0): it stays in
-  // the "No coordinates" list.
   const pinned = visible.filter(
     (store) => store.pinned && finiteCoordinates(store.latitude, store.longitude)
   );
@@ -133,9 +131,15 @@ export function StoreMap() {
       store.location_suggestion?.outcome === 'suggest' &&
       finiteCoordinates(store.location_suggestion.latitude, store.location_suggestion.longitude)
   );
-  const suggestedKeys = new Set(suggestions.map(storeKey));
+  // Manual drops exist only in local state and only participate in the prototype canvas.
+  const suggestionKeys = new Set(suggestions.map(storeKey));
+  const drafted = prototype ? visible.filter((store) =>
+    !store.pinned && !rejected.has(storeKey(store))
+    && !suggestionKeys.has(storeKey(store)) && !!overrides[storeKey(store)]
+  ) : [];
+  const suggestedKeys = new Set([...suggestions, ...drafted].map(storeKey));
   const proposalList = proposedStores(visible, rejected);
-  const mapStores = [...pinned, ...suggestions];
+  const mapStores = [...pinned, ...suggestions, ...drafted];
   const mappedKeys = new Set(mapStores.map(storeKey));
   const unpinned = visible.filter((store) => !mappedKeys.has(storeKey(store)));
   const points = mapStores.map((store) => ({
@@ -143,56 +147,39 @@ export function StoreMap() {
     ...(store.pinned
       ? finiteCoordinates(store.latitude, store.longitude)!
       : (overrides[storeKey(store)] ??
-        finiteCoordinates(
-          store.location_suggestion!.latitude,
-          store.location_suggestion!.longitude
-        )!)),
+        finiteCoordinates(store.location_suggestion!.latitude, store.location_suggestion!.longitude)!)),
   }));
   const pointOf = new Map(points.map((point) => [point.id, point]));
   const needle = unpinnedQuery.trim().toLowerCase();
   const listed = needle
     ? unpinned.filter((store) =>
         [storePlace(store), store.site_label, store.customer_name ?? '']
-          .join(' ')
-          .toLowerCase()
-          .includes(needle)
+          .join(' ').toLowerCase().includes(needle)
       )
     : unpinned;
-  // The default view fits the continent the pins are in; the steward can pan and zoom away from
-  // it. A pin drag freezes whichever view it started in.
+
   const fit = storeMapBounds(points);
   const mapView = useMapView(fit, panLimits(fit, points), canvasRef, STORE_MIN_LON_SPAN);
   const bounds = dragBounds ?? mapView.bounds;
   const projected = projectStores(points, bounds);
-  // Pins in one screen cell become a numbered cluster at their centroid; zooming in dissolves
-  // them. The pin being dragged or read stays a single pin at its real position. At the tightest
-  // zoom nothing is clustered and pins that still overlap fan out on screen.
   const atMaxZoom = lonSpanOf(bounds) <= STORE_MIN_LON_SPAN * 1.05;
   const stayOpen = new Set([activePinKey, selectedKey]);
   const groups = atMaxZoom
     ? []
     : clusterPins(
-        projected
-          .filter((pin) => !stayOpen.has(pin.id))
+        projected.filter((pin) => !stayOpen.has(pin.id))
           .map((pin) => ({ ...pin, ...pointOf.get(pin.id)! })),
         mapPx
       );
   const singles = atMaxZoom
     ? spreadOverlaps(projected, mapPx, PIN_SPREAD_PX).map((pin) => ({ ...pin, hit: SPREAD_HIT_PX }))
     : [
-        ...projected
-          .filter((pin) => stayOpen.has(pin.id))
+        ...projected.filter((pin) => stayOpen.has(pin.id))
           .map((pin) => ({ ...pin, dx: 0, dy: 0, hit: OPEN_HIT_PX })),
-        ...groups
-          .filter((group) => group.members.length === 1)
-          .map((group) => ({
-            id: group.id,
-            x: group.x,
-            y: group.y,
-            dx: 0,
-            dy: 0,
-            hit: hitFor(PIN_SIZE, group.nearestPx),
-          })),
+        ...groups.filter((group) => group.members.length === 1).map((group) => ({
+          id: group.id, x: group.x, y: group.y, dx: 0, dy: 0,
+          hit: hitFor(PIN_SIZE, group.nearestPx),
+        })),
       ];
   const clusters = groups.filter((group) => group.members.length > 1);
   const placeOf = new Map(singles.map((pin) => [pin.id, pin]));
@@ -204,13 +191,11 @@ export function StoreMap() {
   const activePin = suggestions.find((store) => storeKey(store) === activePinKey) ?? null;
   const activePosition = activePin ? placeOf.get(storeKey(activePin)) : null;
 
-  // A different customer is a different set of pins: fit the view to them again.
   function chooseCustomer(next: number | 'all') {
     setCustomerId(next);
     mapView.reset();
   }
 
-  // Zoom the view to fit a cluster's members; they separate into single pins or smaller clusters.
   function zoomToCluster(group: PinGroup) {
     setHoverClusterId(null);
     const next = storeMapBounds(group.members, STORE_MIN_LON_SPAN, CLUSTER_FIT_PADDING);
@@ -225,16 +210,8 @@ export function StoreMap() {
     const point = projected.find((item) => item.id === key);
     if (!rect?.width || !rect.height || !point) return;
     dragRef.current = {
-      key,
-      pointerId: event.pointerId,
-      clientX: event.clientX,
-      clientY: event.clientY,
-      x: point.x,
-      y: point.y,
-      width: rect.width,
-      height: rect.height,
-      bounds,
-      moved: false,
+      key, pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY,
+      x: point.x, y: point.y, width: rect.width, height: rect.height, bounds, moved: false,
     };
     setDragBounds(bounds);
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -246,8 +223,6 @@ export function StoreMap() {
     if (!drag || event.pointerId !== drag.pointerId) return;
     if (!drag.moved && event.clientX === drag.clientX && event.clientY === drag.clientY) return;
     drag.moved = true;
-    // Use the projection at pointer down throughout this gesture. The visual
-    // overlap offset stays out of the geographic coordinates.
     const coordinates = unprojectStore(
       drag.x + ((event.clientX - drag.clientX) / drag.width) * 100,
       drag.y + ((event.clientY - drag.clientY) / drag.height) * 100,
@@ -275,11 +250,29 @@ export function StoreMap() {
   function rejectSuggestion(store: StoreMapStore) {
     const key = storeKey(store);
     setRejected((current) => new Set(current).add(key));
+    setOverrides((current) => Object.fromEntries(Object.entries(current).filter(([id]) => id !== key)));
     proposalConfirm.clearError(key);
     setActivePinKey(null);
     setHoverKey(null);
     setPinError(null);
     setPinErrorKey(null);
+  }
+
+  function stagePrototypePin(key: string, coordinates: Coordinates) {
+    if (proposalConfirm.saving || saving) return;
+    setOverrides((current) => ({ ...current, [key]: coordinates }));
+    setRejected((current) => new Set([...current].filter((id) => id !== key)));
+    proposalConfirm.clearError(key);
+  }
+
+  function confirmPrototype(items: PinConfirmItem[]) {
+    // Explicit panel edits/alternatives win. Otherwise include any locally staged map edit.
+    return proposalConfirm.confirm(items.map((item) => {
+      const coordinates = overrides[`${item.customer_id}:${item.site_label}`];
+      return item.latitude == null && item.longitude == null && coordinates
+        ? { ...item, ...coordinates }
+        : item;
+    }));
   }
 
   async function postPin(store: StoreMapStore, lat: number, lon: number) {
@@ -298,11 +291,10 @@ export function StoreMap() {
       });
       queryClient.setQueryData<StoreMapPayload>(
         ['store-dc-map'],
-        (current) =>
-          current && {
-            ...current,
-            stores: current.stores.map((item) => (storeKey(item) === key ? saved : item)),
-          }
+        (current) => current && {
+          ...current,
+          stores: current.stores.map((item) => (storeKey(item) === key ? saved : item)),
+        }
       );
       setActivePinKey(null);
       setPinFor(null);
@@ -333,54 +325,41 @@ export function StoreMap() {
 
   async function confirmSuggestion(store: StoreMapStore) {
     const suggestion = store.location_suggestion;
-    if (
-      suggestion?.outcome !== 'suggest' ||
-      suggestion.latitude == null ||
-      suggestion.longitude == null
-    ) {
-      return;
-    }
+    if (suggestion?.outcome !== 'suggest' || suggestion.latitude == null || suggestion.longitude == null) return;
     const coordinates = overrides[storeKey(store)] ?? suggestion;
     await postPin(store, coordinates.latitude!, coordinates.longitude!);
   }
 
   return (
     <Box data-testid="store-map" sx={{ mt: 1.5 }}>
-      <Box
-        sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mb: 1 }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mb: 1 }}>
         <Typography variant="subtitle1">Stores</Typography>
-        <Box
-          data-testid="store-map-legend"
-          sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}
-        >
-          <Typography variant="caption" sx={{ color: tokens.text.secondary }}>
-            Worst
-          </Typography>
-          <Box
-            sx={{
-              flex: 1,
-              height: 8,
-              borderRadius: 4,
-              background: `linear-gradient(90deg, ${tokens.semantic.danger}, ${tokens.semantic.success})`,
-            }}
-          />
-          <Typography variant="caption" sx={{ color: tokens.text.secondary }}>
-            Best
-          </Typography>
+        <FormControlLabel
+          label="New map (prototype)"
+          control={
+            <Switch
+              size="small"
+              checked={prototype}
+              disabled={saving || proposalConfirm.saving}
+              onChange={(_event, checked) => setPrototype(checked)}
+            />
+          }
+        />
+        <Box data-testid="store-map-legend" sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+          <Typography variant="caption" sx={{ color: tokens.text.secondary }}>Worst</Typography>
+          <Box sx={{
+            flex: 1, height: 8, borderRadius: 4,
+            background: `linear-gradient(90deg, ${tokens.semantic.danger}, ${tokens.semantic.success})`,
+          }} />
+          <Typography variant="caption" sx={{ color: tokens.text.secondary }}>Best</Typography>
         </Box>
       </Box>
       <Typography variant="caption" sx={{ display: 'block', color: tokens.text.muted, mb: 1 }}>
-        {mapQuery.data?.legend?.formula ??
-          "last week's units / (last week's units + stock on hand)"}
+        {mapQuery.data?.legend?.formula ?? "last week's units / (last week's units + stock on hand)"}
       </Typography>
       <PinLegend />
       {mapQuery.isLoading ? (
-        <Typography
-          variant="body2"
-          sx={{ color: tokens.text.secondary }}
-          data-testid="store-map-loading"
-        >
+        <Typography variant="body2" sx={{ color: tokens.text.secondary }} data-testid="store-map-loading">
           Loading stores.
         </Typography>
       ) : null}
@@ -389,15 +368,8 @@ export function StoreMap() {
           Store map could not be loaded: {safeDisplayError(mapQuery.error)}
         </Typography>
       ) : null}
-      <Box
-        sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}
-        data-testid="store-map-customers"
-      >
-        <Button
-          size="small"
-          variant={customerId === 'all' ? 'contained' : 'outlined'}
-          onClick={() => chooseCustomer('all')}
-        >
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }} data-testid="store-map-customers">
+        <Button size="small" variant={customerId === 'all' ? 'contained' : 'outlined'} onClick={() => chooseCustomer('all')}>
           All customers
         </Button>
         {(mapQuery.data?.customers ?? []).map((customer) => (
@@ -406,278 +378,212 @@ export function StoreMap() {
             size="small"
             variant={customerId === customer.id ? 'contained' : 'outlined'}
             onClick={() => chooseCustomer(customer.id)}
-          >
-            {customer.name}
-          </Button>
+          >{customer.name}</Button>
         ))}
       </Box>
-      <MapLayout>
-        <MapPanel>
-          <MapCanvas
-            ref={canvasRef}
-            data-testid="store-map-canvas"
-            label="Store locations coloured by sell-through"
-            bounds={bounds}
-            onSizeChange={setMapPx}
-            panHandlers={mapView.panHandlers}
-            grabbing={mapView.grabbing}
-          >
-            {mapStores.length === 0 ? (
-              <Typography variant="body2" sx={{ p: 2, color: tokens.text.secondary }}>
-                No store has coordinates yet.
-              </Typography>
-            ) : null}
-            {mapStores.map((store) => {
-              const key = storeKey(store);
-              const unconfirmed = suggestedKeys.has(key);
-              const coordinates = pointOf.get(key)!;
-              const pin = placeOf.get(key);
-              if (!pin) return null;
-              const color = sellThroughColor(
-                store.sell_through,
-                tokens.semantic.success,
-                tokens.semantic.danger
-              );
-              const on = unconfirmed ? activePinKey === key : selectedKey === key;
-              // The Shipments marker: solid = a pin a steward saved, hollow dashed = a proposal
-              // (see PinLegend). The sell-through colour stays the marker colour.
-              return (
-                <MapMarker
-                  key={key}
-                  x={pin.x}
-                  y={pin.y}
-                  offset={{ dx: pin.dx, dy: pin.dy }}
-                  hit={pin.hit}
-                  color={color}
-                  size={on ? PIN_SIZE_SELECTED : PIN_SIZE}
-                  selected={on}
-                  hollow={unconfirmed}
-                  glow={glow}
-                  zIndex={on ? 1 : undefined}
-                  cursor={unconfirmed ? 'grab' : 'pointer'}
-                  touchAction={unconfirmed ? 'none' : 'auto'}
-                  data-testid={unconfirmed ? 'store-dot-unconfirmed' : 'store-dot'}
-                  data-pin-state={unconfirmed ? 'unconfirmed' : 'confirmed'}
-                  data-latitude={coordinates.latitude}
-                  data-longitude={coordinates.longitude}
-                  data-customer-id={store.customer_id}
-                  aria-label={`${storePlace(store)}, ${store.site_label}, ${store.customer_name ?? ''}`}
-                  aria-pressed={unconfirmed ? undefined : on}
-                  onMouseEnter={() => setHoverKey(key)}
-                  onMouseLeave={() => setHoverKey((current) => (current === key ? null : current))}
-                  onFocus={() => setHoverKey(key)}
-                  onBlur={() => setHoverKey((current) => (current === key ? null : current))}
-                  onClick={() => (unconfirmed ? setActivePinKey(key) : setSelectedKey(key))}
-                  onPointerDown={unconfirmed ? (event) => startDrag(event, key) : undefined}
-                  onPointerMove={unconfirmed ? moveDrag : undefined}
-                  onPointerUp={unconfirmed ? (event) => endDrag(event) : undefined}
-                  onPointerCancel={unconfirmed ? (event) => endDrag(event, true) : undefined}
-                  onLostPointerCapture={unconfirmed ? (event) => endDrag(event, true) : undefined}
-                />
-              );
-            })}
-            {clusters.map((group) => {
-              const members = group.members.map((member) => storeByKey.get(member.id)!);
-              const count = members.length;
-              const proposed = members.some((store) => suggestedKeys.has(storeKey(store)));
-              const color = sellThroughColor(
-                meanSellThrough(members.map((store) => store.sell_through)),
-                tokens.semantic.success,
-                tokens.semantic.danger
-              );
-              const size = clusterSize(count);
-              // The Shipments cluster marker: the same dot with the count in it; a dashed ring
-              // when any member is only a proposal.
-              return (
-                <MapMarker
-                  key={group.id}
-                  x={group.x}
-                  y={group.y}
-                  hit={hitFor(size, group.nearestPx)}
-                  color={color}
-                  size={size}
-                  hollow={proposed}
-                  glow={glow}
-                  data-testid="store-cluster"
-                  data-cluster-count={count}
-                  data-pin-state={proposed ? 'proposed' : 'confirmed'}
-                  data-latitude={group.latitude}
-                  data-longitude={group.longitude}
-                  aria-label={`${count} stores near ${storePlace(members[0])}. Click to zoom in.`}
-                  onMouseEnter={() => setHoverClusterId(group.id)}
-                  onMouseLeave={() =>
-                    setHoverClusterId((current) => (current === group.id ? null : current))
-                  }
-                  onFocus={() => setHoverClusterId(group.id)}
-                  onBlur={() =>
-                    setHoverClusterId((current) => (current === group.id ? null : current))
-                  }
-                  onClick={() => zoomToCluster(group)}
-                >
-                  <span style={proposed ? { color } : undefined}>{count}</span>
-                </MapMarker>
-              );
-            })}
-            <MapViewControls
-              data-testid="store-map-view-controls"
-              onZoomIn={mapView.zoomIn}
-              onZoomOut={mapView.zoomOut}
-              onReset={mapView.reset}
-              canZoomIn={mapView.canZoomIn}
-              canZoomOut={mapView.canZoomOut}
-              canReset={mapView.panned}
-            />
-            {activePin && activePosition ? (
-              <Box
-                data-no-pan
-                data-testid="store-pin-actions"
-                sx={{
-                  position: 'absolute',
-                  left: `clamp(8px, ${activePosition.x}%, calc(100% - 240px))`,
-                  top: `clamp(8px, ${activePosition.y}% + 16px, calc(100% - 130px))`,
-                  width: 220,
-                  maxWidth: '90%',
-                  p: 1,
-                  zIndex: 2,
-                  borderRadius: 1,
-                  bgcolor: tokens.bg.elevated,
-                  border: `1px solid ${tokens.border.strong}`,
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  data-testid="place-suggestion"
-                  sx={{ display: 'block' }}
-                >
-                  {activePin.site_label}: confirm location · {activePin.location_suggestion?.place}.{' '}
-                  {activePin.location_suggestion?.licence}. Drag to adjust. Nothing is saved until
-                  you confirm.
-                </Typography>
-                <Button
-                  size="small"
-                  data-testid="confirm-suggestion"
-                  disabled={saving}
-                  onClick={() => void confirmSuggestion(activePin)}
-                >
-                  Confirm location
-                </Button>
-                <Button
-                  size="small"
-                  data-testid="reject-suggestion"
-                  disabled={saving}
-                  onClick={() => rejectSuggestion(activePin)}
-                >
-                  Reject
-                </Button>
-                {pinError && pinErrorKey === storeKey(activePin) ? (
-                  <Typography
-                    variant="caption"
-                    color="error"
-                    data-testid="pin-error"
-                    sx={{ display: 'block' }}
-                  >
-                    {pinError}
-                  </Typography>
-                ) : null}
-              </Box>
-            ) : null}
-            {hoverCluster ? (
-              <Box
-                data-testid="store-map-cluster-hover"
-                sx={{
-                  position: 'absolute',
-                  left: 8,
-                  bottom: 8,
-                  maxWidth: '90%',
-                  px: 1,
-                  py: 0.75,
-                  borderRadius: 1,
-                  bgcolor: tokens.bg.elevated,
-                  border: `1px solid ${tokens.border.strong}`,
-                  color: tokens.text.primary,
-                  fontSize: 12,
-                  pointerEvents: 'none',
-                }}
-              >
-                <div>{hoverCluster.members.length} stores here · click to zoom in</div>
-                {hoverCluster.members.slice(0, CLUSTER_CARD_STORES).map((member) => {
-                  const store = storeByKey.get(member.id)!;
-                  return (
-                    <div key={member.id}>
-                      {storePlace(store)} · {store.customer_name}
-                      {suggestedKeys.has(member.id) ? ' (proposed)' : ''}
-                    </div>
-                  );
-                })}
-                {hoverCluster.members.length > CLUSTER_CARD_STORES ? (
-                  <div>+{hoverCluster.members.length - CLUSTER_CARD_STORES} more</div>
-                ) : null}
-              </Box>
-            ) : null}
-            {hover ? (
-              <Box
-                data-testid="store-map-hover"
-                sx={{
-                  position: 'absolute',
-                  left: 8,
-                  bottom: 8,
-                  maxWidth: '90%',
-                  px: 1,
-                  py: 0.75,
-                  borderRadius: 1,
-                  bgcolor: tokens.bg.elevated,
-                  border: `1px solid ${tokens.border.strong}`,
-                  color: tokens.text.primary,
-                  fontSize: 12,
-                  pointerEvents: 'none',
-                }}
-              >
-                <div>{storePlace(hover)}</div>
-                <div>{hover.site_label}</div>
-                <div>{hover.customer_name}</div>
-                <div>Last week {fmt(hover.last_week_units)} units</div>
-                <div>Stock on hand {fmt(hover.stock_on_hand)}</div>
-                <div>Weeks of cover {fmt(hover.weeks_of_cover)}</div>
-                {suggestedKeys.has(storeKey(hover)) ? (
-                  <div>
-                    confirm location · {hover.location_suggestion?.place} ·{' '}
-                    {hover.location_suggestion?.licence}
-                  </div>
-                ) : null}
-              </Box>
-            ) : null}
-          </MapCanvas>
-        </MapPanel>
-        <MapAside>
-          <Box
-            data-testid="store-map-unpinned"
-            sx={{ height: mapPx.h, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-          >
-            <Typography variant="caption" sx={{ color: tokens.text.secondary }}>
-              No coordinates
-            </Typography>
-            <TextField
-              size="small"
-              placeholder="Search stores"
-              value={unpinnedQuery}
-              onChange={(event) => setUnpinnedQuery(event.target.value)}
-              inputProps={{ 'aria-label': 'Search stores', 'data-testid': 'store-map-search' }}
-              sx={{ mt: 0.5 }}
-            />
-            <Box
-              data-testid="store-map-unpinned-scroll"
-              sx={{ overflowY: 'auto', flex: 1, minHeight: 0, mt: 0.5 }}
+      {prototype ? (
+        <Suspense fallback={<Typography variant="body2">Loading map prototype…</Typography>}>
+          <StoreMapPrototype
+            key={String(customerId)}
+            stores={visible}
+            mapStores={mapStores}
+            points={points}
+            scopeKey={String(customerId)}
+            selectedKey={selectedKey}
+            saving={saving || proposalConfirm.saving}
+            errors={proposalConfirm.errors}
+            onSelect={setSelectedKey}
+            onAdjust={stagePrototypePin}
+            onConfirm={confirmPrototype}
+            onSkip={rejectSuggestion}
+          />
+        </Suspense>
+      ) : (
+        <MapLayout>
+          <MapPanel>
+            <MapCanvas
+              ref={canvasRef}
+              data-testid="store-map-canvas"
+              label="Store locations coloured by sell-through"
+              bounds={bounds}
+              onSizeChange={setMapPx}
+              panHandlers={mapView.panHandlers}
+              grabbing={mapView.grabbing}
             >
-              {unpinned.length === 0 ? (
-                <Typography variant="body2" sx={{ color: tokens.text.muted }}>
-                  Every store in this view has a pin.
-                </Typography>
-              ) : listed.length === 0 ? (
-                <Typography variant="body2" sx={{ color: tokens.text.muted }}>
-                  No store matches that search.
-                </Typography>
-              ) : (
-                listed.map((store) => {
+              {mapStores.length === 0 ? (
+                <Typography variant="body2" sx={{ p: 2, color: tokens.text.secondary }}>No store has coordinates yet.</Typography>
+              ) : null}
+              {mapStores.map((store) => {
+                const key = storeKey(store);
+                const unconfirmed = suggestedKeys.has(key);
+                const coordinates = pointOf.get(key)!;
+                const pin = placeOf.get(key);
+                if (!pin) return null;
+                const color = sellThroughColor(store.sell_through, tokens.semantic.success, tokens.semantic.danger);
+                const on = unconfirmed ? activePinKey === key : selectedKey === key;
+                return (
+                  <MapMarker
+                    key={key}
+                    x={pin.x}
+                    y={pin.y}
+                    offset={{ dx: pin.dx, dy: pin.dy }}
+                    hit={pin.hit}
+                    color={color}
+                    size={on ? PIN_SIZE_SELECTED : PIN_SIZE}
+                    selected={on}
+                    hollow={unconfirmed}
+                    glow={glow}
+                    zIndex={on ? 1 : undefined}
+                    cursor={unconfirmed ? 'grab' : 'pointer'}
+                    touchAction={unconfirmed ? 'none' : 'auto'}
+                    data-testid={unconfirmed ? 'store-dot-unconfirmed' : 'store-dot'}
+                    data-pin-state={unconfirmed ? 'unconfirmed' : 'confirmed'}
+                    data-latitude={coordinates.latitude}
+                    data-longitude={coordinates.longitude}
+                    data-customer-id={store.customer_id}
+                    aria-label={`${storePlace(store)}, ${store.site_label}, ${store.customer_name ?? ''}`}
+                    aria-pressed={unconfirmed ? undefined : on}
+                    onMouseEnter={() => setHoverKey(key)}
+                    onMouseLeave={() => setHoverKey((current) => current === key ? null : current)}
+                    onFocus={() => setHoverKey(key)}
+                    onBlur={() => setHoverKey((current) => current === key ? null : current)}
+                    onClick={() => unconfirmed ? setActivePinKey(key) : setSelectedKey(key)}
+                    onPointerDown={unconfirmed ? (event) => startDrag(event, key) : undefined}
+                    onPointerMove={unconfirmed ? moveDrag : undefined}
+                    onPointerUp={unconfirmed ? (event) => endDrag(event) : undefined}
+                    onPointerCancel={unconfirmed ? (event) => endDrag(event, true) : undefined}
+                    onLostPointerCapture={unconfirmed ? (event) => endDrag(event, true) : undefined}
+                  />
+                );
+              })}
+              {clusters.map((group) => {
+                const members = group.members.map((member) => storeByKey.get(member.id)!);
+                const count = members.length;
+                const proposed = members.some((store) => suggestedKeys.has(storeKey(store)));
+                const color = sellThroughColor(
+                  meanSellThrough(members.map((store) => store.sell_through)),
+                  tokens.semantic.success, tokens.semantic.danger
+                );
+                const size = clusterSize(count);
+                return (
+                  <MapMarker
+                    key={group.id}
+                    x={group.x}
+                    y={group.y}
+                    hit={hitFor(size, group.nearestPx)}
+                    color={color}
+                    size={size}
+                    hollow={proposed}
+                    glow={glow}
+                    data-testid="store-cluster"
+                    data-cluster-count={count}
+                    data-pin-state={proposed ? 'proposed' : 'confirmed'}
+                    data-latitude={group.latitude}
+                    data-longitude={group.longitude}
+                    aria-label={`${count} stores near ${storePlace(members[0])}. Click to zoom in.`}
+                    onMouseEnter={() => setHoverClusterId(group.id)}
+                    onMouseLeave={() => setHoverClusterId((current) => current === group.id ? null : current)}
+                    onFocus={() => setHoverClusterId(group.id)}
+                    onBlur={() => setHoverClusterId((current) => current === group.id ? null : current)}
+                    onClick={() => zoomToCluster(group)}
+                  >
+                    <span style={proposed ? { color } : undefined}>{count}</span>
+                  </MapMarker>
+                );
+              })}
+              <MapViewControls
+                data-testid="store-map-view-controls"
+                onZoomIn={mapView.zoomIn}
+                onZoomOut={mapView.zoomOut}
+                onReset={mapView.reset}
+                canZoomIn={mapView.canZoomIn}
+                canZoomOut={mapView.canZoomOut}
+                canReset={mapView.panned}
+              />
+              {activePin && activePosition ? (
+                <Box
+                  data-no-pan
+                  data-testid="store-pin-actions"
+                  sx={{
+                    position: 'absolute',
+                    left: `clamp(8px, ${activePosition.x}%, calc(100% - 240px))`,
+                    top: `clamp(8px, ${activePosition.y}% + 16px, calc(100% - 130px))`,
+                    width: 220, maxWidth: '90%', p: 1, zIndex: 2, borderRadius: 1,
+                    bgcolor: tokens.bg.elevated, border: `1px solid ${tokens.border.strong}`,
+                  }}
+                >
+                  <Typography variant="caption" data-testid="place-suggestion" sx={{ display: 'block' }}>
+                    {activePin.site_label}: confirm location · {activePin.location_suggestion?.place}.{' '}
+                    {activePin.location_suggestion?.licence}. Drag to adjust. Nothing is saved until you confirm.
+                  </Typography>
+                  <Button size="small" data-testid="confirm-suggestion" disabled={saving} onClick={() => void confirmSuggestion(activePin)}>
+                    Confirm location
+                  </Button>
+                  <Button size="small" data-testid="reject-suggestion" disabled={saving} onClick={() => rejectSuggestion(activePin)}>Reject</Button>
+                  {pinError && pinErrorKey === storeKey(activePin) ? (
+                    <Typography variant="caption" color="error" data-testid="pin-error" sx={{ display: 'block' }}>{pinError}</Typography>
+                  ) : null}
+                </Box>
+              ) : null}
+              {hoverCluster ? (
+                <Box data-testid="store-map-cluster-hover" sx={{
+                  position: 'absolute', left: 8, bottom: 8, maxWidth: '90%', px: 1, py: 0.75,
+                  borderRadius: 1, bgcolor: tokens.bg.elevated,
+                  border: `1px solid ${tokens.border.strong}`, color: tokens.text.primary,
+                  fontSize: 12, pointerEvents: 'none',
+                }}>
+                  <div>{hoverCluster.members.length} stores here · click to zoom in</div>
+                  {hoverCluster.members.slice(0, CLUSTER_CARD_STORES).map((member) => {
+                    const store = storeByKey.get(member.id)!;
+                    return (
+                      <div key={member.id}>
+                        {storePlace(store)} · {store.customer_name}
+                        {suggestedKeys.has(member.id) ? ' (proposed)' : ''}
+                      </div>
+                    );
+                  })}
+                  {hoverCluster.members.length > CLUSTER_CARD_STORES ? (
+                    <div>+{hoverCluster.members.length - CLUSTER_CARD_STORES} more</div>
+                  ) : null}
+                </Box>
+              ) : null}
+              {hover ? (
+                <Box data-testid="store-map-hover" sx={{
+                  position: 'absolute', left: 8, bottom: 8, maxWidth: '90%', px: 1, py: 0.75,
+                  borderRadius: 1, bgcolor: tokens.bg.elevated,
+                  border: `1px solid ${tokens.border.strong}`, color: tokens.text.primary,
+                  fontSize: 12, pointerEvents: 'none',
+                }}>
+                  <div>{storePlace(hover)}</div>
+                  <div>{hover.site_label}</div>
+                  <div>{hover.customer_name}</div>
+                  <div>Last week {fmt(hover.last_week_units)} units</div>
+                  <div>Stock on hand {fmt(hover.stock_on_hand)}</div>
+                  <div>Weeks of cover {fmt(hover.weeks_of_cover)}</div>
+                  {suggestedKeys.has(storeKey(hover)) ? (
+                    <div>confirm location · {hover.location_suggestion?.place} · {hover.location_suggestion?.licence}</div>
+                  ) : null}
+                </Box>
+              ) : null}
+            </MapCanvas>
+          </MapPanel>
+          <MapAside>
+            <Box data-testid="store-map-unpinned" sx={{ height: mapPx.h, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <Typography variant="caption" sx={{ color: tokens.text.secondary }}>No coordinates</Typography>
+              <TextField
+                size="small"
+                placeholder="Search stores"
+                value={unpinnedQuery}
+                onChange={(event) => setUnpinnedQuery(event.target.value)}
+                inputProps={{ 'aria-label': 'Search stores', 'data-testid': 'store-map-search' }}
+                sx={{ mt: 0.5 }}
+              />
+              <Box data-testid="store-map-unpinned-scroll" sx={{ overflowY: 'auto', flex: 1, minHeight: 0, mt: 0.5 }}>
+                {unpinned.length === 0 ? (
+                  <Typography variant="body2" sx={{ color: tokens.text.muted }}>Every store in this view has a pin.</Typography>
+                ) : listed.length === 0 ? (
+                  <Typography variant="body2" sx={{ color: tokens.text.muted }}>No store matches that search.</Typography>
+                ) : listed.map((store) => {
                   const key = storeKey(store);
                   const place = storePlace(store);
                   return (
@@ -685,48 +591,25 @@ export function StoreMap() {
                       <Typography variant="body2">
                         {place}
                         {place !== store.site_label ? (
-                          <Box component="span" sx={{ color: tokens.text.secondary }}>
-                            {' '}
-                            · {store.site_label}
-                          </Box>
+                          <Box component="span" sx={{ color: tokens.text.secondary }}> · {store.site_label}</Box>
                         ) : null}
-                        <Box component="span" sx={{ color: tokens.text.secondary }}>
-                          {' '}
-                          · {store.customer_name}
-                        </Box>
+                        <Box component="span" sx={{ color: tokens.text.secondary }}> · {store.customer_name}</Box>
                       </Typography>
                       {store.location_suggestion?.outcome === 'manual' ? (
-                        <Typography
-                          variant="caption"
-                          sx={{ display: 'block', color: tokens.text.secondary }}
-                          data-testid="place-manual"
-                        >
+                        <Typography variant="caption" sx={{ display: 'block', color: tokens.text.secondary }} data-testid="place-manual">
                           {store.location_suggestion.reason === 'multiple'
                             ? 'More than one place matches. Drop a pin.'
                             : 'No place match. Drop a pin.'}
                         </Typography>
                       ) : null}
                       {pinError && pinErrorKey === key ? (
-                        <Typography
-                          variant="caption"
-                          color="error"
-                          data-testid="pin-error"
-                          sx={{ display: 'block' }}
-                        >
-                          {pinError}
-                        </Typography>
+                        <Typography variant="caption" color="error" data-testid="pin-error" sx={{ display: 'block' }}>{pinError}</Typography>
                       ) : null}
-                      <Button
-                        size="small"
-                        data-testid="drop-pin"
-                        onClick={() => {
-                          setPinFor(key);
-                          setPinError(null);
-                          setPinErrorKey(null);
-                        }}
-                      >
-                        Drop pin
-                      </Button>
+                      <Button size="small" data-testid="drop-pin" onClick={() => {
+                        setPinFor(key);
+                        setPinError(null);
+                        setPinErrorKey(null);
+                      }}>Drop pin</Button>
                       {pinFor === key ? (
                         <Box sx={{ display: 'grid', gap: 0.5, mt: 0.5 }}>
                           <TextField
@@ -743,29 +626,22 @@ export function StoreMap() {
                             onChange={(event) => setLongitude(event.target.value)}
                             inputProps={{ 'data-testid': 'pin-longitude' }}
                           />
-                          <Button
-                            size="small"
-                            variant="contained"
-                            disabled={saving}
-                            onClick={() => void savePin(store)}
-                          >
-                            Save pin
-                          </Button>
+                          <Button size="small" variant="contained" disabled={saving} onClick={() => void savePin(store)}>Save pin</Button>
                         </Box>
                       ) : null}
                     </Box>
                   );
-                })
-              )}
+                })}
+              </Box>
             </Box>
-          </Box>
-        </MapAside>
-      </MapLayout>
+          </MapAside>
+        </MapLayout>
+      )}
       <ProposedPinsPanel
         stores={proposalList}
         saving={saving || proposalConfirm.saving}
         errors={proposalConfirm.errors}
-        onConfirm={proposalConfirm.confirm}
+        onConfirm={prototype ? confirmPrototype : proposalConfirm.confirm}
         onSkip={rejectSuggestion}
       />
       {selected ? (
@@ -774,17 +650,13 @@ export function StoreMap() {
             {storePlace(selected)} · {selected.site_label} · {selected.customer_name}
           </Typography>
           {selected.lines.length === 0 ? (
-            <Typography variant="body2" sx={{ color: tokens.text.secondary }}>
-              No product lines for this store.
+            <Typography variant="body2" sx={{ color: tokens.text.secondary }}>No product lines for this store.</Typography>
+          ) : selected.lines.map((line) => (
+            <Typography key={line.product_id} variant="body2" data-testid="store-line">
+              {line.sku ?? line.product_name} · {fmt(line.units)} units · stock{' '}
+              {fmt(line.stock_on_hand)} · cover {fmt(line.weeks_of_cover)}
             </Typography>
-          ) : (
-            selected.lines.map((line) => (
-              <Typography key={line.product_id} variant="body2" data-testid="store-line">
-                {line.sku ?? line.product_name} · {fmt(line.units)} units · stock{' '}
-                {fmt(line.stock_on_hand)} · cover {fmt(line.weeks_of_cover)}
-              </Typography>
-            ))
-          )}
+          ))}
         </Box>
       ) : null}
     </Box>
