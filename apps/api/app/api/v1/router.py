@@ -86,6 +86,7 @@ from app.api.v1.endpoints import (
     cpor_payment_evidence,
     cst_steward,
     dashboards,
+    database_map,
     dev_wipe,
     catalog,
     competition,
@@ -215,6 +216,7 @@ api_router.include_router(mappings.router, prefix="/mappings", tags=["mappings"]
 api_router.include_router(steward_audit.router, prefix="/admin", tags=["admin"])
 api_router.include_router(platform_audit.router, prefix="/admin", tags=["admin"])
 api_router.include_router(sql_viewer.router, prefix="/admin", tags=["admin"])
+api_router.include_router(database_map.router, tags=["admin"])
 api_router.include_router(ops.router, prefix="/admin", tags=["admin"])
 api_router.include_router(ops_logs.router, prefix="/admin", tags=["admin"])
 api_router.include_router(product_master_gaps.router, prefix="/product-master-gaps", tags=["product-master-gaps"])
