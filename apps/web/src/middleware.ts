@@ -42,12 +42,20 @@ export function middleware(request: NextRequest) {
     url.pathname = lineupTarget;
     return NextResponse.redirect(url);
   }
-  if (pathname === '/stock') {
-    const lens = request.nextUrl.searchParams.get('lens');
-    if (!lens || lens === 'cover') {
-      const url = request.nextUrl.clone();
+  const legacyCoverPath = pathname === '/stock/cover' || pathname.startsWith('/stock/cover/');
+  if (pathname === '/stock' || legacyCoverPath) {
+    const lens = (
+      request.nextUrl.searchParams.get('lens') ??
+      request.nextUrl.searchParams.get('tab') ??
+      ''
+    ).trim().toLowerCase();
+    if (legacyCoverPath || !lens || lens === 'cover') {
+      const url = new URL(request.nextUrl.toString());
       url.pathname = '/inventory';
       url.searchParams.delete('lens');
+      if (url.searchParams.get('tab')?.trim().toLowerCase() === 'cover') {
+        url.searchParams.delete('tab');
+      }
       return NextResponse.redirect(url);
     }
     if (lens === 'inbound') {
@@ -61,5 +69,17 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/dashboard', '/exceptions', '/getting-started', '/sell-out', '/plan-vs-executed', '/shipping', '/inventory', '/buy-plans', '/stock'],
+  matcher: [
+    '/',
+    '/dashboard',
+    '/exceptions',
+    '/getting-started',
+    '/sell-out',
+    '/plan-vs-executed',
+    '/shipping',
+    '/inventory',
+    '/buy-plans',
+    '/stock',
+    '/stock/cover/:path*',
+  ],
 };
