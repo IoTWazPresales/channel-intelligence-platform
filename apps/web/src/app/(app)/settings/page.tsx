@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { AdminChrome } from '@/features/administration/AdminChrome';
 import { BusinessCalendarPanel } from '@/features/settings/BusinessCalendarPanel';
+import { DiscoverySettingsPanel } from '@/features/settings/DiscoverySettingsPanel';
 import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { ShippingDigestRecipientsPanel } from '@/features/shipping-mailer';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
@@ -100,6 +101,7 @@ export default function SettingsPage() {
 
   const { data: me } = useCurrentUser();
   const isAdmin = String(me?.role || '').toLowerCase() === 'admin';
+  const canEditDiscovery = isAdmin || me?.role === 'steward';
 
   const tenantProfileQuery = useQuery({
     queryKey: ['auth', 'tenant-commercial-profile'],
@@ -302,10 +304,10 @@ export default function SettingsPage() {
               </Select>
             </FormControl>
             <FormControl fullWidth disabled={!isAdmin}>
-              <InputLabel id="tenant-profile-pm-attribution-mode-label">PM attribution mode (Q-009)</InputLabel>
+              <InputLabel id="tenant-profile-pm-attribution-mode-label">PM attribution mode (Q-003)</InputLabel>
               <Select
                 labelId="tenant-profile-pm-attribution-mode-label"
-                label="PM attribution mode (Q-009)"
+                label="PM attribution mode (Q-003)"
                 value={pmAttributionMode}
                 onChange={(ev) => setPmAttributionMode(ev.target.value as PmAttributionMode)}
                 inputProps={{ 'data-testid': 'tenant-profile-pm-attribution-mode' }}
@@ -455,6 +457,13 @@ export default function SettingsPage() {
             ) : null}
           </Stack>
         )}
+
+        {canEditDiscovery ? (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <DiscoverySettingsPanel />
+          </>
+        ) : null}
 
         {isAdmin ? (
           <>
