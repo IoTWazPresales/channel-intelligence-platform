@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ColDef, GridOptions } from 'ag-grid-community';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
@@ -11,6 +11,10 @@ import type { LineupPlanRow } from './lineupTypes';
 import type { LineupGroup, LineupSlice } from './lineupViews';
 
 const apiPost = vi.hoisted(() => vi.fn());
+const grid = vi.hoisted(() => ({
+  columns: [] as ColDef<TestRow>[],
+  options: {} as GridOptions<TestRow>,
+}));
 
 vi.mock('@/lib/api', () => ({
   apiPost: (url: string, body?: unknown) => apiPost(url, body),
@@ -44,10 +48,18 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
     columnDefs: ColDef<TestRow>[];
     gridOptions: GridOptions<TestRow>;
   }) => {
+    grid.columns = columnDefs;
+    grid.options = gridOptions;
     const Detail = gridOptions.fullWidthCellRenderer as ComponentType<{ data: TestRow }>;
     return (
-      <div data-testid="group-grid">
-        <div data-testid="group-headers">{columnDefs.map((column) => column.headerName).join('|')}</div>
+      <div data-testid="group-grid" role="grid">
+        <div data-testid="group-headers" role="row">
+          {columnDefs.map((column) => (
+            <span key={column.colId} role="columnheader">
+              {column.headerName}
+            </span>
+          ))}
+        </div>
         {rowData.map((row) => {
           const fullWidth = gridOptions.isFullWidthRow?.({
             rowNode: { data: row },
@@ -56,6 +68,7 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
           return (
             <div
               key={row.key}
+              role="row"
               data-testid={`summary-${row.key}`}
               onClick={() => gridOptions.onRowClicked?.({
                 data: row,
@@ -67,7 +80,16 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
                 const getValue = column.valueGetter as
                   ((params: { data: TestRow }) => unknown) | undefined;
                 return (
-                  <span key={column.colId} data-testid={`${row.key}-${column.colId}`}>
+                  <span
+                    key={column.colId}
+                    role="gridcell"
+                    data-testid={`${row.key}-${column.colId}`}
+                    style={
+                      typeof column.cellStyle === 'object'
+                        ? column.cellStyle as CSSProperties
+                        : undefined
+                    }
+                  >
                     {renderCell ? renderCell({ data: row }) : String(getValue?.({ data: row }) ?? '')}
                   </span>
                 );
@@ -132,19 +154,77 @@ describe('LineupGroupsPanel', () => {
     apiPost.mockResolvedValue({ changed: 1 });
   });
 
-  it('uses one summary row per customer/period and separate labelled columns', () => {
-    renderPanel();
+  it('puts every header over its corresponding cell in customer/period order', () => {
+    renderPanel({
+      data: [
+        ...rows,
+        { ...rows[0], id: 4, planned_volume_units: 8 },
+        { ...rows[0], id: 5, planned_volume_units: 10 },
+        { ...rows[1], id: 6, planned_volume_units: 12 },
+        { ...rows[0], id: 7, planned_volume_units: 14, approval_status: 'rejected' },
+      ],
+    });
     expect(screen.getAllByTestId(/^summary-/)).toHaveLength(2);
-    expect(screen.getByTestId('group-headers')).toHaveTextContent(
-      'Customer|Period|Lines|Units|Pending|Approved|Rejected|Actions',
-    );
-    expect(screen.getByTestId('3|2026-01-01-customer')).toHaveTextContent(/^Customer A$/);
-    expect(screen.getByTestId('3|2026-01-01-lines')).toHaveTextContent(/^2$/);
-    expect(screen.getByTestId('3|2026-01-01-plannedUnits')).toHaveTextContent(/^10$/);
-    expect(screen.getByTestId('3|2026-01-01-pending')).toHaveTextContent(/^1$/);
-    expect(screen.getByTestId('3|2026-01-01-approved')).toHaveTextContent(/^1$/);
-    expect(screen.getByTestId('3|2026-01-01-rejected')).toHaveTextContent(/^0$/);
+    expect(
+      within(screen.getByTestId('group-headers'))
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual([
+      'Customer', 'Period', 'Lines', 'Units', 'Pending', 'Approved', 'Rejected', 'Actions',
+    ]);
+    expect(grid.columns.map((column) => column.colId)).toEqual([
+      'customer', 'period', 'lines', 'plannedUnits', 'pending', 'approved', 'rejected', 'actions',
+    ]);
+
+    const summary = within(screen.getByTestId('summary-3|2026-01-01'));
+    expect(summary.getAllByRole('gridcell').map((cell) => cell.textContent)).toEqual([
+      'Customer A', '26Q1', '6', '54', '3', '2', '1', 'OpenApproveReject',
+    ]);
+    expect(
+      within(summary.getAllByRole('gridcell')[7])
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Open', 'Approve', 'Reject']);
     expect(screen.queryByTestId('detail-line-ids')).not.toBeInTheDocument();
+  });
+
+  it('fits essential columns at 1280px and keeps the action buttons pinned right', () => {
+    renderPanel();
+    // AppShell rail: 252px; WorkbenchCanvas horizontal padding: 40px.
+    // Reserve another 40px for borders and the page/grid vertical scrollbars.
+    const availableWidth = 1280 - 252 - 40 - 40;
+    expect(grid.columns.every((column) => column.width != null)).toBe(true);
+    const requiredWidth = grid.columns.reduce((total, column) => total + (column.width ?? 200), 0);
+    expect(requiredWidth).toBeLessThanOrEqual(availableWidth);
+    expect(grid.columns.find((column) => column.colId === 'actions')).toEqual(
+      expect.objectContaining({
+        width: 216,
+        minWidth: 216,
+        maxWidth: 216,
+        pinned: 'right',
+        lockPinned: true,
+        resizable: false,
+        suppressSizeToFit: true,
+        filter: false,
+      }),
+    );
+    expect(grid.options.suppressMovableColumns).toBe(true);
+    expect(screen.getByTestId('lineup-group-open-3|2026-01-01')).toBeVisible();
+    expect(screen.getByTestId('lineup-group-approve-3|2026-01-01')).toBeVisible();
+    expect(screen.getByTestId('lineup-group-reject-3|2026-01-01')).toBeVisible();
+  });
+
+  it('aligns numeric cells with their right-aligned headers inside the flex grid', () => {
+    renderPanel();
+    for (const colId of ['lines', 'plannedUnits', 'pending', 'approved', 'rejected']) {
+      expect(grid.columns.find((column) => column.colId === colId)?.type).toBe('numericColumn');
+      expect(screen.getByTestId(`3|2026-01-01-${colId}`)).toHaveStyle({
+        justifyContent: 'flex-end',
+        textAlign: 'right',
+        paddingLeft: '8px',
+        paddingRight: '8px',
+      });
+    }
   });
 
   it('expands lines inside the same grid, switches groups, and closes them', () => {

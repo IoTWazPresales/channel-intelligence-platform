@@ -33,7 +33,7 @@ export function PlanningChrome({ children }: { children?: ReactNode }) {
 
   const meta =
     summary && !summary.data_unavailable
-      ? `${fmtInt(summary.cases)} cases · ${fmtInt(summary.lines)} lines`
+      ? `${fmtInt(summary.cases)} cases · ${fmtInt(summary.lines)} lines · Reporting customers only`
       : undefined;
 
   return (
