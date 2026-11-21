@@ -88,10 +88,11 @@ function useParam(key: string) {
   const set = useCallback(
     (v: string | null) => {
       const next = new URLSearchParams(search.toString());
+      next.delete('lens');
       if (v === null) next.delete(key);
       else next.set(key, v);
       const qs = next.toString();
-      router.replace(qs ? `/stock?${qs}` : '/stock?lens=cover', { scroll: false });
+      router.replace(qs ? `/inventory?${qs}` : '/inventory', { scroll: false });
     },
     [key, router, search],
   );

@@ -13,4 +13,11 @@ describe('stockLensFromLocation', () => {
     expect(stockLensFromLocation('/forecasts', new URLSearchParams())).toBe('forecast');
     expect(stockLensFromLocation('/forecasts/workspace', new URLSearchParams())).toBe('forecast');
   });
+
+  it('owns Inventory by pathname even when a legacy lens parameter is present', () => {
+    expect(stockLensFromLocation('/inventory', new URLSearchParams())).toBe('cover');
+    expect(stockLensFromLocation('/inventory', new URLSearchParams('product=42'))).toBe('cover');
+    expect(stockLensFromLocation('/inventory', new URLSearchParams('lens=movement'))).toBe('cover');
+    expect(stockLensFromLocation('/inventory/hand-entered', new URLSearchParams())).toBe('cover');
+  });
 });

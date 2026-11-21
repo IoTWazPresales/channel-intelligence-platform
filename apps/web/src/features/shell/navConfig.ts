@@ -153,7 +153,8 @@ export const navGroups: NavGroup[] = [
     href: '/stock',
     what: 'Distributor and retailer stock, weeks of cover, sell-out velocity and execution against plan.',
     items: [
-      { label: 'Inventory', href: '/inventory', roles: ALL, what: 'Hand-entered customer stock: on-hand and on-order quantities by product and date. Retailer stock files are shown on Sell-through.' },
+      { label: 'Inventory', href: '/inventory', roles: ALL, what: 'Derived stock on hand and weeks of cover per distributor and product; breaches, excess and stock vintage. Hand-entered stock is available separately.' },
+      { label: 'Hand-entered stock', href: '/inventory/hand-entered', roles: ALL, what: 'Hand-entered customer stock: on-hand and on-order quantities by product and date. Retailer stock files are shown on Sell-through.' },
       { label: 'Movement', href: '/stock?lens=movement', roles: ALL, what: 'Weekly sell-out, shipments and stock trend by family and distributor.' },
       { label: 'Sell-through', href: '/channel-intelligence', roles: ALL, what: 'Retailer sell-through and customer inventory from retailer files.' },
       { label: 'Stores and DCs', href: '/stock/replenishment', roles: ALL, what: 'Store and distribution-centre replenishment. A steward confirms a site once. Suggestions do not create a promotion, transfer, or return.' },

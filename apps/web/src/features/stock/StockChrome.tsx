@@ -6,6 +6,7 @@ import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { LensTabs } from '@/features/workbench-ui/controls';
@@ -28,6 +29,7 @@ const LENSES: { value: StockDomainLens; label: string; href: string }[] = [
 ];
 
 export function stockLensFromLocation(pathname: string, search: URLSearchParams): StockDomainLens {
+  if (pathname === '/inventory' || pathname.startsWith('/inventory/')) return 'cover';
   if (pathname.startsWith('/channel-intelligence')) return 'sellthrough';
   if (pathname.startsWith('/stock/replenishment')) return 'replenishment';
   if (pathname.startsWith('/forecasts')) return 'forecast';
@@ -54,6 +56,7 @@ export function StockChrome({
   const search = useSearchParams();
   const router = useRouter();
   const lens = stockLensFromLocation(pathname, search);
+  const inventoryChrome = lens === 'cover' ? navPageChrome('/inventory') : null;
   const { data: coverDist } = useQuery({
     queryKey: ['channel-ops', 'cover-distribution', 'stock-chrome'],
     queryFn: ({ signal }) =>
@@ -73,13 +76,18 @@ export function StockChrome({
   return (
     <WorkbenchCanvas>
       <DomainHeader
-        crumbs={[{ label: STOCK_TITLE }]}
-        title={STOCK_TITLE}
+        crumbs={inventoryChrome?.crumbs ?? [{ label: STOCK_TITLE }]}
+        title={inventoryChrome?.title ?? STOCK_TITLE}
         description={STOCK_DESCRIPTION}
         meta={metaText}
         actions={
           actions ?? (
             <>
+              {lens === 'cover' ? (
+                <Button variant="outlined" size="small" component={NextLink} href="/inventory/hand-entered">
+                  Hand-entered stock
+                </Button>
+              ) : null}
               <Button variant="outlined" size="small" component={NextLink} href="/reports">
                 Open in Reports
               </Button>
