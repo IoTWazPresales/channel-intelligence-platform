@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ColDef, GridOptions } from 'ag-grid-community';
 import type { ComponentType, CSSProperties, ReactNode } from 'react';
@@ -12,6 +12,7 @@ import type { LineupGroup, LineupSlice } from './lineupViews';
 
 const apiPost = vi.hoisted(() => vi.fn());
 const grid = vi.hoisted(() => ({
+  rows: [] as TestRow[],
   columns: [] as ColDef<TestRow>[],
   options: {} as GridOptions<TestRow>,
 }));
@@ -48,6 +49,7 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
     columnDefs: ColDef<TestRow>[];
     gridOptions: GridOptions<TestRow>;
   }) => {
+    grid.rows = rowData;
     grid.columns = columnDefs;
     grid.options = gridOptions;
     const Detail = gridOptions.fullWidthCellRenderer as ComponentType<{ data: TestRow }>;
@@ -70,9 +72,10 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
               key={row.key}
               role="row"
               data-testid={`summary-${row.key}`}
-              onClick={() => gridOptions.onRowClicked?.({
+              onClick={(event) => gridOptions.onRowClicked?.({
                 data: row,
-              } as Parameters<NonNullable<GridOptions<TestRow>['onRowClicked']>>[0])}
+                event: event.nativeEvent,
+              } as unknown as Parameters<NonNullable<GridOptions<TestRow>['onRowClicked']>>[0])}
             >
               {columnDefs.map((column) => {
                 const renderCell = column.cellRenderer as
@@ -146,6 +149,13 @@ function renderPanel({
     </QueryClientProvider>,
   );
   return { onOpen, invalidate };
+}
+
+function reportNativeRowActivation(event: MouseEvent | KeyboardEvent) {
+  act(() => grid.options.onRowClicked?.({
+    data: grid.rows.find((row) => row.key === '3|2026-01-01'),
+    event,
+  } as unknown as Parameters<NonNullable<GridOptions<TestRow>['onRowClicked']>>[0]));
 }
 
 describe('LineupGroupsPanel', () => {
@@ -244,13 +254,78 @@ describe('LineupGroupsPanel', () => {
     expect(screen.queryByTestId('detail-line-ids')).not.toBeInTheDocument();
   });
 
+  it('activates Open and Close once when AG Grid also reports the native button click', () => {
+    const { onOpen } = renderPanel();
+    for (const expanded of [true, false]) {
+      const button = screen.getByTestId('lineup-group-open-3|2026-01-01');
+      let native: MouseEvent | undefined;
+      button.addEventListener('click', (event) => { native = event as MouseEvent; }, { once: true });
+      fireEvent.click(button);
+      expect(native?.target).toBe(button);
+      // AG Grid's native row event is delivered separately from React bubbling.
+      // Calling it explicitly prevents the mock Stack.stopPropagation from hiding the bug.
+      reportNativeRowActivation(native!);
+      expect(screen.getByTestId('lineup-group-open-3|2026-01-01'))
+        .toHaveAttribute('aria-expanded', String(expanded));
+      if (expanded) expect(screen.getByTestId('detail-line-ids')).toHaveTextContent(/^1,2$/);
+      else expect(screen.queryByTestId('detail-line-ids')).not.toBeInTheDocument();
+    }
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['button', false],
+    ['button', true],
+    ['a', true],
+    ['role-button', true],
+  ] as const)('ignores native row clicks originating from %s (nested=%s)', (kind, nested) => {
+    const { onOpen } = renderPanel();
+    const control = document.createElement(kind === 'role-button' ? 'div' : kind);
+    if (kind === 'role-button') control.setAttribute('role', 'button');
+    const target = nested ? control.appendChild(document.createElement('span')) : control;
+    const event = new MouseEvent('click', { bubbles: true });
+    target.dispatchEvent(event);
+    expect(event.target).toBe(target);
+    reportNativeRowActivation(event);
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('detail-line-ids')).not.toBeInTheDocument();
+  });
+
+  it.each(['Enter', ' '])('ignores button-origin %s row activation from the keyboard wrapper', (key) => {
+    const { onOpen } = renderPanel();
+    const control = document.createElement('button');
+    const target = control.appendChild(document.createElement('span'));
+    const event = new KeyboardEvent('keydown', { key, bubbles: true });
+    target.dispatchEvent(event);
+    reportNativeRowActivation(event);
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('detail-line-ids')).not.toBeInTheDocument();
+  });
+
+  it.each(['Enter', ' '])('preserves plain-cell %s row activation from the keyboard wrapper', (key) => {
+    const { onOpen } = renderPanel();
+    const target = document.createElement('span');
+    const event = new KeyboardEvent('keydown', { key, bubbles: true });
+    target.dispatchEvent(event);
+    reportNativeRowActivation(event);
+    expect(screen.getByTestId('detail-line-ids')).toHaveTextContent(/^1,2$/);
+    reportNativeRowActivation(event);
+    expect(screen.queryByTestId('detail-line-ids')).not.toBeInTheDocument();
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['approved', 'rejected'] as const)(
     'sends %s through the existing group endpoint and refreshes items',
     async (status) => {
       const { onOpen, invalidate } = renderPanel();
-      fireEvent.click(screen.getByTestId(
+      const button = screen.getByTestId(
         `lineup-group-${status === 'approved' ? 'approve' : 'reject'}-3|2026-01-01`,
-      ));
+      );
+      let native: MouseEvent | undefined;
+      button.addEventListener('click', (event) => { native = event as MouseEvent; }, { once: true });
+      fireEvent.click(button);
+      reportNativeRowActivation(native!);
       await waitFor(() => expect(apiPost).toHaveBeenCalledWith(
         '/api/v1/lineup/items/group-approval',
         {

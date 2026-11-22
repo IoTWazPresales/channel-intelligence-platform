@@ -208,6 +208,10 @@ export function LineupGroupsPanel({
     getRowId: (p) => p.data.key,
     suppressMovableColumns: true,
     onRowClicked: (event) => {
+      // AG Grid dispatches native row events before React's stopPropagation.
+      // Action controls own their click/keyboard activation; only a plain row toggles.
+      const target = event.event?.target;
+      if (target instanceof Element && target.closest('button, a, [role="button"]')) return;
       if (event.data && !event.data.detailRows) toggleGroup(event.data.group);
     },
     isFullWidthRow: (p) => p.rowNode.data?.detailRows != null,
