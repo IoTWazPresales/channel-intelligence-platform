@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-11-22 - **Line-up full gate interrupted by test-runner I/O:** candidate `071be7bb` lint passed; full web exited1 with289files/1798tests passed and one unhandled Vitest profile-Temp cache write UNKNOWN. Unchanged DashboardWorkspace integration file16tests was missing; no assertion failure was reported. One evidence-led full retry with isolated process-local TEMP/TMP is authorized; original logs retained. Candidate remains unpushed/undeployed; do not claim the failed run passed.
+
 - 2026-11-22 - **Line-up candidate reviewed, full gates pending:** `071be7bb` adds only native interactive-target exclusion and regression tests. Before9fail/11pass; after44focused tests and types/lint passed. Separate reviewer passed20tests and10real mouse/keyboard Open/Close gestures on isolated dev3108, then cleaned up its owned processes. Candidate not integrated/pushed/deployed. Old3107server stopped after identity check; clean verification tree now071be7bb for fullsource/prodbrowser gates. Existing API/approval/shared-grid behavior unchanged.
 
 - 2026-11-22 - **Line-up acceptance exposed native double-toggle:** after Inventory checkpoint `f1a13b3f`, live grouping/reporting/header/action geometry passed; Open did not expand. Observation-only browser/native-event/AG Grid model trace proved button activation and row activation both toggle, while direct Customer-cell activation works. Two earlier harness formatting failures are retained. Targeted two-file fix is in progress on `fix/lineup-row-activation-20261122`; no product fix is yet committed/deployed. Canonical path map published; existing writers remain unchanged.
