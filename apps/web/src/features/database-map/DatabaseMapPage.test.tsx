@@ -18,6 +18,8 @@ import {
   type TableNode,
 } from './model';
 
+const { fitView } = vi.hoisted(() => ({ fitView: vi.fn().mockResolvedValue(true) }));
+
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(),
   apiPut: vi.fn(),
@@ -31,8 +33,9 @@ vi.mock('@/features/administration/AdminChrome', () => ({
 vi.mock('@xyflow/react', async () => {
   const actual = await vi.importActual<typeof import('@xyflow/react')>('@xyflow/react');
   const React = await import('react');
-  const instance = { fitView: vi.fn().mockResolvedValue(true) };
+  const instance = { fitView };
   const updateInternals = vi.fn();
+  const NodesContext = React.createContext<TableNode[]>([]);
 
   function MockFlow({
     nodes,
@@ -107,7 +110,7 @@ vi.mock('@xyflow/react', async () => {
             {edge.source} → {edge.target}
           </div>
         ))}
-        {children}
+        <NodesContext.Provider value={nodes}>{children}</NodesContext.Provider>
       </div>
     );
   }
@@ -120,6 +123,7 @@ vi.mock('@xyflow/react', async () => {
     MiniMap: () => <div data-testid="minimap" />,
     Background: () => null,
     useUpdateNodeInternals: () => updateInternals,
+    useNodes: () => React.useContext(NodesContext),
   };
 });
 
@@ -228,6 +232,72 @@ describe('admin database map', () => {
       target: { value: '' },
     });
     expect(screen.getByTestId('node-public.island')).toBeInTheDocument();
+  });
+
+  it.each([false, true])('fits only search matches without changing saved positions (neighbour focus: %s)', async (focusNeighbours) => {
+    const savedNodes = {
+      'public.parent': { x: 90000, y: 80000, collapsed: false },
+      'public.child': { x: 11, y: 22, collapsed: true },
+      'public.island': { x: 300, y: 400, collapsed: false },
+    };
+    layout.value = { version: 1, nodes: savedNodes };
+    mount();
+    await screen.findByTestId('node-public.child');
+    fireEvent.change(screen.getByLabelText('Search tables or columns'), {
+      target: { value: 'hidden_reference' },
+    });
+    if (focusNeighbours) fireEvent.click(screen.getByLabelText('Focus on neighbours'));
+    expect(screen.getByTestId('node-public.parent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Fit matches' }));
+    expect(fitView).toHaveBeenCalledTimes(1);
+    expect(fitView).toHaveBeenLastCalledWith({
+      nodes: [{ id: 'public.child' }], padding: 0.2, maxZoom: 1, duration: 200,
+    });
+
+    fireEvent.change(screen.getByLabelText('Search tables or columns'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Fit all' }));
+    expect(fitView).toHaveBeenLastCalledWith({
+      nodes: payload.tables.map(({ id }) => ({ id })), padding: 0.2, maxZoom: 1, duration: 200,
+    });
+    for (const [id, position] of Object.entries(savedNodes)) {
+      const node = screen.getByTestId(`node-${id}`);
+      expect(node).toHaveAttribute('data-x', String(position.x));
+      expect(node).toHaveAttribute('data-y', String(position.y));
+    }
+    expect(screen.getByRole('button', { name: 'Expand columns for child' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Layout saved');
+    expect(screen.getByRole('button', { name: 'Save layout' })).toBeDisabled();
+    expect(apiPut).not.toHaveBeenCalled();
+  });
+
+  it('omits the minimap only while neighbour focus hides every node and restores it on clear', async () => {
+    mount();
+    await screen.findByTestId('node-public.child');
+    const search = screen.getByLabelText('Search tables or columns');
+    const focus = screen.getByLabelText('Focus on neighbours');
+    fireEvent.change(search, { target: { value: 'no_such_column' } });
+    expect(screen.getByText('No table or column matches.')).toBeInTheDocument();
+    expect(screen.getByTestId('minimap')).toBeInTheDocument();
+    fireEvent.click(focus);
+    expect(screen.queryByTestId('node-public.child')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('node-public.parent')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('node-public.island')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('minimap')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fit matches' })).toBeDisabled();
+    fireEvent.click(focus);
+    expect(screen.getByTestId('minimap')).toBeInTheDocument();
+    fireEvent.click(focus);
+    expect(screen.queryByTestId('minimap')).not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: '' } });
+    expect(screen.getByTestId('node-public.child')).toBeInTheDocument();
+    expect(screen.getByTestId('node-public.parent')).toBeInTheDocument();
+    expect(screen.getByTestId('node-public.island')).toBeInTheDocument();
+    expect(screen.getByTestId('minimap')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fit all' })).toBeEnabled();
+    expect(fitView).not.toHaveBeenCalled();
+    expect(apiPut).not.toHaveBeenCalled();
   });
 
   it('restores positions and expanded columns, then saves only layout data after dragging', async () => {
