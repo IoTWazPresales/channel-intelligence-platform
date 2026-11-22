@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-11-22. Inventory implementation verified with limitations; deployment prerequisite in progress.
+**Last updated:** 2026-11-22. Inventory implementation and fresh migration rehearsal verified with limitations; live release awaits an operator execution path.
 **Branch:** `feat/integrate-20261103`. Product content pin `2d374040`; confirm actual HEAD with `git rev-parse`.
 
 ## Branch and delivery
@@ -15,7 +15,7 @@
 - Local Windows, Mode B: API 8001, live web 3000, local PostgreSQL/Redis. No Docker.
 - Fresh direct read-only check on 2026-11-22 returned `cip`, `transaction_read_only=on`, revision `20261118_0063`; `public.tenant_setting` and `public.user_ui_layout` are absent. PostgreSQL 18.3 owner preflight was independently confirmed by the database agent.
 - No coordinator/child live DB mutation or primary service restart has occurred. Browser sign-in uses the existing authentication flow.
-- Recovered Nov21 backup remains preserved. Fresh Nov22 owner backup completed with exit 0: 3,353,527,730 bytes, SHA256 `c7c14cd993418f78d6acac84667101648e11db45311f3bd50a7b3b104a11f152`; `pg_restore --list` passed. Backup is under `.tmp/coordinator-20261122/migration-proof/`; full clone restore/migration proof is pending.
+- Recovered Nov21 backup remains preserved. Fresh Nov22 owner backup, TOC listing and real restore passed: 3,353,527,730 bytes, SHA256 `c7c14cd993418f78d6acac84667101648e11db45311f3bd50a7b3b104a11f152`. Backup and proof are under `.tmp/coordinator-20261122/migration-proof/`.
 - Shared `cip_test` is preserved: its earlier proof restamped Discovery revision `20261121_0065` to UI 0064 before applying 0065. That is insufficient for the intended natural 0063 -> UI0065 transition.
 
 ## What is working / evidence
@@ -29,17 +29,19 @@
 
 ## In progress / not proven
 
-- ONE task and ONE delegated agent at a time. Sole active child `/root/ui_migration_clone` is verifying the existing 0064/0065 migrations using a fresh owner backup and a newly named disposable clone; no product edits, shared-test mutations or live migrations are authorized for that agent.
-- Unique target `cip_ui_migrate_20261122_1df81d9e4dcb` was checked nonexistent before creation. Clone restore and natural UP/DOWN/UP verification are in progress; do not claim PASS or restamp to make proof pass.
+- ONE task and ONE delegated agent at a time. Database child `/root/ui_migration_clone` finished; no child remains active. Inventory is not accepted live. No shared `cip_test` mutation, live migration or primary restart was performed.
+- Fresh retained clone `cip_ui_migrate_20261122_1df81d9e4dcb` restored naturally at 0063; canonical UP0065 / DOWN0063 / UP0065 and current commands all exited 0, without stamping. Keys, types, cascading FKs, checks, index, app-role grants and zero seed rows passed. Existing counts stayed 1 tenant / 3 users / 5,623 customers / 435 ledger rows / 340 import jobs in all four snapshots.
+- All 798 existing relation owners, effective ACLs (including grantors/options) and RLS flags matched. Earlier verifier failures are retained: explicit/default ACL representation was normalized using PostgreSQL defaults and the sequence object code was corrected from uppercase S to documented lowercase s. No real privileges were altered to satisfy the comparison.
+- Coordinator independently sampled source and clone in read-only transactions: live remains 0063 with both new tables absent; clone is 0065 with both new tables empty and the representative counts above. Full proof is same-session execution verification; database-level ACL/settings and cluster-global roles/passwords are not disaster-recovery tested.
 - Owned isolated web PID 86740 serves corrected `2d374040` on 127.0.0.1:3107; confirm process identity before stopping it.
 - Last primary deploy record (Nov21 00:35) failed at Celery ping despite healthy restarts. Worker task acceptance and primary stability remain unproven.
 - Other legacy redirect handlers retain pre-existing NextURL origin behavior; follow-up origin audit is BACKLOG-266. Inventory verification does not close the whole navigation batch.
 
 ## Next
 
-1. Finish disposable clone migration proof and operator handoff. Use the canonical migration entrypoint with explicit targets and both sync URLs bound to the intended DB.
-2. Obtain an operator-supported live execution path, apply approved additive migrations after a fresh backup, then recheck actual identity/revision/tables.
-3. Run the supported deployment/readiness sequence and browser-verify Inventory on 3000. Accept each remaining lane separately.
+1. Obtain an operator-supported live execution path. Prepared handoff: `.tmp/coordinator-20261122/migration-proof/operator-handoff.txt`; explicit upgrade target `20261120_0065`, fresh-backup and identity/source-hash preconditions, rollback limits. Do not execute from this unregistered session.
+2. After operator execution, recheck live identity/revision/tables read-only.
+3. Run the supported deployment/readiness sequence and browser-verify Inventory on 3000, including worker readiness/stability. Accept each remaining lane separately.
 4. Resume the original queued lanes below, one at a time.
 
 ## Blockers requiring Warren
