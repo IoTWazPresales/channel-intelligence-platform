@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-11-22. Live migrations, Inventory, Line-up and database-map acceptance verified. Next: MapLibre screenshots for Warren.
+**Last updated:** 2026-11-22. Live migrations, Inventory, Line-up and database-map acceptance verified. Next: Warren's MapLibre visual/provider decision.
 **Branch:** `feat/integrate-20261103`. Product content pin `c685bf63`; confirm actual HEAD with `git rev-parse`.
 
 ## Branch and delivery
@@ -38,15 +38,23 @@
 - Full evidence: `.tmp/coordinator-20261122/database-map-proof/lifecycle-correction/verification-report.md`, `full-verification/verification-report.md`, `live-browser-verification.md`, `web-release.json`, `live-web-stability.json`, `browser-persistence-run-2.json`.
 - Canonical earlier stack deploy `deploy-20261122-145442.json` remains FAILED at busy-solo Celery ping; later idle ping and heartbeat were separate proof. BACKLOG-245 retains the canonical heartbeat follow-up. Other alias origins: BACKLOG-266. Earlier harness/Temp failures retained separately.
 
+## MapLibre visual previews awaiting decision
+
+- Actual live tenant settings are empty; prototype defaults off. Real store payload:310records/four customers,192proposed coordinate points, zero confirmed pins. These are proposals, not verified store positions.
+- Country preview `maplibre-proof/preview-2/01-country-preview.png`; city `preview-4/02-city-preview.png`; mall/street `preview-4/03-mall-area-proposed-preview.png`, all under `.tmp/coordinator-20261122/`. Root and separate agent inspected pixels. Fourways Mall label/buildings and city roads render; selected MakroA02 proposed point is near a road intersection, with store accuracy unverified.
+- Browser-only GET-settings override used verified OpenFreeMap TileJSON/glyph endpoints and real app store data. Provider responses200; no authenticated browser/page/blocked-write errors. Real settings refetched200/empty after removing override, prototype restored off and contexts closed. No production settings, coordinates, source or default-map change.
+- Two approval questions presented: visual direction and OpenFreeMap provider. Neither preselected option nor elapsed time is approval. Normal production provider setup/map replacement remains pending. Detail `.tmp/coordinator-20261122/maplibre-proof/preview-report.md`; initial unconfigured state and failed harness/provider probes retained separately.
+- Existing Clearwater Mall -> rural Clearwater proposal counterexample deferred explicitly to BACKLOG-267 before bulk pin confirmation. No resolver/data change was made for screenshot work.
+
 ## Next
 
-1. Capture MapLibre country/city/mall screenshots for Warren's approval before switching maps. ONE task/ONE delegated agent at a time.
+1. Await Warren's two MapLibre decisions, then continue accepted setup/replacement work. Screenshots are ready; all store coordinates remain unconfirmed. ONE task/ONE delegated agent at a time.
 2. Resume Discovery, Dashboard and AI-import in dependency order, one at a time. Requested library review follows original live lanes.
 3. Next deploy-script reliability review: existing identity-bound heartbeat for busy solo (BACKLOG-245), rather than a relaxed ping timeout.
 
 ## Blockers requiring Warren
 
-- MapLibre screenshot approval and any main promotion are separate explicit decisions.
+- MapLibre visual/provider decisions are pending; any main promotion remains a separate explicit decision.
 - Codex session had no EIF runtime-session record on Nov22. Future protected DB mutations need installed operator route; never fabricate state/self-grant/use missing hooks as permission. Completed0064/65 prerequisite is fulfilled; no repeat approval needed.
 - Required `engineering-rules.mdc` missing; no contents assumed, installed controls untouched.
 

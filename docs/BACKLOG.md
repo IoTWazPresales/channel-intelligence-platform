@@ -4107,3 +4107,16 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 | **Regression traps** | Next normalizes loopback hosts and can use the listener authority internally. Ignore query-supplied destinations and forwarded-host values. Keep authentication storage scoped to its real origin. No timeout/retry or token-sharing workaround. |
 | **Behavior to retain** | Inventory's corrected redirects; current canonical destinations and filter semantics; Movement and Execution navigation. No DB writer or schema change. |
 | **TRIGGER** | Next navigation review, before marking the complete Lane A1 navigation batch accepted live. |
+
+
+## BACKLOG-267 ? Review ambiguous store-location proposals before confirmation
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open ? 2026-11-22, observed during browser-only MapLibre visual previews. |
+| **Effort** | Estimate after the canonical resolver audit. |
+| **Evidence** | Real GET `/api/v1/store-dc/map`: Makro customer15/siteA01 has place name `Walmart Clearwater Mall`, but its proposal is `Clearwater`, confidence0.7/reason`match`, at-28.65,23.98333. The rendered basemap shows a rural area around Schmidtsdrif. It is unconfirmed. Evidence `.tmp/coordinator-20261122/maplibre-proof/preview-2/results.json` and the retained rural-detail PNG. No location was saved or corrected. |
+| **What the work is** | Trace the existing map proposal reader/resolver and canonical confirmation writers before changing rules. Determine whether this is wrong place identity, ambiguity or an insufficiently explained area fallback. Verify mall/city/suburb grain and candidate context; preserve uncertain evidence for steward review. Add a meaningful regression for this counterexample if a rule defect is established. Root cause is not yet proven. |
+| **Behavior / constraints** | Keep the existing proposed/confirmed distinction and explicit steward confirmation. Do not automatically rewrite live coordinates, infer a mall building from a name, weaken validation, or add a second location writer. Current dataset has zero confirmed coordinate pins; the192 proposed points are not verified store positions. |
+| **Out of scope** | Map visual direction/provider selection and automatic confirmation of other proposals. |
+| **TRIGGER** | Before bulk-confirming store-location proposals, or when store-location accuracy work is authorized. |
