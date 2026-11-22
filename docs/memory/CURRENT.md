@@ -1,12 +1,12 @@
 # CURRENT state
 
-**Last updated:** 2026-11-22. Live migrations, Inventory and Line-up navigation/interaction verified. Next: database-map acceptance, then MapLibre screenshots for Warren.
-**Branch:** `feat/integrate-20261103`. Product content pin `7f2785d4`; confirm actual HEAD with `git rev-parse`.
+**Last updated:** 2026-11-22. Live migrations, Inventory, Line-up and database-map acceptance verified. Next: MapLibre screenshots for Warren.
+**Branch:** `feat/integrate-20261103`. Product content pin `c685bf63`; confirm actual HEAD with `git rev-parse`.
 
 ## Branch and delivery
 
-- Inventory `055bc770`/origin correction `f8bb446f` integrated at `2d374040`. Line-up correction `071be7bb` integrated at `7f2785d4`. Integration and feature branches pushed. No main merge/push.
-- Live web: `7f2785d4`, BUILD_ID `LDwtnkNCD92sXjO_YUHSi`. API/worker retain earlier `b3b54f5e` deployment; their source did not change for this fix.
+- Inventory `055bc770`/origin correction `f8bb446f` integrated at `2d374040`. Line-up correction `071be7bb` integrated at `7f2785d4`. Database-map corrections `23f47395`/`567f8bfa` integrated at `c685bf63`. Integration and feature branches pushed. No main merge/push.
+- Live web: `c685bf63`, BUILD_ID `CbNqqIUC9jWVb7H6po90e`. API/worker retain earlier `b3b54f5e` deployment; their source did not change for this fix.
 - Source/applied Alembic: `20261120_0065`. Existing untracked `.agents/`, `.eif/upgrade-history/`, `.eif/upgrade-work/`, `apps/api/.env.bak-20261117` preserved and unstaged.
 
 ## Database and environment
@@ -26,30 +26,26 @@
 - Candidate production3107 and live3000 each passed five acceptance records plus ten real mouse/button-Enter/button-Space/plain-cell-keyboard Open/Close checks, no page errors/business-write attempts. Approval/edit/import writes deliberately untested; current plan dataset lacks non-reporting plan rows for a visual negative fixture.
 - Web-only release used existing pnpm build/supervisor component restart. Web launches4->5; other launches unchanged. Two samples60.297s apart: web200/API readiness200, all six components healthy/counts unchanged. Proof `.tmp/coordinator-20261122/lineup-proof/live-verification.json`.
 
-## In progress / not proven
+## Database-map acceptance / limits
 
-- ONE task/ONE delegated agent at a time. Warren explicitly answered "Continue the targeted correction" after the two-attempt stop. Current task: database-map view fixes/acceptance. Candidate `567f8bfa` on `fix/db-map-fit-empty-20261122`, NOT integrated/pushed/deployed. Old lane-E branch preserved.
-- Database-map live read-only proof matched142tables/285FKlinks; auth/search/neighbours/relationship selection worked. Focused fit shrank cards to30px (zoom0.08888); zero-match focus produced minimap NaN SVG, clear recovered. Candidate fits actual matches and mounts minimap only with visible nodes. Backend/schema/global positions/Save unchanged. Before2fail/9pass, after11passed, lint/types0; frozen install restored25locked packages, no manifest/lock edit. Separate reviewer11tests/lint/diff0, no source blocker.
-- Reviewer custom3108 dev command (temporary tsconfig/dist + hidden server) was rejected BEFOREexecution by automatic approval review: generic CreateProcess "blocked by policy", no detailed reason/EIF code. No config/server created, no retry/alternate launcher by reviewer. Candidate real-browser proof remains pending. Exact command/error is retained in `.tmp/coordinator-20261122/database-map-proof/independent-review/` and session messages; do not assume all launch methods are authorized or infer a reason.
-- Full23f47395 source gates PASSED: lint0errors/48warnings, nonincremental types0, production build0/84pages, unfiltered web290files/1817tests exit0 with verified task-local TEMP/TMP. Verification tree clean. Logs `.tmp/coordinator-20261122/database-map-proof/full-verification/`.
-- Candidate production-browser gate FAILED twice: focused fit nowzoom1/card340px; settled empty view has no minimap/invalid SVG; catalog/FK selection work. Clearing the empty focused search still emits transient minimap NaN path/viewBox errors before recovery. Both actual runs exit1, zero page exceptions/business writes. `.tmp/coordinator-20261122/database-map-proof/candidate-browser-report.md`. Prop/internal-store timing is an inference, not yet proven.
-- **Rendering correction resumed with Warren's explicit instruction:** installed ReactFlow12.8.5 copies controlled nodes in a passive effect; minimap bounds use the internal lookup. New private wrapper uses public useNodes to gate from that same store. Real provider/store/minimap regression caught eight NaN attributes before; after12focused tests passed. Separate reviewer reproduced12pass/no blocker; changed-file lint/nonincremental types0. Full clean567 source gates in progress; browser gate pending. First implementation agent hit its usage limit before edits; coordinator implemented, separate reviewer checked.
-- Clone API persistence/isolation proof PASSED actualexit0 after reviewed read-only preflight. Real production app/normal cip role/session authentication, in-process ASGI with no lifespan/listener/pollers/overrides: committed write/readback/new sessions, user+tenant isolation, owner-body422, forged headers ignored, one-row UPSERT. Exact fixture counts/full-row digests restored; source preferences read-only/unchanged. `.tmp/coordinator-20261122/database-map-proof/private-layout-api-run-1.json`. This is API proof ONLY; browser drag/Save/reload/account-switch UI remains UNVERIFIED. Shared cip_test untouched.
-- Root stopped23f candidate3107 PID110180 after PID/creation/command/listener checks before switching the clean verifier to567. No candidate server currently claimed. Standard foreground production entrypoint was previously allowed; rejected custom launcher remains unused. No policy/hook changes.
-- Browser layout-persistence proof prepared using the same retained clone/identity/fixture-cleanup helper. Read-only preflight0/source preferences unchanged; no browser fixture writes yet. Production UI core APIs will use real app ASGI IPC, with unrelated shell readers explicitly stubbed; no API listener/lifespan/overrides. Independent artifact review and actual browser execution pending. This does not yet prove browser Save.
-- Canonical stack deploy `deploy-20261122-145442.json` remains FAILED at busy-solo Celery ping: successful~21.5s listing chunks occupied10s ping window, then88-listing completion. Exact idle ping later exit0 and heartbeat matched PID. Supplemental checks are separate; do not rewrite original run OK. Follow-up: BACKLOG-245.
-- Other legacy origins: BACKLOG-266. Earlier failed harness/verifier evidence (locale, padded headers, nested empty stability array, Temp I/O) retained, never relabeled PASS.
+- **Verified live:** canonical public catalog142tables/285FKlinks; normal sign-in/admin access, matching-card fit340px/zoom1, focused empty/clear restoration, three repeated empty/focus-toggle/restore cycles with all142positions preserved, exact FK mouse selection. Separate verifier independently executed all seven live checks on3000/c685, actualexit0; zero authenticated console/page errors/blocked writes. Four intentional pre-login401 errors retained. No live Save/drag/reset performed.
+- Root cause confirmed in installed ReactFlow12.8.5: controlled props reach the store in a passive effect; minimap bounds filter hidden internal nodes. Private wrapper now gates from that same store through public useNodes. No graph remount, layout algorithm, backend/schema or writer change. Real-renderer regression caught eight invalid SVG attributes before; after12focused tests pass. Separate review independently12pass/no blocker.
+- Clean567 source gates all0: lint0errors/48baseline warnings, nonincremental types0, build84pages, unfiltered291files/1818tests (623.31s), no retry/filter/config/suppression change. Private process TEMP/TMP write/read probe0. Source tree clean; integration product tree compared identical before release.
+- **Browser persistence verified on retained clone with limitations:** actual production UI drag/expand/Save/reload, second-user separate Save, cross-tenant empty preference, return-to-first-user restoration; five records/all17core responses200/no browser errors. Actual normal cip-role app/auth/storage via ASGI IPC; four unrelated shell readers stubbed, fixture bearer tokens injected into ephemeral storage. Does not test Save through the Next HTTP proxy, password-login/logout or retained-client account switching; normal live sign-in/catalog/rendering are separately proved.
+- Both committed clone layouts matched browser values before cleanup. Exact tenant1/app_user3/auth_session135/layout0 counts/full-row digests restored, source preferences READ ONLY/unchanged. Separate verifier independently re-executed read-only preflight and compared exact digests. Earlier real API owner/upsert/forged-header/body-field proof also passed. Shared cip_test untouched.
+- Web-only canonical build/component restart0: web launches5->6, others unchanged. Two native read-only samples82.349s apart: web/API200, all six component states healthy, counts/build unchanged. Candidate3107PID38448 stopped after exact ownership checks; no candidate listener retained. Primary API/worker unchanged.
+- Failures remain retained: original23f browser failed twice (Warren explicitly authorized correction), clone-browser run1 failed on invalid expanded-card width assertion (reviewed harness-only correction, run2passed), first stability collector called an unexported helper before any health query (fresh native collector passed). No failed artifact relabeled PASS. Rejected custom3108 launcher was never used; standard foreground production entrypoint was allowed. No policy/hook changes.
+- Full evidence: `.tmp/coordinator-20261122/database-map-proof/lifecycle-correction/verification-report.md`, `full-verification/verification-report.md`, `live-browser-verification.md`, `web-release.json`, `live-web-stability.json`, `browser-persistence-run-2.json`.
+- Canonical earlier stack deploy `deploy-20261122-145442.json` remains FAILED at busy-solo Celery ping; later idle ping and heartbeat were separate proof. BACKLOG-245 retains the canonical heartbeat follow-up. Other alias origins: BACKLOG-266. Earlier harness/Temp failures retained separately.
 
 ## Next
 
-1. Finish567 clean source gates, production browser lifecycle checks and clone browser Save/reload/isolation proof, then integrate/release only if accepted. Preserve original23f failures. API persistence is verified; browser Save is not yet.
-2. Capture MapLibre country/city/mall screenshots for Warren's approval before switching maps.
-3. Resume Discovery, Dashboard and AI-import in dependency order, one at a time. Requested library review follows original live lanes.
-4. Next deploy-script reliability review: existing identity-bound heartbeat for busy solo (BACKLOG-245), rather than a relaxed ping timeout.
+1. Capture MapLibre country/city/mall screenshots for Warren's approval before switching maps. ONE task/ONE delegated agent at a time.
+2. Resume Discovery, Dashboard and AI-import in dependency order, one at a time. Requested library review follows original live lanes.
+3. Next deploy-script reliability review: existing identity-bound heartbeat for busy solo (BACKLOG-245), rather than a relaxed ping timeout.
 
 ## Blockers requiring Warren
 
-- Prior two-attempt stop was lifted by Warren's explicit "Continue the targeted correction" response. Any new repeated failure still follows AGENTS.md; no failure record is relabeled PASS.
 - MapLibre screenshot approval and any main promotion are separate explicit decisions.
 - Codex session had no EIF runtime-session record on Nov22. Future protected DB mutations need installed operator route; never fabricate state/self-grant/use missing hooks as permission. Completed0064/65 prerequisite is fulfilled; no repeat approval needed.
 - Required `engineering-rules.mdc` missing; no contents assumed, installed controls untouched.
