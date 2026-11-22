@@ -39,7 +39,7 @@
 
 ## Next
 
-1. Obtain an operator-supported live execution path. Prepared handoff: `.tmp/coordinator-20261122/migration-proof/operator-handoff.txt`; explicit upgrade target `20261120_0065`, fresh-backup and identity/source-hash preconditions, rollback limits. Do not execute from this unregistered session.
+1. Warren explicitly authorized this coordinator to execute and continue on Nov22. The remaining prerequisite is technical: obtain an EIF-registered execution session with an operator-issued grant. Prepared handoff: `.tmp/coordinator-20261122/migration-proof/operator-handoff.txt`; explicit upgrade target `20261120_0065`, fresh-backup and identity/source-hash preconditions, rollback limits. Do not execute from this unregistered session.
 2. After operator execution, recheck live identity/revision/tables read-only.
 3. Run the supported deployment/readiness sequence and browser-verify Inventory on 3000, including worker readiness/stability. Accept each remaining lane separately.
 4. Resume the original queued lanes below, one at a time.
@@ -47,7 +47,7 @@
 ## Blockers requiring Warren
 
 - Current Codex session has no EIF runtime-session record (rechecked Nov22). `C:/AI/eif-lean/tools/session_grant.py` rejects absent state: a session must have made a real hook call. Protected live execution requires an operator-supported route; never fabricate state, self-grant, or use missing hooks as permission.
-- Operator execution-path question remains pending (operator terminal or an existing guarded/granted session). Elapsed time is not an answer.
+- Migration scope is approved by Warren's Nov22 "you do it please and continue". Reinspection confirms the installed guard requires a session-specific grant for protected `cip` writes and the grant tool rejects absent state. No live command was attempted; this is a measured missing prerequisite, not an observed tool denial. Resume through a real guarded session; do not ask for the same migration approval again.
 - MapLibre prototype country/city/mall screenshots need Warren's approval before switching maps. Main promotion remains a separate explicit instruction.
 
 ## Original queue / continuity
