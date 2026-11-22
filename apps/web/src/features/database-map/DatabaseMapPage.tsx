@@ -264,7 +264,7 @@ function DatabaseDiagram({
         <Button
           disabled={!flow || (query !== '' && matches.size === 0)}
           onClick={() => {
-            const ids = query === '' ? nodes.map((node) => node.id) : [...(focusNeighbours ? neighbours : matches)];
+            const ids = query === '' ? nodes.map((node) => node.id) : [...matches];
             void flow?.fitView({ nodes: ids.map((id) => ({ id })), padding: 0.2, maxZoom: 1, duration: 200 });
           }}
         >
@@ -339,14 +339,16 @@ function DatabaseDiagram({
           colorMode={theme.palette.mode}
         >
           <Background color={theme.palette.divider} />
-          <MiniMap
-            pannable
-            zoomable
-            bgColor={theme.palette.background.paper}
-            maskColor={alpha(theme.palette.background.default, 0.75)}
-            nodeColor={theme.palette.primary.light}
-            nodeStrokeColor={theme.palette.divider}
-          />
+          {displayNodes.some((node) => !node.hidden) && (
+            <MiniMap
+              pannable
+              zoomable
+              bgColor={theme.palette.background.paper}
+              maskColor={alpha(theme.palette.background.default, 0.75)}
+              nodeColor={theme.palette.primary.light}
+              nodeStrokeColor={theme.palette.divider}
+            />
+          )}
           <Controls showInteractive={false} />
         </ReactFlow>
       </Box>
