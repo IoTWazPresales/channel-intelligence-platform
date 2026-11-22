@@ -39,7 +39,7 @@
 
 ## Next
 
-1. Warren explicitly authorized this coordinator to execute and continue on Nov22. The remaining prerequisite is technical: obtain an EIF-registered execution session with an operator-issued grant. Prepared handoff: `.tmp/coordinator-20261122/migration-proof/operator-handoff.txt`; explicit upgrade target `20261120_0065`, fresh-backup and identity/source-hash preconditions, rollback limits. Do not execute from this unregistered session.
+1. Warren explicitly authorized execution on Nov22 and has no Cursor usage. Direct human PowerShell is the available operator route. Prepared wrapper `.tmp/coordinator-20261122/run-approved-ui-migration.py` defaults to read-only checks; only Warren's separate terminal may use `--execute-by-operator`. It calls the existing backup/Alembic entrypoints, takes a fresh backup, validates identity/source/revision and applies explicit `20261120_0065`. Do not execute that mode from this unregistered agent session. Detailed handoff remains `.tmp/coordinator-20261122/migration-proof/operator-handoff.txt`.
 2. After operator execution, recheck live identity/revision/tables read-only.
 3. Run the supported deployment/readiness sequence and browser-verify Inventory on 3000, including worker readiness/stability. Accept each remaining lane separately.
 4. Resume the original queued lanes below, one at a time.
@@ -47,7 +47,7 @@
 ## Blockers requiring Warren
 
 - Current Codex session has no EIF runtime-session record (rechecked Nov22). `C:/AI/eif-lean/tools/session_grant.py` rejects absent state: a session must have made a real hook call. Protected live execution requires an operator-supported route; never fabricate state, self-grant, or use missing hooks as permission.
-- Migration scope is approved by Warren's Nov22 "you do it please and continue". Reinspection confirms the installed guard requires a session-specific grant for protected `cip` writes and the grant tool rejects absent state. No live command was attempted; this is a measured missing prerequisite, not an observed tool denial. Resume through a real guarded session; do not ask for the same migration approval again.
+- Migration scope is approved by Warren's Nov22 "you do it please and continue". This agent cannot perform protected writes without a registered/granted session. Warren can instead execute the prepared wrapper directly in his operator terminal, without Cursor/Claude usage. Final read-only preflight passed at 0063; no live migration/restart or actual guard denial occurred. After his run, independently read the saved result and actual live state before deployment. Do not ask for migration approval again.
 - MapLibre prototype country/city/mall screenshots need Warren's approval before switching maps. Main promotion remains a separate explicit instruction.
 
 ## Original queue / continuity
