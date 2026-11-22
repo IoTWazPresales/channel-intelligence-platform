@@ -33,6 +33,8 @@
 ## In progress / not proven
 
 - ONE task and ONE delegated agent at a time. Database and worker-diagnosis children finished. Shared `cip_test` remains untouched by this continuation. Inventory navigation is verified live; the entire navigation/importer backlog is not closed.
+- **Current task: Line-up Open/Close bug, not accepted live.** Browser verified 177 reporting items, six customer-period groups, reporting header29cases/1460lines, eight aligned columns and18visible actions. Inline Open failed. Focused observation-only diagnosis proved both the button and native AG Grid row-click handlers toggle: Open ends closed, plain Customer-cell click opens; Close button ends open. Same DOM remained mounted, no page errors/business writes. Evidence `.tmp/coordinator-20261122/lineup-proof/interaction-diagnosis/`.
+- Sole child `/root/lineup_live_verification` is implementing only `LineupGroupsPanel.tsx` and its test on new branch `fix/lineup-row-activation-20261122`, existing `.worktrees/lane-b-20261120`, from `f1a13b3f`. Canonical direction published: ignore button/link-origin native row events, following existing import-steward pattern. Approval/item/apply APIs and shared grid stay untouched. No commit/push/restart authorized to builder; independent review and source/browser gates precede release.
 - Fresh retained clone `cip_ui_migrate_20261122_1df81d9e4dcb` restored naturally at 0063; canonical UP0065 / DOWN0063 / UP0065 and current commands all exited 0, without stamping. Keys, types, cascading FKs, checks, index, app-role grants and zero seed rows passed. Existing counts stayed 1 tenant / 3 users / 5,623 customers / 435 ledger rows / 340 import jobs in all four snapshots.
 - All 798 existing relation owners, effective ACLs (including grantors/options) and RLS flags matched. Earlier verifier failures are retained: explicit/default ACL representation was normalized using PostgreSQL defaults and the sequence object code was corrected from uppercase S to documented lowercase s. No real privileges were altered to satisfy the comparison.
 - Before Warren's live upgrade, coordinator independently sampled source0063/clone0065 read-only. Retained clone/rehearsal limitations: same-session full cycle execution verification; database-level ACL/settings and cluster-global roles/passwords are not disaster-recovery tested.
@@ -43,7 +45,7 @@
 
 ## Next
 
-1. Accept the next integrated lane separately: Line-up row/header/reporting behavior on the live application.
+1. Finish the isolated Line-up event fix, independently review it, run required source gates and browser verification, then deploy and prove its Open/Close behavior live. Keep earlier failed harness/product evidence.
 2. Verify database-map lane separately; capture MapLibre country/city/mall screenshots for Warren's approval before switching maps.
 3. Resume original Discovery, Dashboard and AI-import lanes in dependency order, one at a time.
 4. Future deploy-script reliability review: align busy-solo liveness with the existing worker heartbeat, per BACKLOG-245; do not simply relax the ping timeout.
