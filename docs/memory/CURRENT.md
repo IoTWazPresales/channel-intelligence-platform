@@ -28,14 +28,16 @@
 
 ## In progress / not proven
 
-- ONE task/ONE delegated agent at a time. Line-up release finished; no child currently active. Database map/MapLibre are deployed but await separate acceptance. These checks do not close broader importer/planner/navigation backlogs.
+- ONE task/ONE delegated agent at a time. Line-up release finished. Current task: database-map acceptance/view fixes; sole child `/root/database_map_verification` is implementing two frontend files in `.worktrees/lane-e-20261120`, new branch `fix/db-map-fit-empty-20261122` from ca52cb47. Old lane-E branch preserved; no commit/push/restart by builder.
+- Database-map read-only live proof matched142tables/285FKlinks; auth/search/neighbours/relationship selection worked. Focused Fit matches instead fit distant neighbours at zoom0.08888 (~30px cards); zero-match focused view produced minimap NaN SVG attributes, clearing recovered. Measured stage/geometry in `.tmp/coordinator-20261122/database-map-proof/`. Published canonical direction: fit actual matches; render minimap only with visible nodes. Backend/schema/saved-layout positions/writer unchanged. Tests failed-before2/pass9, after11passed; lint0, type gate finishing after frozen restoration of25locked packages, no manifest/lock edit.
+- Private-layout Save/reload/user isolation remain UNVERIFIED. Plan a separate proof on retained unique disposable clone only; source cip and shared cip_test writes remain out of scope. MapLibre still awaits separate acceptance/approval.
 - Isolated production3107 PID60852 serves071be7bb, BUILD_ID `--f3Ruf-FDzLCxPvnv8gE`. Verify current PID/command/port before cleanup. Old3107 PID86740/review3108 processes were identity-checked/stopped.
 - Canonical stack deploy `deploy-20261122-145442.json` remains FAILED at busy-solo Celery ping: successful~21.5s listing chunks occupied10s ping window, then88-listing completion. Exact idle ping later exit0 and heartbeat matched PID. Supplemental checks are separate; do not rewrite original run OK. Follow-up: BACKLOG-245.
 - Other legacy origins: BACKLOG-266. Earlier failed harness/verifier evidence (locale, padded headers, nested empty stability array, Temp I/O) retained, never relabeled PASS.
 
 ## Next
 
-1. Verify deployed database map read-only; do not claim private-layout persistence without testing it.
+1. Finish/review database-map view fixes and source/browser gates; prove private-layout Save/reload/isolation on the disposable clone before claiming that capability.
 2. Capture MapLibre country/city/mall screenshots for Warren's approval before switching maps.
 3. Resume Discovery, Dashboard and AI-import in dependency order, one at a time. Requested library review follows original live lanes.
 4. Next deploy-script reliability review: existing identity-bound heartbeat for busy solo (BACKLOG-245), rather than a relaxed ping timeout.
