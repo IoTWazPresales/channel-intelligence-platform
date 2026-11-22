@@ -24,6 +24,7 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  useNodes,
   useNodesState,
   useUpdateNodeInternals,
   type NodeProps,
@@ -142,6 +143,24 @@ const DatabaseTableNode = memo(function DatabaseTableNode({
 });
 
 const nodeTypes = { table: DatabaseTableNode };
+
+function DatabaseMiniMap() {
+  const theme = useTheme();
+  const nodes = useNodes<TableNode>();
+  // Controlled node props reach ReactFlow's store in an effect. Use that same
+  // store as MiniMap so it never renders bounds for an all-hidden node lookup.
+  if (!nodes.some((node) => !node.hidden)) return null;
+  return (
+    <MiniMap
+      pannable
+      zoomable
+      bgColor={theme.palette.background.paper}
+      maskColor={alpha(theme.palette.background.default, 0.75)}
+      nodeColor={theme.palette.primary.light}
+      nodeStrokeColor={theme.palette.divider}
+    />
+  );
+}
 
 function DatabaseDiagram({
   payload,
@@ -339,16 +358,7 @@ function DatabaseDiagram({
           colorMode={theme.palette.mode}
         >
           <Background color={theme.palette.divider} />
-          {displayNodes.some((node) => !node.hidden) && (
-            <MiniMap
-              pannable
-              zoomable
-              bgColor={theme.palette.background.paper}
-              maskColor={alpha(theme.palette.background.default, 0.75)}
-              nodeColor={theme.palette.primary.light}
-              nodeStrokeColor={theme.palette.divider}
-            />
-          )}
+          <DatabaseMiniMap />
           <Controls showInteractive={false} />
         </ReactFlow>
       </Box>

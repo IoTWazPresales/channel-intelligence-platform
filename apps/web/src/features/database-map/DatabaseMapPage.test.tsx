@@ -35,6 +35,7 @@ vi.mock('@xyflow/react', async () => {
   const React = await import('react');
   const instance = { fitView };
   const updateInternals = vi.fn();
+  const NodesContext = React.createContext<TableNode[]>([]);
 
   function MockFlow({
     nodes,
@@ -109,7 +110,7 @@ vi.mock('@xyflow/react', async () => {
             {edge.source} → {edge.target}
           </div>
         ))}
-        {children}
+        <NodesContext.Provider value={nodes}>{children}</NodesContext.Provider>
       </div>
     );
   }
@@ -122,6 +123,7 @@ vi.mock('@xyflow/react', async () => {
     MiniMap: () => <div data-testid="minimap" />,
     Background: () => null,
     useUpdateNodeInternals: () => updateInternals,
+    useNodes: () => React.useContext(NodesContext),
   };
 });
 
