@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Button, FormControlLabel, Switch, TextField, Typography } from '@mui/material';
+import { Box, Button, TextField, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useRef, useState } from 'react';
@@ -17,6 +17,7 @@ import { MapMarker } from '@/features/maps/MapMarker';
 import { MapViewControls } from '@/features/maps/MapViewControls';
 import { lonSpanOf, panLimits } from '@/features/maps/mapView';
 import { useMapView } from '@/features/maps/useMapView';
+import { useMapSettings } from '@/features/settings/useMapSettings';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
@@ -35,7 +36,6 @@ import {
   unprojectStore,
 } from './storeMapLayout';
 import type { PinConfirmItem, StoreMapPayload, StoreMapStore } from './types';
-import { useMapPrototype } from './useMapPrototype';
 
 const StoreMapPrototype = lazy(() => import('./StoreMapPrototype').then((module) => ({
   default: module.StoreMapPrototype,
@@ -80,7 +80,8 @@ export function StoreMap() {
   const tokens = tokensFor(theme.palette.mode);
   const queryClient = useQueryClient();
   const proposalConfirm = useProposalConfirm();
-  const [prototype, setPrototype] = useMapPrototype();
+  const mapSettings = useMapSettings();
+  const useLibre = !mapSettings.pending && !!mapSettings.settings.tilejsonUrl;
   const [customerId, setCustomerId] = useState<number | 'all'>('all');
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [hoverClusterId, setHoverClusterId] = useState<string | null>(null);
@@ -133,7 +134,7 @@ export function StoreMap() {
   );
   // Manual drops exist only in local state and only participate in the prototype canvas.
   const suggestionKeys = new Set(suggestions.map(storeKey));
-  const drafted = prototype ? visible.filter((store) =>
+  const drafted = useLibre ? visible.filter((store) =>
     !store.pinned && !rejected.has(storeKey(store))
     && !suggestionKeys.has(storeKey(store)) && !!overrides[storeKey(store)]
   ) : [];
@@ -336,18 +337,6 @@ export function StoreMap() {
     <Box data-testid="store-map" sx={{ mt: 1.5 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Stores</Typography>
-        <FormControlLabel
-          label="New map (prototype)"
-          sx={{ mr: 0 }}
-          control={
-            <Switch
-              size="small"
-              checked={prototype}
-              disabled={saving || proposalConfirm.saving}
-              onChange={(_event, checked) => setPrototype(checked)}
-            />
-          }
-        />
       </Box>
       {mapQuery.isLoading ? (
         <Typography variant="body2" sx={{ color: tokens.text.secondary }} data-testid="store-map-loading">
@@ -372,8 +361,8 @@ export function StoreMap() {
           >{customer.name}</Button>
         ))}
       </Box>
-      {prototype ? (
-        <Suspense fallback={<Typography variant="body2">Loading map prototype…</Typography>}>
+      {useLibre ? (
+        <Suspense fallback={<Typography variant="body2">Loading map…</Typography>}>
           <StoreMapPrototype
             key={String(customerId)}
             stores={visible}

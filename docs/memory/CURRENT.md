@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-11-23 — BACKLOG-268 store-map revisions implemented. Last prior live acceptance: 22 November (`c685bf63`).
+**Last updated:** 2026-11-23 — store map uses this tenant's OpenFreeMap setting; denser shared land dots. Last prior live acceptance: 22 November (`c685bf63`).
 **Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
 **Next agent:** Discovery V2 is next unless Warren reprioritizes. Read [durable handoff](../handoffs/2026-11-23/README.md), [map revision brief](../handoffs/2026-11-23/MAP_FEEDBACK.md), and [Targets status](../handoffs/2026-11-23/TARGETS_STATUS.md).
 
@@ -21,12 +21,11 @@
 - Web-only release0; launches5->6, others unchanged; two web/API200/healthy-state/count/build samples82.349s apart. Candidate3107 stopped after ownership checks; stale PIDs in evidence are historical. Original failures retained, never relabeled PASS. Portable summaries in handoff/evidence; raw local proof under`.tmp/coordinator-20261121/` and`.tmp/coordinator-20261122/`.
 - Earlier canonical stack deploy`deploy-20261122-145442.json` remains FAILED at busy-solo Celery ping. Later idle ping/heartbeat and stability are separate evidence. BACKLOG-245 retains the heartbeat-based deploy gate follow-up; read DEV_TOPOLOGY before worker changes.
 
-## Store map (BACKLOG-268) — implemented 2026-11-23, provider still unanswered
+## Store map (BACKLOG-268) — OpenFreeMap chosen 2026-11-23
 
-- Default SVG store map and the default-off MapLibre prototype now share the Shipments filled point/halo marker language (`MapMarker`; proposed pins use a dashed outer ring, not hollow-only rings), `MapPanel` theme in light and dark, and the shipping map box ratio. Pins, proposed pins, details and confirm/skip/bulk controls sit in the right-hand panel with internal scrolling. Existing confirm writers were reused; nothing was auto-confirmed.
-- MapLibre attribution is the compact collapsible (i) control, with required OSM/provider credit retained. Tile provider is still unanswered and was not configured or enabled. Prototype remains off by default (`cip.storeMap.prototype.v1`).
-- Revision-reference images remain in `docs/handoffs/2026-11-23/assets/`. Last known live payload: 310 stores / four customers / 192 proposed points / zero confirmed. Fourways A02 and Clearwater A01 stay unverified; BACKLOG-267 before any confirmation.
-- Warren has not yet accepted the revised look on the live screen.
+- Sell-through shows the MapLibre store map when this tenant has a TileJSON URL in tenant settings. No provider URL is hardcoded in code or migrations; Warren chose OpenFreeMap and it is stored as this tenant's setting via the existing settings API. The SVG dotted basemap remains the fallback and is still used by On the water. Attribution stays the compact OSM/provider (i) control.
+- Shared land dots were regenerated denser (0.7 deg / ~4.4 viewBox units, stroke 1.8) and the MapLibre `dotted-land` pattern was tightened to a 4px tile so the two maps stay visually matched at world scale.
+- Pins, proposed pins, details and confirm/skip controls remain in the right-hand panel. No store locations were confirmed. BACKLOG-267 still applies. Fourways A02 and Clearwater A01 stay unverified.
 
 ## Targets / Dashboard V2 ? not done
 
@@ -36,13 +35,13 @@
 
 ## Next ? one task / one delegated agent at a time
 
-1. BACKLOG-268 implemented; Warren reviews the live default store map. Do not enable a tile provider or confirm store locations (BACKLOG-267).
+1. Warren reviews the live Sell-through MapLibre store map (OpenFreeMap, this tenant only). Do not confirm store locations (BACKLOG-267).
 2. Discovery V2 is next unless reprioritized: committed S1/S2/S3c/S5 not integrated; S3a dirty foundations/incomplete lint; S4 dirty/failed saved checks; S3b Crawlee+Playwright finder pending. Keep live Preview-only and exact GTIN/model evidence. No automatic schedule activation.
 3. Dashboard/Targets delivery per accepted theme/placement decisions, then AI-assisted import implementation/three-customer clone proof. AI proposes; steward confirms fixed rules. Requested library review follows original live lanes.
 4. Recovery manifests name every relevant branch/base and dirty file. Verified Git bundle and ZIP preserve seven separate refs plus three dirty worktrees/15untrackedfiles; restore only into new worktrees after inspection, never blindly into integration.
 
 ## Boundaries / blockers
 
-- No main push/promotion. Map tile provider remains unconfigured; no store-location confirmation or DB mutation is authorized by BACKLOG-268.
+- No main push/promotion. OpenFreeMap is this tenant's setting only, not a product default. No store-location confirmation is authorized.
 - Codex session registration was absent on22November. Future protected DB work requires installed operator mechanism; never fabricate state/self-grant/borrow a session/use missing hooks as permission. Do not set ALLOW_TESTS_ON_DEV_DB casually. Cloud guard denial is a stop condition.
 - No hook/policy/.claude/CLAUDE.md edits; engineering-rules.mdc missing and not invented. Preserve existing failed artifacts and the two-attempt stop rule. Agent quotas may be exhausted; all outstanding scope is durable outside chat.

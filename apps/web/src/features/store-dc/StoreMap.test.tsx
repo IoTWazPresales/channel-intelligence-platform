@@ -15,7 +15,19 @@ function dotOf(pin: HTMLElement): HTMLElement {
   return pin.querySelector('[data-marker-dot]') as HTMLElement;
 }
 
+vi.mock('@/features/settings/useMapSettings', () => ({
+  useMapSettings: () => ({
+    settings: hoisted.mapSettings,
+    pending: false,
+    error: null,
+    canEdit: false,
+    query: { data: { settings: hoisted.mapSettings } },
+    queryKey: ['tenant-settings', 'map'],
+  }),
+}));
+
 const hoisted = vi.hoisted(() => ({
+  mapSettings: {} as { tilejsonUrl?: string; glyphsUrl?: string; attribution?: string },
   payload: null as StoreMapPayload | null,
   posted: [] as unknown[],
   postError: null as Error | null,
@@ -148,6 +160,7 @@ describe('StoreMap', () => {
     hoisted.confirmed = [];
     hoisted.rejectLabels = [];
     hoisted.postError = null;
+    hoisted.mapSettings = {};
     vi.clearAllMocks();
     // jsdom lacks PointerEvent; preserve real pointer coordinates for fireEvent.
     vi.stubGlobal('PointerEvent', class extends MouseEvent {
