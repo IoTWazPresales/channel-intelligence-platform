@@ -34,6 +34,7 @@ KEY_DISCOVERY_SEARCH_OPTIONS = "discovery.search_options"
 KEY_DISCOVERY_SEARXNG_URL = "discovery.searxng_url"
 KEY_DISCOVERY_EXCLUDED_DOMAINS = "discovery.excluded_domains"
 KEY_DISCOVERY_BROWSER_FALLBACK = "discovery.browser_fallback_enabled"
+KEY_LISTING_SCOPE = "listing_scope.settings"
 
 # Keep ddg_lite readable for existing configurations. The adapter reports it unsupported:
 # ddgs has one DuckDuckGo HTML backend, not an independent Lite fallback.
@@ -230,6 +231,39 @@ def _as_excluded_domains(value: Any) -> list[str]:
     return out
 
 
+LISTING_SCOPE_FIELDS = ("enabled", "recent_window_days", "recent_interval_days", "absent_days")
+MAX_SCOPE_DAYS = 3650
+
+
+def _scope_days(value: Any, name: str, low: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError(f"{name} must be a whole number of days")
+    try:
+        number = float(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a whole number of days") from exc
+    if number != int(number) or not low <= int(number) <= MAX_SCOPE_DAYS:
+        raise ValueError(f"{name} must be a whole number from {low} to {MAX_SCOPE_DAYS}")
+    return int(number)
+
+
+def _as_listing_scope(value: Any) -> dict[str, Any]:
+    """All four fields are required: nothing is filled in for the tenant."""
+    if not isinstance(value, dict):
+        raise ValueError("listing scope must be an object")
+    if set(value) != set(LISTING_SCOPE_FIELDS):
+        raise ValueError(f"listing scope needs exactly: {', '.join(LISTING_SCOPE_FIELDS)}")
+    clean = {
+        "enabled": _as_bool(value["enabled"]),
+        "recent_window_days": _scope_days(value["recent_window_days"], "recent_window_days", 1),
+        "recent_interval_days": _scope_days(value["recent_interval_days"], "recent_interval_days", 1),
+        "absent_days": _scope_days(value["absent_days"], "absent_days", 0),
+    }
+    if clean["absent_days"] >= clean["recent_window_days"]:
+        raise ValueError("absent_days must be shorter than recent_window_days")
+    return clean
+
+
 # No map defaults or provider URLs are stored or supplied here.
 # PMTiles is deliberately not registered until a client protocol implementation exists.
 SETTING_VALIDATORS: dict[str, Callable[[Any], Any]] = {
@@ -244,6 +278,7 @@ SETTING_VALIDATORS: dict[str, Callable[[Any], Any]] = {
     KEY_DISCOVERY_SEARXNG_URL: _as_https_base_url,
     KEY_DISCOVERY_EXCLUDED_DOMAINS: _as_excluded_domains,
     KEY_DISCOVERY_BROWSER_FALLBACK: _as_bool,
+    KEY_LISTING_SCOPE: _as_listing_scope,
 }
 
 

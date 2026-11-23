@@ -58,6 +58,12 @@ function DiscoverySettingsForm({
   const [excluded, setExcluded] = useState((initial['discovery.excluded_domains'] ?? []).join('\n'));
   const [browser, setBrowser] = useState(initial['discovery.browser_fallback_enabled'] === true);
   const [scheduled, setScheduled] = useState(initial['discovery.schedule_enabled'] === true);
+  const savedScope = initial['listing_scope.settings'];
+  // Suggested values only (Warren, 24 Nov 2026); nothing is stored until Save is pressed.
+  const [scopeOn, setScopeOn] = useState(savedScope?.enabled === true);
+  const [windowDays, setWindowDays] = useState(String(savedScope?.recent_window_days ?? 180));
+  const [intervalDays, setIntervalDays] = useState(String(savedScope?.recent_interval_days ?? 7));
+  const [absentDays, setAbsentDays] = useState(String(savedScope?.absent_days ?? 14));
   const [errors, setErrors] = useState<Partial<Record<DiscoverySettingKey, string>>>({});
   const [saved, setSaved] = useState(false);
   const save = useSaveDiscoverySetting();
@@ -168,6 +174,29 @@ function DiscoverySettingsForm({
           onChange={(event) => setExcluded(event.target.value)} error={Boolean(errors['discovery.excluded_domains'])}
           helperText={helper('discovery.excluded_domains', Boolean(excluded.trim()), 'One host name per line. These sites will not be proposed.')} />
         {saveButton('Save excluded domains', { key: 'discovery.excluded_domains', value: lines(excluded) })}
+      </Stack>
+      <Stack spacing={1}>
+        <Typography variant="subtitle2">Listing monitoring scope</Typography>
+        <Typography variant="caption" color="text.secondary">
+          Active products (in stock, on order, inbound or at a distributor) are checked on the normal schedule.
+          Recently gone products are checked less often. Older products are not checked; use Fetch now on a listing.
+          {savedScope ? '' : ' Not set: every listing is checked. The numbers are suggestions and are saved only when you press Save.'}
+        </Typography>
+        <FormControlLabel label="Limit monitoring by stock" control={
+          <Switch checked={scopeOn} disabled={save.isPending} onChange={(_, checked) => setScopeOn(checked)} />} />
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <TextField size="small" type="number" label="Recently gone window (days)" value={windowDays} disabled={save.isPending}
+            onChange={(event) => setWindowDays(event.target.value)} error={Boolean(errors['listing_scope.settings'])}
+            helperText={errors['listing_scope.settings']} />
+          <TextField size="small" type="number" label="Check recently gone every (days)" value={intervalDays} disabled={save.isPending}
+            onChange={(event) => setIntervalDays(event.target.value)} error={Boolean(errors['listing_scope.settings'])} />
+          <TextField size="small" type="number" label="Days missing before a product drops" value={absentDays} disabled={save.isPending}
+            onChange={(event) => setAbsentDays(event.target.value)} error={Boolean(errors['listing_scope.settings'])} />
+        </Stack>
+        {saveButton('Save monitoring scope', { key: 'listing_scope.settings', value: {
+          enabled: scopeOn, recent_window_days: Number(windowDays), recent_interval_days: Number(intervalDays),
+          absent_days: Number(absentDays),
+        } }, !windowDays.trim() || !intervalDays.trim() || !absentDays.trim())}
       </Stack>
       <Stack spacing={1}>
         <FormControlLabel label="Use a browser when a page needs one" control={

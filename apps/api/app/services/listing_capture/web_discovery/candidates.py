@@ -298,6 +298,12 @@ def read_context(session: Session, customer: DimCustomer) -> CustomerContext:
 
     pairs = _product_ids_by_source(session, tenant_id, customer_id)
     if pairs:
+        from app.services.listing_capture.stock_scope import TIER_ACTIVE, product_tiers
+
+        tiers = product_tiers(session, tenant_id, [pid for _i, pid in pairs])
+        if tiers is not None:  # stock scope on: discovery searches for active products only
+            pairs = [(i, pid) for i, pid in pairs if tiers.get(int(pid)) == TIER_ACTIVE]
+    if pairs:
         by_id = {
             int(p.id): p
             for p in session.scalars(

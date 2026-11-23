@@ -168,7 +168,15 @@ export type SearchOptions = {
   region?: string;
 };
 
+export type ListingScope = {
+  enabled: boolean;
+  recent_window_days: number;
+  recent_interval_days: number;
+  absent_days: number;
+};
+
 export type DiscoverySettingValues = {
+  'listing_scope.settings': ListingScope;
   'tenant.country': { code: string; name: string };
   'tenant.domain_endings': string[];
   'discovery.search_providers': ProviderId[];
@@ -222,6 +230,7 @@ const REASONS: Record<string, string> = {
   time_limit: 'The time available for this check was reached',
   over_review_limit: 'Other candidates were placed ahead of this one for review',
   changed_since_preview: 'The saved records changed after this preview',
+  already_in_review: 'Already in the review queue. Nothing new to save.',
   robots: 'The site does not allow this page to be checked',
   search_not_installed: 'Web search is not available on this server',
   settings_changed: 'Settings changed. Start a new preview before saving.',

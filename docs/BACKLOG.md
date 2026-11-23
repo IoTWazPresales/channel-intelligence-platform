@@ -4143,3 +4143,16 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 | **Accepted direction** | Both light/dark themes; stock health below sales charts. Expanded replenishment and aged-stock detail/mock-up/build remain pending. Old saved lightPNG duplicated dark and must not be used as rendered proof. |
 | **Work / constraints** | Extend existing Overview/dashboard/widget/query engine and canonical theme tokens; implement scoped target persistence/validation/API/UI and verify actual behavior. Do not invent another metrics or storage system, alter job/role authorization, or claim illustrative values are real. Preserve original design provenance and review outstanding detail. |
 | **TRIGGER** | Dashboard/Targets delivery resumes after current higher-priority work, or Warren explicitly reprioritizes it. |
+
+## BACKLOG-270 - Stock-based listing monitoring scope (active / recently gone / historical)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Done - 2026-11-24 (Warren t407u, approved). Scope is OFF until a tenant saves Settings -> Discovery -> Listing monitoring scope; live has no row. |
+| **What shipped** | `services/listing_capture/stock_scope.py`. Tier per product from existing stock facts: distributor on hand (`fact_inventory_distributor`), customer on hand / on order (`fact_inventory_customer`, `customer_stock_position` incl. in transit), inbound open orders and shipped lines not yet delivered (`fact_inbound_shipment`), and `dim_product.retired_date` (end of life). **Active**: live evidence within `absent_days` of the tenant's newest stock date, or inbound. **Recently gone**: evidence or end of life within `recent_window_days`. **Historical**: older. |
+| **Where it applies** | Listing poll (`poll_active_listings`, the existing beat + batches + pacing + back-off): historical not polled, recently gone only every `recent_interval_days`, active and listings without a product as before. Discovery candidate products: active only. Fetch now in the listing drawer polls just that listing on the worker (`listing_capture.fetch_now`), any tier; the worker is the only process with live fetch (D-0061). |
+| **Setting** | One tenant key `listing_scope.settings` = `{enabled, recent_window_days, recent_interval_days, absent_days}`; every field required, nothing stored by code or migration. The form suggests 180 / 7 / 14 (Warren). Hysteresis is measured from the tenant's newest stock date, so stale feeds do not drop products; a tenant with no stock data is not scoped. |
+| **Same PR** | Discovery buttons say Discover (Apply unchanged). Apply reports `already_in_review` ("Already in the review queue. Nothing new to save.") instead of "saved records changed" for a listing already in the review queue. |
+| **Read-only live sample (suggested settings, not saved)** | 218 listings: 42 active, 73 recently gone, 12 historical, 91 without a product (Evetech 23/45/2/18, Takealot 19/28/10/22, Amazon CS 0/0/0/51). |
+| **Open** | Live Discover needs the API to report live fetch; D-0061 gives it to the worker only (Warren to decide). Scope is not shown per listing on screen yet. |
+

@@ -49,14 +49,20 @@ from app.services.listing_capture.web_discovery.scoring import normalize_host
 
 
 class ChangedSincePreview(ValueError):
-    pass
+    reason = "changed_since_preview"
 
 
-def _skip(counts: dict[str, Any], entry: dict[str, Any]) -> None:
+class AlreadyInReview(ChangedSincePreview):
+    """The item is already in the review queue; nothing new to save."""
+
+    reason = "already_in_review"
+
+
+def _skip(counts: dict[str, Any], entry: dict[str, Any], reason: str = "changed_since_preview") -> None:
     counts["skipped"].append(
         {
             "item_id": str(entry.get("item_id") or ""),
-            "reason": "changed_since_preview",
+            "reason": reason,
         }
     )
 
@@ -466,7 +472,7 @@ def _apply_listing(
         .limit(1)
     )
     if existing is not None:
-        raise ChangedSincePreview()
+        raise AlreadyInReview()
     decision = _listing_decision(session, listing, entry, index)
     if not _matches(entry, decision):
         raise ChangedSincePreview()
@@ -561,10 +567,10 @@ def apply_link_items(
                             counts=counts,
                         )
                     saved = True
-                except (ChangedSincePreview, IntegrityError):
+                except (ChangedSincePreview, IntegrityError) as exc:
                     counts.clear()
                     counts.update(before)
-                    _skip(counts, entry)
+                    _skip(counts, entry, getattr(exc, "reason", "changed_since_preview"))
             if saved and site is not None:
                 _learn_patterns(session, site, site_block, actor)
 
@@ -583,7 +589,7 @@ def apply_link_items(
                     actor=actor,
                     counts=counts,
                 )
-        except (ChangedSincePreview, IntegrityError):
+        except (ChangedSincePreview, IntegrityError) as exc:
             counts.clear()
             counts.update(before)
-            _skip(counts, entry)
+            _skip(counts, entry, getattr(exc, "reason", "changed_since_preview"))

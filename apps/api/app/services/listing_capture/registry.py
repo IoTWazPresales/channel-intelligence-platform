@@ -972,6 +972,7 @@ def poll_active_listings(
     exclude_ids: list[int] | None = None,
     log_result: bool = True,
     site_for=None,
+    listing_ids: list[int] | None = None,
 ) -> dict[str, Any]:
     """Synchronous poll — used by API + Celery task.
 
@@ -986,6 +987,9 @@ def poll_active_listings(
     - A 403/429 from a site pauses that site (``site_pause``): no more requests to it
       this run, and later runs skip it until the pause ends.
     - Stops starting new fetches after ``time_limit_seconds`` (default 10 min).
+    - Stock scope (tenant setting ``listing_scope.settings``): historical products are not
+      polled and recently-gone products only every ``recent_interval_days``. ``listing_ids``
+      (fetch now) polls exactly those listings and ignores the scope.
     """
     import logging
     import time
@@ -1026,7 +1030,24 @@ def poll_active_listings(
             stmt = stmt.where(CustomerListing.marketplace.in_(want))
     if exclude_ids:
         stmt = stmt.where(CustomerListing.id.notin_([int(i) for i in exclude_ids]))
+    if listing_ids is not None:
+        stmt = stmt.where(CustomerListing.id.in_([int(i) for i in listing_ids]))
     due = list(session.scalars(stmt).all())
+    scope_skipped = {"recent": 0, "historical": 0}
+    if listing_ids is None and due:
+        from app.services.listing_capture.stock_scope import scope_due_listings
+
+        seen_rows = session.execute(
+            select(ListingObservation.listing_id, func.max(ListingObservation.fetched_at))
+            .where(
+                ListingObservation.listing_id.in_([int(l.id) for l in due]),
+                ListingObservation.parse_status != "skipped",
+            )
+            .group_by(ListingObservation.listing_id)
+        ).all()
+        due, scope_skipped = scope_due_listings(
+            session, due, now=run_now, last_seen={int(i): t for i, t in seen_rows}
+        )
     tenant_for = None
     if site_for is None:
         from app.services.listing_capture.sites import SiteResolver
@@ -1149,6 +1170,7 @@ def poll_active_listings(
         "skipped_backoff": skipped_backoff,
         "skipped_paused": skipped_paused,
         "skipped_not_configured": skipped_not_configured,
+        "skipped_scope": scope_skipped,
         "not_configured_sites": sorted(
             not_configured.values(), key=lambda e: (str(e["tenant_id"] or ""), e["site_key"])
         ),

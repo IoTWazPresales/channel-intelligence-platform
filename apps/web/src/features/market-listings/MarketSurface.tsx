@@ -576,7 +576,8 @@ export function MarketSurface() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['listing-capture'] }),
   });
   const pollMut = useMutation({
-    mutationFn: () => apiPost('/api/v1/listing-capture/poll', {}),
+    mutationFn: (listingIds?: number[]) =>
+      apiPost('/api/v1/listing-capture/poll', listingIds ? { listing_ids: listingIds } : {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['listing-capture'] }),
   });
   const confirmMut = useMutation({
@@ -1223,7 +1224,7 @@ export function MarketSurface() {
                     onClick={listingColumns.openPicker}
                     count={listingColumns.optionalFields.length}
                   />
-                  <Button size="small" variant="outlined" disabled={pollMut.isPending} onClick={() => pollMut.mutate()}>
+                  <Button size="small" variant="outlined" disabled={pollMut.isPending} onClick={() => pollMut.mutate(undefined)}>
                     Fetch now
                   </Button>
                 </Stack>
@@ -1718,7 +1719,7 @@ export function MarketSurface() {
         footer={
           selected ? (
             <>
-              <Button size="small" variant="outlined" disabled={pollMut.isPending} onClick={() => pollMut.mutate()}>
+              <Button size="small" variant="outlined" disabled={pollMut.isPending} onClick={() => pollMut.mutate([selected.id])}>
                 Fetch now
               </Button>
               <Button size="small" variant="outlined" onClick={() => setSelectedListing(null)}>
