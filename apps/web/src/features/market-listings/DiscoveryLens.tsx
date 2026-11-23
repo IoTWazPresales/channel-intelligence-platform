@@ -64,14 +64,14 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
                     value={customer} onChange={setCustomer} fetchOptions={fetchCustomers}
                     getOptionLabel={customerLabel} disabled={busy} />
                 </Box>
-                <Button variant="outlined" aria-label="Preview one customer" disabled={!customer || disabled('customer')}
-                  onClick={() => customer && run({ scope: 'customer', customer_id: customer.id })}>Preview</Button>
+                <Button variant="outlined" aria-label="Discover one customer" disabled={!customer || disabled('customer')}
+                  onClick={() => customer && run({ scope: 'customer', customer_id: customer.id })}>Discover</Button>
               </Stack>
             </Stack>
             <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
               <Typography variant="subtitle2">Discover for all reporting customers</Typography>
-              <Button variant="outlined" aria-label="Preview all reporting customers" disabled={disabled('reporting')}
-                onClick={() => run({ scope: 'reporting' })}>Preview</Button>
+              <Button variant="outlined" aria-label="Discover all reporting customers" disabled={disabled('reporting')}
+                onClick={() => run({ scope: 'reporting' })}>Discover</Button>
             </Stack>
             <Stack spacing={1}>
               <Typography variant="subtitle2">Add a site to monitor</Typography>
@@ -85,14 +85,14 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
                 <TextField size="small" label="Domain" value={domain} disabled={busy}
                   onChange={(event) => setDomain(event.target.value)}
                   helperText="Host name only, such as shop.example.test" sx={{ flex: 1 }} />
-                <Button variant="outlined" aria-label="Preview a site" disabled={!siteCustomer || !domain.trim() || disabled('domain')}
-                  onClick={() => siteCustomer && run({ scope: 'domain', customer_id: siteCustomer.id, domain: domain.trim() })}>Preview</Button>
+                <Button variant="outlined" aria-label="Discover a site" disabled={!siteCustomer || !domain.trim() || disabled('domain')}
+                  onClick={() => siteCustomer && run({ scope: 'domain', customer_id: siteCustomer.id, domain: domain.trim() })}>Discover</Button>
               </Stack>
             </Stack>
             <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
               <Typography variant="subtitle2">Link listings with no product</Typography>
-              <Button variant="outlined" aria-label="Preview listings with no product" disabled={disabled('unlinked_listings')}
-                onClick={() => run({ scope: 'unlinked_listings', customer_id: null })}>Preview</Button>
+              <Button variant="outlined" aria-label="Discover listings with no product" disabled={disabled('unlinked_listings')}
+                onClick={() => run({ scope: 'unlinked_listings', customer_id: null })}>Discover</Button>
             </Stack>
           </Stack>
         </Panel>

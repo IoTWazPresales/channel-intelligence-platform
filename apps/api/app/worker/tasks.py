@@ -1050,6 +1050,24 @@ def listing_capture_poll_listings_task(run: dict | None = None) -> dict:
         return {"skipped": False, **record}
 
 
+@celery_app.task(name="listing_capture.fetch_now")
+def listing_capture_fetch_now_task(listing_ids: list[int]) -> dict:
+    """Fetch now: poll exactly these listings, whatever their stock-scope tier."""
+    from app.db.session_sync import SessionLocal
+    from app.services.listing_capture.observation import default_http_get
+    from app.services.listing_capture.registry import poll_active_listings
+
+    if not _listing_live_fetch_enabled():
+        return {"skipped": True, "reason": "live_fetch_not_enabled"}
+    ids = [int(i) for i in listing_ids or []][:50]
+    if not ids:
+        return {"skipped": True, "reason": "no_listings"}
+    with SessionLocal() as session:
+        result = poll_active_listings(session, http_get=default_http_get, listing_ids=ids)
+        session.commit()
+    return {"skipped": False, **result}
+
+
 @celery_app.task(name="listing_capture.clear_expired_snapshots")
 def listing_capture_clear_expired_snapshots_task() -> dict:
     """Beat task (daily): clear raw page snapshots older than 90 days (payload only, rows kept)."""

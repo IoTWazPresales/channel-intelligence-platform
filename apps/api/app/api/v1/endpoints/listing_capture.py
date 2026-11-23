@@ -65,6 +65,8 @@ class ConfirmProposalBody(BaseModel):
 class PollBody(BaseModel):
     marketplaces: list[str] | None = None
     limit: int | None = Field(default=None, ge=1, le=500)
+    # Fetch now: poll exactly these listings, whatever their stock-scope tier.
+    listing_ids: list[int] | None = Field(default=None, min_length=1, max_length=50)
 
 
 @router.get("/meta")
@@ -612,6 +614,12 @@ def post_poll(body: PollBody | None = None):
     from app.services.listing_capture.observation import default_http_get
 
     body = body or PollBody()
+    if body.listing_ids:
+        # Fetch now runs on the worker, which is the only process given live fetch (D-0061).
+        from app.worker.tasks import listing_capture_fetch_now_task
+
+        listing_capture_fetch_now_task.delay([int(i) for i in body.listing_ids])
+        return {"queued": True, "listing_ids": [int(i) for i in body.listing_ids]}
     live = os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on")
     if not live:
         raise HTTPException(
@@ -625,6 +633,7 @@ def post_poll(body: PollBody | None = None):
                 marketplaces=body.marketplaces,
                 http_get=default_http_get,
                 limit=body.limit,
+                listing_ids=body.listing_ids,
             )
             session.commit()
             return result

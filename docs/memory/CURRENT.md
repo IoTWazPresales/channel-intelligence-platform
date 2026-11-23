@@ -1,8 +1,8 @@
 # CURRENT state
 
-**Last updated:** 2026-11-23 — store map uses this tenant's OpenFreeMap setting; denser shared land dots. Last prior live acceptance: 22 November (`c685bf63`).
+**Last updated:** 2026-11-24 - Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it.
 **Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
-**Next agent:** Discovery V2 is next unless Warren reprioritizes. Read [durable handoff](../handoffs/2026-11-23/README.md), [map revision brief](../handoffs/2026-11-23/MAP_FEEDBACK.md), and [Targets status](../handoffs/2026-11-23/TARGETS_STATUS.md).
+**Next agent:** Next wave item: Dashboard V2 and Targets (BACKLOG-269) unless Warren reprioritizes. Read [durable handoff](../handoffs/2026-11-23/README.md).
 
 ## Branch, database and topology
 
@@ -20,6 +20,11 @@
 - Final clean product gates:lint0errors/48baseline warnings, nonincremental types0, build84pages, unfiltered291files/1818tests0 (623.31s, no retry/filter/suppression). Clone browser Save/reload/user+tenant isolation passed with actual app ASGI IPC; unrelated shell readers stubbed, fixture bearer sessions. This does not test Save via the Next proxy/password logout or retained-client switching. Live normal sign-in/catalog/rendering separately proved.
 - Web-only release0; launches5->6, others unchanged; two web/API200/healthy-state/count/build samples82.349s apart. Candidate3107 stopped after ownership checks; stale PIDs in evidence are historical. Original failures retained, never relabeled PASS. Portable summaries in handoff/evidence; raw local proof under`.tmp/coordinator-20261121/` and`.tmp/coordinator-20261122/`.
 - Earlier canonical stack deploy`deploy-20261122-145442.json` remains FAILED at busy-solo Celery ping. Later idle ping/heartbeat and stability are separate evidence. BACKLOG-245 retains the heartbeat-based deploy gate follow-up; read DEV_TOPOLOGY before worker changes.
+
+## Discovery V2 and listing scope (2026-11-24)
+
+- Discovery V2 merged `a6f498ce` (Crawlee, Playwright, extruct, price-parser, tldextract, protego, ddgs; licences in the merge commit). Migration `20261123_0066_web_discovery` applied on live as owner after a 3.36 GB backup. Live Discovery settings saved 24 Nov 00:57 by Warren's approval (ZA, .co.za/.com, free web search, 5 s/10/20 s, browser on); schedule OFF. Live Discover button is disabled while the API reports live fetch off (D-0061 worker-only); Warren to decide.
+- Stock-based listing scope (BACKLOG-270) uses existing stock facts and the existing poll beat. Off until `listing_scope.settings` is saved for the tenant.
 
 ## Store map (BACKLOG-268) — OpenFreeMap chosen 2026-11-23
 

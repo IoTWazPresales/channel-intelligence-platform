@@ -69,8 +69,8 @@ describe('DiscoveryLens', () => {
     state.missing = ['tenant.country', 'tenant.domain_endings'];
     mount();
     expect(await screen.findByRole('link', { name: 'Settings → Discovery' })).toHaveAttribute('href', '/settings#discovery');
-    expect(screen.getByRole('button', { name: 'Preview all reporting customers' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Preview listings with no product' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Discover all reporting customers' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Discover listings with no product' })).toBeEnabled();
     expect(apiPost).not.toHaveBeenCalled();
   });
 
@@ -78,12 +78,12 @@ describe('DiscoveryLens', () => {
     state.live = false;
     mount();
     await screen.findByText(/Live page checking is switched off/);
-    for (const button of screen.getAllByRole('button', { name: /^Preview/ })) expect(button).toBeDisabled();
+    for (const button of screen.getAllByRole('button', { name: /^Discover/ })) expect(button).toBeDisabled();
   });
 
   it('starts the reporting preview only on the button and never applies automatically', async () => {
     mount();
-    const button = await screen.findByRole('button', { name: 'Preview all reporting customers' });
+    const button = await screen.findByRole('button', { name: 'Discover all reporting customers' });
     await waitFor(() => expect(button).toBeEnabled());
     expect(apiPost).not.toHaveBeenCalled();
     fireEvent.click(button);
@@ -97,7 +97,7 @@ describe('DiscoveryLens', () => {
     fireEvent.change(await screen.findByLabelText('Customer for this site'), { target: { value: 'Fixture' } });
     fireEvent.click(await screen.findByRole('option', { name: 'Fixture customer' }));
     fireEvent.change(screen.getByLabelText('Domain'), { target: { value: 'custom-host.test' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Preview a site' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discover a site' }));
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/api/v1/listing-capture/discovery/previews', {
       scope: 'domain', customer_id: 83, domain: 'custom-host.test',
     }));
