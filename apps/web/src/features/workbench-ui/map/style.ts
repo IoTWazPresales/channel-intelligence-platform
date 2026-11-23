@@ -70,14 +70,14 @@ function vectorSource(tilejsonUrl: string): VectorSourceSpecification {
 
 /** Same cool dot colour/opacity as the shared SVG MapCanvas, generated without canvas APIs. */
 export function dotImage(mode: MapThemeMode = 'dark'): { width: number; height: number; data: Uint8Array } {
-  // 4px tile (was 8px): tighter land stipple that still matches the SVG basemap's cool grey dots.
+  // 4px tile keeps the current density; a smaller, ~0.42–0.45 alpha dot leaves air between points.
   const width = 4;
   const height = 4;
   const data = new Uint8Array(width * height * 4);
-  const rgba: [number, number, number, number] = mode === 'dark' ? [160, 185, 205, 90] : [40, 70, 95, 96];
+  const rgba: [number, number, number, number] = mode === 'dark' ? [160, 185, 205, 107] : [40, 70, 95, 115];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      if ((x - 1.5) ** 2 + (y - 1.5) ** 2 > 1.05) continue;
+      if ((x - 1.5) ** 2 + (y - 1.5) ** 2 > 0.55) continue;
       data.set(rgba, (y * width + x) * 4);
     }
   }

@@ -4126,13 +4126,13 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Done — 2026-11-23, updated the same day. MapLibre is the Sell-through map when the tenant has a TileJSON URL. Warren chose OpenFreeMap; it is stored as this tenant's setting only, not a code or migration default. Denser shared land dots. No store-location proposals were confirmed (BACKLOG-267 still applies). |
+| **Status / parked** | Done — 2026-11-23, updated 2026-11-24 after Warren's live review. MapLibre is the Sell-through map when the tenant has a TileJSON URL. OpenFreeMap is this tenant's setting only. Land dots stay dense but are smaller and semi-transparent. Confirmed pins move only after Move pin; session undo restores the previous coordinates. Pin rings use the shipping-map glow. No store-location proposals were confirmed (BACKLOG-267 still applies). |
 | **Scope** | Country/grouping/city/street/mall points/icons and overall page theme must visually match the shipping map. Keep pins/proposed pins/data/details/confirmation controls in the right panel, with appropriate internal scrolling rather than a long list below. |
 | **Canonical / evidence** | `docs/handoffs/2026-11-23/MAP_FEEDBACK.md`; shipping `OnTheWater.tsx/ClusterMarker`, shared `MapMarker.tsx`, `MapCanvas.tsx`; store `StoreMap.tsx`, `StoreMapPrototype.tsx`, `WorkbenchMap.tsx`, `ProposedPinsPanel.tsx`. Shared imports alone did not produce accepted visual parity. Rejected baseline images preserved in handoff/assets. |
-| **Shipped** | Sell-through uses MapLibre when `map.tilejson_url` is set for the tenant; SVG dotted basemap is the fallback and remains the On the water map. Shared land dots tightened (0.7 deg grid, stroke 1.8) and MapLibre `dotted-land` uses a 4px tile. Filled Shipments point/halo markers, right-hand panel for pins/proposals, compact attribution. Existing confirm writers unchanged. |
+| **Shipped** | Sell-through uses MapLibre when `map.tilejson_url` is set for the tenant; SVG dotted basemap is the fallback and remains the On the water map. Shared land dots stay on the 0.7 deg / 4px grid with a smaller semi-transparent stipple (stroke 1.0, ~0.42–0.45 opacity). Filled Shipments markers use the soft glow only (no hard rings). Confirmed pins are locked unless Move is pressed; Undo / Ctrl+Z / Cmd+Z restores the previous coordinates through the existing pin save path. Right-hand panel for pins/proposals, compact attribution. Existing confirm writers unchanged. |
 | **Credit request** | Prominent/doubled OSM strip removed in favour of MapLibre compact attribution. Official guidance in map brief. This is not provider approval. |
 | **Constraints** | Do not add a second confirmation writer, weaken proposal/confirmed semantics, confirm or move live coordinates for appearance, or configure/enable a provider without acceptance. Last preview payload: 310 stores / 192 proposals / 0 confirmed. |
-| **TRIGGER** | Warren reviews the live default store map (and the prototype only if he turns it on). Provider choice is still required before any prototype rollout. BACKLOG-267 before confirming locations. |
+| **TRIGGER** | Warren reviews the latest live store-map fixes. BACKLOG-267 before confirming locations. |
 
 ## BACKLOG-269 ? Deliver Dashboard V2 and Targets beyond design-only prototypes
 

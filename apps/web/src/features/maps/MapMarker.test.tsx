@@ -33,7 +33,7 @@ describe('shared map marker', () => {
     expect(getComputedStyle(dot).backgroundColor).toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
   });
 
-  it('draws a proposed pin as a filled dot with a dashed outer ring', () => {
+  it('draws a proposed pin as a filled dot with the same soft glow as Shipments', () => {
     renderWithProviders(
       <MapMarker x={15} y={20} color="rgb(10, 20, 30)" proposed aria-label="Proposed Pin">5</MapMarker>,
     );
@@ -43,7 +43,8 @@ describe('shared map marker', () => {
     expect(dot).toHaveAttribute('data-proposed', 'true');
     expect(dot).toHaveTextContent('5');
     expect(getComputedStyle(dot).backgroundColor).toBe('rgb(10, 20, 30)');
-    expect(getComputedStyle(dot).outlineStyle).toBe('dashed');
+    expect(getComputedStyle(dot).outlineStyle).not.toBe('dashed');
+    expect(getComputedStyle(dot).boxShadow).toContain('18px');
   });
 
   it('fades a color-mix() sell-through colour as well as a plain one', () => {

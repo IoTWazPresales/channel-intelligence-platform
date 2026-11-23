@@ -50,6 +50,8 @@ type Props = {
   colorForScore: (score: number | null) => string;
   renderHover?: (id: string) => ReactNode;
   onAdjust?: (id: string, coordinates: Coordinates) => void;
+  onAdjustEnd?: (id: string, coordinates: Coordinates) => void;
+  canDrag?: (id: string) => boolean;
   placing?: boolean;
   onPlace?: (coordinates: Coordinates) => void;
   label?: string;
@@ -75,7 +77,7 @@ export function WorkbenchMap(props: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LibreMap | null>(null);
   const redraw = useRef<() => void>(() => undefined);
-  const drag = useRef<{ id: string; pointerId: number; panWasEnabled: boolean } | null>(null);
+  const drag = useRef<{ id: string; pointerId: number; panWasEnabled: boolean; moved: boolean } | null>(null);
   const [ready, setReady] = useState(false);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const [hover, setHover] = useState<string | null>(null);
@@ -263,22 +265,31 @@ export function WorkbenchMap(props: Props) {
     redraw.current();
   }, [selectedKey, ready]);
 
-  function adjust(event: PointerEvent<HTMLButtonElement>) {
-    const active = drag.current;
+  function coordinatesFromPointer(event: PointerEvent<HTMLButtonElement>): Coordinates | null {
     const map = mapRef.current;
-    if (!active || !map || active.pointerId !== event.pointerId) return;
+    if (!map) return null;
     const rect = map.getContainer().getBoundingClientRect();
     const position = map.unproject([event.clientX - rect.left, event.clientY - rect.top]);
-    latest.current.onAdjust?.(active.id, {
-      latitude: position.lat,
-      longitude: wrapLongitude(position.lng),
-    });
+    return { latitude: position.lat, longitude: wrapLongitude(position.lng) };
+  }
+
+  function adjust(event: PointerEvent<HTMLButtonElement>) {
+    const active = drag.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    const coordinates = coordinatesFromPointer(event);
+    if (!coordinates) return;
+    active.moved = true;
+    latest.current.onAdjust?.(active.id, coordinates);
   }
 
   function finishDrag(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
     const active = drag.current;
     if (!active || active.pointerId !== event.pointerId) return;
-    if (!cancelled) adjust(event);
+    const coordinates = cancelled || !active.moved ? null : coordinatesFromPointer(event);
+    if (coordinates) {
+      latest.current.onAdjust?.(active.id, coordinates);
+      latest.current.onAdjustEnd?.(active.id, coordinates);
+    }
     if (active.panWasEnabled) mapRef.current?.dragPan.enable();
     drag.current = null;
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
@@ -436,10 +447,10 @@ export function WorkbenchMap(props: Props) {
               size={size}
               selected={selected}
               proposed={marker.proposed}
-              glow={marker.clusterId == null && !marker.proposed && overlays.length <= 25}
+              glow={marker.clusterId == null}
               zIndex={selected ? 2 : 1}
-              cursor={point?.proposed && props.onAdjust ? 'grab' : 'pointer'}
-              touchAction={point?.proposed && props.onAdjust ? 'none' : 'auto'}
+              cursor={point && props.onAdjust && (props.canDrag?.(point.id) ?? point.proposed) ? 'grab' : 'pointer'}
+              touchAction={point && props.onAdjust && (props.canDrag?.(point.id) ?? point.proposed) ? 'none' : 'auto'}
               data-testid={marker.clusterId == null ? 'workbench-map-pin' : 'workbench-map-cluster'}
               data-point-id={marker.pointId}
               data-pin-state={marker.proposed ? 'proposed' : 'confirmed'}
@@ -455,7 +466,8 @@ export function WorkbenchMap(props: Props) {
                 else if (marker.pointId) props.onSelect(marker.pointId);
               }}
               onPointerDown={(event) => {
-                if (!point?.proposed || !props.onAdjust || event.button !== 0) return;
+                if (!point || !props.onAdjust || event.button !== 0) return;
+                if (!(props.canDrag?.(point.id) ?? point.proposed)) return;
                 event.stopPropagation();
                 event.preventDefault();
                 const map = mapRef.current;
@@ -465,6 +477,7 @@ export function WorkbenchMap(props: Props) {
                   id: point.id,
                   pointerId: event.pointerId,
                   panWasEnabled: map.dragPan.isEnabled(),
+                  moved: false,
                 };
                 map.dragPan.disable();
                 event.currentTarget.setPointerCapture?.(event.pointerId);

@@ -110,7 +110,7 @@ export const MapCanvas = forwardRef<HTMLDivElement, MapCanvasProps>(function Map
         aria-label={label}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }}
       >
-        <path d={BASEMAP_DOTS} fill="none" stroke={theme.palette.mode === 'dark' ? 'rgba(160,185,205,0.28)' : 'rgba(40,70,95,0.30)'} strokeWidth={basemapStrokeWidth(bounds)} strokeLinecap="round" />
+        <path d={BASEMAP_DOTS} fill="none" stroke={theme.palette.mode === 'dark' ? 'rgba(160,185,205,0.42)' : 'rgba(40,70,95,0.45)'} strokeWidth={basemapStrokeWidth(bounds)} strokeLinecap="round" />
         {svgChildren}
       </svg>
       {children}

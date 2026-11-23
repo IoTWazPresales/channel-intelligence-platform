@@ -6,18 +6,18 @@ import { useTheme } from '@mui/material/styles';
 import { MarkerDot } from '@/features/maps/MapMarker';
 import { tokensFor } from '@/theme/cipTokens';
 
-/** Solid marker: a pin a steward saved. Filled dot with dashed outer ring: a proposal waiting for a steward. */
+/** Solid glowing marker: a pin a steward saved. The same glow, filled, is a proposal waiting for a steward. */
 export function PinLegend() {
   const theme = useTheme();
   const tokens = tokensFor(theme.palette.mode);
   return (
     <Box data-testid="store-pin-legend" sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-        <MarkerDot data-testid="legend-confirmed-dot" color={tokens.semantic.success} glow={false} />
+        <MarkerDot data-testid="legend-confirmed-dot" color={tokens.semantic.success} />
         <Typography variant="caption" sx={{ color: tokens.text.secondary }}>Confirmed pin</Typography>
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-        <MarkerDot data-testid="legend-proposed-dot" color={tokens.text.primary} proposed glow={false} />
+        <MarkerDot data-testid="legend-proposed-dot" color={tokens.text.primary} proposed />
         <Typography variant="caption" sx={{ color: tokens.text.secondary }}>Proposed pin, not saved until you confirm</Typography>
       </Box>
     </Box>

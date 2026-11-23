@@ -20,9 +20,9 @@ type MarkerDotProps = {
   selected?: boolean;
   /** Dashed outline, no fill: legacy hollow mode. */
   hollow?: boolean;
-  /** Filled dot with a dashed outer ring: an unconfirmed proposal matching Shipments' filled point language. */
+  /** Filled dot, same soft glow as a confirmed pin: an unconfirmed proposal. */
   proposed?: boolean;
-  /** The soft glow around a marker. Off for very dense maps. */
+  /** The soft shipping-map glow around a marker. Off for dense clusters. */
   glow?: boolean;
   children?: ReactNode;
   'data-testid'?: string;
@@ -42,7 +42,9 @@ export function MarkerDot({
   const t = tokensFor(useTheme().palette.mode);
   const isProposed = proposed && !hollow;
   const box = hollow ? size + 3 : size;
-  const halo = `0 0 0 ${selected ? 6 : 4}px ${markerAlpha(color, selected ? 0.28 : 0.18)}`;
+  const glowShadow = selected
+    ? `0 0 10px ${markerAlpha(color, 0.7)}, 0 0 22px ${color}`
+    : `0 0 18px ${color}`;
   return (
     <Box
       component="span"
@@ -61,14 +63,10 @@ export function MarkerDot({
         borderRadius: '50%',
         bgcolor: hollow ? 'transparent' : color,
         border: hollow ? `2px dashed ${color}` : undefined,
-        outlineStyle: isProposed ? 'dashed' : undefined,
-        outlineWidth: isProposed ? '1.5px' : undefined,
-        outlineColor: isProposed ? markerAlpha(color, 0.85) : undefined,
-        outlineOffset: isProposed ? '2px' : undefined,
         fontSize: 10,
         fontWeight: 700,
         color: t.bg.default,
-        boxShadow: glow ? `${halo}, 0 0 18px ${color}` : halo,
+        boxShadow: glow && !hollow ? glowShadow : undefined,
       }}
     >
       {children}

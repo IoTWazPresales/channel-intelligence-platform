@@ -41,8 +41,12 @@ type Props = {
   asideHeight?: number;
   onSelect: (key: string) => void;
   onAdjust: (key: string, coordinates: Coordinates) => void;
+  onAdjustEnd?: (key: string, coordinates: Coordinates) => void;
   onConfirm: (items: PinConfirmItem[]) => void | Promise<unknown>;
   onSkip: (store: StoreMapStore) => void;
+  canDrag?: (key: string) => boolean;
+  movingKey?: string | null;
+  onToggleMove?: (key: string) => void;
 };
 
 function fmt(value: number | null | undefined): string {
@@ -134,6 +138,8 @@ export function StoreMapPrototype(props: Props) {
                 return store ? <StoreFacts store={store} /> : null;
               }}
               onAdjust={props.saving ? undefined : props.onAdjust}
+              onAdjustEnd={props.saving ? undefined : props.onAdjustEnd}
+              canDrag={props.canDrag}
               placing={!!placing && !props.saving}
               onPlace={(coordinates) => {
                 if (!placing || !byKey.has(placing) || props.saving) return;
@@ -167,6 +173,21 @@ export function StoreMapPrototype(props: Props) {
                         {line.sku ?? line.product_name} · {fmt(line.units)} units · stock {fmt(line.stock_on_hand)} · cover {fmt(line.weeks_of_cover)}
                       </Typography>
                     ))}
+                  </Box>
+                ) : null}
+                {selected.pinned ? (
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
+                    <Button
+                      size="small"
+                      data-testid="store-map-move-pin"
+                      disabled={props.saving || !props.onToggleMove}
+                      onClick={() => props.onToggleMove?.(proposalKey(selected))}
+                    >
+                      {props.movingKey === proposalKey(selected) ? 'Done moving' : 'Move pin'}
+                    </Button>
+                    {props.movingKey === proposalKey(selected) ? (
+                      <Typography variant="caption">Drag the pin to a new place. Use Undo if it moves by accident.</Typography>
+                    ) : null}
                   </Box>
                 ) : null}
                 {!selected.pinned ? (

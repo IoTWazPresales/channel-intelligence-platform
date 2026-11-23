@@ -1,6 +1,6 @@
 import { BASEMAP_SIZE } from './basemapDots';
 
-// Denser land dots (~4.4 viewBox units / 0.7 deg) with a slightly smaller stroke, so land reads as a surface.
+// Denser land dots (~4.4 viewBox units / 0.7 deg) drawn smaller and semi-transparent, so land reads cleanly.
 // Extent of the existing equirectangular Shipments basemap, not tenant geography.
 export const BASEMAP_BOUNDS = { minLat: -44, maxLat: 58, minLon: -22, maxLon: 136 } as const;
 export const MAP_ASPECT_RATIO = `${BASEMAP_SIZE.width} / ${BASEMAP_SIZE.height}`;
@@ -46,14 +46,14 @@ export function mapBoundsForPoints(points: Coordinates[]): MapBounds {
   };
 }
 
-const BASEMAP_DOT_STROKE = 1.8;
+const BASEMAP_DOT_STROKE = 1.0;
 // A zoomed-in view spreads the same dots further apart, so the dots grow (more slowly than the
 // zoom) to keep the continent outline readable instead of sparse; never past this on-screen size.
 const BASEMAP_DOT_ZOOM_EXPONENT = 0.75;
 const BASEMAP_DOT_MAX_ON_SCREEN = 7;
 
 /**
- * Basemap dot size in viewBox units. At the Shipments extent a dot is 1.8 units. A zoomed-in view
+ * Basemap dot size in viewBox units. At the Shipments extent a dot is 1.0 units. A zoomed-in view
  * magnifies the viewBox, so the stroke is divided by the zoom, then multiplied back by a
  * sub-linear growth so the dots get a little larger on screen instead of vanishing.
  */

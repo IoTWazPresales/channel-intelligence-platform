@@ -63,20 +63,20 @@ describe('map view', () => {
   });
 
   it('grows basemap dots a little on screen when zoomed in, so the outline does not look sparse', () => {
-    expect(basemapStrokeWidth()).toBe(1.8);
-    expect(basemapStrokeWidth(BASEMAP_BOUNDS)).toBe(1.8);
+    expect(basemapStrokeWidth()).toBe(1.0);
+    expect(basemapStrokeWidth(BASEMAP_BOUNDS)).toBe(1.0);
     // On screen a dot is its stroke times the zoom: bigger than the Shipments dot, but sub-linear.
     const lonZoom = (bounds: typeof view) => (BASEMAP_BOUNDS.maxLon - BASEMAP_BOUNDS.minLon) / lonSpanOf(bounds);
     const continent = { minLat: -20, maxLat: 20, minLon: 0, maxLon: 60 };
     const onScreen = basemapStrokeWidth(continent) * lonZoom(continent);
-    expect(onScreen).toBeGreaterThan(1.8);
-    expect(onScreen).toBeLessThan(1.8 * lonZoom(continent));
-    expect(basemapStrokeWidth(continent)).toBeLessThan(1.8);
+    expect(onScreen).toBeGreaterThan(1.0);
+    expect(onScreen).toBeLessThan(1.0 * lonZoom(continent));
+    expect(basemapStrokeWidth(continent)).toBeLessThan(1.0);
     // Never a huge blob however far in.
     const city = { minLat: 0, maxLat: 0.2, minLon: 0, maxLon: 0.3 };
     expect(basemapStrokeWidth(city) * lonZoom(city)).toBeLessThanOrEqual(7 + 1e-9);
     // Zooming out past the basemap never makes the dots bigger.
-    expect(basemapStrokeWidth(WORLD_BOUNDS)).toBe(1.8);
+    expect(basemapStrokeWidth(WORLD_BOUNDS)).toBe(1.0);
   });
 
   it('zooms in as far as the caller allows, and no further', () => {

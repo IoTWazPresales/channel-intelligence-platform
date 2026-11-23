@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-11-24 - Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it.
+**Last updated:** 2026-11-24 — store map review fixes (smaller semi-transparent land dots, Move+undo, shipping-map glow). Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it. Last prior live acceptance: 22 November (`c685bf63`).
 **Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
 **Next agent:** Next wave item: Dashboard V2 and Targets (BACKLOG-269) unless Warren reprioritizes. Read [durable handoff](../handoffs/2026-11-23/README.md).
 
@@ -29,8 +29,8 @@
 ## Store map (BACKLOG-268) — OpenFreeMap chosen 2026-11-23
 
 - Sell-through shows the MapLibre store map when this tenant has a TileJSON URL in tenant settings. No provider URL is hardcoded in code or migrations; Warren chose OpenFreeMap and it is stored as this tenant's setting via the existing settings API. The SVG dotted basemap remains the fallback and is still used by On the water. Attribution stays the compact OSM/provider (i) control.
-- Shared land dots were regenerated denser (0.7 deg / ~4.4 viewBox units, stroke 1.8) and the MapLibre `dotted-land` pattern was tightened to a 4px tile so the two maps stay visually matched at world scale.
-- Pins, proposed pins, details and confirm/skip controls remain in the right-hand panel. No store locations were confirmed. BACKLOG-267 still applies. Fourways A02 and Clearwater A01 stay unverified.
+- Shared land dots stay on the dense 0.7 deg / 4px grid, but are smaller and semi-transparent (SVG stroke 1.0 at about 0.42–0.45 opacity; MapLibre dotted-land uses a tighter, ~0.42 alpha stipple) so the land reads cleanly.
+- Confirmed pins are not draggable until the user presses Move pin. Unconfirmed and proposed pins stay draggable. Pin moves can be undone in the session with Ctrl+Z / Cmd+Z or Undo, through the same save path. Boundary rings were replaced with the shipping-map soft glow (`MapMarker`). No store locations were auto-confirmed. BACKLOG-267 still applies. Fourways A02 and Clearwater A01 stay unverified.
 
 ## Targets / Dashboard V2 ? not done
 
@@ -40,7 +40,7 @@
 
 ## Next ? one task / one delegated agent at a time
 
-1. Warren reviews the live Sell-through MapLibre store map (OpenFreeMap, this tenant only). Do not confirm store locations (BACKLOG-267).
+1. Warren reviews the latest live store-map fixes (smaller dots, Move+undo, glow). Do not confirm store locations (BACKLOG-267).
 2. Discovery V2 is next unless reprioritized: committed S1/S2/S3c/S5 not integrated; S3a dirty foundations/incomplete lint; S4 dirty/failed saved checks; S3b Crawlee+Playwright finder pending. Keep live Preview-only and exact GTIN/model evidence. No automatic schedule activation.
 3. Dashboard/Targets delivery per accepted theme/placement decisions, then AI-assisted import implementation/three-customer clone proof. AI proposes; steward confirms fixed rules. Requested library review follows original live lanes.
 4. Recovery manifests name every relevant branch/base and dirty file. Verified Git bundle and ZIP preserve seven separate refs plus three dirty worktrees/15untrackedfiles; restore only into new worktrees after inspection, never blindly into integration.

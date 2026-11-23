@@ -3,7 +3,7 @@
 import { Box, Button, TextField, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 
 import {
@@ -65,7 +65,6 @@ const PIN_SIZE = 11;
 const PIN_SIZE_SELECTED = 16;
 const CLUSTER_FIT_PADDING = 1.8;
 const CLUSTER_CARD_STORES = 5;
-const GLOW_PIN_LIMIT = 60;
 
 function hitFor(size: number, nearestPx: number): number {
   return Math.max(size + 2, Math.min(MAX_HIT_PX, Math.floor(nearestPx)));
@@ -96,10 +95,20 @@ export function StoreMap() {
   const [overrides, setOverrides] = useState<Record<string, Coordinates>>({});
   const [rejected, setRejected] = useState<Set<string>>(() => new Set());
   const [activePinKey, setActivePinKey] = useState<string | null>(null);
+  const [movingKey, setMovingKey] = useState<string | null>(null);
+  const [undoStack, setUndoStack] = useState<Array<{
+    key: string;
+    previous: Coordinates;
+    next: Coordinates;
+    persisted: boolean;
+  }>>([]);
   const [dragBounds, setDragBounds] = useState<MapBounds | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [mapPx, setMapPx] = useState(DEFAULT_MAP_SIZE);
   const savingRef = useRef(false);
+  const undoStackRef = useRef(undoStack);
+  undoStackRef.current = undoStack;
+  const adjustStartRef = useRef<Record<string, Coordinates>>({});
   const dragRef = useRef<{
     key: string;
     pointerId: number;
@@ -110,6 +119,8 @@ export function StoreMap() {
     width: number;
     height: number;
     bounds: MapBounds;
+    previous: Coordinates;
+    persisted: boolean;
     moved: boolean;
   } | null>(null);
 
@@ -145,10 +156,10 @@ export function StoreMap() {
   const unpinned = visible.filter((store) => !mappedKeys.has(storeKey(store)));
   const points = mapStores.map((store) => ({
     id: storeKey(store),
-    ...(store.pinned
-      ? finiteCoordinates(store.latitude, store.longitude)!
-      : (overrides[storeKey(store)] ??
-        finiteCoordinates(store.location_suggestion!.latitude, store.location_suggestion!.longitude)!)),
+    ...(overrides[storeKey(store)] ??
+      (store.pinned
+        ? finiteCoordinates(store.latitude, store.longitude)!
+        : finiteCoordinates(store.location_suggestion!.latitude, store.location_suggestion!.longitude)!)),
   }));
   const pointOf = new Map(points.map((point) => [point.id, point]));
   const needle = unpinnedQuery.trim().toLowerCase();
@@ -186,7 +197,6 @@ export function StoreMap() {
   const placeOf = new Map(singles.map((pin) => [pin.id, pin]));
   const storeByKey = new Map(mapStores.map((store) => [storeKey(store), store]));
   const hoverCluster = clusters.find((group) => group.id === hoverClusterId) ?? null;
-  const glow = mapStores.length <= GLOW_PIN_LIMIT;
   const selected = visible.find((store) => storeKey(store) === selectedKey) ?? null;
   const hover = mapStores.find((store) => storeKey(store) === hoverKey) ?? null;
   const activePin = suggestions.find((store) => storeKey(store) === activePinKey) ?? null;
@@ -204,19 +214,38 @@ export function StoreMap() {
     else mapView.zoomIn();
   }
 
-  function startDrag(event: PointerEvent<HTMLButtonElement>, key: string) {
+  function startDrag(event: PointerEvent<HTMLButtonElement>, key: string, persisted: boolean) {
     if (savingRef.current || event.button !== 0) return;
-    setActivePinKey(key);
+    if (persisted && movingKey !== key) return;
+    if (!persisted) setActivePinKey(key);
     const rect = canvasRef.current?.getBoundingClientRect();
     const point = projected.find((item) => item.id === key);
-    if (!rect?.width || !rect.height || !point) return;
+    const start = pointOf.get(key);
+    if (!rect?.width || !rect.height || !point || !start) return;
     dragRef.current = {
       key, pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY,
-      x: point.x, y: point.y, width: rect.width, height: rect.height, bounds, moved: false,
+      x: point.x, y: point.y, width: rect.width, height: rect.height, bounds,
+      previous: { latitude: start.latitude, longitude: start.longitude },
+      persisted, moved: false,
     };
     setDragBounds(bounds);
     event.currentTarget.setPointerCapture?.(event.pointerId);
     event.preventDefault();
+  }
+
+  function coordinatesFromDrag(
+    event: PointerEvent<HTMLButtonElement>,
+    drag: NonNullable<typeof dragRef.current>,
+  ): Coordinates {
+    const coordinates = unprojectStore(
+      drag.x + ((event.clientX - drag.clientX) / drag.width) * 100,
+      drag.y + ((event.clientY - drag.clientY) / drag.height) * 100,
+      drag.bounds
+    );
+    return {
+      latitude: Math.max(-90, Math.min(90, coordinates.latitude)),
+      longitude: Math.max(-180, Math.min(180, coordinates.longitude)),
+    };
   }
 
   function moveDrag(event: PointerEvent<HTMLButtonElement>) {
@@ -224,28 +253,32 @@ export function StoreMap() {
     if (!drag || event.pointerId !== drag.pointerId) return;
     if (!drag.moved && event.clientX === drag.clientX && event.clientY === drag.clientY) return;
     drag.moved = true;
-    const coordinates = unprojectStore(
-      drag.x + ((event.clientX - drag.clientX) / drag.width) * 100,
-      drag.y + ((event.clientY - drag.clientY) / drag.height) * 100,
-      drag.bounds
-    );
-    setOverrides((current) => ({
-      ...current,
-      [drag.key]: {
-        latitude: Math.max(-90, Math.min(90, coordinates.latitude)),
-        longitude: Math.max(-180, Math.min(180, coordinates.longitude)),
-      },
-    }));
+    setOverrides((current) => ({ ...current, [drag.key]: coordinatesFromDrag(event, drag) }));
   }
 
-  function endDrag(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
-    if (dragRef.current?.pointerId !== event.pointerId) return;
-    if (!cancelled) moveDrag(event);
+  async function endDrag(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const next = cancelled || !drag.moved ? null : coordinatesFromDrag(event, drag);
+    if (next) setOverrides((current) => ({ ...current, [drag.key]: next }));
     dragRef.current = null;
     setDragBounds(null);
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    if (!next) return;
+    if (drag.persisted) {
+      const store = storeByKey.get(drag.key);
+      if (!store) return;
+      const saved = await postPin(store, next.latitude, next.longitude);
+      if (!saved) {
+        setOverrides((current) => ({ ...current, [drag.key]: drag.previous }));
+        return;
+      }
+    }
+    setUndoStack((current) => [...current, {
+      key: drag.key, previous: drag.previous, next, persisted: drag.persisted,
+    }]);
   }
 
   function rejectSuggestion(store: StoreMapStore) {
@@ -261,9 +294,31 @@ export function StoreMap() {
 
   function stagePrototypePin(key: string, coordinates: Coordinates) {
     if (proposalConfirm.saving || saving) return;
+    if (!(key in adjustStartRef.current)) {
+      const current = pointOf.get(key);
+      if (current) adjustStartRef.current[key] = { latitude: current.latitude, longitude: current.longitude };
+    }
     setOverrides((current) => ({ ...current, [key]: coordinates }));
     setRejected((current) => new Set([...current].filter((id) => id !== key)));
     proposalConfirm.clearError(key);
+  }
+
+  async function commitPrototypeAdjust(key: string, coordinates: Coordinates) {
+    const previous = adjustStartRef.current[key];
+    delete adjustStartRef.current[key];
+    if (!previous) return;
+    if (previous.latitude === coordinates.latitude && previous.longitude === coordinates.longitude) return;
+    const store = storeByKey.get(key) ?? visible.find((entry) => storeKey(entry) === key);
+    if (!store) return;
+    const persisted = !!store.pinned;
+    if (persisted) {
+      const saved = await postPin(store, coordinates.latitude, coordinates.longitude);
+      if (!saved) {
+        setOverrides((current) => ({ ...current, [key]: previous }));
+        return;
+      }
+    }
+    setUndoStack((current) => [...current, { key, previous, next: coordinates, persisted }]);
   }
 
   function confirmPrototype(items: PinConfirmItem[]) {
@@ -276,8 +331,8 @@ export function StoreMap() {
     }));
   }
 
-  async function postPin(store: StoreMapStore, lat: number, lon: number) {
-    if (savingRef.current) return;
+  async function postPin(store: StoreMapStore, lat: number, lon: number): Promise<boolean> {
+    if (savingRef.current) return false;
     savingRef.current = true;
     const key = storeKey(store);
     setSaving(true);
@@ -297,21 +352,56 @@ export function StoreMap() {
           stores: current.stores.map((item) => (storeKey(item) === key ? saved : item)),
         }
       );
+      setOverrides((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
       setActivePinKey(null);
       setPinFor(null);
       setLatitude('');
       setLongitude('');
       setPinErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['store-dc-map'] });
+      return true;
     } catch (error) {
       setPinError(safeDisplayError(error));
       setPinErrorKey(key);
       if (suggestedKeys.has(key)) setActivePinKey(key);
+      return false;
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
   }
+
+  async function undoMove() {
+    const item = undoStackRef.current.at(-1);
+    if (!item || savingRef.current) return;
+    setUndoStack((current) => current.slice(0, -1));
+    if (item.persisted) {
+      const store = storeByKey.get(item.key) ?? visible.find((entry) => storeKey(entry) === item.key);
+      if (!store) return;
+      const saved = await postPin(store, item.previous.latitude, item.previous.longitude);
+      if (!saved) setUndoStack((current) => [...current, item]);
+      return;
+    }
+    setOverrides((current) => ({ ...current, [item.key]: item.previous }));
+  }
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== 'z') return;
+      const target = event.target as HTMLElement | null;
+      if (typeof target?.closest === 'function' && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (undoStackRef.current.length === 0 || savingRef.current) return;
+      event.preventDefault();
+      void undoMove();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   async function savePin(store: StoreMapStore) {
     const lat = Number(latitude);
@@ -337,6 +427,14 @@ export function StoreMap() {
     <Box data-testid="store-map" sx={{ mt: 1.5 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Stores</Typography>
+        <Button
+          size="small"
+          data-testid="store-map-undo"
+          disabled={undoStack.length === 0 || saving}
+          onClick={() => void undoMove()}
+        >
+          Undo
+        </Button>
       </Box>
       {mapQuery.isLoading ? (
         <Typography variant="body2" sx={{ color: tokens.text.secondary }} data-testid="store-map-loading">
@@ -377,8 +475,12 @@ export function StoreMap() {
             asideHeight={mapPx.h}
             onSelect={setSelectedKey}
             onAdjust={stagePrototypePin}
+            onAdjustEnd={commitPrototypeAdjust}
             onConfirm={confirmPrototype}
             onSkip={rejectSuggestion}
+            canDrag={(key) => suggestedKeys.has(key) || movingKey === key}
+            movingKey={movingKey}
+            onToggleMove={(key) => setMovingKey((current) => current === key ? null : key)}
           />
         </Suspense>
       ) : (
@@ -405,6 +507,7 @@ export function StoreMap() {
                 if (!pin) return null;
                 const color = sellThroughColor(store.sell_through, tokens.semantic.success, tokens.semantic.danger);
                 const on = unconfirmed ? activePinKey === key : selectedKey === key;
+                const canDrag = unconfirmed || movingKey === key;
                 return (
                   <MapMarker
                     key={key}
@@ -416,12 +519,12 @@ export function StoreMap() {
                     size={on ? PIN_SIZE_SELECTED : PIN_SIZE}
                     selected={on}
                     proposed={unconfirmed}
-                    glow={!unconfirmed && glow}
+                    glow
                     zIndex={on ? 1 : undefined}
-                    cursor={unconfirmed ? 'grab' : 'pointer'}
-                    touchAction={unconfirmed ? 'none' : 'auto'}
+                    cursor={canDrag ? 'grab' : 'pointer'}
+                    touchAction={canDrag ? 'none' : 'auto'}
                     data-testid={unconfirmed ? 'store-dot-unconfirmed' : 'store-dot'}
-                    data-pin-state={unconfirmed ? 'unconfirmed' : 'confirmed'}
+                    data-pin-state={unconfirmed ? 'unconfirmed' : (movingKey === key ? 'moving' : 'confirmed')}
                     data-latitude={coordinates.latitude}
                     data-longitude={coordinates.longitude}
                     data-customer-id={store.customer_id}
@@ -432,11 +535,11 @@ export function StoreMap() {
                     onFocus={() => setHoverKey(key)}
                     onBlur={() => setHoverKey((current) => current === key ? null : current)}
                     onClick={() => unconfirmed ? setActivePinKey(key) : setSelectedKey(key)}
-                    onPointerDown={unconfirmed ? (event) => startDrag(event, key) : undefined}
-                    onPointerMove={unconfirmed ? moveDrag : undefined}
-                    onPointerUp={unconfirmed ? (event) => endDrag(event) : undefined}
-                    onPointerCancel={unconfirmed ? (event) => endDrag(event, true) : undefined}
-                    onLostPointerCapture={unconfirmed ? (event) => endDrag(event, true) : undefined}
+                    onPointerDown={canDrag ? (event) => void startDrag(event, key, !unconfirmed) : undefined}
+                    onPointerMove={canDrag ? moveDrag : undefined}
+                    onPointerUp={canDrag ? (event) => void endDrag(event) : undefined}
+                    onPointerCancel={canDrag ? (event) => void endDrag(event, true) : undefined}
+                    onLostPointerCapture={canDrag ? (event) => void endDrag(event, true) : undefined}
                   />
                 );
               })}
@@ -458,7 +561,7 @@ export function StoreMap() {
                     color={color}
                     size={size}
                     proposed={proposed}
-                    glow={false}
+                    glow
                     data-testid="store-cluster"
                     data-cluster-count={count}
                     data-pin-state={proposed ? 'proposed' : 'confirmed'}
@@ -572,6 +675,16 @@ export function StoreMap() {
                   <Typography variant="subtitle2">
                     {storePlace(selected)} · {selected.site_label} · {selected.customer_name}
                   </Typography>
+                  {selected.pinned && finiteCoordinates(selected.latitude, selected.longitude) ? (
+                    <Button
+                      size="small"
+                      data-testid="store-map-move-pin"
+                      disabled={saving}
+                      onClick={() => setMovingKey((current) => current === storeKey(selected) ? null : storeKey(selected))}
+                    >
+                      {movingKey === storeKey(selected) ? 'Done moving' : 'Move pin'}
+                    </Button>
+                  ) : null}
                   {selected.lines.length === 0 ? (
                     <Typography variant="body2" sx={{ color: tokens.text.secondary }}>No product lines for this store.</Typography>
                   ) : selected.lines.map((line) => (

@@ -446,13 +446,15 @@ describe('StoreMap', () => {
     const solid = screen.getAllByTestId('store-dot')[0];
     expect(parseFloat(getComputedStyle(pin).left)).toBeGreaterThan(parseFloat(getComputedStyle(solid).left));
     expect(parseFloat(getComputedStyle(pin).top)).toBeGreaterThan(parseFloat(getComputedStyle(solid).top));
-    // Same filled point/halo marker as Shipments, with a dashed outer ring when proposed.
+    // Same filled glowing marker as Shipments, for both confirmed and proposed pins.
     expect(dotOf(pin)).toHaveAttribute('data-proposed', 'true');
     expect(dotOf(pin)).toHaveAttribute('data-hollow', 'false');
-    expect(getComputedStyle(dotOf(pin)).outlineStyle).toBe('dashed');
+    expect(getComputedStyle(dotOf(pin)).outlineStyle).not.toBe('dashed');
+    expect(getComputedStyle(dotOf(pin)).boxShadow).toContain('18px');
     expect(dotOf(solid)).toHaveAttribute('data-proposed', 'false');
     expect(dotOf(solid)).toHaveAttribute('data-hollow', 'false');
     expect(getComputedStyle(dotOf(solid)).outlineStyle).not.toBe('dashed');
+    expect(getComputedStyle(dotOf(solid)).boxShadow).toContain('18px');
     fireEvent.click(screen.getByRole('button', { name: 'SDC-C2' }));
     expect(screen.queryByTestId('store-dot-unconfirmed')).toBeNull();
     expect(screen.getAllByTestId('store-dot')).toHaveLength(1);
@@ -527,7 +529,7 @@ describe('StoreMap', () => {
       };
     }
 
-    it('shows a legend with filled confirmed and filled+ringed proposed dots', async () => {
+    it('shows a legend with filled glowing confirmed and proposed dots', async () => {
       hoisted.payload = suggestedPayload();
       wrap(<StoreMap />);
       await screen.findByTestId('store-dot-unconfirmed');
@@ -535,13 +537,14 @@ describe('StoreMap', () => {
       expect(legend).toHaveTextContent('Confirmed pin');
       expect(legend).toHaveTextContent('Proposed pin');
       expect(within(legend).getByTestId('legend-proposed-dot')).toHaveAttribute('data-proposed', 'true');
-      expect(getComputedStyle(within(legend).getByTestId('legend-proposed-dot')).outlineStyle).toBe('dashed');
+      expect(getComputedStyle(within(legend).getByTestId('legend-proposed-dot')).outlineStyle).not.toBe('dashed');
+      expect(getComputedStyle(within(legend).getByTestId('legend-proposed-dot')).boxShadow).toContain('18px');
       expect(within(legend).getByTestId('legend-confirmed-dot')).toHaveAttribute('data-proposed', 'false');
-      // the dot on the map matches the legend: filled core + dashed outer ring when proposed
       const dot = dotOf(screen.getByTestId('store-dot-unconfirmed'));
       expect(dot).toHaveAttribute('data-proposed', 'true');
       expect(getComputedStyle(dot).backgroundColor).not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
-      expect(getComputedStyle(dot).outlineStyle).toBe('dashed');
+      expect(getComputedStyle(dot).outlineStyle).not.toBe('dashed');
+      expect(getComputedStyle(dot).boxShadow).toContain('18px');
     });
 
     it('lists the proposals with a Confirm that uses the confirm route and saves one pin', async () => {
@@ -714,6 +717,40 @@ describe('StoreMap', () => {
       expect(pin.dataset.latitude).not.toBe(latitude);
       // The map was not panned: its view is still the automatic fit.
       expect(screen.getByTestId('map-reset-view')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('store-map-undo'));
+      expect(screen.getByTestId('store-dot-unconfirmed').dataset.latitude).toBe(latitude);
+    });
+
+    it('keeps a confirmed pin still until Move is pressed, then saves and undoes through the pin endpoint', async () => {
+      hoisted.payload = payload();
+      wrap(<StoreMap />);
+      const pin = await screen.findByRole('button', { name: /SDC-SITE-A, SDC-C1/ });
+      expect(pin).toHaveAttribute('data-latitude', '1.5');
+      expect(pin).toHaveAttribute('data-longitude', '2.5');
+      fireEvent.pointerDown(pin, { pointerId: 1, button: 0, clientX: 500, clientY: 300 });
+      fireEvent.pointerMove(pin, { pointerId: 1, clientX: 450, clientY: 250 });
+      fireEvent.pointerUp(pin, { pointerId: 1, clientX: 450, clientY: 250 });
+      expect(pin).toHaveAttribute('data-latitude', '1.5');
+      expect(hoisted.posted).toEqual([]);
+      expect(screen.getByTestId('store-map-undo')).toBeDisabled();
+
+      fireEvent.click(pin);
+      fireEvent.click(screen.getByTestId('store-map-move-pin'));
+      vi.spyOn(screen.getByTestId('store-map-canvas'), 'getBoundingClientRect').mockReturnValue({
+        x: 0, y: 0, left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, toJSON: () => ({}),
+      });
+      fireEvent.pointerDown(pin, { pointerId: 1, button: 0, clientX: 400, clientY: 300 });
+      fireEvent.pointerMove(pin, { pointerId: 1, clientX: 500, clientY: 250 });
+      fireEvent.pointerUp(pin, { pointerId: 1, clientX: 500, clientY: 250 });
+      await waitFor(() => expect(hoisted.posted).toHaveLength(1));
+      expect(hoisted.posted[0]).toMatchObject({ customer_id: 1, site_label: 'SDC-SITE-A' });
+      expect(hoisted.posted[0]).not.toMatchObject({ latitude: 1.5, longitude: 2.5 });
+
+      fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+      await waitFor(() => expect(hoisted.posted).toHaveLength(2));
+      expect(hoisted.posted[1]).toEqual({
+        customer_id: 1, site_label: 'SDC-SITE-A', latitude: 1.5, longitude: 2.5,
+      });
     });
 
     it('resets the view, and zooms in and out with the buttons', async () => {
@@ -909,7 +946,7 @@ describe('StoreMap', () => {
       expect(screen.getAllByTestId('store-dot')).toHaveLength(3);
     });
 
-    it('draws a cluster with a proposed pin as a dashed ring', async () => {
+    it('draws a cluster that includes a proposed pin without a boundary ring', async () => {
       hoisted.payload = {
         ...payload(),
         stores: [
@@ -930,7 +967,7 @@ describe('StoreMap', () => {
       expect(cluster).toHaveAttribute('data-pin-state', 'proposed');
       expect(dotOf(cluster)).toHaveAttribute('data-proposed', 'true');
       expect(dotOf(cluster)).toHaveAttribute('data-hollow', 'false');
-      expect(getComputedStyle(dotOf(cluster)).outlineStyle).toBe('dashed');
+      expect(getComputedStyle(dotOf(cluster)).outlineStyle).not.toBe('dashed');
       expect(cluster).toHaveTextContent('2');
       fireEvent.mouseEnter(cluster);
       expect(screen.getByTestId('store-map-cluster-hover')).toHaveTextContent('(proposed)');
