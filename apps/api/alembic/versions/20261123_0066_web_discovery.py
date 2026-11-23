@@ -1,7 +1,7 @@
 """Discovery V2: customer web sites, and listing-link queue rows that need a product.
 
-Revision ID: 20261121_0065
-Revises: 20261120_0064
+Revision ID: 20261123_0066
+Revises: 20261120_0065
 Create Date: 2026-11-21
 
 Adds ``customer_web_site`` (the customer-to-domain association and the site-candidate steward
@@ -26,8 +26,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "20261121_0065"
-down_revision: str | Sequence[str] | None = "20261120_0064"
+revision: str = "20261123_0066"
+down_revision: str | Sequence[str] | None = "20261120_0065"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

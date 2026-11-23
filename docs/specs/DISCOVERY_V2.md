@@ -1,7 +1,7 @@
 # Discovery V2: find customer web shops, their product pages, and link them
 
 Status: DESIGN (Opus planner, 2026-11-20). Base: `feat/integrate-20261103` @ `4ca70b68`. Merges to `feat/integrate-20261103` only.
-Depends on: the `tenant_setting` PR (worktree `sched-off-20261120`, migration `20261120_0064`). This spec's migration is `20261121_0065`.
+Depends on: the `tenant_setting` PR (worktree `sched-off-20261120`, migration `20261120_0064`). This spec's migration is `20261123_0066` (see §12).
 
 Rules this design keeps (Warren): it reuses existing code and adds no parallel systems. Nothing that names a customer, site, retailer or country goes in code or migrations. A link is made automatically only on exact evidence; anything less goes to a steward queue with that evidence. Preview writes nothing. Apply saves. Robots.txt is respected, and the #100 spacing and 403/429 back-off apply to every host, search engines included.
 
@@ -243,7 +243,7 @@ Safeguards:
 
 ## 6. Database, API, worker
 
-### 6.1 Migration `apps/api/alembic/versions/20261121_0065_web_discovery.py` (revises `20261120_0064`)
+### 6.1 Migration `apps/api/alembic/versions/20261123_0066_web_discovery.py` (revises `20261120_0065`)
 Idempotent (`IF NOT EXISTS`), no data rows, and grants as in 0064.
 
 ```sql
@@ -456,7 +456,7 @@ Builders **BE-A** (S1 → S4), **BE-B** (S2 → S3) and **FE** (S5) work in para
 
 | Slice | Owner | Files (create unless marked *edit*) | Depends on |
 |---|---|---|---|
-| **S1 core** | BE-A | `alembic/versions/20261121_0065_web_discovery.py`; `models/customer_web_site.py`; *edit* `models/__init__.py`, `models/listing_link.py`, `core/tenant_scope.py`, `services/tenant_settings.py` (keys §2), `api/v1/router.py`, `worker/tasks.py`; `web_discovery/__init__.py`, `settings.py` (`load_discovery_settings(session, tenant) -> DiscoverySettings(missing=[…])`), `robots.py`, `cache.py`, `polite.py`, `candidates.py`, `scoring.py`, `preview.py` (`run_preview`, plan store), `apply.py` (sites part); `endpoints/listing_discovery.py`; *edit* `discovery.py` **only** `_site_keys`/`_seed_origin` (§6.1); tests `test_web_discovery_{settings,robots,scoring,candidates,preview_write_free,apply,api}.py`; fixtures `fixtures/web_discovery/robots_*`, `home_*` | tenant_setting PR merged |
+| **S1 core** | BE-A | `alembic/versions/20261123_0066_web_discovery.py`; `models/customer_web_site.py`; *edit* `models/__init__.py`, `models/listing_link.py`, `core/tenant_scope.py`, `services/tenant_settings.py` (keys §2), `api/v1/router.py`, `worker/tasks.py`; `web_discovery/__init__.py`, `settings.py` (`load_discovery_settings(session, tenant) -> DiscoverySettings(missing=[…])`), `robots.py`, `cache.py`, `polite.py`, `candidates.py`, `scoring.py`, `preview.py` (`run_preview`, plan store), `apply.py` (sites part); `endpoints/listing_discovery.py`; *edit* `discovery.py` **only** `_site_keys`/`_seed_origin` (§6.1); tests `test_web_discovery_{settings,robots,scoring,candidates,preview_write_free,apply,api}.py`; fixtures `fixtures/web_discovery/robots_*`, `home_*` | tenant_setting PR merged |
 | **S2 search** | BE-B | `web_discovery/search.py`, `web_discovery/search_parsers.py`; fixtures `fixtures/web_discovery/{ddg_*,searxng_*}`; `tests/test_web_discovery_search.py` | `polite.PoliteGetter` interface (stub until S1 lands) |
 | **S3 pages** | BE-B | `web_discovery/pages.py`; *edit* `identity.py` (fact extraction only; `corroboration` and keys unchanged), `discovery.py` (except the S1 functions: extract the pure finder from `_find_and_propose`/`_search_candidates`/`_sitemap_urls` and call it); fixtures `product_*`, `opensearch.xml`, `sitemap_index.xml`, `spa_shell.html`, `home_search_form.html`; `tests/test_web_discovery_pages.py`; *edit* existing `test_listing_discovery*` | S2 (getter usage), S4 `linking.decide` signature (stub) |
 | **S4 linking** | BE-A | `web_discovery/linking.py`; *edit* `links.py` (`link_product`, `queue_listing_case`), `endpoints/listing_capture.py` (`QueueDecision`, `/link-queue` payload), `coverage.py` (NULL product guard), `web_discovery/apply.py` (pages + listings part); `tests/test_web_discovery_linking.py` | S1 |
@@ -491,3 +491,32 @@ Builders **BE-A** (S1 → S4), **BE-B** (S2 → S3) and **FE** (S5) work in para
 - **D-W4:** A page `sku` equal to our part code stays evidence only. *Recommend yes* (keeps `identity.py:62`).
 - **D-W5:** Treat a feed seed's `product_id` (same customer, site and external id) as exact evidence for unlinked listings. *Recommend yes.*
 - **D-W6:** Use the new `customer_web_site` table (any customer) instead of widening `site_onboarding` to non-reporting customers through `customer_report_config`. *Recommend new table*; `site_onboarding` is unchanged.
+
+---
+
+## 12. Machinery update, 23 Nov 2026 (Warren t393u, t394u, t396u, t397u)
+
+Behaviour is unchanged (Preview saves nothing, Apply saves only what was previewed, exact-evidence linking only, robots.txt respected, the existing per-site spacing and 403/429 pause). The machinery moved onto maintained, permissively licensed libraries:
+
+| Library | Version | Licence | Used for | Replaces |
+|---|---|---|---|---|
+| Crawlee for Python | 0.6.12 | Apache-2.0 | `web_discovery/crawl.py`: `HttpCrawler` for normal pages, `PlaywrightCrawler` for script-built pages; request queue, de-duplication, retries, robots.txt (`respect_robots_txt_file`) | hand-rolled fetch loops and the planned bare Playwright fallback |
+| Playwright (Python) | 1.65.2 | Apache-2.0 | headless Chromium under Crawlee's Playwright crawler | (new) |
+| extruct | 0.18.0 | BSD-3 | JSON-LD, microdata, OpenGraph → GTIN/EAN, SKU, MPN, brand, price, currency, availability (`page_facts.py`), for discovery and for the generic listing reader | regex scraping of those fields |
+| price-parser | 0.5.0 | BSD-3 | price strings → amount + currency | regex price parsing in the structured path |
+| tldextract | 5.3.0 | BSD-3 | registered domain and public suffix for the name match and the country check (offline suffix list) | last-label heuristics |
+| protego | 0.5.0 | BSD-3 | robots.txt matching in the polite getter (also what Crawlee uses internally) | own matcher |
+| ddgs | 9.16.1 | MIT | free, keyless DuckDuckGo search; failures never fail a run (other candidate sources continue) | own DuckDuckGo HTML/Lite parsers (kept as the S2 fallback) |
+| GS1 check digit | — | own code (`gtin.py`, tested) | GTIN-8/12/13/14 validation | python-stdnum was not used (LGPL) |
+
+Pins: Crawlee is held at 0.6.x because Crawlee 1.x requires pydantic ≥ 2.11 and the API pins pydantic < 2.11; `browserforge` is pinned to 1.2.3 because 1.2.4 breaks Crawlee 0.6.12 at import. Upgrading pydantic is a separate decision.
+
+**How Crawlee sits under the polite gate.** Crawlee's HTTP client is `GatedHttpClient`, whose transport is `PoliteGetter.get`: every request (pages, robots.txt, sitemaps, search pages) still passes the robots check, the per-host spacing, the shared 403/429 pause and the HTTP cache. Crawlee keeps its queues in memory only (`persist_storage=False`). The Playwright crawler fetches the page's own document through the same getter and hands it to the browser with `route.fulfill`; images, media and fonts are not loaded; no fingerprint generator, proxy or session rotation is used (D-0063). A block is a stop.
+
+**No hardcoding (t396u, t397u).** Nothing in discovery or capture code, config defaults, runtime fixtures or migrations names a retailer, site, domain, URL pattern, search URL, selector or country. Consequently the generic platform search patterns listed in §4.4 step 2 are **not** used: a site's search pattern comes only from the site itself (stored pattern, its OpenSearch description, or its home-page search form) and is learned from the first working query. Readers are chosen by the site's stored `adapter_key` (data), i.e. by capability (`html_page` for HTML/structured-data pages, `rest_buybox` for JSON buy-box documents), never by name or domain. `tests/test_no_hardcoded_sites.py` fails the build if a retailer name or a country domain ending appears in the scanned discovery/capture/UI/migration files.
+
+**Generic listing reader.** `observation.parse_snapshot_text` (the `html_page` reader) now reads the schema.org Product/Offer with extruct + price-parser first (`flags.method = "structured_data"`); the existing JSON envelope, JSON-LD regex and HTML price readers remain as the fallback for pages without structured offers. Schema availability (`InStock`/`OutOfStock`) wins over page text.
+
+**Migration.** Integration already had `20261120_0065_user_ui_layout`, so this spec's migration is `20261123_0066_web_discovery.py` (revises `20261120_0065`).
+
+Known pre-existing country-specific constants outside this change (§1.7) are listed for Warren in the report.
