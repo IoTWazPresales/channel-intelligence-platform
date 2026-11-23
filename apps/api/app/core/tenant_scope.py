@@ -52,6 +52,7 @@ def install_tenant_select_scope() -> None:
     from app.models.cpor import CporCase
     from app.models.cpor_payment import CporPaymentEvidence
     from app.models.customer_code_mint_setting import CustomerCodeMintSetting
+    from app.models.customer_web_site import CustomerWebSite
     from app.models.derived import WeeksOfCoverObservation
     from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
     from app.models.distributor_code_mint_setting import DistributorCodeMintSetting
@@ -82,6 +83,7 @@ def install_tenant_select_scope() -> None:
             CporCase,
             CporPaymentEvidence,
             CustomerCodeMintSetting,
+            CustomerWebSite,
             Dashboard,
             DashboardWidget,
             DimCustomer,

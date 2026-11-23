@@ -103,6 +103,7 @@ from app.api.v1.endpoints import (
     lineup,
     lineup_new_customer,
     listing_capture,
+    listing_discovery,
     planning,
     platform_audit,
     mappings,
@@ -169,6 +170,9 @@ api_router.include_router(
     channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]
 )
 api_router.include_router(sell_through.router, prefix="/sell-through", tags=["sell-through"])
+api_router.include_router(
+    listing_discovery.router, prefix="/listing-capture/discovery", tags=["listing-discovery"]
+)
 api_router.include_router(listing_capture.router, prefix="/listing-capture", tags=["listing-capture"])
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
 api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])

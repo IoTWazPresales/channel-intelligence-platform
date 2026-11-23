@@ -208,3 +208,60 @@ def _reset_login_throttle():
     login_throttle.reset_all()
     yield
     login_throttle.reset_all()
+
+
+@pytest.fixture(autouse=True)
+def no_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch):
+    """Discovery V2 unit tests never touch the network.
+
+    Autouse for every ``test_web_discovery_*`` module: DNS, raw sockets and urllib's ``urlopen`` raise.
+    Only loopback and the configured database host stay reachable (the async driver resolves its
+    host through ``socket.getaddrinfo``; libpq does not use these Python calls at all).
+    """
+    module = getattr(request, "module", None)
+    name = getattr(module, "__name__", "").rsplit(".", 1)[-1]
+    if not name.startswith("test_web_discovery_"):
+        yield
+        return
+    import socket
+    import urllib.request
+    from urllib.parse import urlsplit
+
+    from app.core.config import get_settings
+
+    allowed = {"", "localhost", "127.0.0.1", "::1"}
+    cfg = get_settings()
+    for url in (cfg.database_url, cfg.database_url_sync):
+        host = urlsplit(url).hostname
+        if host:
+            allowed.add(host.lower())
+
+    def _allowed(host) -> bool:
+        if host is None:
+            return True
+        text = host.decode("utf-8", errors="replace") if isinstance(host, bytes) else str(host)
+        return text.lower() in allowed
+
+    real_getaddrinfo = socket.getaddrinfo
+    real_create_connection = socket.create_connection
+
+    def _refuse() -> None:
+        raise OSError("network access is disabled in test_web_discovery_* tests")
+
+    def guarded_getaddrinfo(host, *args, **kwargs):
+        if not _allowed(host):
+            _refuse()
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    def guarded_create_connection(address, *args, **kwargs):
+        if not _allowed(address[0]):
+            _refuse()
+        return real_create_connection(address, *args, **kwargs)
+
+    def refuse_urlopen(*_args, **_kwargs):
+        _refuse()
+
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
+    monkeypatch.setattr(socket, "create_connection", guarded_create_connection)
+    monkeypatch.setattr(urllib.request, "urlopen", refuse_urlopen)
+    yield

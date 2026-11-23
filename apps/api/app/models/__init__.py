@@ -53,6 +53,7 @@ from app.models.customer_sellthrough_layout import CustomerSellthroughLayout
 from app.models.cst_listing_seed import CstListingSeed
 from app.models.budget_ledger import BudgetLedgerEntry
 from app.models.listing_capture import CustomerListing, ListingObservation
+from app.models.customer_web_site import CustomerWebSite
 from app.models.listing_link import ListingLink, ListingLinkQueue
 from app.models.listing_offer import ListingOffer
 from app.models.listing_site import ListingSite, ListingSiteSeller
@@ -180,6 +181,7 @@ __all__ = [
     "BudgetLedgerEntry",
     "CustomerListing",
     "ListingObservation",
+    "CustomerWebSite",
     "ListingLink",
     "ListingLinkQueue",
     "ListingOffer",
