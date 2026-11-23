@@ -2,7 +2,8 @@
 
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { Alert, Box, Button, Link, Typography } from '@mui/material';
+import { Alert, Box, Link, Typography } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import type { GeoJSONSource, Map as LibreMap } from 'maplibre-gl';
 import {
   useEffect,
@@ -13,7 +14,9 @@ import {
   type ReactNode,
 } from 'react';
 
+import { MAP_ASPECT_RATIO } from '@/features/maps/mapGeometry';
 import { MapMarker } from '@/features/maps/MapMarker';
+import { tokensFor } from '@/theme/cipTokens';
 import { safeDisplayError } from '@/lib/api';
 
 import {
@@ -31,7 +34,7 @@ import {
   DOT_IMAGE,
   buildMapStyle,
   dotImage,
-  mapColors,
+  mapColorsFor,
   type MapSettings,
 } from './style';
 
@@ -62,6 +65,10 @@ export function WorkbenchMap(props: Props) {
     selectedKey,
     fitKey,
   } = props;
+  const theme = useTheme();
+  const mode = theme.palette.mode;
+  const t = tokensFor(mode);
+  const colors = mapColorsFor(mode);
   const latest = useRef(props);
   latest.current = props;
 
@@ -75,8 +82,8 @@ export function WorkbenchMap(props: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const style = useMemo(
-    () => buildMapStyle({ tilejsonUrl, glyphsUrl, attribution }),
-    [tilejsonUrl, glyphsUrl, attribution],
+    () => buildMapStyle({ tilejsonUrl, glyphsUrl, attribution }, mode),
+    [tilejsonUrl, glyphsUrl, attribution, mode],
   );
   const dataKey = JSON.stringify(pointCollection(props.points));
 
@@ -116,13 +123,14 @@ export function WorkbenchMap(props: Props) {
         mapRef.current = instance;
         instance.addControl(new library.NavigationControl({ showCompass: false }), 'top-right');
         instance.addControl(new library.AttributionControl({
-          compact: false,
+          compact: true,
           customAttribution: style.metadata['workbench:attribution'],
         }), 'bottom-right');
         instance.getCanvas().setAttribute('aria-label', latest.current.label ?? 'Interactive map');
 
         const addDots = () => {
-          if (!instance.hasImage(DOT_IMAGE)) instance.addImage(DOT_IMAGE, dotImage());
+          if (instance.hasImage(DOT_IMAGE)) instance.removeImage?.(DOT_IMAGE);
+          instance.addImage(DOT_IMAGE, dotImage(mode));
         };
         instance.on('styleimagemissing', (event) => {
           if (event.id === DOT_IMAGE) addDots();
@@ -225,7 +233,7 @@ export function WorkbenchMap(props: Props) {
       if (mapRef.current === map) mapRef.current = null;
       map?.remove();
     };
-  }, [style]);
+  }, [style, mode]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource(POINT_SOURCE) as GeoJSONSource | undefined;
@@ -303,10 +311,6 @@ export function WorkbenchMap(props: Props) {
 
   return (
     <Box data-testid="workbench-map">
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-        <Button size="small" onClick={reset} disabled={!ready}>Reset view</Button>
-        {!ready && !error ? <Typography variant="caption">Loading map…</Typography> : null}
-      </Box>
       {!glyphsUrl?.trim() ? (
         <Alert severity="info" sx={{ mb: 1 }}>
           Map labels are not configured. Set the glyph URL in{' '}
@@ -315,12 +319,50 @@ export function WorkbenchMap(props: Props) {
       ) : null}
       {error ? <Alert severity="error" sx={{ mb: 1 }}>Map could not load: {error}</Alert> : null}
       <Box
+        data-map-canvas
         sx={{
           position: 'relative',
-          height: { xs: 360, md: 480 },
+          width: '100%',
+          aspectRatio: MAP_ASPECT_RATIO,
           overflow: 'hidden',
           borderRadius: 1,
-          bgcolor: mapColors.panel,
+          bgcolor: colors.panel,
+          '& .maplibregl-ctrl-top-right': { top: 8, right: 8, margin: 0 },
+          '& .maplibregl-ctrl-top-right .maplibregl-ctrl-group': {
+            margin: 0,
+            bgcolor: t.bg.elevated,
+            border: `1px solid ${t.border.strong}`,
+            borderRadius: 1,
+            boxShadow: 'none',
+            overflow: 'hidden',
+          },
+          '& .maplibregl-ctrl-group button': {
+            width: 28,
+            height: 28,
+            bgcolor: 'transparent',
+            borderColor: t.border.subtle,
+          },
+          '& .maplibregl-ctrl-group button:hover': { bgcolor: t.bg.surfaceMuted },
+          '& .maplibregl-ctrl-group button + button': { borderTop: `1px solid ${t.border.subtle}` },
+          '& .maplibregl-ctrl-group button .maplibregl-ctrl-icon': {
+            filter: mode === 'dark' ? 'invert(1) brightness(1.6)' : 'none',
+          },
+          '& .maplibregl-ctrl-bottom-right': { bottom: 8, right: 8, margin: 0 },
+          '& .maplibregl-ctrl-attrib': {
+            margin: 0,
+            bgcolor: alpha(t.bg.default, 0.8),
+            color: t.text.secondary,
+            border: `1px solid ${t.border.subtle}`,
+            borderRadius: '12px',
+            fontSize: 11,
+            boxShadow: 'none',
+          },
+          '& .maplibregl-ctrl-attrib.maplibregl-compact': { minHeight: 24 },
+          '& .maplibregl-ctrl-attrib a': { color: t.accent.primary },
+          '& .maplibregl-ctrl-attrib-button': {
+            bgcolor: 'transparent',
+            filter: mode === 'dark' ? 'invert(0.85)' : 'none',
+          },
         }}
         onKeyDown={(event) => {
           const map = mapRef.current;
@@ -331,12 +373,57 @@ export function WorkbenchMap(props: Props) {
         }}
       >
         <Box ref={container} data-testid="workbench-map-engine" sx={{ position: 'absolute', inset: 0 }} />
+        <Box
+          component="button"
+          type="button"
+          data-testid="map-reset-view"
+          disabled={!ready}
+          onClick={reset}
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 42,
+            zIndex: 3,
+            minWidth: 28,
+            height: 28,
+            px: 1,
+            font: 'inherit',
+            fontSize: 12,
+            fontWeight: 600,
+            color: t.text.primary,
+            bgcolor: t.bg.elevated,
+            border: `1px solid ${t.border.strong}`,
+            borderRadius: 1,
+            cursor: 'pointer',
+            '&:disabled': { cursor: 'default', opacity: 0.45 },
+          }}
+        >
+          Reset view
+        </Box>
+        {!ready && !error ? (
+          <Typography
+            variant="caption"
+            sx={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              zIndex: 3,
+              px: 1,
+              py: 0.25,
+              borderRadius: 1,
+              bgcolor: alpha(t.bg.default, 0.8),
+              color: t.text.secondary,
+            }}
+          >
+            Loading map…
+          </Typography>
+        ) : null}
         {overlays.map((marker) => {
           const point = props.points.find((item) => item.id === marker.pointId);
           const selected = marker.pointId === props.selectedKey;
           const size = marker.clusterId == null
             ? (selected ? 16 : 11)
-            : 16 + (String(marker.count).length - 1) * 4;
+            : 16 + (String(marker.count).length - 1) * 5;
           const color = props.colorForScore(marker.score);
           return (
             <MapMarker
@@ -348,8 +435,8 @@ export function WorkbenchMap(props: Props) {
               color={color}
               size={size}
               selected={selected}
-              hollow={marker.proposed}
-              glow={overlays.length <= 60}
+              proposed={marker.proposed}
+              glow={marker.clusterId == null && !marker.proposed && overlays.length <= 25}
               zIndex={selected ? 2 : 1}
               cursor={point?.proposed && props.onAdjust ? 'grab' : 'pointer'}
               touchAction={point?.proposed && props.onAdjust ? 'none' : 'auto'}
@@ -387,9 +474,7 @@ export function WorkbenchMap(props: Props) {
               onPointerCancel={(event) => finishDrag(event, true)}
               onLostPointerCapture={(event) => finishDrag(event, true)}
             >
-              {marker.clusterId != null ? (
-                <span style={marker.proposed ? { color } : undefined}>{marker.count}</span>
-              ) : null}
+              {marker.clusterId != null ? marker.count : null}
             </MapMarker>
           );
         })}
@@ -398,8 +483,10 @@ export function WorkbenchMap(props: Props) {
             data-testid="workbench-map-hover"
             sx={{
               position: 'absolute', left: 8, bottom: 8, zIndex: 3,
-              maxWidth: '85%', p: 1, borderRadius: 1,
-              bgcolor: mapColors.panel, color: mapColors.text, pointerEvents: 'none',
+              maxWidth: '85%', p: 1.25, borderRadius: 1.25,
+              bgcolor: alpha(t.bg.default, 0.96), color: t.text.primary,
+              border: `1px solid ${t.border.subtle}`,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.28)', pointerEvents: 'none',
             }}
           >
             {props.renderHover(hover)}

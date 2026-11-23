@@ -128,7 +128,7 @@ describe('shared map lifecycle and interaction', () => {
     expect(fake.Map.instances).toHaveLength(0);
   });
 
-  it('uses native cluster expansion, always-visible attribution and cleans up', async () => {
+  it('uses native cluster expansion, compact collapsible attribution and cleans up', async () => {
     const view = render(
       <WorkbenchMap
         settings={settings} points={[point]} fitKey="all" selectedKey={null}
@@ -137,7 +137,7 @@ describe('shared map lifecycle and interaction', () => {
     );
     const map = await loadMap();
     expect(map.controls.some((control) =>
-      control.options.compact === false
+      control.options.compact === true
       && String(control.options.customAttribution).includes('OpenStreetMap contributors')
     )).toBe(true);
     map.features = [{
@@ -245,5 +245,6 @@ describe('store list and map link', () => {
     expect(confirm).toHaveBeenCalledWith([{
       customer_id: 1, site_label: 'Store B', latitude: 13, longitude: 35,
     }]);
+    expect(within(screen.getByTestId('store-map-aside')).getByTestId('proposed-pins')).toBeInTheDocument();
   });
 });

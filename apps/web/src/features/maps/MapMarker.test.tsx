@@ -33,6 +33,19 @@ describe('shared map marker', () => {
     expect(getComputedStyle(dot).backgroundColor).toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
   });
 
+  it('draws a proposed pin as a filled dot with a dashed outer ring', () => {
+    renderWithProviders(
+      <MapMarker x={15} y={20} color="rgb(10, 20, 30)" proposed aria-label="Proposed Pin">5</MapMarker>,
+    );
+    const marker = screen.getByRole('button', { name: 'Proposed Pin' });
+    const dot = marker.querySelector('[data-marker-dot]') as HTMLElement;
+    expect(dot).toHaveAttribute('data-hollow', 'false');
+    expect(dot).toHaveAttribute('data-proposed', 'true');
+    expect(dot).toHaveTextContent('5');
+    expect(getComputedStyle(dot).backgroundColor).toBe('rgb(10, 20, 30)');
+    expect(getComputedStyle(dot).outlineStyle).toBe('dashed');
+  });
+
   it('fades a color-mix() sell-through colour as well as a plain one', () => {
     const ramp = 'color-mix(in srgb, #0a0 60%, #a00)';
     expect(markerAlpha(ramp, 0.18)).toBe(`color-mix(in srgb, ${ramp} 18%, transparent)`);

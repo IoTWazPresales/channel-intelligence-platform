@@ -53,6 +53,11 @@ describe('tenant map style', () => {
     expect(sprite.data).toHaveLength(sprite.width * sprite.height * 4);
     expect(sprite.data.some((value, index) => index % 4 === 3 && value === 71)).toBe(true);
     expect(sprite.data[3]).toBe(0);
+    const lightStyle = buildMapStyle({ tilejsonUrl: 'https://tiles.example.test/vector' }, 'light')!;
+    const darkStyle = buildMapStyle({ tilejsonUrl: 'https://tiles.example.test/vector' }, 'dark')!;
+    expect(lightStyle.name).toBe('Workbench light');
+    expect(darkStyle.name).toBe('Workbench dark');
+    expect(JSON.stringify(lightStyle)).not.toBe(JSON.stringify(darkStyle));
   });
 });
 

@@ -14,16 +14,30 @@ export type WorkbenchMapStyle = StyleSpecification & {
 
 export const DOT_IMAGE = 'workbench-land-dot';
 
-const dark = tokensFor('dark');
+export type MapThemeMode = 'light' | 'dark';
 
-export const mapColors = {
-  panel: dark.bg.default,
-  land: dark.bg.surface,
-  landcover: dark.bg.surfaceMuted,
-  road: dark.text.muted,
-  building: dark.border.strong,
-  text: dark.text.secondary,
-};
+export function mapColorsFor(mode: MapThemeMode = 'dark') {
+  const t = tokensFor(mode);
+  return mode === 'dark'
+    ? {
+        panel: '#121519',
+        land: '#18222c',
+        landcover: t.bg.surfaceMuted,
+        road: t.text.muted,
+        building: t.border.strong,
+        text: t.text.secondary,
+      }
+    : {
+        panel: '#f6f9fb',
+        land: '#e6eef3',
+        landcover: t.bg.surfaceMuted,
+        road: t.text.muted,
+        building: t.border.strong,
+        text: t.text.secondary,
+      };
+}
+
+export const mapColors = mapColorsFor('dark');
 
 /** Always retained, including when a tenant supplies additional provider attribution. */
 export const OSM_ATTRIBUTION =
@@ -55,27 +69,29 @@ function vectorSource(tilejsonUrl: string): VectorSourceSpecification {
 }
 
 /** Same cool dot colour/opacity as the shared SVG MapCanvas, generated without canvas APIs. */
-export function dotImage(): { width: number; height: number; data: Uint8Array } {
+export function dotImage(mode: MapThemeMode = 'dark'): { width: number; height: number; data: Uint8Array } {
   const width = 8;
   const height = 8;
   const data = new Uint8Array(width * height * 4);
+  const rgba: [number, number, number, number] = mode === 'dark' ? [160, 185, 205, 71] : [40, 70, 95, 77];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       if ((x - 3.5) ** 2 + (y - 3.5) ** 2 > 1.8) continue;
-      data.set([160, 185, 205, 71], (y * width + x) * 4);
+      data.set(rgba, (y * width + x) * 4);
     }
   }
   return { width, height, data };
 }
 
 /** OpenMapTiles schema; geography and provider URLs come entirely from tenant configuration. */
-export function buildMapStyle(settings: MapSettings): WorkbenchMapStyle | null {
+export function buildMapStyle(settings: MapSettings, mode: MapThemeMode = 'dark'): WorkbenchMapStyle | null {
   const url = settings.tilejsonUrl?.trim();
   if (!url) return null;
+  const colors = mapColorsFor(mode);
 
   const style: WorkbenchMapStyle = {
     version: 8,
-    name: 'Workbench dark',
+    name: mode === 'dark' ? 'Workbench dark' : 'Workbench light',
     metadata: { 'workbench:attribution': mapAttribution(settings) },
     sources: { openmaptiles: vectorSource(url) },
     layers: [
@@ -85,8 +101,8 @@ export function buildMapStyle(settings: MapSettings): WorkbenchMapStyle | null {
         paint: {
           'background-color': [
             'interpolate', ['linear'], ['zoom'],
-            5, mapColors.panel,
-            10, mapColors.land,
+            5, colors.panel,
+            10, colors.land,
           ],
         },
       },
@@ -107,7 +123,7 @@ export function buildMapStyle(settings: MapSettings): WorkbenchMapStyle | null {
         'source-layer': 'landcover',
         minzoom: 6,
         paint: {
-          'fill-color': mapColors.landcover,
+          'fill-color': colors.landcover,
           'fill-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 10, 0.35],
         },
       },
@@ -118,7 +134,7 @@ export function buildMapStyle(settings: MapSettings): WorkbenchMapStyle | null {
         'source-layer': 'landuse',
         minzoom: 8,
         paint: {
-          'fill-color': mapColors.landcover,
+          'fill-color': colors.landcover,
           'fill-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0, 12, 0.5],
         },
       },
@@ -127,7 +143,7 @@ export function buildMapStyle(settings: MapSettings): WorkbenchMapStyle | null {
         type: 'fill',
         source: 'openmaptiles',
         'source-layer': 'water',
-        paint: { 'fill-color': mapColors.panel },
+        paint: { 'fill-color': colors.panel },
       },
       {
         id: 'transportation',
@@ -137,7 +153,7 @@ export function buildMapStyle(settings: MapSettings): WorkbenchMapStyle | null {
         minzoom: 8,
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
-          'line-color': mapColors.road,
+          'line-color': colors.road,
           'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0, 12, 0.9],
           'line-width': [
             'interpolate', ['linear'], ['zoom'],
@@ -154,7 +170,7 @@ export function buildMapStyle(settings: MapSettings): WorkbenchMapStyle | null {
         'source-layer': 'building',
         minzoom: 13,
         paint: {
-          'fill-color': mapColors.building,
+          'fill-color': colors.building,
           'fill-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 16, 0.9],
         },
       },
@@ -184,8 +200,8 @@ export function buildMapStyle(settings: MapSettings): WorkbenchMapStyle | null {
           'text-padding': 5,
         },
         paint: {
-          'text-color': mapColors.text,
-          'text-halo-color': mapColors.panel,
+          'text-color': colors.text,
+          'text-halo-color': colors.panel,
           'text-halo-width': 1.5,
         },
       });

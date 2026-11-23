@@ -190,7 +190,7 @@ describe('StoreMap', () => {
       { customer_id: 1, site_label: 'SDC-SITE-B', latitude: 3, longitude: 4 },
     ]));
     const canvas = screen.getByTestId('store-map-canvas');
-    const list = screen.getByTestId('store-map-unpinned');
+    const aside = screen.getByTestId('store-map-aside');
     expect(canvas).toHaveAttribute('data-map-canvas');
     expect(getComputedStyle(canvas).aspectRatio).toMatch(/^1000\s*\/\s*646$/);
     // Same box and basemap; the view zooms to the pins but keeps the 1000/646 aspect.
@@ -198,8 +198,9 @@ describe('StoreMap', () => {
       .split(' ')
       .map(Number);
     expect(viewWidth / viewHeight).toBeCloseTo(1000 / 646);
-    expect(getComputedStyle(list).height).toBe('646px');
-    expect(screen.getByTestId('store-map-unpinned-scroll')).toBeInTheDocument();
+    expect(getComputedStyle(aside).height).toBe('646px');
+    expect(within(aside).getByTestId('proposed-pins')).toBeInTheDocument();
+    expect(within(aside).getByTestId('store-map-unpinned-scroll')).toBeInTheDocument();
   });
 
   it('filters the unpinned list by place name and keeps the store code as the pin key', async () => {
@@ -432,11 +433,13 @@ describe('StoreMap', () => {
     const solid = screen.getAllByTestId('store-dot')[0];
     expect(parseFloat(getComputedStyle(pin).left)).toBeGreaterThan(parseFloat(getComputedStyle(solid).left));
     expect(parseFloat(getComputedStyle(pin).top)).toBeGreaterThan(parseFloat(getComputedStyle(solid).top));
-    // Same marker as the Shipments map: hollow dashed when proposed, solid when saved.
-    expect(getComputedStyle(dotOf(pin)).borderStyle).toBe('dashed');
-    expect(dotOf(pin)).toHaveAttribute('data-hollow', 'true');
+    // Same filled point/halo marker as Shipments, with a dashed outer ring when proposed.
+    expect(dotOf(pin)).toHaveAttribute('data-proposed', 'true');
+    expect(dotOf(pin)).toHaveAttribute('data-hollow', 'false');
+    expect(getComputedStyle(dotOf(pin)).outlineStyle).toBe('dashed');
+    expect(dotOf(solid)).toHaveAttribute('data-proposed', 'false');
     expect(dotOf(solid)).toHaveAttribute('data-hollow', 'false');
-    expect(getComputedStyle(dotOf(solid)).borderStyle).not.toBe('dashed');
+    expect(getComputedStyle(dotOf(solid)).outlineStyle).not.toBe('dashed');
     fireEvent.click(screen.getByRole('button', { name: 'SDC-C2' }));
     expect(screen.queryByTestId('store-dot-unconfirmed')).toBeNull();
     expect(screen.getAllByTestId('store-dot')).toHaveLength(1);
@@ -511,19 +514,21 @@ describe('StoreMap', () => {
       };
     }
 
-    it('shows a legend with filled confirmed and hollow proposed dots', async () => {
+    it('shows a legend with filled confirmed and filled+ringed proposed dots', async () => {
       hoisted.payload = suggestedPayload();
       wrap(<StoreMap />);
       await screen.findByTestId('store-dot-unconfirmed');
       const legend = screen.getByTestId('store-pin-legend');
       expect(legend).toHaveTextContent('Confirmed pin');
       expect(legend).toHaveTextContent('Proposed pin');
-      expect(getComputedStyle(within(legend).getByTestId('legend-proposed-dot')).borderStyle).toBe('dashed');
-      expect(within(legend).getByTestId('legend-confirmed-dot')).toHaveAttribute('data-hollow', 'false');
-      // the dot on the map matches the legend: hollow when proposed
+      expect(within(legend).getByTestId('legend-proposed-dot')).toHaveAttribute('data-proposed', 'true');
+      expect(getComputedStyle(within(legend).getByTestId('legend-proposed-dot')).outlineStyle).toBe('dashed');
+      expect(within(legend).getByTestId('legend-confirmed-dot')).toHaveAttribute('data-proposed', 'false');
+      // the dot on the map matches the legend: filled core + dashed outer ring when proposed
       const dot = dotOf(screen.getByTestId('store-dot-unconfirmed'));
-      expect(getComputedStyle(dot).backgroundColor).toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
-      expect(getComputedStyle(dot).borderStyle).toBe('dashed');
+      expect(dot).toHaveAttribute('data-proposed', 'true');
+      expect(getComputedStyle(dot).backgroundColor).not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+      expect(getComputedStyle(dot).outlineStyle).toBe('dashed');
     });
 
     it('lists the proposals with a Confirm that uses the confirm route and saves one pin', async () => {
@@ -910,8 +915,9 @@ describe('StoreMap', () => {
       wrap(<StoreMap />);
       const cluster = await screen.findByTestId('store-cluster');
       expect(cluster).toHaveAttribute('data-pin-state', 'proposed');
-      expect(dotOf(cluster)).toHaveAttribute('data-hollow', 'true');
-      expect(getComputedStyle(dotOf(cluster)).borderStyle).toBe('dashed');
+      expect(dotOf(cluster)).toHaveAttribute('data-proposed', 'true');
+      expect(dotOf(cluster)).toHaveAttribute('data-hollow', 'false');
+      expect(getComputedStyle(dotOf(cluster)).outlineStyle).toBe('dashed');
       expect(cluster).toHaveTextContent('2');
       fireEvent.mouseEnter(cluster);
       expect(screen.getByTestId('store-map-cluster-hover')).toHaveTextContent('(proposed)');

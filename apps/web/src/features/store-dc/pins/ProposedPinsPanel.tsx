@@ -25,6 +25,7 @@ type Props = {
   errors: Record<string, string>;
   onConfirm: (items: PinConfirmItem[]) => void | Promise<unknown>;
   onSkip: (store: StoreMapStore) => void;
+  inAside?: boolean;
 };
 
 function parseCoordinates(latitude: string, longitude: string): { value?: Coordinates; error?: string } {
@@ -38,7 +39,7 @@ function parseCoordinates(latitude: string, longitude: string): { value?: Coordi
 }
 
 /** The review list: a steward confirms, edits or skips every proposed pin. Nothing is saved before that. */
-export function ProposedPinsPanel({ stores, saving, errors, onConfirm, onSkip }: Props) {
+export function ProposedPinsPanel({ stores, saving, errors, onConfirm, onSkip, inAside = false }: Props) {
   const theme = useTheme();
   const tokens = tokensFor(theme.palette.mode);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -84,7 +85,7 @@ export function ProposedPinsPanel({ stores, saving, errors, onConfirm, onSkip }:
   const card = { border: `1px solid ${tokens.border.subtle}`, borderRadius: 1, p: 1 } as const;
 
   return (
-    <Box data-testid="proposed-pins" sx={{ mt: 1.5, minWidth: 0 }}>
+    <Box data-testid="proposed-pins" sx={{ ...(inAside ? { mt: 0, display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 0' } : { mt: 1.5 }), minWidth: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
         <Typography variant="subtitle2">Proposed pins ({stores.length})</Typography>
         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', ml: { sm: 'auto' } }}>
@@ -110,7 +111,7 @@ export function ProposedPinsPanel({ stores, saving, errors, onConfirm, onSkip }:
           No proposed pins. Stores without a proposal are listed under No coordinates.
         </Typography>
       ) : (
-        <Box data-testid="proposed-pins-scroll" sx={{ maxHeight: { xs: 360, md: 420 }, overflowY: 'auto', display: 'grid', gap: 1 }}>
+        <Box data-testid="proposed-pins-scroll" sx={{ ...(inAside ? { flex: 1, minHeight: 120, maxHeight: { xs: 280, md: 'none' } } : { maxHeight: { xs: 360, md: 420 } }), overflowY: 'auto', display: 'grid', gap: 1 }}>
           {stores.map((store) => {
             const key = proposalKey(store);
             const suggestion = store.location_suggestion;

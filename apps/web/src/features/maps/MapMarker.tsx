@@ -18,8 +18,10 @@ type MarkerDotProps = {
   /** Diameter in px. The Shipments marker is 11, and 16 when selected. */
   size?: number;
   selected?: boolean;
-  /** Dashed outline, no fill: a proposal that is not saved yet. */
+  /** Dashed outline, no fill: legacy hollow mode. */
   hollow?: boolean;
+  /** Filled dot with a dashed outer ring: an unconfirmed proposal matching Shipments' filled point language. */
+  proposed?: boolean;
   /** The soft glow around a marker. Off for very dense maps. */
   glow?: boolean;
   children?: ReactNode;
@@ -32,11 +34,13 @@ export function MarkerDot({
   size = 11,
   selected = false,
   hollow = false,
+  proposed = false,
   glow = true,
   children,
   'data-testid': testId,
 }: MarkerDotProps) {
   const t = tokensFor(useTheme().palette.mode);
+  const isProposed = proposed && !hollow;
   const box = hollow ? size + 3 : size;
   const halo = `0 0 0 ${selected ? 6 : 4}px ${markerAlpha(color, selected ? 0.28 : 0.18)}`;
   return (
@@ -44,6 +48,7 @@ export function MarkerDot({
       component="span"
       data-marker-dot
       data-hollow={hollow}
+      data-proposed={isProposed}
       data-testid={testId}
       sx={{
         display: 'flex',
@@ -56,6 +61,10 @@ export function MarkerDot({
         borderRadius: '50%',
         bgcolor: hollow ? 'transparent' : color,
         border: hollow ? `2px dashed ${color}` : undefined,
+        outlineStyle: isProposed ? 'dashed' : undefined,
+        outlineWidth: isProposed ? '1.5px' : undefined,
+        outlineColor: isProposed ? markerAlpha(color, 0.85) : undefined,
+        outlineOffset: isProposed ? '2px' : undefined,
         fontSize: 10,
         fontWeight: 700,
         color: t.bg.default,
@@ -79,6 +88,7 @@ type MapMarkerProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'color'> & {
   size?: number;
   selected?: boolean;
   hollow?: boolean;
+  proposed?: boolean;
   glow?: boolean;
   zIndex?: number;
   cursor?: string;
@@ -96,6 +106,7 @@ export function MapMarker({
   size,
   selected,
   hollow,
+  proposed,
   glow,
   zIndex,
   cursor = 'pointer',
@@ -131,7 +142,7 @@ export function MapMarker({
         '&:focus-visible': { outline: `2px solid ${t.accent.primary}`, outlineOffset: 2, borderRadius: '50%' },
       }}
     >
-      <MarkerDot color={color} size={size} selected={selected} hollow={hollow} glow={glow}>
+      <MarkerDot color={color} size={size} selected={selected} hollow={hollow} proposed={proposed} glow={glow}>
         {children}
       </MarkerDot>
     </Box>

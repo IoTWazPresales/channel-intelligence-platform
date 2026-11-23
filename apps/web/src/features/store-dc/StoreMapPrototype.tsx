@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import {
   Alert,
@@ -22,7 +22,9 @@ import type { Coordinates, WorkbenchPoint } from '@/features/workbench-ui/map/cl
 import { safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
-import { proposalKey } from './pins/pinProposals';
+import { StoreMapPanelHeader } from './pins/PinLegend';
+import { proposalKey, proposedStores } from './pins/pinProposals';
+import { ProposedPinsPanel } from './pins/ProposedPinsPanel';
 import { sellThroughColor } from './storeMapLayout';
 import type { PinConfirmItem, StoreMapStore } from './types';
 
@@ -34,6 +36,9 @@ type Props = {
   selectedKey: string | null;
   saving: boolean;
   errors: Record<string, string>;
+  proposalList?: StoreMapStore[];
+  formula?: string;
+  asideHeight?: number;
   onSelect: (key: string) => void;
   onAdjust: (key: string, coordinates: Coordinates) => void;
   onConfirm: (items: PinConfirmItem[]) => void | Promise<unknown>;
@@ -85,7 +90,14 @@ export function StoreMapPrototype(props: Props) {
   const listed = props.stores.filter((store) => !needle
     || [store.site_label, store.place_name ?? '', store.customer_name ?? '']
       .join(' ').toLowerCase().includes(needle));
+  const proposals = props.proposalList ?? proposedStores(props.stores, new Set());
   const canPlace = !settings.pending && !settings.error && !!settings.settings.tilejsonUrl && !props.saving;
+  const card = {
+    bgcolor: tokens.bg.surface,
+    border: `1px solid ${tokens.border.subtle}`,
+    borderRadius: 1.5,
+    p: 1.25,
+  } as const;
 
   return (
     <Box
@@ -104,6 +116,7 @@ export function StoreMapPrototype(props: Props) {
       ) : null}
       <MapLayout>
         <MapPanel>
+          <StoreMapPanelHeader />
           {settings.pending ? (
             <Typography variant="body2">Loading map settings…</Typography>
           ) : settings.error ? (
@@ -131,103 +144,134 @@ export function StoreMapPrototype(props: Props) {
               label="Store locations coloured by sell-through"
             />
           )}
+          <Typography variant="caption" sx={{ display: 'block', px: 0.5, color: tokens.text.muted, fontSize: 11 }}>
+            {props.formula ?? "last week's units / (last week's units + stock on hand)"}
+          </Typography>
         </MapPanel>
         <MapAside>
-          <TextField
-            size="small"
-            label="Search stores"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <Box sx={{ maxHeight: 280, overflow: 'auto' }}>
-            <Table size="small" aria-label="Stores linked to map">
-              <TableHead>
-                <TableRow><TableCell>Customer</TableCell><TableCell>Store</TableCell><TableCell>Pin</TableCell></TableRow>
-              </TableHead>
-              <TableBody>
-                {listed.map((store) => {
-                  const key = proposalKey(store);
-                  const point = pointByKey.get(key);
-                  return (
-                    <TableRow
-                      key={key}
-                      selected={props.selectedKey === key}
-                      data-testid="prototype-store-row"
-                      data-store-key={key}
-                      onClick={() => props.onSelect(key)}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell>{store.customer_name ?? '-'}</TableCell>
-                      <TableCell>
+          <Box
+            data-testid="store-map-aside"
+            sx={{ height: { md: props.asideHeight ?? 646 }, display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: 0 }}
+          >
+            {selected ? (
+              <Box
+                data-testid="prototype-store-detail"
+                sx={{ ...card, flexShrink: 0, maxHeight: 230, overflowY: 'auto' }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>Store detail</Typography>
+                <StoreFacts store={selected} />
+                {selected.lines.length > 0 ? (
+                  <Box data-testid="store-map-lines" sx={{ mt: 1 }}>
+                    {selected.lines.map((line) => (
+                      <Typography key={line.product_id} variant="caption" data-testid="store-line" sx={{ display: 'block', color: tokens.text.secondary }}>
+                        {line.sku ?? line.product_name} · {fmt(line.units)} units · stock {fmt(line.stock_on_hand)} · cover {fmt(line.weeks_of_cover)}
+                      </Typography>
+                    ))}
+                  </Box>
+                ) : null}
+                {!selected.pinned ? (
+                  <>
+                    <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
+                      {selectedPoint
+                        ? `Proposed coordinates: ${selectedPoint.latitude.toFixed(5)}, ${selectedPoint.longitude.toFixed(5)}. Drag to adjust.`
+                        : selected.location_suggestion?.reason === 'multiple'
+                          ? 'More than one place matches. Drop a pin.'
+                          : 'No place match. Drop a pin.'}
+                      {' '}Nothing is saved until you confirm.
+                    </Typography>
+                    {selected.location_suggestion?.licence ? (
+                      <Typography variant="caption" sx={{ display: 'block' }}>
+                        {selected.location_suggestion.licence}
+                      </Typography>
+                    ) : null}
+                    {props.errors[proposalKey(selected)] ? (
+                      <Alert severity="error" sx={{ mt: 1 }}>{props.errors[proposalKey(selected)]}</Alert>
+                    ) : null}
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
+                      {selectedPoint ? (
                         <Button
                           size="small"
-                          aria-pressed={props.selectedKey === key}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            props.onSelect(key);
-                          }}
-                        >{store.site_label}</Button>
-                      </TableCell>
-                      <TableCell>{point ? (store.pinned ? 'Confirmed' : 'Proposed') : 'No coordinates'}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-            {!listed.length ? <Typography variant="body2">No stores match this view.</Typography> : null}
-          </Box>
-          {selected ? (
-            <Box
-              data-testid="prototype-store-detail"
-              sx={{ p: 1.5, border: `1px solid ${tokens.border.subtle}`, borderRadius: 1 }}
-            >
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Store detail</Typography>
-              <StoreFacts store={selected} />
-              {!selected.pinned ? (
-                <>
-                  <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
-                    {selectedPoint
-                      ? `Proposed coordinates: ${selectedPoint.latitude.toFixed(5)}, ${selectedPoint.longitude.toFixed(5)}. Drag to adjust.`
-                      : selected.location_suggestion?.reason === 'multiple'
-                        ? 'More than one place matches. Drop a pin.'
-                        : 'No place match. Drop a pin.'}
-                    {' '}Nothing is saved until you confirm.
-                  </Typography>
-                  {selected.location_suggestion?.licence ? (
-                    <Typography variant="caption" sx={{ display: 'block' }}>
-                      {selected.location_suggestion.licence}
-                    </Typography>
-                  ) : null}
-                  {props.errors[proposalKey(selected)] ? (
-                    <Alert severity="error" sx={{ mt: 1 }}>{props.errors[proposalKey(selected)]}</Alert>
-                  ) : null}
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
-                    {selectedPoint ? (
+                          variant="contained"
+                          disabled={props.saving}
+                          onClick={() => void props.onConfirm([{
+                            customer_id: selected.customer_id,
+                            site_label: selected.site_label,
+                            latitude: selectedPoint.latitude,
+                            longitude: selectedPoint.longitude,
+                          }])}
+                        >Confirm location</Button>
+                      ) : null}
                       <Button
                         size="small"
-                        variant="contained"
-                        disabled={props.saving}
-                        onClick={() => void props.onConfirm([{
-                          customer_id: selected.customer_id,
-                          site_label: selected.site_label,
-                          latitude: selectedPoint.latitude,
-                          longitude: selectedPoint.longitude,
-                        }])}
-                      >Confirm location</Button>
-                    ) : null}
-                    <Button
-                      size="small"
-                      disabled={!canPlace}
-                      onClick={() => setPlacing(proposalKey(selected))}
-                    >{selectedPoint ? 'Place elsewhere' : 'Drop pin'}</Button>
-                    <Button size="small" disabled={props.saving} onClick={() => props.onSkip(selected)}>Skip</Button>
-                  </Box>
-                </>
-              ) : null}
+                        disabled={!canPlace}
+                        onClick={() => setPlacing(proposalKey(selected))}
+                      >{selectedPoint ? 'Place elsewhere' : 'Drop pin'}</Button>
+                      <Button size="small" disabled={props.saving} onClick={() => props.onSkip(selected)}>Skip</Button>
+                    </Box>
+                  </>
+                ) : null}
+              </Box>
+            ) : (
+              <Box sx={{ ...card, flexShrink: 0 }}>
+                <Typography variant="body2" color="text.secondary">Select a store on the map or in the list.</Typography>
+              </Box>
+            )}
+            <Box sx={{ ...card, display: 'flex', flexDirection: 'column', gap: 0.75, minHeight: 0, flex: '1 1 0' }}>
+              <TextField
+                size="small"
+                label="Search stores"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <Box sx={{ flex: 1, minHeight: 100, maxHeight: { xs: 240, md: 'none' }, overflowY: 'auto' }}>
+                <Table size="small" aria-label="Stores linked to map">
+                  <TableHead>
+                    <TableRow><TableCell>Customer</TableCell><TableCell>Store</TableCell><TableCell>Pin</TableCell></TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {listed.map((store) => {
+                      const key = proposalKey(store);
+                      const point = pointByKey.get(key);
+                      return (
+                        <TableRow
+                          key={key}
+                          selected={props.selectedKey === key}
+                          data-testid="prototype-store-row"
+                          data-store-key={key}
+                          onClick={() => props.onSelect(key)}
+                          sx={{ cursor: 'pointer' }}
+                        >
+                          <TableCell>{store.customer_name ?? '-'}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              aria-pressed={props.selectedKey === key}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                props.onSelect(key);
+                              }}
+                            >{store.site_label}</Button>
+                          </TableCell>
+                          <TableCell>{point ? (store.pinned ? 'Confirmed' : 'Proposed') : 'No coordinates'}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {!listed.length ? <Typography variant="body2">No stores match this view.</Typography> : null}
+              </Box>
             </Box>
-          ) : (
-            <Typography variant="body2" color="text.secondary">Select a store on the map or in the list.</Typography>
-          )}
+            <Box sx={{ ...card, display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 0' }}>
+              <ProposedPinsPanel
+                inAside
+                stores={proposals}
+                saving={props.saving}
+                errors={props.errors}
+                onConfirm={props.onConfirm}
+                onSkip={props.onSkip}
+              />
+            </Box>
+          </Box>
         </MapAside>
       </MapLayout>
     </Box>

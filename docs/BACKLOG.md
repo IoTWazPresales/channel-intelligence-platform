@@ -4126,12 +4126,13 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Open ? latest Warren feedback preserved2026-11-23; no implementation during consolidation. Shown look requires changes; provider unanswered. |
+| **Status / parked** | Done — 2026-11-23. Implemented on feat/integrate-20261103. Provider still unanswered and remains off. No store-location proposals were confirmed (BACKLOG-267 still applies). |
 | **Scope** | Country/grouping/city/street/mall points/icons and overall page theme must visually match the shipping map. Keep pins/proposed pins/data/details/confirmation controls in the right panel, with appropriate internal scrolling rather than a long list below. |
 | **Canonical / evidence** | `docs/handoffs/2026-11-23/MAP_FEEDBACK.md`; shipping `OnTheWater.tsx/ClusterMarker`, shared `MapMarker.tsx`, `MapCanvas.tsx`; store `StoreMap.tsx`, `StoreMapPrototype.tsx`, `WorkbenchMap.tsx`, `ProposedPinsPanel.tsx`. Shared imports alone did not produce accepted visual parity. Rejected baseline images preserved in handoff/assets. |
-| **Credit request** | Remove prominent/doubled OSM label strip; retain mandatory OSM/provider attribution through a compliant compact or dismissible pattern. Official guidance and exact request in map brief. No attribution implementation has been selected. |
-| **Constraints** | Do not add a second confirmation writer, weaken proposal/confirmed semantics, confirm or move live coordinates for appearance, or configure/enable a provider without acceptance. Actual live settings empty/prototypeoff;310stores/192proposals/0confirmed at last preview. |
-| **TRIGGER** | Next authorized map revision task; compare real rendered shipping and revised store-map pixels before requesting approval or rollout. |
+| **Shipped** | Default SVG store map and default-off MapLibre prototype now use the same filled Shipments point/halo marker (proposed pins keep a dashed outer ring), shared MapPanel theme in light and dark, and the shipping map box ratio. `ProposedPinsPanel`, selected-store lines and confirmation/skip controls live in `MapAside` with internal scrolling. MapLibre attribution uses the compact collapsible (i) control; required OSM/provider credit is retained. Tile provider is not configured or enabled. Existing confirm writers unchanged. |
+| **Credit request** | Prominent/doubled OSM strip removed in favour of MapLibre compact attribution. Official guidance in map brief. This is not provider approval. |
+| **Constraints** | Do not add a second confirmation writer, weaken proposal/confirmed semantics, confirm or move live coordinates for appearance, or configure/enable a provider without acceptance. Last preview payload: 310 stores / 192 proposals / 0 confirmed. |
+| **TRIGGER** | Warren reviews the live default store map (and the prototype only if he turns it on). Provider choice is still required before any prototype rollout. BACKLOG-267 before confirming locations. |
 
 ## BACKLOG-269 ? Deliver Dashboard V2 and Targets beyond design-only prototypes
 

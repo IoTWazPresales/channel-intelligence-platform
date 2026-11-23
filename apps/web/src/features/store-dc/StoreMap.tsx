@@ -20,7 +20,7 @@ import { useMapView } from '@/features/maps/useMapView';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
 
-import { PinLegend } from './pins/PinLegend';
+import { StoreMapPanelHeader } from './pins/PinLegend';
 import { proposedStores } from './pins/pinProposals';
 import { ProposedPinsPanel } from './pins/ProposedPinsPanel';
 import { useProposalConfirm } from './pins/useProposalConfirm';
@@ -330,12 +330,15 @@ export function StoreMap() {
     await postPin(store, coordinates.latitude!, coordinates.longitude!);
   }
 
+  const formula = mapQuery.data?.legend?.formula ?? "last week's units / (last week's units + stock on hand)";
+
   return (
     <Box data-testid="store-map" sx={{ mt: 1.5 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-        <Typography variant="subtitle1">Stores</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Stores</Typography>
         <FormControlLabel
           label="New map (prototype)"
+          sx={{ mr: 0 }}
           control={
             <Switch
               size="small"
@@ -345,19 +348,7 @@ export function StoreMap() {
             />
           }
         />
-        <Box data-testid="store-map-legend" sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-          <Typography variant="caption" sx={{ color: tokens.text.secondary }}>Worst</Typography>
-          <Box sx={{
-            flex: 1, height: 8, borderRadius: 4,
-            background: `linear-gradient(90deg, ${tokens.semantic.danger}, ${tokens.semantic.success})`,
-          }} />
-          <Typography variant="caption" sx={{ color: tokens.text.secondary }}>Best</Typography>
-        </Box>
       </Box>
-      <Typography variant="caption" sx={{ display: 'block', color: tokens.text.muted, mb: 1 }}>
-        {mapQuery.data?.legend?.formula ?? "last week's units / (last week's units + stock on hand)"}
-      </Typography>
-      <PinLegend />
       {mapQuery.isLoading ? (
         <Typography variant="body2" sx={{ color: tokens.text.secondary }} data-testid="store-map-loading">
           Loading stores.
@@ -392,6 +383,9 @@ export function StoreMap() {
             selectedKey={selectedKey}
             saving={saving || proposalConfirm.saving}
             errors={proposalConfirm.errors}
+            proposalList={proposalList}
+            formula={formula}
+            asideHeight={mapPx.h}
             onSelect={setSelectedKey}
             onAdjust={stagePrototypePin}
             onConfirm={confirmPrototype}
@@ -401,6 +395,7 @@ export function StoreMap() {
       ) : (
         <MapLayout>
           <MapPanel>
+            <StoreMapPanelHeader />
             <MapCanvas
               ref={canvasRef}
               data-testid="store-map-canvas"
@@ -431,8 +426,8 @@ export function StoreMap() {
                     color={color}
                     size={on ? PIN_SIZE_SELECTED : PIN_SIZE}
                     selected={on}
-                    hollow={unconfirmed}
-                    glow={glow}
+                    proposed={unconfirmed}
+                    glow={!unconfirmed && glow}
                     zIndex={on ? 1 : undefined}
                     cursor={unconfirmed ? 'grab' : 'pointer'}
                     touchAction={unconfirmed ? 'none' : 'auto'}
@@ -473,8 +468,8 @@ export function StoreMap() {
                     hit={hitFor(size, group.nearestPx)}
                     color={color}
                     size={size}
-                    hollow={proposed}
-                    glow={glow}
+                    proposed={proposed}
+                    glow={false}
                     data-testid="store-cluster"
                     data-cluster-count={count}
                     data-pin-state={proposed ? 'proposed' : 'confirmed'}
@@ -487,7 +482,7 @@ export function StoreMap() {
                     onBlur={() => setHoverClusterId((current) => current === group.id ? null : current)}
                     onClick={() => zoomToCluster(group)}
                   >
-                    <span style={proposed ? { color } : undefined}>{count}</span>
+                    {count}
                   </MapMarker>
                 );
               })}
@@ -566,9 +561,72 @@ export function StoreMap() {
                 </Box>
               ) : null}
             </MapCanvas>
+            <Typography variant="caption" sx={{ display: 'block', px: 0.5, color: tokens.text.muted, fontSize: 11 }}>
+              {formula}
+            </Typography>
           </MapPanel>
           <MapAside>
-            <Box data-testid="store-map-unpinned" sx={{ height: mapPx.h, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Box data-testid="store-map-aside" sx={{ height: mapPx.h, display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: 0 }}>
+              {selected ? (
+                <Box
+                  data-testid="store-map-lines"
+                  sx={{
+                    bgcolor: tokens.bg.surface,
+                    border: `1px solid ${tokens.border.subtle}`,
+                    borderRadius: 1.5,
+                    p: 1.25,
+                    flexShrink: 0,
+                    maxHeight: 150,
+                    overflowY: 'auto',
+                  }}
+                >
+                  <Typography variant="subtitle2">
+                    {storePlace(selected)} · {selected.site_label} · {selected.customer_name}
+                  </Typography>
+                  {selected.lines.length === 0 ? (
+                    <Typography variant="body2" sx={{ color: tokens.text.secondary }}>No product lines for this store.</Typography>
+                  ) : selected.lines.map((line) => (
+                    <Typography key={line.product_id} variant="body2" data-testid="store-line">
+                      {line.sku ?? line.product_name} · {fmt(line.units)} units · stock{' '}
+                      {fmt(line.stock_on_hand)} · cover {fmt(line.weeks_of_cover)}
+                    </Typography>
+                  ))}
+                </Box>
+              ) : null}
+              <Box
+                sx={{
+                  bgcolor: tokens.bg.surface,
+                  border: `1px solid ${tokens.border.subtle}`,
+                  borderRadius: 1.5,
+                  p: 1.25,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  flex: '1 1 0',
+                }}
+              >
+                <ProposedPinsPanel
+                  inAside
+                  stores={proposalList}
+                  saving={saving || proposalConfirm.saving}
+                  errors={proposalConfirm.errors}
+                  onConfirm={proposalConfirm.confirm}
+                  onSkip={rejectSuggestion}
+                />
+              </Box>
+              <Box
+                data-testid="store-map-unpinned"
+                sx={{
+                  bgcolor: tokens.bg.surface,
+                  border: `1px solid ${tokens.border.subtle}`,
+                  borderRadius: 1.5,
+                  p: 1.25,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  flex: '1 1 0',
+                }}
+              >
               <Typography variant="caption" sx={{ color: tokens.text.secondary }}>No coordinates</Typography>
               <TextField
                 size="small"
@@ -633,32 +691,11 @@ export function StoreMap() {
                   );
                 })}
               </Box>
+              </Box>
             </Box>
           </MapAside>
         </MapLayout>
       )}
-      <ProposedPinsPanel
-        stores={proposalList}
-        saving={saving || proposalConfirm.saving}
-        errors={proposalConfirm.errors}
-        onConfirm={prototype ? confirmPrototype : proposalConfirm.confirm}
-        onSkip={rejectSuggestion}
-      />
-      {selected ? (
-        <Box data-testid="store-map-lines" sx={{ mt: 1.5 }}>
-          <Typography variant="subtitle2">
-            {storePlace(selected)} · {selected.site_label} · {selected.customer_name}
-          </Typography>
-          {selected.lines.length === 0 ? (
-            <Typography variant="body2" sx={{ color: tokens.text.secondary }}>No product lines for this store.</Typography>
-          ) : selected.lines.map((line) => (
-            <Typography key={line.product_id} variant="body2" data-testid="store-line">
-              {line.sku ?? line.product_name} · {fmt(line.units)} units · stock{' '}
-              {fmt(line.stock_on_hand)} · cover {fmt(line.weeks_of_cover)}
-            </Typography>
-          ))}
-        </Box>
-      ) : null}
     </Box>
   );
 }
