@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Dashboard — illustrative design</title>
+<style>
+:root {
+  color-scheme:dark;
+  --bg:#14161a; --elevated:#1a1d23; --surface:#22262e; --muted:#2a2f38;
+  --border:rgba(120,160,190,.22); --strong:rgba(120,160,190,.35);
+  --text:rgba(245,247,250,.96); --secondary:rgba(186,198,210,.82);
+  --accent:#3db8e8; --accent-wash:rgba(61,184,232,.15);
+  --success:#3d9b6a; --warning:#d4a15a; --danger:#c45c5c;
+  --good-ink:#a0dfbc; --warn-ink:#ebc48e; --bad-ink:#f0aaaa;
+  --shadow:0 8px 28px rgba(0,0,0,.25);
+}
+:root[data-theme="light"] {
+  color-scheme:light;
+  --bg:#f3f5f7; --elevated:#fff; --surface:#fff; --muted:#e8edf1;
+  --border:rgba(32,52,72,.14); --strong:rgba(32,52,72,.28);
+  --text:rgba(16,22,30,.94); --secondary:rgba(40,54,68,.82);
+  --accent:#156f9c; --accent-wash:rgba(21,111,156,.12);
+  --success:#1f7a4d; --warning:#9a6418; --danger:#b13434;
+  --good-ink:#1f7a4d; --warn-ink:#85520d; --bad-ink:#b13434;
+  --shadow:0 4px 20px rgba(20,35,50,.08);
+}
+* { box-sizing:border-box }
+body {
+  margin:0; font:13px/1.45 "Segoe UI",system-ui,sans-serif; color:var(--text);
+  background:radial-gradient(ellipse at 25% 0, var(--accent-wash), transparent 52%),var(--bg);
+}
+button,select,a { -webkit-tap-highlight-color:transparent }
+button,select {
+  font:inherit; color:var(--text); background:var(--elevated);
+  border:1px solid var(--strong); border-radius:10px; min-height:34px; padding:6px 11px;
+}
+button,a,select { cursor:pointer }
+button:hover,a.button:hover { border-color:var(--accent); background:var(--accent-wash) }
+a { color:var(--accent); text-decoration:none }
+a:hover { text-decoration:underline }
+:focus-visible { outline:3px solid var(--accent); outline-offset:3px }
+button.primary,a.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:700 }
+[data-theme="light"] button.primary,[data-theme="light"] a.primary { color:#fff }
+.button { display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:6px 11px; border:1px solid var(--strong); border-radius:10px; color:var(--text) }
+.skip { position:fixed; left:190px; top:-60px; z-index:10; background:var(--surface); padding:10px }
+.skip:focus { top:10px }
+.shell { display:grid; grid-template-columns:172px minmax(0,1fr); min-height:100vh }
+.sidebar { padding:24px 14px; border-right:1px solid var(--border); background:var(--elevated); display:flex; flex-direction:column; gap:25px }
+.brand { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:700; letter-spacing:-.3px }
+.brand svg { color:var(--accent); flex:none }
+.brand small { display:block; color:var(--secondary); font-size:10px; font-weight:400; letter-spacing:.5px }
+.nav-group { display:grid; gap:5px }
+.nav-label,.eyebrow { font-size:10px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:var(--secondary) }
+.nav-label { padding:0 10px 7px }
+.nav-item { padding:9px 10px; color:var(--secondary); border-left:2px solid transparent; border-radius:0 8px 8px 0 }
+.nav-item.active { color:var(--accent); background:var(--accent-wash); border-left-color:var(--accent); font-weight:600 }
+.sidebar-foot { margin-top:auto; padding:12px 9px 0; border-top:1px solid var(--border); color:var(--secondary); font-size:11px }
+main { padding:18px 22px; display:grid; gap:12px; align-content:start; min-width:0 }
+.page-head { min-height:48px; display:flex; align-items:center; justify-content:space-between; gap:16px }
+h1 { font-size:27px; line-height:1.1; margin:0 0 4px; font-weight:650; letter-spacing:-1px }
+h2,h3,p { margin:0 }
+.subtitle { color:var(--secondary); font-size:12px }
+.head-actions,.controls,.control-group { display:flex; gap:9px; align-items:center }
+.badge { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border:1px solid var(--strong); border-radius:7px; font-size:11px; white-space:nowrap }
+.badge::before { content:""; width:5px; height:5px; border-radius:50%; background:var(--accent) }
+.controls { justify-content:space-between; min-height:42px; border-top:1px solid var(--border); padding-top:10px; flex-wrap:wrap }
+.control-group label { color:var(--secondary); font-size:11px }
+.control-group select { max-width:180px }
+.reset { border:0; background:transparent; color:var(--secondary); padding:5px; font-size:11px }
+.kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px }
+.tile,.panel {
+  position:relative; border:1px solid var(--border); border-radius:12px;
+  background:var(--surface); box-shadow:var(--shadow); min-width:0;
+}
+.tile { padding:13px 15px 12px; min-height:144px; overflow:hidden }
+.tile::before { content:""; position:absolute; top:0; left:0; right:0; height:3px; background:var(--tone) }
+.tile.featured { background:linear-gradient(125deg,var(--accent-wash),transparent 70%),var(--surface) }
+.tile-top,.tile-bottom { display:flex; align-items:center; justify-content:space-between; gap:8px }
+.tile-label { font-size:12px; font-weight:600 }
+.tile-tools { display:flex; gap:9px; align-items:center; color:var(--secondary); font-size:14px }
+.grip { letter-spacing:-3px; opacity:.7; user-select:none }
+.tile-value { display:flex; align-items:baseline; gap:7px; margin-top:10px }
+.number { font-size:33px; font-weight:650; line-height:1; letter-spacing:-1.2px; font-variant-numeric:tabular-nums }
+.unit { color:var(--secondary); font-size:11px }
+.tile-caption { margin-top:5px; color:var(--secondary); font-size:11px }
+.tile-bottom { margin-top:10px; font-size:11px }
+.status { font-weight:650; color:var(--tone-ink); white-space:nowrap }
+.delta { color:var(--secondary); font-variant-numeric:tabular-nums }
+.progress { height:4px; background:var(--muted); border-radius:5px; overflow:hidden; margin-top:9px }
+.progress span { display:block; height:100%; background:var(--tone); border-radius:5px }
+.spark { position:absolute; top:46px; right:14px; width:88px; height:34px; color:var(--tone) }
+.resize { position:absolute; bottom:5px; right:5px; width:8px; height:8px; border-right:2px solid var(--strong); border-bottom:2px solid var(--strong); border-radius:0 0 2px 0 }
+body[data-editing="false"] .grip,body[data-editing="false"] .resize { visibility:hidden }
+.work-area { display:grid; grid-template-columns:minmax(0,1fr) 306px; gap:12px; min-height:356px }
+.analysis { display:grid; grid-template-rows:218px 126px; gap:12px; min-width:0 }
+.charts { display:grid; grid-template-columns:1.2fr 1fr; gap:12px; min-width:0 }
+.panel-head { padding:12px 13px 6px; display:flex; align-items:start; justify-content:space-between; gap:8px }
+.panel-head h2 { font-size:13px; font-weight:650; letter-spacing:-.15px }
+.panel-head p { font-size:10px; color:var(--secondary); margin-top:2px }
+.panel-tools { color:var(--secondary); white-space:nowrap }
+.chart { width:100%; height:155px; display:block; padding:0 8px 5px }
+.chart text,.cover-chart text { font:11px "Segoe UI",system-ui,sans-serif; fill:var(--secondary) }
+.chart .value,.cover-chart .value { fill:var(--text); font-weight:600; font-variant-numeric:tabular-nums }
+.gridline { stroke:var(--border); stroke-width:1 }
+.actual { stroke:var(--accent); stroke-width:3; fill:none; stroke-linecap:round }
+.target-line { stroke:var(--warning); stroke-width:1.5; stroke-dasharray:5 5; fill:none }
+.legend { display:flex; gap:12px; font-size:10px; color:var(--secondary); padding:0 13px }
+.legend i { display:inline-block; width:12px; height:3px; vertical-align:middle; margin-right:4px; background:var(--accent) }
+.legend .target-key { background:var(--warning) }
+.cover .panel-head { padding-bottom:1px }
+.cover-chart { width:100%; height:80px; padding:0 12px; display:block }
+.attention { display:flex; flex-direction:column; border-top:3px solid var(--warning) }
+.attention .panel-head { padding:12px 14px 10px }
+.attention .count { color:var(--warn-ink); font-size:11px }
+.attention ol { list-style:none; padding:0 14px; margin:0; display:grid; gap:0 }
+.attention li { display:grid; grid-template-columns:20px minmax(0,1fr); gap:8px; padding:11px 0; border-top:1px solid var(--border) }
+.rank { font-variant-numeric:tabular-nums; color:var(--secondary); font-size:11px; padding-top:1px }
+.issue-title { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:650 }
+.severity { width:6px; height:6px; flex:none; border-radius:2px; background:var(--danger) }
+.severity.warn { background:var(--warning) }
+.issue-meta { color:var(--secondary); font-size:10px; margin:4px 0 7px }
+.issue-action { min-height:28px; padding:3px 8px; font-size:11px; color:var(--accent); background:var(--accent-wash); border-color:transparent }
+.attention-foot { margin-top:auto; padding:8px 14px; border-top:1px solid var(--border); font-size:10px; color:var(--secondary) }
+.start-work { display:grid; grid-template-columns:100px repeat(4,minmax(0,1fr)); align-items:center; gap:9px; min-height:64px }
+.start-label { font-size:12px; font-weight:650 }
+.start-label small { display:block; font-size:10px; color:var(--secondary); font-weight:400 }
+.action-card { display:flex; align-items:center; justify-content:space-between; gap:7px; text-align:left; padding:10px 12px; min-height:57px; background:var(--elevated); border-color:var(--border) }
+.action-card b { display:block; font-size:11px; font-weight:600 }
+.action-card small { display:block; color:var(--secondary); font-size:10px }
+.action-card .arrow { color:var(--accent); font-size:17px }
+footer { display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; color:var(--secondary); font-size:10px; border-top:1px solid var(--border); padding-top:7px }
+dialog { color:var(--text); background:var(--surface); border:1px solid var(--strong); border-radius:12px; padding:24px; width:min(480px,calc(100% - 32px)); box-shadow:var(--shadow) }
+dialog::backdrop { background:rgba(0,0,0,.65) }
+dialog h2 { font-size:20px; margin-bottom:10px }
+dialog p { color:var(--secondary); white-space:pre-line }
+.dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px }
+@media (max-width:1050px) {
+  .shell { grid-template-columns:142px minmax(0,1fr) }
+  main { padding:16px }
+  .work-area { grid-template-columns:minmax(0,1fr) 275px }
+  .spark { width:60px; opacity:.6 }
+  .start-work { grid-template-columns:repeat(2,minmax(0,1fr)) }
+  .start-label { grid-column:1/-1 }
+}
+@media (max-width:800px) {
+  .shell { display:block }
+  .sidebar { display:none }
+  .page-head { align-items:start }
+  .head-actions { flex-wrap:wrap; justify-content:flex-end }
+  .kpis { grid-template-columns:1fr }
+  .work-area { grid-template-columns:1fr }
+  .analysis { grid-template-rows:auto auto }
+  .charts { grid-template-columns:1fr }
+  .chart { height:185px }
+  .attention { min-height:340px }
+  .controls { gap:12px }
+  .control-group { flex-wrap:wrap }
+}
+@media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important } }
+</style>
+</head>
+<body data-editing="true">
+<a class="skip" href="#main">Skip to Dashboard</a>
+<div class="shell">
+  <aside class="sidebar" aria-label="Application navigation">
+    <div class="brand">
+      <svg width="27" height="29" viewBox="0 0 27 29" aria-hidden="true"><path d="M2 21V8l11-6 12 6v13l-12 6Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m2 8 11 7 12-7M13 15v12" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      <div>Channel<small>INTELLIGENCE</small></div>
+    </div>
+    <nav class="nav-group" aria-label="Workspace">
+      <div class="nav-label">Workspace</div>
+      <a class="nav-item active" href="#main" aria-current="page">◈ &nbsp; Dashboard</a>
+      <span class="nav-item">Line-ups</span>
+      <span class="nav-item">Promotions</span>
+      <span class="nav-item">Sell-through</span>
+      <span class="nav-item">Stock</span>
+      <span class="nav-item">Shipments</span>
+    </nav>
+    <div class="nav-group">
+      <div class="nav-label">Explore</div>
+      <span class="nav-item">Reports</span>
+      <span class="nav-item">Chart builder</span>
+    </div>
+    <div class="sidebar-foot">Your workspace<br>Only data you can access</div>
+  </aside>
+
+  <main id="main">
+    <header class="page-head">
+      <div><h1>Dashboard</h1><p class="subtitle">Your performance. Your priorities. Your next move.</p></div>
+      <div class="head-actions">
+        <span class="badge">Illustrative data</span>
+        <button id="theme" type="button" aria-label="Switch to light theme">☼ &nbsp; Light theme</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Dashboard controls">
+      <div class="control-group">
+        <label for="job">Job default</label>
+        <select id="job" aria-label="Explore job-title defaults">
+          <option value="account_manager">Account manager</option>
+          <option value="product_manager">Product manager</option>
+          <option value="finance">Finance</option>
+          <option value="country_manager">Country manager</option>
+          <option value="admin">Admin</option>
+        </select>
+        <span class="subtitle">All permitted accounts · Jul–Sep 2026</span>
+      </div>
+      <div class="control-group">
+        <button class="reset" id="reset" type="button">Reset to my role default</button>
+        <button id="edit" type="button" aria-pressed="true">Done editing</button>
+        <a class="button primary" href="targets-builder.html">+ Add tile</a>
+      </div>
+    </section>
+
+    <section class="kpis" aria-label="Your quarterly targets">
+      <article class="tile featured" style="--tone:var(--danger);--tone-ink:var(--bad-ink)">
+        <div class="tile-top">
+          <h2 class="tile-label">Sell-through units</h2>
+          <div class="tile-tools"><span class="grip" aria-hidden="true">⠿</span><a href="targets-builder.html" aria-label="Edit sell-through target">✎</a></div>
+        </div>
+        <div class="tile-value"><strong class="number">24,860</strong><span class="unit">units</span></div>
+        <svg class="spark" viewBox="0 0 90 34" role="img" aria-label="Monthly sell-through increased from 7,200 to 9,560 units"><path d="M2 28 43 19 87 4" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="87" cy="4" r="3" fill="currentColor"/></svg>
+        <p class="tile-caption">82.9% of 30,000 target · 5,140 to go</p>
+        <div class="tile-bottom"><span class="status">● Behind</span><span class="delta">↑ 12.3% vs previous period</span></div>
+        <div class="progress" role="progressbar" aria-label="Sell-through target attainment" aria-valuemin="0" aria-valuemax="100" aria-valuenow="82.9"><span style="width:82.9%"></span></div>
+        <span class="resize" aria-hidden="true"></span>
+      </article>
+
+      <article class="tile" style="--tone:var(--success);--tone-ink:var(--good-ink)">
+        <div class="tile-top"><h2 class="tile-label">Units per week</h2><div class="tile-tools"><span class="grip" aria-hidden="true">⠿</span><span aria-hidden="true">✎</span></div></div>
+        <div class="tile-value"><strong class="number">1,892</strong><span class="unit">units / week</span></div>
+        <svg class="spark" viewBox="0 0 90 34" role="img" aria-label="Monthly weekly rate increased across the quarter"><path d="M2 29 43 21 87 4" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="87" cy="4" r="3" fill="currentColor"/></svg>
+        <p class="tile-caption">105.1% of 1,800 target · 92 above target</p>
+        <div class="tile-bottom"><span class="status">● On track</span><span class="delta">↑ 12.3% vs previous period</span></div>
+        <div class="progress" role="progressbar" aria-label="Weekly rate target attainment, 105.1 percent" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span style="width:100%"></span></div>
+        <span class="resize" aria-hidden="true"></span>
+      </article>
+
+      <article class="tile" style="--tone:var(--warning);--tone-ink:var(--warn-ink)">
+        <div class="tile-top"><h2 class="tile-label">Sites reporting</h2><div class="tile-tools"><span class="grip" aria-hidden="true">⠿</span><span aria-hidden="true">✎</span></div></div>
+        <div class="tile-value"><strong class="number">46</strong><span class="unit">sites</span></div>
+        <svg class="spark" viewBox="0 0 90 34" role="img" aria-label="Reporting sites increased from 41 to 46 during the quarter"><path d="M2 27 43 19 87 6" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="87" cy="6" r="3" fill="currentColor"/></svg>
+        <p class="tile-caption">92.0% of 50 target · 4 to go</p>
+        <div class="tile-bottom"><span class="status">● At risk</span><span class="delta">↑ 4 sites vs previous period</span></div>
+        <div class="progress" role="progressbar" aria-label="Reporting sites target attainment" aria-valuemin="0" aria-valuemax="100" aria-valuenow="92"><span style="width:92%"></span></div>
+        <span class="resize" aria-hidden="true"></span>
+      </article>
+    </section>
+
+    <div class="work-area">
+      <section class="analysis" aria-label="Account manager charts">
+        <div class="charts">
+          <article class="panel">
+            <div class="panel-head"><div><h2>Sell-through vs target</h2><p>Monthly units · quarter ended 30 Sep</p></div><span class="panel-tools grip" aria-hidden="true">⠿</span></div>
+            <div class="legend"><span><i></i>Actual</span><span><i class="target-key"></i>Target: 10,000 / month</span></div>
+            <svg class="chart" viewBox="0 0 360 155" role="img" aria-labelledby="trend-title trend-desc">
+              <title id="trend-title">Monthly sell-through against an evenly allocated target</title>
+              <desc id="trend-desc">July 7,200, August 8,100, September 9,560 units. Each monthly target is 10,000. Actual total 24,860; target total 30,000.</desc>
+              <defs><linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".3"/><stop offset="1" stop-color="var(--accent)" stop-opacity=".01"/></linearGradient></defs>
+              <path class="gridline" d="M43 27H340M43 77H340M43 127H340"/>
+              <text x="4" y="30">10k</text><text x="12" y="80">5k</text><text x="17" y="130">0</text>
+              <path class="target-line" d="M48 27H334"/>
+              <path d="M50 55C100 55 145 47 192 46S285 34 333 31V127H50Z" fill="url(#trend-fill)"/>
+              <path class="actual" d="M50 55C100 55 145 47 192 46S285 34 333 31"/>
+              <g fill="var(--surface)" stroke="var(--accent)" stroke-width="2"><circle cx="50" cy="55" r="4"/><circle cx="192" cy="46" r="4"/><circle cx="333" cy="31" r="4"/></g>
+              <text class="value" x="50" y="44" text-anchor="middle">7.2k</text>
+              <text class="value" x="192" y="66" text-anchor="middle">8.1k</text>
+              <text class="value" x="333" y="50" text-anchor="middle">9.6k</text>
+              <text x="50" y="149" text-anchor="middle">Jul</text><text x="192" y="149" text-anchor="middle">Aug</text><text x="333" y="149" text-anchor="middle">Sep</text>
+            </svg>
+            <span class="resize" aria-hidden="true"></span>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head"><div><h2>Units by customer</h2><p>Sell-through · same quarter</p></div><span class="panel-tools grip" aria-hidden="true">⠿</span></div>
+            <svg class="chart" viewBox="0 0 300 163" role="img" aria-labelledby="customers-title customers-desc">
+              <title id="customers-title">Customer sell-through ranking</title>
+              <desc id="customers-desc">Customer A 8,720; Customer B 6,940; Customer C 5,400; Customer D 3,800 units. Four customers shown.</desc>
+              <text x="9" y="16">Customer</text><text x="289" y="16" text-anchor="end">Units</text>
+              <path class="gridline" d="M99 26V142M185 26V142M271 26V142"/>
+              <g fill="var(--accent)">
+                <rect x="99" y="33" width="150" height="13" rx="3"/>
+                <rect x="99" y="62" width="119" height="13" rx="3" opacity=".85"/>
+                <rect x="99" y="91" width="93" height="13" rx="3" opacity=".7"/>
+                <rect x="99" y="120" width="65" height="13" rx="3" opacity=".55"/>
+              </g>
+              <text x="9" y="44">Customer A</text><text class="value" x="289" y="44" text-anchor="end">8,720</text>
+              <text x="9" y="73">Customer B</text><text class="value" x="289" y="73" text-anchor="end">6,940</text>
+              <text x="9" y="102">Customer C</text><text class="value" x="289" y="102" text-anchor="end">5,400</text>
+              <text x="9" y="131">Customer D</text><text class="value" x="289" y="131" text-anchor="end">3,800</text>
+              <text x="99" y="159">0</text><text x="185" y="159" text-anchor="middle">5k</text><text x="271" y="159" text-anchor="middle">10k</text>
+            </svg>
+            <span class="resize" aria-hidden="true"></span>
+          </article>
+        </div>
+
+        <article class="panel cover">
+          <div class="panel-head"><div><h2>Stock cover</h2><p>Latest report by customer · illustrative preferred band: 3–6 weeks</p></div><span class="panel-tools grip" aria-hidden="true">⠿</span></div>
+          <svg class="cover-chart" viewBox="0 0 700 80" role="img" aria-labelledby="cover-title cover-desc">
+            <title id="cover-title">Stock-cover heat strip</title>
+            <desc id="cover-desc">Customer A 1.4 weeks, low; Customer B 4.8 weeks, within band; Customer C 9.2 weeks, high; Customer D 3.6 weeks, within band. Cover uses four weeks of sales ending on each customer's last reported day. The preferred band is illustrative.</desc>
+            <text x="0" y="13">Customer</text><text x="160" y="13">Cover, weeks</text><text x="574" y="13">Position</text>
+            <g fill="var(--muted)"><rect x="160" y="21" width="360" height="9" rx="3"/><rect x="160" y="36" width="360" height="9" rx="3"/><rect x="160" y="51" width="360" height="9" rx="3"/><rect x="160" y="66" width="360" height="9" rx="3"/></g>
+            <rect x="250" y="18" width="90" height="60" fill="var(--success)" opacity=".12"/>
+            <path d="M250 18V78M340 18V78" stroke="var(--success)" stroke-opacity=".5" stroke-dasharray="2 3"/>
+            <g fill="var(--danger)"><rect x="160" y="21" width="42" height="9" rx="3"/></g>
+            <g fill="var(--success)"><rect x="160" y="36" width="144" height="9" rx="3"/><rect x="160" y="66" width="108" height="9" rx="3"/></g>
+            <rect x="160" y="51" width="276" height="9" rx="3" fill="var(--warning)"/>
+            <text x="0" y="29">Customer A</text><text class="value" x="550" y="29" text-anchor="end">1.4</text><text x="574" y="29">Low</text>
+            <text x="0" y="44">Customer B</text><text class="value" x="550" y="44" text-anchor="end">4.8</text><text x="574" y="44">Within band</text>
+            <text x="0" y="59">Customer C</text><text class="value" x="550" y="59" text-anchor="end">9.2</text><text x="574" y="59">High</text>
+            <text x="0" y="74">Customer D</text><text class="value" x="550" y="74" text-anchor="end">3.6</text><text x="574" y="74">Within band</text>
+          </svg>
+          <span class="resize" aria-hidden="true"></span>
+        </article>
+      </section>
+
+      <aside class="panel attention" aria-labelledby="attention-title">
+        <div class="panel-head"><div><h2 id="attention-title">Needs attention</h2><p>Ranked by what needs action first</p></div><span class="count">3 priorities</span></div>
+        <ol>
+          <li><span class="rank">01</span><div>
+            <h3 class="issue-title"><span class="severity" aria-hidden="true"></span>3 reports overdue</h3>
+            <p class="issue-meta">Owner: Data steward · Oldest: 3 days</p>
+            <button class="issue-action" data-title="Review overdue reports" data-detail="3 expected reports are overdue. Review the missing periods and reporting status before following up.&#10;&#10;Owner: Data steward&#10;Oldest overdue report: 3 days" type="button">Review reports →</button>
+          </div></li>
+          <li><span class="rank">02</span><div>
+            <h3 class="issue-title"><span class="severity warn" aria-hidden="true"></span>1 account below cover band</h3>
+            <p class="issue-meta">Owner: Account manager · Observed: 1 day ago</p>
+            <button class="issue-action" data-title="Review low stock cover" data-detail="One account has 1.4 weeks of cover against the illustrative preferred band of 3–6 weeks. Review the reported stock and recent sales together before choosing an action.&#10;&#10;Owner: Account manager&#10;Observed: 1 day ago" type="button">Review stock →</button>
+          </div></li>
+          <li><span class="rank">03</span><div>
+            <h3 class="issue-title"><span class="severity warn" aria-hidden="true"></span>2 imports need review</h3>
+            <p class="issue-meta">Owner: Data steward · Oldest: 1 day</p>
+            <button class="issue-action" data-title="Review failed imports" data-detail="Two imports need review. Open their validation details and correct the source or mapping before trying again.&#10;&#10;Owner: Data steward&#10;Oldest failure: 1 day" type="button">Review imports →</button>
+          </div></li>
+        </ol>
+        <div class="attention-foot">Review opens the work. Nothing is approved here.</div>
+      </aside>
+    </div>
+
+    <section class="start-work" aria-label="Start work">
+      <div class="start-label">Start work<small>Pick up a task</small></div>
+      <button class="action-card" data-title="Review line-ups" data-detail="Review assortment, approval status and net requirement in the existing line-up workspace." type="button"><span><b>Review line-ups</b><small>Assortment & approvals</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+      <button class="action-card" data-title="Propose a promotion" data-detail="Start a proposal for a customer and period in the existing promotion workspace." type="button"><span><b>Propose a promotion</b><small>Plan the next move</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+      <button class="action-card" data-title="Settle a funding case" data-detail="Review evidence and reconciliation in the existing case book." type="button"><span><b>Settle a funding case</b><small>Evidence & reconciliation</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+      <button class="action-card" data-title="Open reports" data-detail="Open saved reports and the reports you have pinned to your workspace." type="button"><span><b>Open reports</b><small>Saved views & detail</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+    </section>
+
+    <footer><span>Illustrative snapshot · 1 Oct 2026, 08:30 · Targets are personal</span><span>Previous period: 31 Mar–30 Jun 2026 · 92 days</span></footer>
+  </main>
+</div>
+
+<dialog id="detail" aria-labelledby="detail-title">
+  <h2 id="detail-title"></h2><p id="detail-copy"></p>
+  <div class="dialog-actions"><button id="detail-close" class="primary" type="button">Close</button></div>
+</dialog>
+<dialog id="reset-dialog" aria-labelledby="reset-title">
+  <h2 id="reset-title">Reset to your role default?</h2>
+  <p>Your personal tile choices and targets would be replaced with the current Account manager default. Other dashboards and reports stay in your workspace.</p>
+  <div class="dialog-actions"><button id="reset-cancel" type="button">Keep my layout</button><button id="reset-confirm" class="primary" type="button">Reset this Dashboard</button></div>
+</dialog>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  const theme = document.getElementById('theme');
+  theme.addEventListener('click', () => {
+    const light = root.dataset.theme !== 'light';
+    root.dataset.theme = light ? 'light' : 'dark';
+    theme.textContent = light ? '☾  Dark theme' : '☼  Light theme';
+    theme.setAttribute('aria-label', light ? 'Switch to dark theme' : 'Switch to light theme');
+  });
+  const dialog = document.getElementById('detail');
+  function show(title, copy) {
+    document.getElementById('detail-title').textContent = title;
+    document.getElementById('detail-copy').textContent = copy;
+    dialog.showModal();
+  }
+  document.querySelectorAll('[data-title]').forEach(button => {
+    button.addEventListener('click', () => show(button.dataset.title, button.dataset.detail));
+  });
+  document.getElementById('detail-close').addEventListener('click', () => dialog.close());
+  const edit = document.getElementById('edit');
+  edit.addEventListener('click', () => {
+    const editing = document.body.dataset.editing !== 'true';
+    document.body.dataset.editing = String(editing);
+    edit.textContent = editing ? 'Done editing' : 'Edit layout';
+    edit.setAttribute('aria-pressed', String(editing));
+  });
+  const defaults = {
+    product_manager: ['Product manager', 'Sell-through by product, monthly trend, reported stock and stock cover. Numeric targets are set by you.'],
+    finance: ['Finance', 'Promotion support and delivery, using the existing case measures. Numeric targets are set by you.'],
+    country_manager: ['Country manager', 'Sell-through across permitted accounts, monthly trend and stock position. Numeric targets are set by you.'],
+    admin: ['Admin', 'Attention, work shortcuts and saved reports. Add the performance tiles you need.']
+  };
+  const job = document.getElementById('job');
+  job.addEventListener('change', () => {
+    const selected = defaults[job.value];
+    if (selected) show(selected[0] + ' default', selected[1] + '\n\nThis explores a job default. Your job, permissions and current Dashboard have not changed.');
+    job.value = 'account_manager';
+  });
+  const reset = document.getElementById('reset-dialog');
+  document.getElementById('reset').addEventListener('click', () => reset.showModal());
+  document.getElementById('reset-cancel').addEventListener('click', () => reset.close());
+  document.getElementById('reset-confirm').addEventListener('click', () => {
+    reset.close();
+    document.body.dataset.editing = 'false';
+    edit.textContent = 'Edit layout';
+    edit.setAttribute('aria-pressed', 'false');
+    show('Role default preview', 'The Account manager layout is shown. All numbers and targets in this preview are illustrative.');
+  });
+})();
+</script>
+</body>
+</html>

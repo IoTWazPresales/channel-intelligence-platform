@@ -1,66 +1,50 @@
 # CURRENT state
 
-**Last updated:** 2026-11-22. Live migrations, Inventory, Line-up and database-map acceptance verified. Next: Warren's MapLibre visual/provider decision.
-**Branch:** `feat/integrate-20261103`. Product content pin `c685bf63`; confirm actual HEAD with `git rev-parse`.
+**Last updated:**2026-11-23 ? documentation/recovery consolidation and Warren's latest feedback. Last actual live acceptance:22November; no new product/runtime change during consolidation.
+**Branch:**`feat/integrate-20261103`. Product content pin`c685bf63`; confirm actual documentation HEAD with `git rev-parse`.
+**Next agent:** read [durable handoff](../handoffs/2026-11-23/README.md), [map revision brief](../handoffs/2026-11-23/MAP_FEEDBACK.md), and [Targets status](../handoffs/2026-11-23/TARGETS_STATUS.md). All are in Git, with recovery archives and screenshots.
 
-## Branch and delivery
+## Branch, database and topology
 
-- Inventory `055bc770`/origin correction `f8bb446f` integrated at `2d374040`. Line-up correction `071be7bb` integrated at `7f2785d4`. Database-map corrections `23f47395`/`567f8bfa` integrated at `c685bf63`. Integration and feature branches pushed. No main merge/push.
-- Live web: `c685bf63`, BUILD_ID `CbNqqIUC9jWVb7H6po90e`. API/worker retain earlier `b3b54f5e` deployment; their source did not change for this fix.
-- Source/applied Alembic: `20261120_0065`. Existing untracked `.agents/`, `.eif/upgrade-history/`, `.eif/upgrade-work/`, `apps/api/.env.bak-20261117` preserved and unstaged.
+- Web last verified atc685bf63 / BUILD_ID`CbNqqIUC9jWVb7H6po90e`. API/worker last deployedb3b54f5e; no backend restart for the final UI corrections. Integration and product feature branches were pushed; no main promotion.
+- Windows local ModeB; web3000/API8001/Postgres5432 database`cip`/Redis6379. No Docker. API Python3.12 venv; system3.14 only for non-API documentation scripts.
+- Source/applied UI Alembic`20261120_0065`, last verified22November. Warren executed natural0063->0064->0065; do not repeat the old operator wrapper. Schema/grants/798existing relation metadata/counts and3.35GB backup/hash independently checked; exact backup path/hash in handoff.
+- Retained clone`cip_ui_migrate_20261122_1df81d9e4dcb`: real backup/restore/naturalUP-DOWN-UP passed without stamping. Final browser fixtures restored to tenant1/app_user3/auth_session135/layout0 with exact full-row digests; independently rechecked READ ONLY. Sharedcip_test untouched by this continuation.
+- Original untracked`.agents/`,`.eif/upgrade-history/`,`.eif/upgrade-work/`,`apps/api/.env.bak-20261117` preserved/unstaged. Source worktrees preserved; no automatic cleanup or restoration.
 
-## Database and environment
+## Proven live / limits
 
-- Local Windows Mode B: API8001, web3000, native PostgreSQL/Redis. No Docker. Shared `cip_test` untouched by this continuation.
-- Warren executed approved operator wrapper: natural0063 ->0064 ->0065 and current exited0. Coordinator separately sampled cip127.0.0.1:5432 as postgres READ ONLY: both tables present, schema/grants match rehearsal, all798 existing relation metadata entries and representative counts unchanged. Both new tables were empty at that check.
-- Fresh operator backup `cip_20261122_144208.dump`:3,355,093,451bytes, SHA256 `bcff1ef7b4f06362e5619cd4900d0d0a6138b9a408e67c9f49ed1f051c3be985`, independently rehashed. Actual backup/list/upgrade/current/read-only proof: `.tmp/operator-ui-migration-20261122T124159Z-b48d2c53/`.
-- Retained clone `cip_ui_migrate_20261122_1df81d9e4dcb`: real owner backup/restore, natural UP0065/DOWN0063/UP0065 all0 without stamping; schema/grants/owners/effective ACL/RLS/counts preserved. Proof `.tmp/coordinator-20261122/migration-proof/`. Same-session full cycle plus coordinator read-only sample, not cluster-wide disaster recovery.
-- Coordinator did not execute protected migration. Service restarts/sign-in use normal application flows. Do not rerun operator migration wrapper against upgraded baseline.
+- Inventory:055bc770/f8bb446f integrated2d374040; six actual browser route/redirect checks pass, including same-origin filters and Movement navigation. Movement dataset acceptance is outside those route checks. BACKLOG-266 covers other aliases.
+- Line-up:071be7bb integrated7f2785d4; native button/grid double-toggle corrected.177reporting items/sixgroups and reporting header semantics checked, five acceptance records/ten real mouse-keyboard gestures pass. Approval/edit/import writes were not exercised.
+- Database-map:23f47395/567f8bfa integratedc685bf63; seven independently executed live checks pass:142tables/285FKlinks, readablefit340px/zoom1, empty/clear cycles, stable positions and FK selection. ReactFlow internal-store visibility fixes transient minimapNaN; no alternate writer/layout algorithm.
+- Final clean product gates:lint0errors/48baseline warnings, nonincremental types0, build84pages, unfiltered291files/1818tests0 (623.31s, no retry/filter/suppression). Clone browser Save/reload/user+tenant isolation passed with actual app ASGI IPC; unrelated shell readers stubbed, fixture bearer sessions. This does not test Save via the Next proxy/password logout or retained-client switching. Live normal sign-in/catalog/rendering separately proved.
+- Web-only release0; launches5->6, others unchanged; two web/API200/healthy-state/count/build samples82.349s apart. Candidate3107 stopped after ownership checks; stale PIDs in evidence are historical. Original failures retained, never relabeled PASS. Portable summaries in handoff/evidence; raw local proof under`.tmp/coordinator-20261121/` and`.tmp/coordinator-20261122/`.
+- Earlier canonical stack deploy`deploy-20261122-145442.json` remains FAILED at busy-solo Celery ping. Later idle ping/heartbeat and stability are separate evidence. BACKLOG-245 retains the heartbeat-based deploy gate follow-up; read DEV_TOPOLOGY before worker changes.
 
-## What is working / evidence
+## Latest map feedback ? changes required, not approved
 
-- **Inventory live:** canonical cover at `/inventory`, manual stock retained at `/inventory/hand-entered`; six live browser checks passed, including three filter-preserving legacy redirects/four same-origin hops and Movement route/tab. No page errors/business-write attempts. Movement dataset acceptance is outside those route checks.
-- **Line-up live:**177 reporting plan items/six customer-period groups; header29cases/1460reporting lines excludes1235 non-reporting active commercial lines. Eight aligned columns/18visible actions; expanded detail renders PM-derived BU/workbench link; Close restores summary grain.
-- **Open/Close corrected:** native grid row event and React button event previously toggled twice. Panel now excludes button/link/role-button native row events, following existing repository pattern. Only panel/test changed; shared grid/API/approval payloads/writers/layout untouched. Failed-before9/pass11; focused44 passed, separate reviewer20 passed/no blocker.
-- Clean071be7bb source gates: lint0errors/48baseline warnings, nonincremental types0, production build0/84pages; full unfiltered web retry290files/1814tests exit0. Initial full run failed289files/1798tests on unhandled Vitest Windows-profile Temp-cache write; original log/exit retained. Verified-writable process-local TEMP/TMP retry required no product/config/error-suppression change; transient cause is not claimed fixed.
-- Candidate production3107 and live3000 each passed five acceptance records plus ten real mouse/button-Enter/button-Space/plain-cell-keyboard Open/Close checks, no page errors/business-write attempts. Approval/edit/import writes deliberately untested; current plan dataset lacks non-reporting plan rows for a visual negative fixture.
-- Web-only release used existing pnpm build/supervisor component restart. Web launches4->5; other launches unchanged. Two samples60.297s apart: web200/API readiness200, all six components healthy/counts unchanged. Proof `.tmp/coordinator-20261122/lineup-proof/live-verification.json`.
+- Warren dislikes country/grouping markers. Country/city/street/mall icons or points and the general page theme must match the shipping map. Canonical reference:OnTheWater.tsx/ClusterMarker and shared MapMarker; compare pixels, not only imports.
+- Pins, proposed pins, data/details and confirmation controls belong in the **right-hand panel**, avoiding the long below-map list/page scrolling. Preserve the existing single/bulk confirmation paths and steward actions.
+- Remove the prominent/doubled OSM credit strip as requested; retain legally required OSM/provider attribution through a compliant compact/dismissible presentation. This alternative is a recorded design recommendation, not an implementation or approval. Official sources in map brief.
+- Existing three images are revision references in`docs/handoffs/2026-11-23/assets/`. They used temporary browser GET-settings overrides and real data. Actual settings remained{}200 after cleanup; prototype restored off/contexts closed. No production provider/configuration/pin/source/default change.
+- Real payload310stores/four customers,192proposed coordinate points, zero confirmed. FourwaysA02 is an unverified intersection proposal near visible FourwaysMall, not store/building proof. ClearwaterA01/rural-place mismatch is BACKLOG-267 before bulk confirmation.
+- Old visual/provider approval questions are superseded by this feedback for appearance; provider remains unanswered. Do not enable/configure the provider or roll out the shown look as approved. Revision work is BACKLOG-268.
 
-## Database-map acceptance / limits
+## Targets / Dashboard V2 ? not done
 
-- **Verified live:** canonical public catalog142tables/285FKlinks; normal sign-in/admin access, matching-card fit340px/zoom1, focused empty/clear restoration, three repeated empty/focus-toggle/restore cycles with all142positions preserved, exact FK mouse selection. Separate verifier independently executed all seven live checks on3000/c685, actualexit0; zero authenticated console/page errors/blocked writes. Four intentional pre-login401 errors retained. No live Save/drag/reset performed.
-- Root cause confirmed in installed ReactFlow12.8.5: controlled props reach the store in a passive effect; minimap bounds filter hidden internal nodes. Private wrapper now gates from that same store through public useNodes. No graph remount, layout algorithm, backend/schema or writer change. Real-renderer regression caught eight invalid SVG attributes before; after12focused tests pass. Separate review independently12pass/no blocker.
-- Clean567 source gates all0: lint0errors/48baseline warnings, nonincremental types0, build84pages, unfiltered291files/1818tests (623.31s), no retry/filter/config/suppression change. Private process TEMP/TMP write/read probe0. Source tree clean; integration product tree compared identical before release.
-- **Browser persistence verified on retained clone with limitations:** actual production UI drag/expand/Save/reload, second-user separate Save, cross-tenant empty preference, return-to-first-user restoration; five records/all17core responses200/no browser errors. Actual normal cip-role app/auth/storage via ASGI IPC; four unrelated shell readers stubbed, fixture bearer tokens injected into ephemeral storage. Does not test Save through the Next HTTP proxy, password-login/logout or retained-client account switching; normal live sign-in/catalog/rendering are separately proved.
-- Both committed clone layouts matched browser values before cleanup. Exact tenant1/app_user3/auth_session135/layout0 counts/full-row digests restored, source preferences READ ONLY/unchanged. Separate verifier independently re-executed read-only preflight and compared exact digests. Earlier real API owner/upsert/forged-header/body-field proof also passed. Shared cip_test untouched.
-- Web-only canonical build/component restart0: web launches5->6, others unchanged. Two native read-only samples82.349s apart: web/API200, all six component states healthy, counts/build unchanged. Candidate3107PID38448 stopped after exact ownership checks; no candidate listener retained. Primary API/worker unchanged.
-- Failures remain retained: original23f browser failed twice (Warren explicitly authorized correction), clone-browser run1 failed on invalid expanded-card width assertion (reviewed harness-only correction, run2passed), first stability collector called an unexported helper before any health query (fresh native collector passed). No failed artifact relabeled PASS. Rejected custom3108 launcher was never used; standard foreground production entrypoint was allowed. No policy/hook changes.
-- Full evidence: `.tmp/coordinator-20261122/database-map-proof/lifecycle-correction/verification-report.md`, `full-verification/verification-report.md`, `live-browser-verification.md`, `web-release.json`, `live-web-stability.json`, `browser-persistence-run-2.json`.
-- Canonical earlier stack deploy `deploy-20261122-145442.json` remains FAILED at busy-solo Celery ping; later idle ping and heartbeat were separate proof. BACKLOG-245 retains the canonical heartbeat follow-up. Other alias origins: BACKLOG-266. Earlier harness/Temp failures retained separately.
+- Only a design spec and standalone HTML Dashboard/target-builder prototypes were recovered. Submit opens an illustrative dialog; no matching new Targets route/API/product implementation was found. Draft dark/light styling exists; the requested live redesign is not delivered.
+- Exact original drafts now preserved in`docs/design/dashboard-v2/` and`docs/specs/DASHBOARD_V2.md`; they retain design-only provenance. See handoff/TARGETS_STATUS.md for source evidence and limitations.
+- Earlier Dashboard visual direction approved in **both themes**, stock health BELOW sales charts. Expanded replenishment/aged-stock mock-up/detail/build pending. Previous saved light screenshot duplicated dark and is not light-theme acceptance evidence. BACKLOG-269 tracks remaining delivery.
 
-## MapLibre visual previews awaiting decision
+## Next ? one task / one delegated agent at a time
 
-- Actual live tenant settings are empty; prototype defaults off. Real store payload:310records/four customers,192proposed coordinate points, zero confirmed pins. These are proposals, not verified store positions.
-- Country preview `maplibre-proof/preview-2/01-country-preview.png`; city `preview-4/02-city-preview.png`; mall/street `preview-4/03-mall-area-proposed-preview.png`, all under `.tmp/coordinator-20261122/`. Root and separate agent inspected pixels. Fourways Mall label/buildings and city roads render; selected MakroA02 proposed point is near a road intersection, with store accuracy unverified.
-- Browser-only GET-settings override used verified OpenFreeMap TileJSON/glyph endpoints and real app store data. Provider responses200; no authenticated browser/page/blocked-write errors. Real settings refetched200/empty after removing override, prototype restored off and contexts closed. No production settings, coordinates, source or default-map change.
-- Two approval questions presented: visual direction and OpenFreeMap provider. Neither preselected option nor elapsed time is approval. Normal production provider setup/map replacement remains pending. Detail `.tmp/coordinator-20261122/maplibre-proof/preview-report.md`; initial unconfigured state and failed harness/provider probes retained separately.
-- Existing Clearwater Mall -> rural Clearwater proposal counterexample deferred explicitly to BACKLOG-267 before bulk pin confirmation. No resolver/data change was made for screenshot work.
+1. This turn is consolidation only. On a subsequent continue, resume map revisions from Warren's brief unless reprioritized; show revised rendered screenshots before rollout.
+2. Discovery V2:committed S1/S2/S3c/S5 not integrated; S3a dirty foundations/incomplete lint; S4 dirty/failed saved checks; S3b Crawlee finder pending. Keep live Preview-only and exact GTIN/model evidence. No automatic schedule activation.
+3. Dashboard/Targets delivery per accepted theme/placement decisions, then AI-assisted import implementation/three-customer clone proof. AI proposes; steward confirms fixed rules. Requested library review follows original live lanes.
+4. Recovery manifests name every relevant branch/base and dirty file. Verified Git bundle and ZIP preserve seven separate refs plus three dirty worktrees/15untrackedfiles; restore only into new worktrees after inspection, never blindly into integration.
 
-## Next
+## Boundaries / blockers
 
-1. Await Warren's two MapLibre decisions, then continue accepted setup/replacement work. Screenshots are ready; all store coordinates remain unconfirmed. ONE task/ONE delegated agent at a time.
-2. Resume Discovery, Dashboard and AI-import in dependency order, one at a time. Requested library review follows original live lanes.
-3. Next deploy-script reliability review: existing identity-bound heartbeat for busy solo (BACKLOG-245), rather than a relaxed ping timeout.
-
-## Blockers requiring Warren
-
-- MapLibre visual/provider decisions are pending; any main promotion remains a separate explicit decision.
-- Codex session had no EIF runtime-session record on Nov22. Future protected DB mutations need installed operator route; never fabricate state/self-grant/use missing hooks as permission. Completed0064/65 prerequisite is fulfilled; no repeat approval needed.
-- Required `engineering-rules.mdc` missing; no contents assumed, installed controls untouched.
-
-## Original queue / continuity
-
-- Discovery S1/S2/S3c/S5 separate; S3a uncommitted/incomplete lint, S4 failed saved checks, S3b Crawlee finder pending. Live Preview-only/exact-evidence links.
-- Dashboard in `lane-c-20261120`: approved look/both themes/stock health BELOW sales charts; expanded replenishment/aged-stock mock-up and build pending. Saved light PNG duplicates dark; interactive switching works.
-- AI-import spec `docs/ai-import-spec-20261120`; build/three-customer clone proof pending.
-- Evidence `.tmp/coordinator-20261121/`, `.tmp/coordinator-20261122/lineup-proof/`, operator/clone folders above. Older decisions: [CURRENT snapshot](CURRENT-snapshot-20261121-before-coordinator.md); verify current code before resuming.
+- No main push/promotion, source implementation, provider setup or DB mutation authorized by this consolidation. Latest map design requires changes; no provider approval was received.
+- Codex session registration was absent on22November. Future protected DB work requires installed operator mechanism; never fabricate state/self-grant/borrow a session/use missing hooks as permission. Do not set ALLOW_TESTS_ON_DEV_DB casually. Cloud guard denial is a stop condition.
+- No hook/policy/.claude/CLAUDE.md edits; engineering-rules.mdc missing and not invented. Preserve existing failed artifacts and the two-attempt stop rule. Agent quotas may be exhausted; all outstanding scope is durable outside chat.

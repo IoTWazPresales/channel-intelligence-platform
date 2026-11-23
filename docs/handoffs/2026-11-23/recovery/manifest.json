@@ -1,0 +1,174 @@
+{
+  "base_integration": "6c2280526b750c08cb20d26f308920793d155a10",
+  "bundle_heads": [
+    "6fc12b3b0f60e33dcb27787c2623ba4278f8d748 refs/heads/feat/discovery-s1-20261120",
+    "dac2a1bb02ae4049c2cf1a4788686f94213e27f5 refs/heads/feat/discovery-s2-20261120",
+    "dac2a1bb02ae4049c2cf1a4788686f94213e27f5 refs/heads/feat/discovery-s3-20261120",
+    "bf2f721b609344bcecb6f3661e107f134260ae92 refs/heads/feat/discovery-s3c-20261120",
+    "dac2a1bb02ae4049c2cf1a4788686f94213e27f5 refs/heads/feat/discovery-s4-20261120",
+    "a907be60805b8945a48dcffd69723005c7de5bc9 refs/heads/feat/discovery-s5-20261120",
+    "4c386d8aef76ade27bf892649155868b85cc99dd refs/heads/docs/ai-import-spec-20261120"
+  ],
+  "bundle_sha256": "a0776685088744d9eb5e64f5e912e882de5e4edd74beed6058f1b6f262dce7ee",
+  "bundle_verified": true,
+  "snapshots": [
+    {
+      "worktree": "disc-s3-20261120",
+      "branch": "feat/discovery-s3-20261120",
+      "base": "dac2a1bb02ae4049c2cf1a4788686f94213e27f5",
+      "tracked_patch": "disc-s3-20261120/tracked.patch",
+      "patch_sha256": "a4f818779ec6e3ac59d67a15fad7126935b642068193352e63666b2c979aa704",
+      "patch_check_on_base": true,
+      "untracked": [
+        {
+          "path": "apps/api/app/services/listing_capture/web_discovery/gtin.py",
+          "entry": "disc-s3-20261120/untracked/apps/api/app/services/listing_capture/web_discovery/gtin.py",
+          "sha256": "cd1087b85fe6caca1cf96f1f290952489320acd4d92d5a9fbe632d02d1f77a9d"
+        },
+        {
+          "path": "apps/api/app/services/listing_capture/web_discovery/page_facts.py",
+          "entry": "disc-s3-20261120/untracked/apps/api/app/services/listing_capture/web_discovery/page_facts.py",
+          "sha256": "3522697d3c82927cef65606431fafb8cd923469d65490dc5b4d3441c284f899d"
+        },
+        {
+          "path": "apps/api/tests/fixtures/web_discovery/product_jsonld.html",
+          "entry": "disc-s3-20261120/untracked/apps/api/tests/fixtures/web_discovery/product_jsonld.html",
+          "sha256": "ea786a7ada5842ee79b96d96b6a4b6a96b1efd81326a887e1d6abd47ac079f4b"
+        },
+        {
+          "path": "apps/api/tests/fixtures/web_discovery/product_microdata.html",
+          "entry": "disc-s3-20261120/untracked/apps/api/tests/fixtures/web_discovery/product_microdata.html",
+          "sha256": "b7b911dd905a7277af49ccb933098d27c1b1fadb84d7526eef60bb5a4333722f"
+        },
+        {
+          "path": "apps/api/tests/fixtures/web_discovery/product_opengraph.html",
+          "entry": "disc-s3-20261120/untracked/apps/api/tests/fixtures/web_discovery/product_opengraph.html",
+          "sha256": "2a5a1db4a77e323c6c8014bfce567518f9c91c4a99b0abdafa0ef04709a6c2ea"
+        },
+        {
+          "path": "apps/api/tests/test_web_discovery_domains.py",
+          "entry": "disc-s3-20261120/untracked/apps/api/tests/test_web_discovery_domains.py",
+          "sha256": "3fb99edc63902ba49756a85abf6e4d495250f942b594bd6e1a1ab991f8d89a0d"
+        },
+        {
+          "path": "apps/api/tests/test_web_discovery_gtin.py",
+          "entry": "disc-s3-20261120/untracked/apps/api/tests/test_web_discovery_gtin.py",
+          "sha256": "df10943775b9e46480d9a1c4acf02ee12823758c300987c346d8a09155c81065"
+        },
+        {
+          "path": "apps/api/tests/test_web_discovery_page_facts.py",
+          "entry": "disc-s3-20261120/untracked/apps/api/tests/test_web_discovery_page_facts.py",
+          "sha256": "02255e662e83d7c838b6162186a83bb79ceb79257295e260455f0e88e1e3a1f1"
+        },
+        {
+          "path": "apps/api/tests/test_web_discovery_robots_protego.py",
+          "entry": "disc-s3-20261120/untracked/apps/api/tests/test_web_discovery_robots_protego.py",
+          "sha256": "9d0a16b0f57482835b184e1902ba4590fa7e7a94747309387f7a74de4b5f69ef"
+        }
+      ]
+    },
+    {
+      "worktree": "disc-s4-20261120",
+      "branch": "feat/discovery-s4-20261120",
+      "base": "dac2a1bb02ae4049c2cf1a4788686f94213e27f5",
+      "tracked_patch": "disc-s4-20261120/tracked.patch",
+      "patch_sha256": "16d9c6ff7253347d275de73d722702cc9f98e5da7e3eed8e27be8d9b8e2b5175",
+      "patch_check_on_base": true,
+      "untracked": [
+        {
+          "path": "apps/api/app/services/listing_capture/web_discovery/link_apply.py",
+          "entry": "disc-s4-20261120/untracked/apps/api/app/services/listing_capture/web_discovery/link_apply.py",
+          "sha256": "c315965e78e63d10012c65b067abaeeca6ce9cc9bf7545c3f34b6c9349bedded"
+        },
+        {
+          "path": "apps/api/app/services/listing_capture/web_discovery/linking.py",
+          "entry": "disc-s4-20261120/untracked/apps/api/app/services/listing_capture/web_discovery/linking.py",
+          "sha256": "bc276d7ea17f7aca26aa1e8adc2e085cce364732e71280bb7604df8dbbbf6e6f"
+        },
+        {
+          "path": "apps/api/tests/test_web_discovery_linking.py",
+          "entry": "disc-s4-20261120/untracked/apps/api/tests/test_web_discovery_linking.py",
+          "sha256": "f881926b8c0635cc4ad0c32e25e7c9ae4e44abcd900daf406cdffa915e1294ed"
+        }
+      ]
+    },
+    {
+      "worktree": "lane-c-20261120",
+      "branch": "docs/dashboard-v2-design-20261120",
+      "base": "b4039a1dc6b9bafcd72bf544cf3dfcbd78b7ca35",
+      "tracked_patch": "lane-c-20261120/tracked.patch",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "patch_check_on_base": true,
+      "untracked": [
+        {
+          "path": "docs/design/dashboard-v2/index.html",
+          "entry": "lane-c-20261120/untracked/docs/design/dashboard-v2/index.html",
+          "sha256": "e73c9f3b55b2eecb4d8a8e262aeec86187f23bb97ac546f0c51e67cf7cd079de"
+        },
+        {
+          "path": "docs/design/dashboard-v2/targets-builder.html",
+          "entry": "lane-c-20261120/untracked/docs/design/dashboard-v2/targets-builder.html",
+          "sha256": "7a9fb59da26f9fcaa4976cd2a8fb2be874424f1dfa6cb5ebfe239723d029e563"
+        },
+        {
+          "path": "docs/specs/DASHBOARD_V2.md",
+          "entry": "lane-c-20261120/untracked/docs/specs/DASHBOARD_V2.md",
+          "sha256": "427a9086cef56c06cca8fb2c214c442e2e4513c5c1f95acc8bd9dc636e38a7c5"
+        }
+      ]
+    }
+  ],
+  "copied_files": [
+    {
+      "path": "docs/design/dashboard-v2/index.html",
+      "origin_worktree": "lane-c-20261120",
+      "sha256": "e73c9f3b55b2eecb4d8a8e262aeec86187f23bb97ac546f0c51e67cf7cd079de"
+    },
+    {
+      "path": "docs/design/dashboard-v2/targets-builder.html",
+      "origin_worktree": "lane-c-20261120",
+      "sha256": "7a9fb59da26f9fcaa4976cd2a8fb2be874424f1dfa6cb5ebfe239723d029e563"
+    },
+    {
+      "path": "docs/specs/DASHBOARD_V2.md",
+      "origin_worktree": "lane-c-20261120",
+      "sha256": "427a9086cef56c06cca8fb2c214c442e2e4513c5c1f95acc8bd9dc636e38a7c5"
+    },
+    {
+      "path": "docs/handoffs/2026-11-23/assets/country-REQUIRES-REVISION.png",
+      "source": ".tmp/coordinator-20261122/maplibre-proof/preview-2/01-country-preview.png",
+      "sha256": "938cb572e1e7f2afee9d29afd661c9108f10bce88f3298756207ad6755acb932"
+    },
+    {
+      "path": "docs/handoffs/2026-11-23/assets/city-REQUIRES-REVISION.png",
+      "source": ".tmp/coordinator-20261122/maplibre-proof/preview-4/02-city-preview.png",
+      "sha256": "1055593ccd08c9bad6350cf69e6d2cceb06743909a230eb019368b6bc15439f0"
+    },
+    {
+      "path": "docs/handoffs/2026-11-23/assets/mall-REQUIRES-REVISION.png",
+      "source": ".tmp/coordinator-20261122/maplibre-proof/preview-4/03-mall-area-proposed-preview.png",
+      "sha256": "cf3c5996083a3b8a490f6a42895c1122197f8af262961b9649912a29729921ad"
+    },
+    {
+      "path": "docs/handoffs/2026-11-23/evidence/maplibre-preview.md",
+      "source": ".tmp/coordinator-20261122/maplibre-proof/preview-report.md",
+      "sha256": "09da835a5113ec328be471a9435999ea5fdc9a608fb1cf763b42cbe2be53ea7f"
+    },
+    {
+      "path": "docs/handoffs/2026-11-23/evidence/database-map-verification.md",
+      "source": ".tmp/coordinator-20261122/database-map-proof/lifecycle-correction/verification-report.md",
+      "sha256": "2253d0daa9d83f8cb7b124ef2369905782f0f271a0a2a7cc96d11cfbb8ccbaff"
+    },
+    {
+      "path": "docs/handoffs/2026-11-23/evidence/source-and-clone-verification.md",
+      "source": ".tmp/coordinator-20261122/database-map-proof/lifecycle-correction/full-verification/verification-report.md",
+      "sha256": "279e2d9e05322372e81bb7b537893cc495d7c7aad4d24df3442eeec40ec76c2a"
+    },
+    {
+      "path": "docs/handoffs/2026-11-23/evidence/database-map-live-browser.md",
+      "source": ".tmp/coordinator-20261122/database-map-proof/lifecycle-correction/live-browser-verification.md",
+      "sha256": "b5adb617e5c3a51d5f78ec6e0769e2ae864fff52f114b53e35af8ec589999cae"
+    }
+  ],
+  "uncommitted_zip_sha256": "43794ea699811fe2e7e75e445de4bdab9c95584f047e7688089fbd93b51b6fcf"
+}

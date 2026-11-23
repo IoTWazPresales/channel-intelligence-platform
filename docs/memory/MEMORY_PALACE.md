@@ -43,6 +43,10 @@
 
 ---
 
+## Transfer handoff ? 2026-11-23
+
+For continuation by another agent or on another machine, read `docs/handoffs/2026-11-23/README.md` after CURRENT and CONTEXT. It preserves latest map feedback, honest Targets status, screenshots, evidence summaries, branch refs and verified uncommitted-work recovery archives. It is a dated snapshot; CURRENT remains authoritative for later changes. Historical CONTEXT was preserved unchanged in `CONTEXT-archive-20261123-before-consolidation.md`; do not read that entire archive for ordinary orientation.
+
 ## Conflict resolution (mandatory)
 
 If two sources disagree (e.g. `CURRENT.md` vs code vs `CONTEXT` archive vs a skill):

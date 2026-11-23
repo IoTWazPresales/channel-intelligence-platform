@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Your target — illustrative design</title>
+<style>
+:root {
+  color-scheme:dark;
+  --bg:#14161a; --elevated:#1a1d23; --surface:#22262e; --muted:#2a2f38;
+  --border:rgba(120,160,190,.22); --strong:rgba(120,160,190,.35);
+  --text:rgba(245,247,250,.96); --secondary:rgba(186,198,210,.82);
+  --accent:#3db8e8; --accent-wash:rgba(61,184,232,.15);
+  --success:#3d9b6a; --warning:#d4a15a; --danger:#c45c5c;
+  --good-ink:#a0dfbc; --warn-ink:#ebc48e; --bad-ink:#f0aaaa;
+  --shadow:0 8px 28px rgba(0,0,0,.25);
+}
+:root[data-theme="light"] {
+  color-scheme:light;
+  --bg:#f3f5f7; --elevated:#fff; --surface:#fff; --muted:#e8edf1;
+  --border:rgba(32,52,72,.14); --strong:rgba(32,52,72,.28);
+  --text:rgba(16,22,30,.94); --secondary:rgba(40,54,68,.82);
+  --accent:#156f9c; --accent-wash:rgba(21,111,156,.12);
+  --success:#1f7a4d; --warning:#9a6418; --danger:#b13434;
+  --good-ink:#1f7a4d; --warn-ink:#85520d; --bad-ink:#b13434;
+  --shadow:0 4px 20px rgba(20,35,50,.08);
+}
+* { box-sizing:border-box }
+body { margin:0; color:var(--text); font:13px/1.45 "Segoe UI",system-ui,sans-serif; background:radial-gradient(ellipse at 25% 0,var(--accent-wash),transparent 52%),var(--bg) }
+button,input,select { font:inherit; color:var(--text) }
+button,select { cursor:pointer }
+a { color:var(--accent); text-decoration:none }
+a:hover { text-decoration:underline }
+button { border:1px solid var(--strong); background:var(--elevated); border-radius:10px; min-height:36px; padding:7px 13px }
+button:hover { border-color:var(--accent); background:var(--accent-wash) }
+button.primary { background:var(--accent); border-color:var(--accent); color:var(--bg); font-weight:700 }
+[data-theme="light"] button.primary { color:#fff }
+:focus-visible { outline:3px solid var(--accent); outline-offset:3px }
+.shell { display:grid; grid-template-columns:172px minmax(0,1fr); min-height:100vh }
+aside.navigation { display:flex; flex-direction:column; gap:26px; background:var(--elevated); border-right:1px solid var(--border); padding:25px 17px }
+.brand { font-size:16px; font-weight:700; letter-spacing:-.4px }
+.brand small { display:block; margin-top:2px; font-size:10px; letter-spacing:1.4px; font-weight:400; color:var(--secondary) }
+.nav-label,.eyebrow { font-size:10px; text-transform:uppercase; letter-spacing:1.4px; color:var(--secondary); font-weight:700 }
+.steps { margin:0; padding:0; list-style:none; display:grid; gap:21px }
+.steps li { color:var(--secondary); font-size:12px }
+.steps b { display:inline-grid; place-items:center; width:23px; height:23px; border-radius:7px; border:1px solid var(--strong); margin-right:8px; font-size:10px }
+.steps .active { color:var(--text) }
+.steps .active b { color:var(--accent); border-color:var(--accent); background:var(--accent-wash) }
+.nav-foot { margin-top:auto; border-top:1px solid var(--border); padding-top:13px; font-size:11px; color:var(--secondary) }
+main { padding:22px 28px; max-width:1200px; width:100%; margin:auto; align-self:start }
+.top { display:flex; justify-content:space-between; align-items:center; gap:15px }
+.top-actions { display:flex; gap:10px; align-items:center }
+.badge { border:1px solid var(--strong); border-radius:7px; padding:4px 9px; font-size:11px; color:var(--secondary) }
+h1 { margin:21px 0 5px; font-size:29px; letter-spacing:-1px; font-weight:650; line-height:1.15 }
+h2,h3,p { margin:0 }
+.lead { color:var(--secondary); font-size:13px; margin-bottom:19px }
+.builder { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:20px; align-items:start }
+.form-panel,.preview-tile,.explanation { background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow) }
+.form-panel { padding:20px }
+.section-head { display:flex; align-items:center; gap:9px; margin-bottom:14px }
+.section-head b { display:grid; place-items:center; width:23px; height:23px; border:1px solid var(--strong); color:var(--accent); font-size:10px; border-radius:7px }
+.section-head h2 { font-size:13px; font-weight:650 }
+.field { margin-bottom:14px }
+label,.label { display:block; margin-bottom:5px; font-size:11px; color:var(--secondary); font-weight:600 }
+input,select { width:100%; padding:9px 10px; min-height:39px; border:1px solid var(--strong); border-radius:8px; background:var(--elevated) }
+input[type="number"] { font-variant-numeric:tabular-nums }
+input:invalid { border-color:var(--danger) }
+.help { font-size:10px; color:var(--secondary); margin-top:5px }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:12px }
+.divider { border:0; border-top:1px solid var(--border); margin:18px 0 }
+.target-input { position:relative }
+.target-input input { padding-right:75px }
+.target-unit { position:absolute; right:11px; top:11px; color:var(--secondary); font-size:11px }
+.inline-note { display:flex; align-items:start; gap:8px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--accent-wash); color:var(--secondary); font-size:11px }
+.inline-note span { color:var(--accent); font-size:14px }
+.preview { display:grid; gap:14px; min-width:0 }
+.preview-heading { display:flex; justify-content:space-between; align-items:center }
+.preview-heading h2 { font-size:12px; font-weight:600 }
+.preview-heading span { color:var(--secondary); font-size:10px }
+.preview-tile { position:relative; padding:20px; overflow:hidden; border-top:3px solid var(--danger); background:linear-gradient(125deg,var(--accent-wash),transparent 80%),var(--surface) }
+.preview-tile h3 { font-size:14px; margin-bottom:4px; padding-right:16px }
+.tile-sub { font-size:10px; color:var(--secondary) }
+.grip { position:absolute; right:17px; top:16px; font-size:17px; color:var(--secondary) }
+.preview-core { display:grid; grid-template-columns:minmax(0,1fr) 104px; gap:5px; align-items:center; margin:20px 0 12px }
+.value { font-size:35px; line-height:1.1; font-variant-numeric:tabular-nums; font-weight:650; letter-spacing:-1.1px }
+.value-unit { color:var(--secondary); font-size:11px; margin-top:3px }
+.ring { width:104px; height:104px; overflow:visible }
+.ring text { font:600 16px "Segoe UI",system-ui,sans-serif; fill:var(--text); font-variant-numeric:tabular-nums }
+.ring .ring-caption { font-size:9px; fill:var(--secondary); font-weight:400 }
+.status { font-size:12px; font-weight:650; color:var(--bad-ink) }
+.target-caption { font-size:11px; color:var(--secondary); margin-top:6px }
+.sparkline { width:100%; height:57px; display:block; margin:14px 0 5px }
+.sparkline text { fill:var(--secondary); font:10px "Segoe UI",system-ui,sans-serif }
+.tile-foot { padding-top:10px; border-top:1px solid var(--border); display:flex; justify-content:space-between; gap:10px; color:var(--secondary); font-size:10px }
+.explanation { padding:16px 18px }
+.explanation h3 { font-size:12px; margin-bottom:10px }
+.explanation dl { display:grid; grid-template-columns:85px minmax(0,1fr); gap:9px; font-size:11px; margin:0 }
+dt { color:var(--secondary) }
+dd { margin:0 }
+.explanation p { font-size:10px; color:var(--secondary); padding-top:12px; margin-top:13px; border-top:1px solid var(--border) }
+.preview-note { color:var(--secondary); font-size:11px; padding:0 3px }
+.form-actions { display:flex; justify-content:space-between; gap:15px; align-items:center; padding-top:18px; margin-top:18px; border-top:1px solid var(--border) }
+.form-actions small { color:var(--secondary); font-size:10px; max-width:220px }
+.error { color:var(--bad-ink); font-size:11px; min-height:16px; margin-top:10px }
+footer { margin-top:18px; color:var(--secondary); font-size:10px; display:flex; justify-content:space-between; gap:10px }
+dialog { color:var(--text); background:var(--surface); border:1px solid var(--strong); border-radius:12px; padding:24px; width:min(440px,calc(100% - 32px)) }
+dialog::backdrop { background:rgba(0,0,0,.65) }
+dialog h2 { font-size:20px; margin-bottom:10px }
+dialog p { color:var(--secondary) }
+.dialog-actions { display:flex; justify-content:flex-end; margin-top:20px }
+@media (max-width:1080px) {
+  .shell { grid-template-columns:145px minmax(0,1fr) }
+  main { padding:20px }
+  .builder { grid-template-columns:minmax(0,1fr) 310px; gap:14px }
+  .form-panel { padding:16px }
+}
+@media (max-width:850px) {
+  .shell { display:block }
+  aside.navigation { display:none }
+  main { padding:18px }
+  .builder { grid-template-columns:1fr }
+  .preview { grid-row:1 }
+  .preview-core { grid-template-columns:1fr 104px }
+  .two { grid-template-columns:1fr }
+  .top-actions { flex-wrap:wrap; justify-content:flex-end }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="navigation" aria-label="Target builder steps">
+    <div class="brand">Channel<small>INTELLIGENCE</small></div>
+    <div class="nav-label">Your Dashboard</div>
+    <ol class="steps">
+      <li class="active"><b>01</b>Choose a measure</li>
+      <li class="active"><b>02</b>Set your target</li>
+      <li class="active"><b>03</b>Check the tile</li>
+    </ol>
+    <div class="nav-foot">Personal targets<br>Your job default is a starting point.</div>
+  </aside>
+
+  <main>
+    <div class="top">
+      <a href="index.html">← Dashboard</a>
+      <div class="top-actions"><span class="badge">Illustrative data</span><button id="theme" type="button" aria-label="Switch to light theme">☼ &nbsp; Light theme</button></div>
+    </div>
+    <h1>What does good look like?</h1>
+    <p class="lead">Choose a measure, set a target, and keep progress in view.</p>
+
+    <div class="builder">
+      <form class="form-panel" id="target-form">
+        <div class="section-head"><b>01</b><h2>Choose what to measure</h2></div>
+        <div class="field">
+          <label for="title">Tile title</label>
+          <input id="title" maxlength="100" value="Sell-through units" required>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="measure">Measure</label>
+            <select id="measure">
+              <option value="cst_sellthrough.units">Sell-through units</option>
+              <option value="cst_sellthrough.units_per_week">Units per week</option>
+              <option value="cst_sellthrough.stores_reporting">Sites reporting</option>
+            </select>
+            <p class="help">From customer sell-through</p>
+          </div>
+          <div class="field">
+            <label for="scope">Account scope</label>
+            <select id="scope"><option value="permitted">All permitted accounts</option><option value="assigned">My assigned accounts</option></select>
+            <p class="help">Always limited to your access</p>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div class="section-head"><b>02</b><h2>Set a target and period</h2></div>
+        <div class="two">
+          <div class="field">
+            <label for="direction">A good result is</label>
+            <select id="direction"><option value="at_least">At least the target</option><option value="at_most">At most the target</option></select>
+          </div>
+          <div class="field">
+            <label for="target">Target value</label>
+            <div class="target-input"><input id="target" type="number" value="30000" step="any" required><span class="target-unit" id="input-unit">units</span></div>
+          </div>
+        </div>
+        <div class="two">
+          <div class="field"><label for="from">Period starts</label><input id="from" type="date" value="2026-07-01" required></div>
+          <div class="field"><label for="to">Period ends</label><input id="to" type="date" value="2026-09-30" required></div>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="comparison">Compare actual with</label>
+            <select id="comparison"><option value="previous_period">Previous period, same length</option><option value="previous_year">Same dates last year</option><option value="none">No previous comparison</option></select>
+          </div>
+          <div class="field">
+            <label for="margin">At-risk margin</label>
+            <select id="margin"><option value="10">Within 10% of target</option><option value="5">Within 5% of target</option><option value="0">No at-risk band</option></select>
+          </div>
+        </div>
+        <div class="inline-note"><span aria-hidden="true">◈</span><p>This is a full-period target. The preview uses a completed quarter, so progress and status can be compared directly.</p></div>
+        <p class="error" id="error" role="status"></p>
+        <div class="form-actions"><small>Only your Dashboard changes.<br>Your role default stays available.</small><button class="primary" type="submit">Add tile to my Dashboard</button></div>
+      </form>
+
+      <section class="preview" aria-label="Tile preview">
+        <div class="preview-heading"><h2>Your tile</h2><span>Updates as you edit</span></div>
+        <article class="preview-tile" id="tile">
+          <span class="grip" aria-hidden="true">⠿</span>
+          <h3 id="preview-title">Sell-through units</h3>
+          <p class="tile-sub" id="preview-period">1 Jul–30 Sep 2026 · All permitted accounts</p>
+          <div class="preview-core">
+            <div><div class="value" id="actual">24,860</div><div class="value-unit" id="actual-unit">units</div></div>
+            <svg class="ring" viewBox="0 0 104 104" role="img" aria-labelledby="ring-title">
+              <title id="ring-title">82.9 percent of target achieved</title>
+              <circle cx="52" cy="52" r="43" fill="none" stroke="var(--muted)" stroke-width="7"/>
+              <circle id="ring-progress" cx="52" cy="52" r="43" fill="none" stroke="var(--danger)" stroke-width="7" stroke-linecap="round" stroke-dasharray="270.18" stroke-dashoffset="46.2" transform="rotate(-90 52 52)"/>
+              <text id="percent" x="52" y="51" text-anchor="middle">82.9%</text><text class="ring-caption" x="52" y="65" text-anchor="middle">of target</text>
+            </svg>
+          </div>
+          <div class="status" id="status">● Behind</div>
+          <p class="target-caption" id="target-caption">Target: 30,000 units · 5,140 to go</p>
+          <svg class="sparkline" id="sparkline" viewBox="0 0 300 57" role="img" aria-labelledby="spark-title">
+            <title id="spark-title">Illustrative monthly trend across July, August and September</title>
+            <path d="M5 39H295" stroke="var(--border)"/>
+            <path id="spark-path" d="M10 34 150 23 290 7" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/>
+            <g fill="var(--accent)"><circle cx="10" cy="34" r="3"/><circle cx="150" cy="23" r="3"/><circle cx="290" cy="7" r="3"/></g>
+            <text x="10" y="55">Jul</text><text x="150" y="55" text-anchor="middle">Aug</text><text x="290" y="55" text-anchor="end">Sep</text>
+          </svg>
+          <div class="tile-foot"><span id="delta">↑ 12.3% vs previous period</span><span>Illustrative data</span></div>
+        </article>
+
+        <section class="explanation" aria-labelledby="reading-title">
+          <h3 id="reading-title">How to read this target</h3>
+          <dl>
+            <dt>Measure</dt><dd id="explain-measure">Customer sell-through units</dd>
+            <dt>Period</dt><dd id="explain-period">1 Jul–30 Sep 2026</dd>
+            <dt>On track</dt><dd id="explain-good">At least 30,000 units</dd>
+            <dt>At risk</dt><dd id="explain-risk">27,000 to under 30,000 units</dd>
+            <dt>Behind</dt><dd id="explain-bad">Below 27,000 units</dd>
+          </dl>
+          <p id="measure-note">Units sold in customer reports. Distributor sell-out is a separate measure.</p>
+        </section>
+        <p class="preview-note">The preview contains illustrative figures for Jul–Sep 2026 only. Changing the period or account scope shows an unavailable state.</p>
+      </section>
+    </div>
+    <footer><span>Targets and layout belong to you.</span><span>Previous period in this example: 31 Mar–30 Jun 2026</span></footer>
+  </main>
+</div>
+
+<dialog id="ready" aria-labelledby="ready-title">
+  <h2 id="ready-title">Tile ready for review</h2>
+  <p>This static mock-up does not save changes. Review the tile and return to the Dashboard to compare the overall layout.</p>
+  <div class="dialog-actions"><button class="primary" id="close" type="button">Keep reviewing</button></div>
+</dialog>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const fixtures = {
+    'cst_sellthrough.units': {
+      actual:24860, previous:22140, unit:'units', title:'Sell-through units', target:30000,
+      explanation:'Customer sell-through units',
+      note:'Units sold in customer reports. Distributor sell-out is a separate measure.'
+    },
+    'cst_sellthrough.units_per_week': {
+      actual:24860 / (92 / 7), previous:22140 / (92 / 7), unit:'units / week', title:'Units per week', target:1800,
+      explanation:'Customer sell-through units per week',
+      note:'The period total divided by its length in weeks. Monthly rates are not added together.'
+    },
+    'cst_sellthrough.stores_reporting': {
+      actual:46, previous:42, unit:'sites', title:'Sites reporting', target:50,
+      explanation:'Distinct reported store / site labels',
+      note:'A distinct count across the period. Monthly site counts are not added together.'
+    }
+  };
+  const number = value => new Intl.NumberFormat('en-GB', { maximumFractionDigits:1 }).format(value);
+  const date = value => {
+    const parsed = new Date(value + 'T12:00:00');
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+  };
+  function update() {
+    const fixture = fixtures[$('measure').value];
+    const target = Number($('target').value);
+    const valid = $('target').value.trim() !== '' && Number.isFinite(target) &&
+      $('from').value && $('to').value && $('from').value <= $('to').value && $('title').value.trim();
+    const hasFixture = valid && $('from').value === '2026-07-01' &&
+      $('to').value === '2026-09-30' && $('scope').value === 'permitted';
+    const atLeast = $('direction').value === 'at_least';
+    const margin = Math.abs(target) * Number($('margin').value) / 100;
+    const period = date($('from').value) + ' – ' + date($('to').value);
+    const boundary = atLeast ? target - margin : target + margin;
+
+    $('preview-title').textContent = $('title').value.trim() || 'Your target';
+    $('preview-period').textContent = period + ' · ' + $('scope').selectedOptions[0].textContent;
+    $('input-unit').textContent = fixture.unit;
+    $('actual-unit').textContent = fixture.unit;
+    $('explain-measure').textContent = fixture.explanation;
+    $('explain-period').textContent = period;
+    $('measure-note').textContent = fixture.note;
+    $('explain-good').textContent = (atLeast ? 'At least ' : 'At most ') + number(target) + ' ' + fixture.unit;
+    $('explain-risk').textContent = margin === 0 ? 'No at-risk band' : atLeast
+      ? number(boundary) + ' to under ' + number(target) + ' ' + fixture.unit
+      : 'Above ' + number(target) + ' up to ' + number(boundary) + ' ' + fixture.unit;
+    $('explain-bad').textContent = (atLeast ? 'Below ' : 'Above ') + number(boundary) + ' ' + fixture.unit;
+    $('error').textContent = valid ? '' : 'Enter a title, a finite target and a valid date range.';
+    $('sparkline').style.visibility = hasFixture ? 'visible' : 'hidden';
+
+    if (!hasFixture) {
+      $('actual').textContent = '—';
+      $('status').textContent = valid ? 'No illustrative data' : 'Check your target';
+      $('status').style.color = 'var(--secondary)';
+      $('tile').style.borderTopColor = 'var(--strong)';
+      $('target-caption').textContent = valid ? 'Your target is defined; this selection has no preview figures.' : 'Complete the fields to preview your target.';
+      $('percent').textContent = '—';
+      $('ring-progress').style.strokeDashoffset = '270.18';
+      $('ring-title').textContent = 'Target attainment is unavailable';
+      $('delta').textContent = 'Comparison unavailable';
+      return;
+    }
+
+    const actual = fixture.actual;
+    const good = atLeast ? actual >= target : actual <= target;
+    const risk = !good && (atLeast ? actual >= boundary : actual <= boundary);
+    const tone = good ? 'success' : risk ? 'warning' : 'danger';
+    const ink = good ? 'good-ink' : risk ? 'warn-ink' : 'bad-ink';
+    const ratio = target > 0 && actual >= 0
+      ? atLeast ? actual / target : actual === 0 ? null : target / actual
+      : null;
+    $('actual').textContent = number(actual);
+    $('status').textContent = '● ' + (good ? 'On track' : risk ? 'At risk' : 'Behind');
+    $('status').style.color = 'var(--' + ink + ')';
+    $('tile').style.borderTopColor = 'var(--' + tone + ')';
+    $('ring-progress').style.stroke = 'var(--' + tone + ')';
+    $('ring-progress').style.strokeDashoffset = ratio == null ? '270.18' : String(270.18 * (1 - Math.min(1, Math.max(0, ratio))));
+    $('percent').textContent = ratio == null ? '—' : number(ratio * 100) + '%';
+    $('ring-title').textContent = ratio == null ? 'Use the actual and target values to compare this result' : number(ratio * 100) + ' percent directional target attainment';
+    const gap = Math.abs(target - actual);
+    $('target-caption').textContent = 'Target: ' + number(target) + ' ' + fixture.unit + ' · ' +
+      (good ? 'Target met' : number(gap) + (atLeast ? ' to go' : ' above target'));
+
+    const comparison = $('comparison').value;
+    if (comparison === 'none') $('delta').textContent = 'No previous comparison';
+    else if (comparison === 'previous_year') $('delta').textContent = 'No illustrative prior-year data';
+    else if ($('measure').value === 'cst_sellthrough.stores_reporting') $('delta').textContent = '↑ 4 sites vs previous period';
+    else $('delta').textContent = '↑ ' + number((actual - fixture.previous) / fixture.previous * 100) + '% vs previous period';
+  }
+
+  $('measure').addEventListener('change', () => {
+    const fixture = fixtures[$('measure').value];
+    $('target').value = String(fixture.target);
+    $('title').value = fixture.title;
+    update();
+  });
+  $('target-form').addEventListener('input', update);
+  $('target-form').addEventListener('change', update);
+  $('target-form').addEventListener('submit', event => {
+    event.preventDefault();
+    update();
+    if ($('target-form').reportValidity() && $('from').value <= $('to').value && $('title').value.trim() && Number.isFinite(Number($('target').value))) $('ready').showModal();
+  });
+  $('close').addEventListener('click', () => $('ready').close());
+  $('theme').addEventListener('click', () => {
+    const light = document.documentElement.dataset.theme !== 'light';
+    document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    $('theme').textContent = light ? '☾  Dark theme' : '☼  Light theme';
+    $('theme').setAttribute('aria-label', light ? 'Switch to dark theme' : 'Switch to light theme');
+  });
+  update();
+})();
+</script>
+</body>
+</html>

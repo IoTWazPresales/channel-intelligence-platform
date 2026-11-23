@@ -20,6 +20,15 @@ CURRENT wins for the session and this file gets corrected.
 
 ---
 
+## Current continuation ? 2026-11-23
+
+Authoritative now: [CURRENT](memory/CURRENT.md). Transfer/recovery pack: [handoff](handoffs/2026-11-23/README.md), including separate branch commits and uncommitted work snapshots.
+
+- Migration, Inventory, Line-up and database-map completion levels are pinned in CURRENT with actual proof limits.
+- MapLibre appearance requires Warren's latest revisions: shipping-map icon/theme parity and pins/proposals in the right panel (BACKLOG-268). Provider remains unset/unapproved; coordinate proposals are not confirmed.
+- Dashboard V2 / Targets remain design-only; requested theme rollout and implementation are unfinished (BACKLOG-269). Existing broad Dashboard look/both themes/stock-below-sales decisions stand.
+- Continue serially: map revisions -> Discovery V2 -> Dashboard/Targets -> AI-assisted import -> requested library review, unless Warren changes priority. No main promotion is implied.
+
 ## End state
 
 A multi-tenant channel intelligence and commercial planning platform, delivered as a service,

@@ -1,0 +1,98 @@
+[
+  {
+    "worktree": "disc-s1-20261120",
+    "branch": "feat/discovery-s1-20261120",
+    "head": "6fc12b3b0f60e33dcb27787c2623ba4278f8d748",
+    "ancestor_of_integration": false,
+    "status": []
+  },
+  {
+    "worktree": "disc-s2-20261120",
+    "branch": "feat/discovery-s2-20261120",
+    "head": "dac2a1bb02ae4049c2cf1a4788686f94213e27f5",
+    "ancestor_of_integration": false,
+    "status": []
+  },
+  {
+    "worktree": "disc-s3-20261120",
+    "branch": "feat/discovery-s3-20261120",
+    "head": "dac2a1bb02ae4049c2cf1a4788686f94213e27f5",
+    "ancestor_of_integration": false,
+    "status": [
+      " M apps/api/app/services/listing_capture/identity.py",
+      " M apps/api/app/services/listing_capture/web_discovery/candidates.py",
+      " M apps/api/app/services/listing_capture/web_discovery/robots.py",
+      " M apps/api/app/services/listing_capture/web_discovery/scoring.py",
+      " M apps/api/requirements.txt",
+      "?? apps/api/app/services/listing_capture/web_discovery/gtin.py",
+      "?? apps/api/app/services/listing_capture/web_discovery/page_facts.py",
+      "?? apps/api/tests/fixtures/web_discovery/product_jsonld.html",
+      "?? apps/api/tests/fixtures/web_discovery/product_microdata.html",
+      "?? apps/api/tests/fixtures/web_discovery/product_opengraph.html",
+      "?? apps/api/tests/test_web_discovery_domains.py",
+      "?? apps/api/tests/test_web_discovery_gtin.py",
+      "?? apps/api/tests/test_web_discovery_page_facts.py",
+      "?? apps/api/tests/test_web_discovery_robots_protego.py"
+    ]
+  },
+  {
+    "worktree": "disc-s3c-20261120",
+    "branch": "feat/discovery-s3c-20261120",
+    "head": "bf2f721b609344bcecb6f3661e107f134260ae92",
+    "ancestor_of_integration": false,
+    "status": []
+  },
+  {
+    "worktree": "disc-s4-20261120",
+    "branch": "feat/discovery-s4-20261120",
+    "head": "dac2a1bb02ae4049c2cf1a4788686f94213e27f5",
+    "ancestor_of_integration": false,
+    "status": [
+      " M apps/api/app/api/v1/endpoints/listing_capture.py",
+      " M apps/api/app/services/listing_capture/links.py",
+      " M apps/api/app/services/listing_capture/web_discovery/apply.py",
+      " M apps/api/app/services/listing_capture/web_discovery/preview.py",
+      "?? apps/api/app/services/listing_capture/web_discovery/link_apply.py",
+      "?? apps/api/app/services/listing_capture/web_discovery/linking.py",
+      "?? apps/api/tests/test_web_discovery_linking.py"
+    ]
+  },
+  {
+    "worktree": "disc-s5-20261120",
+    "branch": "feat/discovery-s5-20261120",
+    "head": "a907be60805b8945a48dcffd69723005c7de5bc9",
+    "ancestor_of_integration": false,
+    "status": []
+  },
+  {
+    "worktree": "lane-c-20261120",
+    "branch": "docs/dashboard-v2-design-20261120",
+    "head": "b4039a1dc6b9bafcd72bf544cf3dfcbd78b7ca35",
+    "ancestor_of_integration": true,
+    "status": [
+      "?? docs/design/dashboard-v2/",
+      "?? docs/specs/DASHBOARD_V2.md"
+    ]
+  },
+  {
+    "worktree": "spec-ai-import-20261120",
+    "branch": "docs/ai-import-spec-20261120",
+    "head": "4c386d8aef76ade27bf892649155868b85cc99dd",
+    "ancestor_of_integration": false,
+    "status": []
+  },
+  {
+    "worktree": "lane-a2-20261120",
+    "branch": "feat/lane-a2-prices-20261120",
+    "head": "033b98b40e1e1fafe17332643bde5f4d90b602a1",
+    "ancestor_of_integration": true,
+    "status": []
+  },
+  {
+    "worktree": "lane-f-20261120",
+    "branch": "feat/lane-f-map-20261120",
+    "head": "5c889c5c75bbcd1e6e397165ae22bf9bd3457e24",
+    "ancestor_of_integration": true,
+    "status": []
+  }
+]

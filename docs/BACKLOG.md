@@ -4120,3 +4120,25 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 | **Behavior / constraints** | Keep the existing proposed/confirmed distinction and explicit steward confirmation. Do not automatically rewrite live coordinates, infer a mall building from a name, weaken validation, or add a second location writer. Current dataset has zero confirmed coordinate pins; the192 proposed points are not verified store positions. |
 | **Out of scope** | Map visual direction/provider selection and automatic confirmation of other proposals. |
 | **TRIGGER** | Before bulk-confirming store-location proposals, or when store-location accuracy work is authorized. |
+
+
+## BACKLOG-268 ? Apply Warren's MapLibre visual and right-panel revisions
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open ? latest Warren feedback preserved2026-11-23; no implementation during consolidation. Shown look requires changes; provider unanswered. |
+| **Scope** | Country/grouping/city/street/mall points/icons and overall page theme must visually match the shipping map. Keep pins/proposed pins/data/details/confirmation controls in the right panel, with appropriate internal scrolling rather than a long list below. |
+| **Canonical / evidence** | `docs/handoffs/2026-11-23/MAP_FEEDBACK.md`; shipping `OnTheWater.tsx/ClusterMarker`, shared `MapMarker.tsx`, `MapCanvas.tsx`; store `StoreMap.tsx`, `StoreMapPrototype.tsx`, `WorkbenchMap.tsx`, `ProposedPinsPanel.tsx`. Shared imports alone did not produce accepted visual parity. Rejected baseline images preserved in handoff/assets. |
+| **Credit request** | Remove prominent/doubled OSM label strip; retain mandatory OSM/provider attribution through a compliant compact or dismissible pattern. Official guidance and exact request in map brief. No attribution implementation has been selected. |
+| **Constraints** | Do not add a second confirmation writer, weaken proposal/confirmed semantics, confirm or move live coordinates for appearance, or configure/enable a provider without acceptance. Actual live settings empty/prototypeoff;310stores/192proposals/0confirmed at last preview. |
+| **TRIGGER** | Next authorized map revision task; compare real rendered shipping and revised store-map pixels before requesting approval or rollout. |
+
+## BACKLOG-269 ? Deliver Dashboard V2 and Targets beyond design-only prototypes
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open ? verified2026-11-23 as design/prototype only, not shipped requested module/theme. |
+| **Evidence** | `docs/handoffs/2026-11-23/TARGETS_STATUS.md`; original `docs/specs/DASHBOARD_V2.md` and `docs/design/dashboard-v2/{index,targets-builder}.html` now preserved in Git. Submit previews a dialog; no production target persistence. |
+| **Accepted direction** | Both light/dark themes; stock health below sales charts. Expanded replenishment and aged-stock detail/mock-up/build remain pending. Old saved lightPNG duplicated dark and must not be used as rendered proof. |
+| **Work / constraints** | Extend existing Overview/dashboard/widget/query engine and canonical theme tokens; implement scoped target persistence/validation/API/UI and verify actual behavior. Do not invent another metrics or storage system, alter job/role authorization, or claim illustrative values are real. Preserve original design provenance and review outstanding detail. |
+| **TRIGGER** | Dashboard/Targets delivery resumes after current higher-priority work, or Warren explicitly reprioritizes it. |
