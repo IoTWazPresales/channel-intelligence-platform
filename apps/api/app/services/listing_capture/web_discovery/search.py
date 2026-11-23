@@ -36,7 +36,10 @@ from app.services.listing_capture.web_discovery.search_parsers import (
 PROVIDER_DDG_HTML = "ddg_html"
 PROVIDER_DDG_LITE = "ddg_lite"
 PROVIDER_SEARXNG = "searxng"
-PROVIDERS = (PROVIDER_DDG_HTML, PROVIDER_DDG_LITE, PROVIDER_SEARXNG)
+# ddgs "auto": the library's own choice of free, keyless engines (no API key).
+PROVIDER_DDGS_AUTO = "ddgs_auto"
+PROVIDERS = (PROVIDER_DDG_HTML, PROVIDER_DDG_LITE, PROVIDER_SEARXNG, PROVIDER_DDGS_AUTO)
+_DDGS_BACKENDS = {PROVIDER_DDG_HTML: "duckduckgo", PROVIDER_DDGS_AUTO: "auto"}
 
 # Protocol endpoint, not a tenant default. ddgs 9.16.1 POSTs to this HTML endpoint.
 DDG_HTML_URL = "https://html.duckduckgo.com/html/"
@@ -116,7 +119,7 @@ def _configuration(
     provider: str, options: dict[str, Any], searxng_url: str | None
 ) -> dict[str, Any]:
     return {
-        "adapter": _CACHE_ADAPTER if provider == PROVIDER_DDG_HTML else PROVIDER_SEARXNG,
+        "adapter": _CACHE_ADAPTER if provider == PROVIDER_DDG_HTML else (f"{_CACHE_ADAPTER}:auto" if provider == PROVIDER_DDGS_AUTO else PROVIDER_SEARXNG),
         "options": options,
         "searxng_url": searxng_url if provider == PROVIDER_SEARXNG else None,
     }
@@ -185,7 +188,7 @@ def _cache_write(
 
 def request_url(provider: str, query: str, searxng_url: str | None) -> str | None:
     """The guarded endpoint; ddgs sends its query itself using POST."""
-    if provider == PROVIDER_DDG_HTML:
+    if provider in _DDGS_BACKENDS:
         return DDG_HTML_URL
     if provider != PROVIDER_SEARXNG:
         return None
@@ -260,19 +263,35 @@ def _exception_status(exc: Exception) -> int:
     return 0
 
 
-def _ddgs_page(query: str, options: dict[str, Any]) -> tuple[int, ParsedPage]:
+def _ddgs_page(query: str, options: dict[str, Any], backend: str = "duckduckgo") -> tuple[int, ParsedPage]:
     # Import and construct inside the guarded operation: even a missing/broken dependency
     # follows the fail-soft pause path, and a robots refusal constructs no client.
     from ddgs import DDGS
 
     arguments: dict[str, Any] = {
-        "backend": "duckduckgo",
+        "backend": backend,
         "max_results": options["max_results"],
     }
     if "region" in options:
         arguments["region"] = options["region"]
-    with DDGS(timeout=options["timeout_seconds"]) as client:
-        rows = client.text(query, **arguments)
+    import ddgs as ddgs_module
+
+    no_results = getattr(ddgs_module, "DDGSException", None)
+    if no_results is None:
+        try:
+            from ddgs.exceptions import DDGSException as no_results
+        except ImportError:
+            no_results = None
+    try:
+        with DDGS(timeout=options["timeout_seconds"]) as client:
+            rows = client.text(query, **arguments)
+    except Exception as exc:  # noqa: BLE001 - re-raised unless it is the plain "no results" class
+        # ddgs raises the base class when every engine answered with no results. That is an
+        # empty search, not a block: it must not pause the search host. Subclasses (rate limit,
+        # timeout) still raise and take the pause path.
+        if no_results is None or type(exc) is not no_results:
+            raise
+        return 200, ParsedPage(PARSED_EMPTY, [], "no_results")
     if not isinstance(rows, list):
         raise ValueError("Unexpected ddgs result type")
 
@@ -317,11 +336,11 @@ def _run_provider(
         previous = None
 
     spacing = options["min_interval_seconds"]
-    if provider == PROVIDER_DDG_HTML:
+    if provider in _DDGS_BACKENDS:
         try:
             called = getter.guarded_call(
                 url,
-                lambda: _ddgs_page(query, options),
+                lambda: _ddgs_page(query, options, _DDGS_BACKENDS[provider]),
                 gate_key=gate_key,
                 spacing=spacing,
             )
@@ -397,7 +416,7 @@ def web_search(
         if provider == PROVIDER_DDG_LITE:
             attempts.append(_attempt(provider, ATTEMPT_ERROR, None, "ddgs_lite_unsupported"))
             continue
-        if provider not in (PROVIDER_DDG_HTML, PROVIDER_SEARXNG):
+        if provider not in (*_DDGS_BACKENDS, PROVIDER_SEARXNG):
             attempts.append(_attempt(provider, ATTEMPT_ERROR, None, "unknown_provider"))
             continue
         configuration = _configuration(provider, options, searxng_url)

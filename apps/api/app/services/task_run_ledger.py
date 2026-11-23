@@ -21,6 +21,7 @@ ENTITY_IMPORT_JOB = "import_job"
 ENTITY_CUSTOMER_ALIAS_SCOPE_MERGE = "customer_alias_scope_merge"
 ENTITY_CUSTOMER_FULL_MERGE = "customer_full_merge"
 ENTITY_DISTRIBUTOR_FULL_MERGE = "distributor_full_merge"
+ENTITY_DISCOVERY_PREVIEW = "discovery_preview"
 
 TRANSPORT_BROKER = "broker"
 TRANSPORT_IN_PROCESS_THREAD = "in_process_thread"
@@ -111,6 +112,9 @@ def read_task_run_poll_progress_sync(task_run_id: str) -> dict[str, Any] | None:
 
 
 def entity_from_task_args(task_name: str, args: tuple[Any, ...]) -> tuple[str, int]:
+    if task_name == "listing_capture.discovery_preview":
+        # args are (tenant_id, preview_id, request); the preview id is text, not a row id.
+        return ENTITY_DISCOVERY_PREVIEW, 0
     if task_name == "commercial_planner.parse_lineup_case":
         if len(args) > 3:
             return ENTITY_IMPORT_JOB, int(args[3])

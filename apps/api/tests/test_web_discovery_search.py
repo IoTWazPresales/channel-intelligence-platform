@@ -704,3 +704,45 @@ def test_preview_finishes_and_other_candidate_sources_survive_search_failure(
     assert any(domain.endswith(".zz") for domain in domains)
     assert "private upstream failure" not in str(plan)
     assert len(ddgs_stub.calls) == (1 if configured else 0)
+
+
+def test_ddgs_no_results_is_an_empty_search_and_does_not_pause(monkeypatch) -> None:
+    import sys
+    import types
+
+    from app.services.listing_capture.web_discovery import search as search_mod
+
+    class NoResults(Exception):
+        pass
+
+    class FakeDDGS:
+        def __init__(self, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def text(self, _query, **kwargs):
+            assert kwargs["backend"] == "auto"
+            raise NoResults("No results found.")
+
+    monkeypatch.setitem(sys.modules, "ddgs", types.SimpleNamespace(DDGS=FakeDDGS, DDGSException=NoResults))
+    status, page = search_mod._ddgs_page("q", {"max_results": 5, "timeout_seconds": 5}, "auto")
+    assert status == 200 and page.status == search_mod.PARSED_EMPTY and page.hits == []
+
+    class Limited(NoResults):
+        pass
+
+    def limited(self, _query, **_kwargs):
+        raise Limited("rate")
+
+    monkeypatch.setattr(FakeDDGS, "text", limited)
+    try:
+        search_mod._ddgs_page("q", {"max_results": 5, "timeout_seconds": 5}, "auto")
+    except Limited:
+        pass
+    else:
+        raise AssertionError("a subclass (rate limit) must still raise")

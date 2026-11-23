@@ -3,7 +3,8 @@
 For each accepted site and up to ``limit`` of the customer's products:
 
 1. **Site search, learned and reused:** the site's stored ``search_url_pattern``; else the
-   site's OpenSearch description (``<link rel="search">``); else the home-page search form
+   site's OpenSearch description (``<link rel="search">``); else the schema.org
+   ``WebSite`` ``SearchAction`` in the home page's structured data; else the home-page search form
    (``discovery._discover_search_pattern``). The first pattern whose result page leads to
    a product page with exact identity evidence is *learned* and reused for the remaining
    products. Nothing is guessed from a built-in list: every pattern comes from the site.
@@ -27,6 +28,8 @@ from __future__ import annotations
 
 import hashlib
 import re
+
+import extruct
 from collections.abc import Callable
 from typing import Any
 from urllib.parse import quote, urljoin, urlsplit
@@ -46,14 +49,17 @@ from app.services.listing_capture.web_discovery.polite import DEFAULT_SPACING_SE
 from app.services.listing_capture.web_discovery.scoring import normalize_host
 
 PRODUCTS_PER_SITE = 5
-QUERIES_PER_PRODUCT = 2
-PAGES_PER_PRODUCT = 3
+QUERIES_PER_PRODUCT = 4
+PAGES_PER_PRODUCT = 6
 SITEMAP_CHILDREN = 3
 MAX_SITEMAP_LOCS = 50_000
 CLIENT_RENDERED_TEXT = 500
 CLIENT_RENDERED_SCRIPTS = 3
 
 OUTCOME_NEEDS_BROWSER = "needs_browser"
+# A query no shop sells: its result page shows only the page chrome and promotions, so links
+# it shares with a real result page are not results. One extra request per pattern.
+BASELINE_QUERY = "zqxjv0wq"
 
 _LINK_TAG = re.compile(r"<link\b[^>]*>", re.IGNORECASE)
 _ATTR = re.compile(r"""([a-zA-Z:-]+)\s*=\s*["']([^"']*)["']""")
@@ -86,6 +92,57 @@ def opensearch_pattern(description: str, base: str) -> str | None:
             pattern = re.sub(r"\{[A-Za-z:]+\?\}", "", pattern)
             if "{query}" in pattern and "{" not in pattern.replace("{query}", ""):
                 return pattern
+    return None
+
+
+_PLACEHOLDER = re.compile(r"\{([A-Za-z_][\w.-]*)\}")
+_QUERY_INPUT_NAME = re.compile(r"name\s*=\s*([A-Za-z_][\w.-]*)")
+
+
+def _walk(node: Any):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _walk(value)
+
+
+def _is_type(node: dict[str, Any], name: str) -> bool:
+    kind = node.get("@type")
+    kinds = kind if isinstance(kind, list) else [kind]
+    return any(str(item).rsplit("/", 1)[-1] == name for item in kinds if item)
+
+
+def searchaction_pattern(home: str, base: str) -> str | None:
+    """The site search URL from a schema.org ``SearchAction`` (``potentialAction``) on the home page."""
+    if not home:
+        return None
+    try:
+        data = extruct.extract(home, base_url=base, syntaxes=["json-ld"], uniform=True)
+    except Exception:  # noqa: BLE001 - unreadable structured data means no pattern
+        return None
+    for node in _walk(data.get("json-ld") or []):
+        if not _is_type(node, "SearchAction"):
+            continue
+        targets = node.get("target")
+        for target in targets if isinstance(targets, list) else [targets]:
+            template = target.get("urlTemplate") if isinstance(target, dict) else target
+            if not isinstance(template, str) or not template.strip():
+                continue
+            names = _PLACEHOLDER.findall(template)
+            wanted = node.get("query-input") or node.get("query")
+            if isinstance(wanted, dict):
+                wanted = wanted.get("valueName")
+            match = _QUERY_INPUT_NAME.search(wanted) if isinstance(wanted, str) else None
+            name = match.group(1) if match else (names[0] if len(names) == 1 else None)
+            if not name or name not in names:
+                continue
+            pattern = urljoin(base, template.strip().replace("{" + name + "}", "{query}"))
+            if _PLACEHOLDER.sub("", pattern.replace("{query}", "")) != pattern.replace("{query}", ""):
+                continue  # other required placeholders the site did not explain
+            return pattern
     return None
 
 
@@ -177,6 +234,17 @@ class _Site:
             self.bodies[url] = rendered
         return rendered
 
+    def baseline(self, pattern: str, rendered: bool) -> str:
+        """The result page for BASELINE_QUERY with this pattern (rendered when asked)."""
+        url = pattern.replace("{query}", quote(BASELINE_QUERY, safe=""))
+        if rendered:
+            cache = self.__dict__.setdefault("_rendered_baselines", {})
+            if url not in cache:
+                page = self.render(url)
+                cache[url] = page.body if page is not None and page.body else ""
+            return cache[url]
+        return self.body(url)
+
     def sitemap(self) -> list[str]:
         if self._sitemap is not None:
             return self._sitemap
@@ -206,6 +274,9 @@ def _search_patterns(state: _Site, site: dict[str, Any]) -> list[tuple[str, str]
         pattern = opensearch_pattern(state.body(href), href)
         if pattern and state.same_site(pattern):
             out.append((pattern, "opensearch"))
+    action = searchaction_pattern(home, state.origin + "/")
+    if action and state.same_site(action):
+        out.append((action, "structured_data"))
     config = SiteConfig(site_key=str(site.get("site_key") or state.domain), display_name=state.domain)
     form = discovery._discover_search_pattern(  # noqa: SLF001
         config, {"origin": state.origin}, state.http_get
@@ -213,6 +284,86 @@ def _search_patterns(state: _Site, site: dict[str, Any]) -> list[tuple[str, str]
     if form and state.same_site(form):
         out.append((form, "form"))
     return list(dict.fromkeys(out))
+
+
+def _query_tokens(queries: list[tuple[str, str]]) -> list[str]:
+    """Take turns between kinds (barcode, model, ...) so one kind cannot use every query."""
+    by_kind: dict[str, list[str]] = {}
+    for kind, query in queries:
+        if query and query not in by_kind.setdefault(kind, []):
+            by_kind[kind].append(query)
+    if "model" in by_kind:  # the shortest code is the one a shop title most often carries
+        by_kind["model"] = sorted(by_kind["model"], key=len)
+    out: list[str] = []
+    rounds = max((len(values) for values in by_kind.values()), default=0)
+    for position in range(rounds):
+        for values in by_kind.values():
+            if position < len(values) and values[position] not in out:
+                out.append(values[position])
+    return out[:QUERIES_PER_PRODUCT]
+
+
+_HREF = re.compile(r"""href\s*=\s*["']([^"'#]+)["']""", re.IGNORECASE)
+_ASSET = re.compile(r"\.(?:css|js|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|pdf|xml|json)$", re.IGNORECASE)
+
+
+def _flat(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def _hrefs(state: _Site, body: str, base: str) -> list[str]:
+    out: list[str] = []
+    for href in _HREF.findall(body or ""):
+        absolute = urljoin(base, href.strip()).split("#")[0]
+        parts = urlsplit(absolute)
+        if parts.scheme in ("http", "https") and state.same_site(absolute) and not _ASSET.search(parts.path):
+            out.append(absolute)
+    return list(dict.fromkeys(out))
+
+
+def _json_urls(data: Any, token: str, state: _Site, base: str) -> list[str]:
+    """Same-site URLs inside JSON objects (search API hits) that mention the query token."""
+    wanted = _flat(token)
+    out: list[str] = []
+    for node in _walk(list(data)):
+        values = [value for value in node.values() if isinstance(value, str)]
+        if not wanted or not any(wanted in _flat(value) for value in values):
+            continue
+        for value in values:
+            text = value.strip()
+            if text.startswith(("http://", "https://")) or (text.startswith("/") and text.count("/") >= 2):
+                absolute = urljoin(base, text).split("#")[0]
+                if state.same_site(absolute) and not _ASSET.search(urlsplit(absolute).path):
+                    out.append(absolute)
+    return list(dict.fromkeys(out))
+
+
+def _result_links(state: _Site, body: str, search_url: str, token: str, data: Any = (),
+                  baseline: str = "") -> list[str]:
+    """Links a search result page adds to the site's own page chrome, token matches first.
+
+    The chrome is every link on the home page; whatever the result page links to beyond it
+    is a result. Script-loaded result lists are read from the rendered page and from the
+    JSON the page fetched while rendering.
+    """
+    def key(url: str) -> tuple[str, str, str]:
+        parts = urlsplit(url)
+        return normalize_host(parts.hostname or ""), parts.path.rstrip("/") or "/", parts.query
+
+    chrome = {key(url) for url in _hrefs(state, state.body(state.origin + "/"), state.origin + "/")}
+    shown_anyway = {key(url) for url in _hrefs(state, baseline, search_url)} if baseline else set()
+    search_path = urlsplit(search_url).path.rstrip("/")
+    found = [url for url in _json_urls(data, token, state, search_url)]
+    for url in _hrefs(state, body, search_url):
+        path = urlsplit(url).path.rstrip("/")
+        if key(url) in chrome or path in ("", search_path):
+            continue
+        if key(url) in shown_anyway and not (_flat(token) and _flat(token) in _flat(url)):
+            continue  # also on the no-match result page: chrome or a promotion
+        found.append(url)
+    found = list(dict.fromkeys(found))
+    wanted = _flat(token)
+    return sorted(found, key=lambda url: 0 if wanted and wanted in _flat(url) else 1)
 
 
 def _item_id(customer_id: int, product_id: int, url: str) -> str:
@@ -321,8 +472,7 @@ def find_product_pages(
         product = index.products.get(int(info.id))
         if product is None:
             continue
-        tokens = [query for _kind, query in discovery._identity_queries(product)]  # noqa: SLF001
-        tokens = [token for token in tokens if token][:QUERIES_PER_PRODUCT]
+        tokens = _query_tokens(discovery._identity_queries(product))  # noqa: SLF001
         if not tokens:
             continue
         found: list[tuple[str, str, str | None]] = []  # (url, found_by, pattern)
@@ -333,10 +483,19 @@ def find_product_pages(
             for token in tokens:
                 search_url = pattern.replace("{query}", quote(token, safe=""))
                 body = state.body(search_url)
+                rendered = None
                 if body and looks_client_rendered(body):
                     rendered = state.render(search_url)
                     body = rendered.body if rendered is not None and rendered.body else body
-                links = discovery._urls_from_document(config, body, search_url, token) if body else []  # noqa: SLF001
+                if not body:
+                    links = []
+                elif body.lstrip().startswith(("{", "[")):
+                    # A JSON search endpoint: the existing reader knows its hit shapes.
+                    links = discovery._urls_from_document(config, body, search_url, token)  # noqa: SLF001
+                else:
+                    links = _result_links(state, body, search_url, token,
+                                          getattr(rendered, "data", ()) if rendered is not None else (),
+                                          state.baseline(pattern, rendered is not None))
                 for link in links:
                     if state.same_site(link):
                         found.append((link, f"search:{how}", pattern))
@@ -350,6 +509,26 @@ def find_product_pages(
                         and page.get("product_id") == int(info.id)), None)
             pattern = hit.get("_pattern") if hit else None
             learned_pattern = next((item for item in patterns if item[0] == pattern), None)
+        if not recorded and state.browser and order:
+            # Search results built by script: the HTML lists only the page chrome, so render the
+            # result page once per token with the learned/first pattern and read its links.
+            pattern, how = order[0]
+            rendered_found: list[tuple[str, str, str | None]] = []
+            for token in tokens:
+                search_url = pattern.replace("{query}", quote(token, safe=""))
+                rendered = state.render(search_url)
+                if rendered is None or not rendered.body:
+                    continue
+                for link in _result_links(state, rendered.body, search_url, token, rendered.data,
+                                          state.baseline(pattern, True)):
+                    if state.same_site(link):
+                        rendered_found.append((link, f"search:{how}:rendered", pattern))
+                if rendered_found:
+                    break
+            recorded = _process(state, config, index, info, product, rendered_found, pages,
+                                auto_urls, customer_id)
+            if recorded and learned_pattern is None:
+                learned_pattern = (pattern, how)
         if not recorded:
             forms = [form for token in tokens for form in _token_forms(token)]
             sitemap_found: list[tuple[str, str, str | None]] = []

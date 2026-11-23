@@ -120,7 +120,7 @@ def _auto_plan(env: Env, preview_id: str, *, host: str = ALPHA_HOST, queue_host:
 def test_capabilities_report_the_server_and_what_the_tenant_has_not_set(env: Env) -> None:
     body = env.client.get(f"{BASE}/capabilities", headers=VIEWER).json()
     assert body["live_fetch"] is True and isinstance(body["browser_available"], bool)
-    assert [p["id"] for p in body["providers"]] == ["ddg_html", "ddg_lite", "searxng"]
+    assert [p["id"] for p in body["providers"]] == ["ddg_html", "ddg_lite", "searxng", "ddgs_auto"]
     assert [p["id"] for p in body["providers"] if p["needs_url"]] == ["searxng"]
     assert body["settings"] == {"missing": []}
 

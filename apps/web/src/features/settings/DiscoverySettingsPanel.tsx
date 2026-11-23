@@ -50,6 +50,11 @@ function DiscoverySettingsForm({
   const [endings, setEndings] = useState((initial['tenant.domain_endings'] ?? []).join('\n'));
   const [providers, setProviders] = useState<ProviderId[]>(initial['discovery.search_providers'] ?? []);
   const [url, setUrl] = useState(initial['discovery.searxng_url'] ?? '');
+  const savedOptions = initial['discovery.search_options'];
+  const [gap, setGap] = useState(savedOptions ? String(savedOptions.min_interval_seconds) : '');
+  const [maxResults, setMaxResults] = useState(savedOptions ? String(savedOptions.max_results) : '');
+  const [timeout, setTimeoutValue] = useState(savedOptions ? String(savedOptions.timeout_seconds) : '');
+  const [region, setRegion] = useState(savedOptions?.region ?? '');
   const [excluded, setExcluded] = useState((initial['discovery.excluded_domains'] ?? []).join('\n'));
   const [browser, setBrowser] = useState(initial['discovery.browser_fallback_enabled'] === true);
   const [scheduled, setScheduled] = useState(initial['discovery.schedule_enabled'] === true);
@@ -138,6 +143,25 @@ function DiscoverySettingsForm({
           </Stack>
         ) : null}
         {saveButton('Save search providers', { key: 'discovery.search_providers', value: providers })}
+      </Stack>
+      <Stack spacing={1}>
+        <Typography variant="subtitle2">Search pacing</Typography>
+        <Typography variant="caption" color="text.secondary">Web search needs these three numbers. Nothing is filled in for you.</Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <TextField size="small" type="number" label="Seconds between searches" value={gap} disabled={save.isPending}
+            onChange={(event) => setGap(event.target.value)} error={Boolean(errors['discovery.search_options'])}
+            helperText={helper('discovery.search_options', Boolean(savedOptions))} />
+          <TextField size="small" type="number" label="Results per search" value={maxResults} disabled={save.isPending}
+            onChange={(event) => setMaxResults(event.target.value)} error={Boolean(errors['discovery.search_options'])} />
+          <TextField size="small" type="number" label="Search timeout (seconds)" value={timeout} disabled={save.isPending}
+            onChange={(event) => setTimeoutValue(event.target.value)} error={Boolean(errors['discovery.search_options'])} />
+          <TextField size="small" label="Search region (optional)" value={region} disabled={save.isPending}
+            onChange={(event) => setRegion(event.target.value)} error={Boolean(errors['discovery.search_options'])} />
+        </Stack>
+        {saveButton('Save search options', { key: 'discovery.search_options', value: {
+          min_interval_seconds: Number(gap), max_results: Number(maxResults), timeout_seconds: Number(timeout),
+          ...(region.trim() ? { region: region.trim() } : {}),
+        } }, !gap.trim() || !maxResults.trim() || !timeout.trim())}
       </Stack>
       <Stack spacing={1}>
         <TextField size="small" label="Excluded domains" value={excluded} multiline minRows={2} disabled={save.isPending}

@@ -37,7 +37,7 @@ KEY_DISCOVERY_BROWSER_FALLBACK = "discovery.browser_fallback_enabled"
 
 # Keep ddg_lite readable for existing configurations. The adapter reports it unsupported:
 # ddgs has one DuckDuckGo HTML backend, not an independent Lite fallback.
-SEARCH_PROVIDER_IDS: tuple[str, ...] = ("ddg_html", "ddg_lite", "searxng")
+SEARCH_PROVIDER_IDS: tuple[str, ...] = ("ddg_html", "ddg_lite", "searxng", "ddgs_auto")
 MAX_SEARCH_RESULTS = 10
 MAX_DOMAIN_ENDINGS = 20
 MAX_EXCLUDED_DOMAINS = 200

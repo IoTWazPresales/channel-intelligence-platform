@@ -36,6 +36,7 @@ PROVIDERS: list[dict[str, Any]] = [
     {"id": "ddg_html", "label": "DuckDuckGo (HTML)", "needs_url": False},
     {"id": "ddg_lite", "label": "DuckDuckGo (Lite)", "needs_url": False},
     {"id": "searxng", "label": "SearXNG (your own server)", "needs_url": True},
+    {"id": "ddgs_auto", "label": "Free web search (several engines, no key)", "needs_url": False},
 ]
 TASK_NAME = "listing_capture.discovery_preview"
 

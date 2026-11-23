@@ -184,3 +184,79 @@ def test_playwright_renders_a_script_built_page_through_the_gate() -> None:
     assert page.rendered
     assert page_facts_from_html(page.body)["barcodes"] == [GTIN]
     assert (f"{ORIGIN}/p/1", "host:x") in getter.calls
+
+
+
+def test_searchaction_in_home_structured_data_gives_the_search_pattern() -> None:
+    home = """<html><head><script type="application/ld+json">{"@context": "https://schema.org",
+      "@graph": [{"@type": "WebSite", "url": "https://shop.example/",
+      "potentialAction": {"@type": "SearchAction",
+        "target": {"@type": "EntryPoint", "urlTemplate": "https://shop.example/find?term={search_term_string}"},
+        "query-input": "required name=search_term_string"}}]}</script></head><body>x</body></html>"""
+    assert pages.searchaction_pattern(home, "https://shop.example/") == "https://shop.example/find?term={query}"
+    assert pages.searchaction_pattern("<html></html>", "https://shop.example/") is None
+    two = home.replace("term={search_term_string}", "term={search_term_string}&cat={category}")
+    assert pages.searchaction_pattern(two, "https://shop.example/") is None
+
+
+def test_searchaction_pattern_is_offered_before_the_form() -> None:
+    home = """<html><script type="application/ld+json">{"@type": "WebSite", "potentialAction":
+      {"@type": "SearchAction", "target": "/s?q={k}", "query-input": "required name=k"}}</script></html>"""
+    state = SimpleNamespace(
+        origin="https://shop.example",
+        domain="shop.example",
+        body=lambda url: home if url == "https://shop.example/" else "",
+        http_get=lambda url: (200, home),
+        same_site=lambda url: url.startswith("https://shop.example"),
+    )
+    found = pages._search_patterns(state, {"domain": "shop.example"})
+    assert found[0] == ("https://shop.example/s?q={query}", "structured_data")
+
+
+
+def test_query_tokens_take_turns_between_barcodes_and_models() -> None:
+    queries = [("barcode", "1111111111116"), ("barcode", "222222222222"), ("model", "AB12"), ("model", "AB12-X")]
+    assert pages._query_tokens(queries) == ["1111111111116", "AB12", "222222222222", "AB12-X"]
+
+
+
+def test_search_results_that_load_by_script_are_read_after_render() -> None:
+    import pytest
+
+    from app.services.listing_capture.web_discovery import crawl
+
+    if not crawl.browser_available():
+        pytest.skip("Playwright is not installed")
+    action = json.dumps({"@context": "https://schema.org", "@type": "WebSite", "potentialAction": {
+        "@type": "SearchAction", "target": f"{ORIGIN}/find?term={{t}}", "query-input": "required name=t"}})
+    home = (f'<html><head><script type="application/ld+json">{action}</script></head><body>'
+            f'<a href="{ORIGIN}/about">About</a><a href="{ORIGIN}/deals/x/1">Deals</a>'
+            f"{'chrome ' * 120}</body></html>")
+    # The result list arrives after a delay, built by script, the way a search API page does.
+    hits = json.dumps([{"title": f"Widget {MODEL}", "href": "/widgets/item/77"}])
+    shell = ("<html><body><div id=r></div><script>1</script><script>2</script><script>"
+             f"setTimeout(function(){{var h={hits};h.forEach(function(x){{var a=document.createElement('a');"
+             "a.href=x.href;a.textContent=x.title;document.getElementById('r').appendChild(a);});},1200);"
+             "</script></body></html>")
+    getter = FakeGetter(
+        {f"{ORIGIN}/": home, f"{ORIGIN}/robots.txt": "", f"{ORIGIN}/widgets/item/77": _product_page(),
+         f"{ORIGIN}/find?term={pages.BASELINE_QUERY}": "<html><body><script>1</script><script>2</script>"
+                                                       "<script>3</script></body></html>"},
+        prefixes={f"{ORIGIN}/find?term=": shell},
+    )
+    pages_found, _site = _run(getter, [_product()], browser=True)
+    hit = next(p for p in pages_found if p["url"] == f"{ORIGIN}/widgets/item/77")
+    assert hit["outcome"] == AUTO_LINK
+    assert (f"{ORIGIN}/widgets/item/77", f"host:{HOST}") in getter.calls
+
+
+def test_json_fetched_by_the_page_supplies_result_urls_and_chrome_is_ignored() -> None:
+    getter = FakeGetter({f"{ORIGIN}/": f'<a href="{ORIGIN}/about">About</a><a href="{ORIGIN}/p/old">x</a>'})
+    state = pages._Site({"domain": HOST}, getter, SimpleNamespace(browser_fallback_enabled=False), 0.0)
+    data = ({"results": [{"hits": [{"Name": f"Thing {MODEL}", "Url": "/catalogue/thing/9"},
+                                   {"Name": "Other", "Url": "/catalogue/other/8"}]}]},)
+    body = f'<a href="{ORIGIN}/about">About</a><a href="{ORIGIN}/p/old">x</a><a href="{ORIGIN}/c/{MODEL.lower()}/5">r</a>'
+    links = pages._result_links(state, body, f"{ORIGIN}/find?term=x", MODEL, data)
+    assert links[0] in (f"{ORIGIN}/catalogue/thing/9", f"{ORIGIN}/c/{MODEL.lower()}/5")
+    assert f"{ORIGIN}/catalogue/thing/9" in links and f"{ORIGIN}/catalogue/other/8" not in links
+    assert f"{ORIGIN}/about" not in links and f"{ORIGIN}/p/old" not in links

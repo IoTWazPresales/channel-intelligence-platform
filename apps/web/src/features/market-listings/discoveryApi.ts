@@ -7,7 +7,7 @@ import { apiGet, apiPost, apiPut, safeDisplayError } from '@/lib/api';
 
 const ROOT = '/api/v1/listing-capture/discovery';
 
-export type ProviderId = 'ddg_html' | 'ddg_lite' | 'searxng';
+export type ProviderId = 'ddg_html' | 'ddg_lite' | 'searxng' | 'ddgs_auto';
 export type DiscoveryProvider = { id: ProviderId; label: string; needs_url: boolean };
 export type DiscoveryCapabilities = {
   live_fetch: boolean;
@@ -161,10 +161,18 @@ export type SiteCandidate = {
   created_at: string | null;
 };
 
+export type SearchOptions = {
+  min_interval_seconds: number;
+  max_results: number;
+  timeout_seconds: number;
+  region?: string;
+};
+
 export type DiscoverySettingValues = {
   'tenant.country': { code: string; name: string };
   'tenant.domain_endings': string[];
   'discovery.search_providers': ProviderId[];
+  'discovery.search_options': SearchOptions;
   'discovery.searxng_url': string;
   'discovery.excluded_domains': string[];
   'discovery.browser_fallback_enabled': boolean;

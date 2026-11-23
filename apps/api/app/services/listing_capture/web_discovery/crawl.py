@@ -20,12 +20,13 @@ Nothing here names a site, a domain, a path or a country.
 from __future__ import annotations
 
 import asyncio
+import json
 import importlib.util
 import logging
 import threading
 import uuid
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
@@ -33,7 +34,12 @@ from app.services.listing_capture.observation import LISTING_CAPTURE_USER_AGENT
 
 logger = logging.getLogger(__name__)
 
-RENDER_TIMEOUT_SECONDS = 20
+RENDER_TIMEOUT_SECONDS = 35
+NETWORK_IDLE_SECONDS = 10
+STABLE_POLLS = 8          # at most this many 1 s checks for the link count to settle
+SCROLL_STEPS = 2          # bounded scrolls for results that load as the page scrolls
+MAX_JSON_PAYLOADS = 20
+MAX_JSON_BYTES = 1_000_000
 MAX_PAGES_PER_CALL = 40
 _SKIPPED_RESOURCES = frozenset({"image", "media", "font"})
 
@@ -46,6 +52,8 @@ class PageResult:
     final_url: str
     refused: str | None = None
     rendered: bool = False
+    # JSON bodies the page itself fetched (XHR/fetch) while it rendered, parsed.
+    data: tuple[Any, ...] = field(default=(), compare=False)
 
 
 GateKeyFor = Callable[[str], str]
@@ -258,6 +266,7 @@ async def _render(urls: list[str], getter: Any, gate_key_for: GateKeyFor,
     queue = await RequestQueue.open(name=f"wd-render-{uuid.uuid4().hex}")
     out: dict[str, PageResult] = {}
     documents: dict[str, Any] = {}
+    responses: dict[str, list[Any]] = {}
     crawler = PlaywrightCrawler(
         browser_type="chromium",
         headless=True,
@@ -299,20 +308,35 @@ async def _render(urls: list[str], getter: Any, gate_key_for: GateKeyFor,
             await route_obj.continue_()
 
         await context.page.route("**/*", route)
+        responses[target] = []
+
+        def keep(response: Any) -> None:
+            try:
+                if response.request.resource_type in ("xhr", "fetch"):
+                    kept = responses.setdefault(target, [])
+                    if len(kept) < MAX_JSON_PAYLOADS * 2:
+                        kept.append(response)
+            except Exception:  # noqa: BLE001
+                return
+
+        context.page.on("response", keep)
 
     @crawler.router.default_handler
     async def handler(context: Any) -> None:
         url = context.request.user_data.get("wd_url") or context.request.url
         fetched = documents.get(context.request.url)
+        page = context.page
         try:
-            await context.page.wait_for_load_state("networkidle",
-                                                   timeout=RENDER_TIMEOUT_SECONDS * 1000 // 2)
+            await page.wait_for_load_state("networkidle", timeout=NETWORK_IDLE_SECONDS * 1000)
         except Exception:  # noqa: BLE001 - render what loaded
             pass
-        html = await context.page.content()
+        await _settle(page)
+        html = await page.content()
+        payloads = await _json_payloads(responses.get(context.request.url, []))
         out[url] = PageResult(url=url, status=int(getattr(fetched, "status", 0) or 0), body=html,
-                              final_url=context.page.url or url,
-                              refused=getattr(fetched, "refused", None), rendered=True)
+                              final_url=page.url or url,
+                              refused=getattr(fetched, "refused", None), rendered=True,
+                              data=tuple(payloads))
 
     @crawler.failed_request_handler
     async def failed(context: Any, _error: Exception) -> None:
@@ -327,6 +351,49 @@ async def _render(urls: list[str], getter: Any, gate_key_for: GateKeyFor,
         await crawler.run(requests)
     finally:
         await queue.drop()
+    return out
+
+
+async def _link_count(page: Any) -> int:
+    try:
+        return int(await page.evaluate("document.querySelectorAll('a[href]').length"))
+    except Exception:  # noqa: BLE001
+        return -1
+
+
+async def _settle(page: Any) -> None:
+    """Wait (bounded) until the page's link count stops changing; scroll a little for lazy lists."""
+    last, steady = await _link_count(page), 0
+    for _ in range(STABLE_POLLS):
+        await page.wait_for_timeout(1000)
+        count = await _link_count(page)
+        steady = steady + 1 if count == last else 0
+        last = count
+        if steady >= 2:
+            break
+    for _ in range(SCROLL_STEPS):
+        try:
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(1000)
+        except Exception:  # noqa: BLE001
+            break
+
+
+async def _json_payloads(kept: list[Any]) -> list[Any]:
+    out: list[Any] = []
+    for response in kept:
+        if len(out) >= MAX_JSON_PAYLOADS:
+            break
+        try:
+            kind = (response.headers or {}).get("content-type", "")
+            if "json" not in kind.lower() or int(response.status) != 200:
+                continue
+            body = await response.body()
+            if not body or len(body) > MAX_JSON_BYTES:
+                continue
+            out.append(json.loads(body.decode("utf-8", errors="replace")))
+        except Exception:  # noqa: BLE001 - an unreadable response is skipped
+            continue
     return out
 
 
