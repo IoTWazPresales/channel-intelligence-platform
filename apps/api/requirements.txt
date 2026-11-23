@@ -21,3 +21,11 @@ httpx>=0.27.0,<0.29.0
 msal>=1.31.0,<2.0.0
 anthropic>=0.40.0,<1.0.0
 ddgs==9.16.1
+# Discovery V2 structured evidence, offline domain parsing and robots policy.
+extruct==0.18.0
+price-parser==0.5.0
+tldextract==5.3.0
+protego==0.5.0
+# Discovery V2 product-page crawler (S3b): Crawlee for Python with Playwright as the browser fallback.
+crawlee[playwright]==0.6.12
+playwright==1.65.2

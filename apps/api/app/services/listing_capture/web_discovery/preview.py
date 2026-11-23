@@ -672,10 +672,13 @@ def run_preview(
     listings: list[dict[str, Any]] = []
     notes: list[str] = []
     if scope == SCOPE_UNLINKED:
-        if link_listings is not None:
-            listings = link_listings(session, tenant_id, request.get("customer_id"), getter)
-        else:
-            notes.append("Linking listings that have no product is not available yet.")
+        if link_listings is None:
+            from app.services.listing_capture.web_discovery.linking import (
+                link_unlinked_listings,
+            )
+
+            link_listings = link_unlinked_listings
+        listings = link_listings(session, tenant_id, request.get("customer_id"), getter)
 
     plan["result"] = {
         "scope": scope,

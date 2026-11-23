@@ -20,7 +20,7 @@ A second Apply on the same preview returns the stored result and writes nothing.
 the unique key ``uq_customer_web_site_tenant_customer_domain`` and the re-validation make a race
 harmless.
 
-Pages and unlinked listings are written by slice S4, in the marked place below.
+Pages and unlinked listings use the S4 writers in ``link_apply`` in this same transaction.
 """
 
 from __future__ import annotations
@@ -46,6 +46,7 @@ from app.models.listing_site import ListingSite
 from app.services.listing_capture import discovery
 from app.services.listing_capture.sites import SITE_KEY_RE, create_site
 from app.services.listing_capture.web_discovery.homepage import HomeSignals
+from app.services.listing_capture.web_discovery.link_apply import apply_link_items
 from app.services.listing_capture.web_discovery.preview import STATUS_DONE, PlanStore
 from app.services.listing_capture.web_discovery.scoring import (
     OUTCOME_AUTO,
@@ -87,6 +88,7 @@ def empty_counts() -> dict[str, Any]:
         "pages_queued": 0,
         "listings_linked": 0,
         "listings_queued": 0,
+        "auto_links": [],
         "skipped": [],
     }
 
@@ -101,7 +103,7 @@ def _actor(user: dict | None) -> str:
 
 
 def unique_site_key(base: str, taken: set[str]) -> str:
-    """``base``, or ``base-2``, ``base-3``… (within 32 characters) when ``base`` is taken."""
+    """``base``, or ``base-2``, ``base-3``. (within 32 characters) when ``base`` is taken."""
     base = base[:MAX_SITE_KEY_LENGTH].strip("-")
     if base not in taken:
         return base
@@ -217,6 +219,7 @@ def rederive_evidence(
 ) -> dict[str, Any]:
     """The stored evidence with every part the database or the settings can answer recomputed."""
     stored = dict(entry.get("evidence") or {})
+)
     host = normalize_host(str(entry.get("domain") or ""))
     home = HomeSignals.from_dict(stored.get("home_signals")) if stored.get("home_signals") else None
     names = name_match(host, customer.name, settings.domain_endings)
@@ -295,7 +298,6 @@ def _apply_candidate(
                     return
                 counts["sites_confirmed"] += 1
                 counts["sites_created"] += 1 if created else 0
-                # S4: write this site's page and link items here (row.site_id is the site).
             else:
                 if existing is not None and existing.status != WEB_SITE_PROPOSED:
                     counts["skipped"].append({"item_id": item_id, "reason": SKIP_CHANGED})
@@ -335,6 +337,8 @@ def apply_plan(
     )
     # Another Apply may have finished while this one waited for the lock.
     plan = plan_store.load(tenant_id, preview_id) or plan
+    if plan.get("tenant_id") != tenant_id or plan.get("preview_id") != preview_id:
+        raise ApplyError("preview_expired", 410, "This preview is not available.")
     if plan.get("applied"):
         return dict(plan["applied"])
     if plan.get("status") != STATUS_DONE or not isinstance(plan.get("result"), dict):
@@ -369,7 +373,14 @@ def apply_plan(
                 now=moment,
                 counts=counts,
             )
-    # S4: write the unlinked-listing items (plan["result"]["listings"]) here.
+    apply_link_items(
+        session,
+        tenant_id=tenant_id,
+        preview_id=preview_id,
+        result=plan["result"],
+        actor=actor,
+        counts=counts,
+    )
 
     record_steward_audit_sync(
         user,

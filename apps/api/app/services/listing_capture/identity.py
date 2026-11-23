@@ -8,7 +8,12 @@ No substring match.
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
+
+from app.services.listing_capture.web_discovery.page_facts import (
+    page_facts_from_html as extract_page_facts,
+)
 
 _MIN_MODEL = 4
 
@@ -47,7 +52,11 @@ def models_match(page_values: Iterable[Any], product_values: Iterable[Any]) -> b
 
 
 def product_barcodes(product: Any) -> list[str]:
-    return [v for v in (getattr(product, "ean", None), getattr(product, "upc", None)) if isinstance(v, str) and v.strip()]
+    return [
+        v
+        for v in (getattr(product, "ean", None), getattr(product, "upc", None))
+        if isinstance(v, str) and v.strip()
+    ]
 
 
 def product_models(product: Any) -> list[str]:
@@ -60,10 +69,13 @@ def product_models(product: Any) -> list[str]:
 
 
 def page_facts_from_html(text: str) -> dict[str, list[str]]:
-    """JSON-LD ``gtin*`` / ``mpn`` / ``model``. A ``sku`` on the page is not read: it is a stock code."""
-    barcodes = re.findall(r'"(?:gtin13|gtin12|gtin14|gtin8|gtin)"\s*:\s*"([^"]+)"', text or "", flags=re.I)
-    models = re.findall(r'"(?:model|mpn)"\s*:\s*"([^"]+)"', text or "", flags=re.I)
-    return {"barcodes": barcodes, "models": models, "stock_codes": []}
+    """Structured HTML evidence. SKU remains a stock code and never an identity key."""
+    facts = extract_page_facts(text)
+    return {
+        "barcodes": list(facts.gtin),
+        "models": list(dict.fromkeys((*facts.mpn, *facts.model))),
+        "stock_codes": list(facts.sku),
+    }
 
 
 def page_facts_from_json(data: dict[str, Any]) -> dict[str, list[str]]:
@@ -83,7 +95,9 @@ def page_facts_from_json(data: dict[str, Any]) -> dict[str, list[str]]:
         barcodes.append(mpn)
     elif mpn:
         models.append(mpn)
-    info = data.get("product_information") if isinstance(data.get("product_information"), dict) else {}
+    info = (
+        data.get("product_information") if isinstance(data.get("product_information"), dict) else {}
+    )
     for row in (info.get("items") if isinstance(info, dict) else None) or []:
         if not isinstance(row, dict):
             continue
@@ -95,14 +109,16 @@ def page_facts_from_json(data: dict[str, Any]) -> dict[str, list[str]]:
             barcodes.append(text)
         elif kind in {"model_number", "model", "mpn"}:
             models.append(text)
-    for item in ((data.get("buybox") or {}).get("items") if isinstance(data.get("buybox"), dict) else None) or []:
+    for item in (
+        (data.get("buybox") or {}).get("items") if isinstance(data.get("buybox"), dict) else None
+    ) or []:
         if isinstance(item, dict) and item.get("sku"):
             stock.append(str(item.get("sku")))
     return {"barcodes": barcodes, "models": models, "stock_codes": stock}
 
 
 def corroboration(page: dict[str, Any], product: Any) -> str | None:
-    """``barcode`` or ``model`` when the page and the product are the same. Stock codes do not count."""
+    """Return ``barcode`` or ``model`` for exact identity evidence. Stock codes do not count."""
     if barcodes_match(page.get("barcodes") or [], product_barcodes(product)):
         return "barcode"
     if models_match(page.get("models") or [], product_models(product)):

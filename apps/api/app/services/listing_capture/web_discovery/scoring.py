@@ -14,7 +14,10 @@ display order, not a score.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
+
+from tldextract import TLDExtract
 
 from app.services.imports.dsi_customer_name_normalization import customer_similarity_lookup_keys
 from app.services.listing_capture.web_discovery.homepage import HomeSignals
@@ -45,12 +48,29 @@ _TITLE_SPLIT = re.compile(r"\s*[|:·]\s*|\s+[–—-]\s+")
 _NON_ALNUM = re.compile(r"[^a-z0-9]")
 
 
+# No suffix downloads or disk cache: use the package's bundled PSL snapshot.
+_DOMAIN_EXTRACTOR = TLDExtract(suffix_list_urls=(), cache_dir=None)
+
+
+@lru_cache(maxsize=32)
+def _extractor_for_endings(endings: tuple[str, ...]) -> TLDExtract:
+    return TLDExtract(suffix_list_urls=(), cache_dir=None, extra_suffixes=endings)
+
+
+def host_from_url(value: str | None) -> str:
+    """Extract a host while preserving its subdomains; no network or suffix refresh."""
+    parts = _DOMAIN_EXTRACTOR(value or "")
+    return normalize_host(
+        ".".join(part for part in (parts.subdomain, parts.domain, parts.suffix) if part)
+    )
+
+
 def normalize_host(host: str) -> str:
     return (host or "").strip().lower().rstrip(".").removeprefix("www.")
 
 
 def customer_keys(name: str | None) -> list[str]:
-    """The customer's name keys: the existing normaliser's keys, reduced to ``a-z0-9``. No empties."""
+    """Customer name keys from the existing normaliser, reduced to non-empty ``a-z0-9``."""
     out: list[str] = []
     for key in customer_similarity_lookup_keys(name):
         reduced = _NON_ALNUM.sub("", key.lower())
@@ -69,17 +89,20 @@ def matched_ending(host: str, endings: list[str]) -> str | None:
 
 
 def domain_key(host: str, endings: list[str]) -> str:
-    """The host's name part: strip ``www.``, strip the longest configured ending (else the last
-    label), take the last remaining label, remove hyphens."""
+    """The registrable name from the offline PSL, extended by tenant-configured endings.
+
+    Unknown suffixes retain S1's last-label fallback. Tenant endings are still
+    the sole source for ending/country evidence; the PSL never supplies country.
+    """
     host = normalize_host(host)
     ending = matched_ending(host, endings)
-    if ending is not None:
-        stripped = host[: -len(ending)]
-    else:
-        labels = host.split(".")
-        stripped = ".".join(labels[:-1]) if len(labels) > 1 else host
-    label = stripped.split(".")[-1] if stripped else ""
-    return label.replace("-", "")
+    extractor = _extractor_for_endings((ending.lstrip("."),)) if ending else _DOMAIN_EXTRACTOR
+    parts = extractor(host)
+    if not parts.suffix and parts.subdomain:
+        # tldextract puts an unknown final label in domain. Treat that label as
+        # an extra suffix, preserving S1 without manually splitting the host.
+        parts = _extractor_for_endings((parts.domain,))(host)
+    return parts.domain.replace("-", "")
 
 
 def name_match(host: str, name: str | None, endings: list[str]) -> dict[str, Any]:

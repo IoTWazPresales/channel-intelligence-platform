@@ -6,18 +6,21 @@ import logging
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 
 from app.core.security import Role, get_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user
 from app.db.session_sync import SessionLocal
+from app.models.dimensions import DimCustomer, DimProduct
 from app.models.listing_capture import CustomerListing, ListingObservation
+from app.services.grid_fields import customer_labels_sync, fact_row_dict, reference_fields
 from app.services.listing_capture import sites as site_service
 from app.services.listing_capture.adapters import adapter_keys, configured_adapter
+from app.services.listing_capture.intelligence_v1 import build_listing_intelligence
 from app.services.listing_capture.marketplace_vocab import (
     LISTING_SOURCES,
     LISTING_STATUSES,
 )
-from app.services.listing_capture.intelligence_v1 import build_listing_intelligence
 from app.services.listing_capture.registry import (
     confirm_proposal,
     confirm_suggested_proposals,
@@ -28,14 +31,12 @@ from app.services.listing_capture.registry import (
     list_recent_observations,
     listing_to_dict,
     observation_to_dict,
-    product_labels,
     poll_active_listings,
+    product_labels,
     reject_proposal,
     reparse_observation,
     set_listing_status,
 )
-from app.services.grid_fields import customer_labels_sync, fact_row_dict, reference_fields
-from sqlalchemy import func, select
 
 router = APIRouter()
 
@@ -461,7 +462,7 @@ def post_listing(
         except Exception as exc:
             raise HTTPException(
                 status_code=503,
-                detail={"message": "listing tables unavailable — migration pending?", "error": str(exc)},
+                detail={"message": "listing tables unavailable - migration pending?", "error": str(exc)},
             ) from exc
 
 
@@ -585,7 +586,7 @@ def get_observations(
 
 @router.get("/intelligence")
 def get_listing_intelligence():
-    """P5 intelligence v1: ≥14d span, activation, price drift, not_activated worklist."""
+    """P5 intelligence v1: =14d span, activation, price drift, not_activated worklist."""
     with SessionLocal() as session:
         try:
             return build_listing_intelligence(session)
@@ -615,7 +616,7 @@ def post_poll(body: PollBody | None = None):
     if not live:
         raise HTTPException(
             status_code=503,
-            detail="CIP_LISTING_LIVE_FETCH is not enabled — cannot poll live storefronts",
+            detail="CIP_LISTING_LIVE_FETCH is not enabled - cannot poll live storefronts",
         )
     with SessionLocal() as session:
         try:
@@ -702,33 +703,109 @@ def post_reparse(observation_id: int):
 class QueueDecision(BaseModel):
     action: str
     url: str | None = None
+    product_id: int | None = Field(default=None, gt=0)
 
 
-def _queue_dict(row) -> dict:
+def _queue_dict(
+    row,
+    *,
+    customer_name: str | None = None,
+    listing_url: str | None = None,
+    product_label: str | None = None,
+    candidates: list | None = None,
+) -> dict:
     return {
         "id": int(row.id),
         "site_id": int(row.site_id),
-        "product_id": int(row.product_id),
+        "product_id": int(row.product_id) if row.product_id is not None else None,
         "customer_id": row.customer_id,
+        "customer_name": customer_name,
         "listing_id": row.listing_id,
+        "listing_url": listing_url,
+        "product_label": product_label,
         "reason": row.reason,
-        "candidates": row.candidates or [],
+        "candidates": candidates if candidates is not None else row.candidates or [],
         "status": row.status,
         "evidence": row.evidence or {},
     }
 
 
+def _queue_payloads(session, rows: list, tenant_id: str) -> list[dict]:
+    customer_ids = {row.customer_id for row in rows if row.customer_id is not None}
+    listing_ids = {row.listing_id for row in rows if row.listing_id is not None}
+    product_ids = {row.product_id for row in rows if row.product_id is not None}
+    for row in rows:
+        product_ids.update(
+            int(candidate["product_id"])
+            for candidate in row.candidates or []
+            if isinstance(candidate, dict) and candidate.get("product_id") is not None
+        )
+    customers = dict(
+        session.execute(
+            select(DimCustomer.id, DimCustomer.name).where(
+                DimCustomer.tenant_id == tenant_id,
+                DimCustomer.id.in_(customer_ids),
+            )
+        ).all()
+    )
+    listings = dict(
+        session.execute(
+            select(CustomerListing.id, CustomerListing.url)
+            .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
+            .where(
+                DimCustomer.tenant_id == tenant_id,
+                CustomerListing.id.in_(listing_ids),
+            )
+        ).all()
+    )
+    products = {
+        int(product.id): str(product.name or product.sales_model_name or product.sku)
+        for product in session.scalars(
+            select(DimProduct).where(
+                DimProduct.tenant_id == tenant_id,
+                DimProduct.id.in_(product_ids),
+            )
+        ).all()
+    }
+    payloads = []
+    for row in rows:
+        candidates = []
+        for candidate in row.candidates or []:
+            if not isinstance(candidate, dict):
+                continue
+            item = dict(candidate)
+            if item.get("product_id") is not None:
+                pid = int(item["product_id"])
+                if pid not in products:
+                    continue
+                item["label"] = products[pid]
+            candidates.append(item)
+        payloads.append(
+            _queue_dict(
+                row,
+                customer_name=customers.get(row.customer_id),
+                listing_url=listings.get(row.listing_id),
+                product_label=products.get(row.product_id),
+                candidates=candidates,
+            )
+        )
+    return payloads
+
+
 @router.get("/link-queue")
-def get_link_queue():
-    """Product pages a steward still has to confirm, reject, or mark not on this site."""
+def get_link_queue(user: dict = Depends(get_current_user)):
+    """Product-page and unlinked-listing cases awaiting a steward decision."""
     from app.services.listing_capture.links import list_open_queue
 
+    tenant_id = tenant_id_from_user(user)
     with SessionLocal() as session:
         try:
-            rows = list_open_queue(session)
+            rows = list_open_queue(session, tenant_id)
+            items = _queue_payloads(session, rows, tenant_id)
         except Exception:
+            session.rollback()
             return {"items": [], "data_unavailable": True}
-        return {"items": [_queue_dict(r) for r in rows], "data_unavailable": False}
+        return {"items": items, "data_unavailable": False}
 
 
 @router.post("/link-queue/{queue_id}")
@@ -736,16 +813,61 @@ def post_link_queue(queue_id: int, body: QueueDecision, user: dict = Depends(req
     from app.models.listing_link import ListingLinkQueue
     from app.services.listing_capture.links import decide_queue
 
+    tenant_id = tenant_id_from_user(user)
     with SessionLocal() as session:
-        row = session.get(ListingLinkQueue, queue_id)
+        row = session.scalar(
+            select(ListingLinkQueue)
+            .where(
+                ListingLinkQueue.id == queue_id,
+                ListingLinkQueue.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
         if row is None:
             raise HTTPException(status_code=404, detail="queue item not found")
         try:
-            decide_queue(session, row, action=body.action.strip().lower(), url=body.url, actor=_user_actor(user))
+            decide_queue(
+                session,
+                row,
+                action=body.action.strip().lower(),
+                url=body.url,
+                product_id=body.product_id,
+                actor=_user_actor(user),
+            )
             session.commit()
         except ValueError as exc:
+            session.rollback()
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return _queue_dict(row)
+        return _queue_payloads(session, [row], tenant_id)[0]
+
+
+@router.post("/links/{link_id}/undo")
+def post_undo_auto_link(
+    link_id: int,
+    user: dict = Depends(require_roles(Role.STEWARD)),
+):
+    """One-click Undo for an automatic Discovery V2 link."""
+    from app.services.listing_capture.links import undo_auto_link
+
+    with SessionLocal() as session:
+        try:
+            result = undo_auto_link(
+                session,
+                tenant_id=tenant_id_from_user(user),
+                link_id=link_id,
+                user=user,
+            )
+            session.commit()
+        except LookupError as exc:
+            session.rollback()
+            raise HTTPException(status_code=404, detail="link not found") from exc
+        except ValueError as exc:
+            session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "changed_since_apply", "message": str(exc)},
+            ) from exc
+        return result
 
 
 @router.post("/listings/{listing_id}/learn")

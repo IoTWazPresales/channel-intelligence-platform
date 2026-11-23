@@ -49,6 +49,7 @@ from app.services.listing_capture.web_discovery.scoring import (
     SOURCE_PRODUCT_SEARCH,
     SOURCE_USER,
     customer_keys,
+    host_from_url,
     normalize_host,
 )
 from app.services.listing_capture.web_discovery.settings import DiscoverySettings
@@ -107,7 +108,7 @@ class Candidate:
 
 @dataclass
 class CustomerContext:
-    """What the database says about one customer. Built by ``read_context``; tests build it by hand."""
+    """Customer context from ``read_context``; tests build it by hand."""
 
     customer_id: int
     name: str
@@ -132,7 +133,7 @@ class CustomerContext:
 
 
 def _host_of(value: str | None) -> str:
-    return normalize_host(discovery._domain(value))  # noqa: SLF001 - reuse the one host parser
+    return host_from_url(value)
 
 
 def _site_hosts(site: ListingSite) -> set[str]:
@@ -166,8 +167,10 @@ def _product_info(row: DimProduct, source_index: int) -> ProductInfo:
     )
 
 
-def _product_ids_by_source(session: Session, tenant_id: str, customer_id: int) -> list[tuple[int, int]]:
-    """``(source_index, product_id)`` in source order: catalogue, line-up plan, commercial line-up, sell-out."""
+def _product_ids_by_source(
+    session: Session, tenant_id: str, customer_id: int
+) -> list[tuple[int, int]]:
+    """Product ids in source order: catalogue, line-up plan, commercial line-up, sell-out."""
     found: list[tuple[int, int]] = []
     seen: set[int] = set()
 
@@ -177,7 +180,12 @@ def _product_ids_by_source(session: Session, tenant_id: str, customer_id: int) -
                 seen.add(int(pid))
                 found.append((index, int(pid)))
 
-    add(0, list(discovery._catalogue_product_ids(session, tenant_id=tenant_id, customer_id=customer_id)))  # noqa: SLF001
+    add(
+        0,
+        list(
+            discovery._catalogue_product_ids(session, tenant_id=tenant_id, customer_id=customer_id)
+        ),
+    )  # noqa: SLF001
     add(
         1,
         list(
@@ -195,7 +203,10 @@ def _product_ids_by_source(session: Session, tenant_id: str, customer_id: int) -
         list(
             session.scalars(
                 select(CommercialLineupLine.product_id)
-                .where(CommercialLineupLine.customer_id == customer_id, CommercialLineupLine.product_id.is_not(None))
+                .where(
+                    CommercialLineupLine.customer_id == customer_id,
+                    CommercialLineupLine.product_id.is_not(None),
+                )
                 .distinct()
                 .order_by(CommercialLineupLine.product_id)
                 .limit(_PRODUCT_SOURCE_LIMIT)
@@ -207,7 +218,10 @@ def _product_ids_by_source(session: Session, tenant_id: str, customer_id: int) -
         list(
             session.scalars(
                 select(FactSalesSellout.product_id)
-                .where(FactSalesSellout.tenant_id == tenant_id, FactSalesSellout.customer_id == customer_id)
+                .where(
+                    FactSalesSellout.tenant_id == tenant_id,
+                    FactSalesSellout.customer_id == customer_id,
+                )
                 .distinct()
                 .order_by(FactSalesSellout.product_id)
                 .limit(_PRODUCT_SOURCE_LIMIT)
@@ -234,16 +248,24 @@ def read_context(session: Session, customer: DimCustomer) -> CustomerContext:
             CustomerWebSite.tenant_id == tenant_id, CustomerWebSite.customer_id == customer_id
         )
     ).all()
-    ctx.confirmed_hosts = [normalize_host(d) for d, status in web_rows if status == WEB_SITE_CONFIRMED]
-    ctx.rejected_hosts = {normalize_host(d) for d, status in web_rows if status == WEB_SITE_REJECTED}
+    ctx.confirmed_hosts = [
+        normalize_host(d) for d, status in web_rows if status == WEB_SITE_CONFIRMED
+    ]
+    ctx.rejected_hosts = {
+        normalize_host(d) for d, status in web_rows if status == WEB_SITE_REJECTED
+    }
 
-    urls = session.scalars(select(CustomerListing.url).where(CustomerListing.customer_id == customer_id)).all()
+    urls = session.scalars(
+        select(CustomerListing.url).where(CustomerListing.customer_id == customer_id)
+    ).all()
     ctx.listing_hosts = sorted({host for host in (_host_of(u) for u in urls) if host})
 
     own_keys = set(
         discovery._site_keys(session, tenant_id=tenant_id, customer_id=customer_id, seed=seed)  # noqa: SLF001
     )
-    for site in session.scalars(select(ListingSite).where(ListingSite.tenant_id == tenant_id)).all():
+    for site in session.scalars(
+        select(ListingSite).where(ListingSite.tenant_id == tenant_id)
+    ).all():
         hosts = _site_hosts(site)
         ctx.site_search_patterns[str(site.site_key)] = site.search_url_pattern
         for host in hosts:
@@ -330,7 +352,11 @@ def _result_hosts(outcome: Any, limit: int = HOSTS_PER_QUERY) -> list[tuple[str,
     """The first ``limit`` distinct result hosts with their rank (from 1)."""
     found: list[tuple[str, int]] = []
     for index, result in enumerate(getattr(outcome, "results", None) or [], start=1):
-        host = normalize_host(getattr(result, "host", None) or urlsplit(getattr(result, "url", "") or "").hostname or "")
+        host = normalize_host(
+            getattr(result, "host", None)
+            or urlsplit(getattr(result, "url", "") or "").hostname
+            or ""
+        )
         if not host or any(host == existing for existing, _rank in found):
             continue
         found.append((host, int(getattr(result, "rank", None) or index)))
@@ -347,7 +373,9 @@ def _usable_hostname(host: str) -> bool:
 
 
 class _Pool:
-    def __init__(self, ctx: CustomerContext, settings: DiscoverySettings, engine_hosts: frozenset[str]) -> None:
+    def __init__(
+        self, ctx: CustomerContext, settings: DiscoverySettings, engine_hosts: frozenset[str]
+    ) -> None:
         self.ctx = ctx
         self.items: dict[str, Candidate] = {}
         self.excluded = [d.lower() for d in settings.excluded_domains]
@@ -360,7 +388,14 @@ class _Pool:
             return True
         return any(host == d or host.endswith("." + d) for d in self.excluded)
 
-    def add(self, raw_host: str, source: str, *, hit: dict[str, Any] | None = None, extra: dict[str, Any] | None = None) -> None:
+    def add(
+        self,
+        raw_host: str,
+        source: str,
+        *,
+        hit: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
         host = normalize_host(raw_host)
         if self._skip(host):
             return
@@ -432,7 +467,12 @@ def assemble_candidates(
                 pool.add(
                     host,
                     SOURCE_PRODUCT_SEARCH,
-                    hit={"product_id": product.id, "product_label": product.label, "query": query, "rank": rank},
+                    hit={
+                        "product_id": product.id,
+                        "product_label": product.label,
+                        "query": query,
+                        "rank": rank,
+                    },
                 )
         if ctx.name.strip():
             for host, rank in _result_hosts(search(name_query(ctx.name, country_name))):
@@ -499,7 +539,7 @@ def load_homepages(
     *,
     limit: int = MAX_HOMEPAGES_PER_CUSTOMER,
 ) -> list[Candidate]:
-    """Load ``https://<host>/`` for each candidate that is not already decided, through the polite getter.
+    """Load undecided candidate home pages through the polite getter.
 
     A candidate that is unreachable, robots-disallowed or not 200 gets a ``drop_reason`` (shown in a
     Preview, never saved). A redirect to a different host replaces the host (``redirected_from``)
@@ -514,7 +554,9 @@ def load_homepages(
             item.drop_reason = DROP_NOT_CHECKED
             continue
         loaded += 1
-        fetched = getter.get(f"https://{item.host}/", gate_key=item.gate_key, spacing=DEFAULT_SPACING_SECONDS)
+        fetched = getter.get(
+            f"https://{item.host}/", gate_key=item.gate_key, spacing=DEFAULT_SPACING_SECONDS
+        )
         _apply_fetch(item, fetched)
         if item.drop_reason is not None and item.outcome_hint != OUTCOME_MONITORED:
             item.outcome_hint = OUTCOME_DROPPED
@@ -538,7 +580,11 @@ def merge_redirects(candidates: list[Candidate]) -> list[Candidate]:
             continue
         # Two candidates ended on one host: keep the one whose home page loaded, union the evidence.
         item_loaded = item.drop_reason is None
-        winner, loser = (item, existing) if (existing.drop_reason is not None and item_loaded) else (existing, item)
+        winner, loser = (
+            (item, existing)
+            if (existing.drop_reason is not None and item_loaded)
+            else (existing, item)
+        )
         winner.sources |= loser.sources
         winner.product_hits.extend(loser.product_hits)
         for key, value in loser.extra.items():
