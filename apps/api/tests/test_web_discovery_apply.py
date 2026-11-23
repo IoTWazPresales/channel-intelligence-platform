@@ -167,6 +167,7 @@ def test_apply_saves_the_confirmed_site_and_the_review_queue_and_nothing_else(
         "pages_queued": 0,
         "listings_linked": 0,
         "listings_queued": 0,
+        "auto_links": [],
         "skipped": [],
     }
     confirmed = _row(session, world, ALPHA_HOST)

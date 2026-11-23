@@ -12,6 +12,9 @@ from collections.abc import Iterable
 from typing import Any
 
 from app.services.listing_capture.web_discovery.page_facts import (
+    embedded_identity,
+)
+from app.services.listing_capture.web_discovery.page_facts import (
     page_facts_from_html as extract_page_facts,
 )
 
@@ -71,9 +74,16 @@ def product_models(product: Any) -> list[str]:
 def page_facts_from_html(text: str) -> dict[str, list[str]]:
     """Structured HTML evidence. SKU remains a stock code and never an identity key."""
     facts = extract_page_facts(text)
+    barcodes = list(facts.gtin)
+    models = list(dict.fromkeys((*facts.mpn, *facts.model)))
+    if not barcodes and not models:
+        # Script-built pages: identity keys in the page's embedded JSON data.
+        embedded = embedded_identity(text)
+        barcodes = list(embedded["gtin"])
+        models = list(dict.fromkeys((*embedded["mpn"], *embedded["model"])))
     return {
-        "barcodes": list(facts.gtin),
-        "models": list(dict.fromkeys((*facts.mpn, *facts.model))),
+        "barcodes": barcodes,
+        "models": models,
         "stock_codes": list(facts.sku),
     }
 

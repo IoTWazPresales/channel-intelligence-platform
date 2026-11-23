@@ -12,6 +12,7 @@ non-network syntaxes are enabled. Missing or malformed markup yields empty facts
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from decimal import Decimal
@@ -223,3 +224,48 @@ def page_facts_from_html(html: str, url: str = "") -> PageFacts:
         availability=_first(offer, "availability"),
         url=_url(_first(product, "url"), url),
     )
+
+
+_EMBEDDED_SCRIPT = re.compile(
+    r"<script\b[^>]*\btype\s*=\s*[\"']application/json[\"'][^>]*>(.*?)</script>",
+    re.IGNORECASE | re.DOTALL,
+)
+_EMBEDDED_KEYS = {
+    "gtin": "gtin", "gtin8": "gtin", "gtin12": "gtin", "gtin13": "gtin", "gtin14": "gtin",
+    "ean": "gtin", "mpn": "mpn", "manufacturerpartnumber": "mpn", "model": "model",
+}
+MAX_EMBEDDED_BYTES = 2 * 1024 * 1024
+
+
+def embedded_identity(html: str) -> dict[str, tuple[str, ...]]:
+    """Identity keys in JSON data embedded in the page (script-built sites).
+
+    Walks every ``<script type="application/json">`` block (this includes framework page
+    data such as ``__NEXT_DATA__``) for the keys ``gtin*``, ``ean``, ``mpn``,
+    ``manufacturerPartNumber`` and ``model``. Values are evidence only; several products'
+    keys on one page make the linking decision ambiguous, never a guess.
+    """
+    found: dict[str, list[str]] = {"gtin": [], "mpn": [], "model": []}
+
+    def walk(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                kind = _EMBEDDED_KEYS.get(str(key).replace("_", "").lower())
+                if kind and isinstance(child, (str, int)) and not isinstance(child, bool):
+                    text = str(child).strip()
+                    if text and len(text) <= 64:
+                        found[kind].append(text)
+                else:
+                    walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    for raw in _EMBEDDED_SCRIPT.findall(html or ""):
+        if len(raw) > MAX_EMBEDDED_BYTES:
+            continue
+        try:
+            walk(json.loads(raw))
+        except ValueError:
+            continue
+    return {kind: tuple(dict.fromkeys(values)) for kind, values in found.items()}

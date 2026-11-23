@@ -939,7 +939,7 @@ def _confirmed_web_site_keys(session: Session, *, tenant_id: str, customer_id: i
     from app.models.customer_web_site import WEB_SITE_CONFIRMED, CustomerWebSite
 
     try:
-        # Its own savepoint: a database without migration 20261121_0065 reads as "none confirmed".
+        # Its own savepoint: a database without migration 20261123_0066 reads as "none confirmed".
         with session.begin_nested():
             found = session.scalars(
                 select(ListingSite.site_key)

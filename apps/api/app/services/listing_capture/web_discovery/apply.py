@@ -219,7 +219,6 @@ def rederive_evidence(
 ) -> dict[str, Any]:
     """The stored evidence with every part the database or the settings can answer recomputed."""
     stored = dict(entry.get("evidence") or {})
-)
     host = normalize_host(str(entry.get("domain") or ""))
     home = HomeSignals.from_dict(stored.get("home_signals")) if stored.get("home_signals") else None
     names = name_match(host, customer.name, settings.domain_endings)

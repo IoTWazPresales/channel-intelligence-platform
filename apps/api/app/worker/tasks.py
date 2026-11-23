@@ -934,6 +934,7 @@ def listing_capture_discovery_preview_task(tenant_id: str, preview_id: str, requ
     from app.services.listing_capture.site_fetch import FetchPolicy
     from app.services.listing_capture.web_discovery import preview as web_preview
     from app.services.listing_capture.web_discovery.cache import HttpCache, RobotsCache, SearchCache
+    from app.services.listing_capture.web_discovery.pages import make_page_finder
     from app.services.listing_capture.web_discovery.polite import PoliteGetter, dns_resolve
 
     log = logging.getLogger(__name__)
@@ -964,6 +965,7 @@ def listing_capture_discovery_preview_task(tenant_id: str, preview_id: str, requ
                     resolve=dns_resolve,
                     plan_store=store,
                     search_factory=lambda settings: web_preview.default_search_fn(settings, getter, search_cache),
+                    find_pages=make_page_finder(),
                 )
             finally:
                 session.rollback()

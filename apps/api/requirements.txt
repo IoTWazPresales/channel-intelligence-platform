@@ -29,3 +29,4 @@ protego==0.5.0
 # Discovery V2 product-page crawler (S3b): Crawlee for Python with Playwright as the browser fallback.
 crawlee[playwright]==0.6.12
 playwright==1.65.2
+browserforge==1.2.3

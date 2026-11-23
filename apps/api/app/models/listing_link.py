@@ -48,7 +48,7 @@ class ListingLinkQueue(Base, TimestampMixin):
             name="ck_listing_link_queue_status",
         ),
         Index("uq_listing_link_queue_open", "site_id", "product_id", unique=True, postgresql_where="status = 'open'"),
-        # A listing with no product yet: one open row per listing (migration 20261121_0065).
+        # A listing with no product yet: one open row per listing (migration 20261123_0066).
         Index(
             "uq_listing_link_queue_open_listing",
             "listing_id",
