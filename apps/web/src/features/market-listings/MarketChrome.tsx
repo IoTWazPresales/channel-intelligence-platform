@@ -25,7 +25,8 @@ export type MarketLens =
   | 'quality'
   | 'sites'
   | 'links'
-  | 'coverage';
+  | 'coverage'
+  | 'discovery';
 
 const LENSES: { value: MarketLens; label: string; href: string }[] = [
   { value: 'listings', label: 'Monitored listings', href: '/listing-capture?tab=registry' },
@@ -36,6 +37,7 @@ const LENSES: { value: MarketLens; label: string; href: string }[] = [
   { value: 'competitor-prices', label: 'Competitor prices', href: '/competition?tab=prices' },
   { value: 'competitor-listings', label: 'Competitor listings', href: '/competition?tab=competitor-listings' },
   { value: 'quality', label: 'Listing quality / SEO', href: '/listing-capture?tab=quality' },
+  { value: 'discovery', label: 'Discover sites', href: '/listing-capture?tab=discovery' },
   { value: 'sites', label: 'Sites & sellers', href: '/listing-capture?tab=sites' },
   { value: 'links', label: 'Link queue', href: '/listing-capture?tab=links' },
   { value: 'coverage', label: 'Coverage', href: '/listing-capture?tab=coverage' },
@@ -52,6 +54,7 @@ export function marketLensFromLocation(pathname: string, search: URLSearchParams
   if (tab === 'intelligence') return 'activation';
   if (tab === 'proposals') return 'proposals';
   if (tab === 'quality') return 'quality';
+  if (tab === 'discovery') return 'discovery';
   if (tab === 'sites') return 'sites';
   if (tab === 'links') return 'links';
   if (tab === 'coverage') return 'coverage';

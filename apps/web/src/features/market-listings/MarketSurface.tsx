@@ -32,6 +32,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { ActivationTimingAlerts } from '@/features/market-listings/ActivationTimingAlerts';
 import { COMPETITION_CAPABILITIES, LISTING_CAPABILITIES } from '@/features/market-listings/capabilities';
+import { DiscoveryLens } from '@/features/market-listings/DiscoveryLens';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
 import { ListingCaptureHealth } from '@/features/market-listings/ListingCaptureHealth';
 import { type IntelligenceRow, useListingIntelligence } from '@/features/market-listings/listingIntelligence';
@@ -131,7 +132,9 @@ type PriceRow = {
 };
 
 type CustomerList = { items?: { id: number; customer_code: string; customer_name: string }[] };
+
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
+
 type ProductPick = { id: number; sku: string; name: string };
 
 const ACTIVATION_LABEL: Record<string, string> = {
@@ -1648,6 +1651,7 @@ export function MarketSurface() {
         ) : null}
 
         {lens === 'quality' ? <ListingQualityLens /> : null}
+        {lens === 'discovery' ? <DiscoveryLens /> : null}
         {lens === 'sites' ? <ListingSitesLens /> : null}
         {lens === 'links' ? <ListingLinksLens /> : null}
         {lens === 'coverage' ? <ListingCoverageLens /> : null}
