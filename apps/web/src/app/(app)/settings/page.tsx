@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AdminChrome } from '@/features/administration/AdminChrome';
 import { BusinessCalendarPanel } from '@/features/settings/BusinessCalendarPanel';
 import { MapSettingsPanel } from '@/features/settings/MapSettingsPanel';
+import { DiscoverySettingsPanel } from '@/features/settings/DiscoverySettingsPanel';
 import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { ShippingDigestRecipientsPanel } from '@/features/shipping-mailer';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
@@ -101,6 +102,7 @@ export default function SettingsPage() {
 
   const { data: me } = useCurrentUser();
   const isAdmin = String(me?.role || '').toLowerCase() === 'admin';
+  const canEditDiscovery = isAdmin || me?.role === 'steward';
 
   const tenantProfileQuery = useQuery({
     queryKey: ['auth', 'tenant-commercial-profile'],
@@ -419,6 +421,12 @@ export default function SettingsPage() {
 
         <Divider sx={{ my: 3 }} />
         <MapSettingsPanel />
+        {canEditDiscovery ? (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <DiscoverySettingsPanel />
+          </>
+        ) : null}
 
         {isAdmin ? (
           <>

@@ -10,12 +10,15 @@ A confirmed link whose page later shows a different product is marked stale and 
 
 from __future__ import annotations
 
+from copy import deepcopy
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.dimensions import DimProduct
+from app.models.cst_listing_seed import CstListingSeed
+from app.models.dimensions import DimCustomer, DimProduct
 from app.models.listing_capture import CustomerListing
 from app.models.listing_link import (
     LINK_CONFIRMED,
@@ -31,7 +34,13 @@ from app.models.listing_link import (
 from app.services.listing_capture.adapters import SiteConfig, adapter_module
 from app.services.listing_capture.adapters.rest_buybox import fetch as rest_fetch
 from app.services.listing_capture.adapters.rest_buybox import parse_body, product_url
-from app.services.listing_capture.identity import corroboration, page_facts_from_html, page_facts_from_json, product_models
+from app.services.listing_capture.identity import (
+    corroboration,
+    page_facts_from_html,
+    page_facts_from_json,
+    product_models,
+)
+from app.services.steward_audit import record_steward_audit_sync
 
 
 def confirmed_link(session: Session, site_id: int, product_id: int) -> ListingLink | None:
@@ -67,11 +76,26 @@ def _not_on_site(session: Session, site_id: int, product_id: int) -> bool:
     return row is not None
 
 
-def _open_queue(session: Session, site_id: int, product_id: int) -> ListingLinkQueue | None:
+def _open_queue(
+    session: Session,
+    site_id: int,
+    product_id: int | None,
+    *,
+    listing_id: int | None = None,
+) -> ListingLinkQueue | None:
+    if product_id is None:
+        if listing_id is None:
+            return None
+        target = (
+            ListingLinkQueue.product_id.is_(None),
+            ListingLinkQueue.listing_id == int(listing_id),
+        )
+    else:
+        target = (ListingLinkQueue.product_id == int(product_id),)
     row = session.scalars(
         select(ListingLinkQueue).where(
             ListingLinkQueue.site_id == int(site_id),
-            ListingLinkQueue.product_id == int(product_id),
+            *target,
             ListingLinkQueue.status == QUEUE_OPEN,
         )
     ).first()
@@ -115,6 +139,47 @@ def queue_case(
     session.flush()
 
 
+def queue_listing_case(
+    session: Session,
+    *,
+    site: SiteConfig,
+    listing: CustomerListing,
+    reason: str,
+    candidates: list[dict[str, Any]],
+    evidence: dict[str, Any],
+) -> ListingLinkQueue:
+    """Queue a listing that has no product, without inventing a product target."""
+    customer = session.get(DimCustomer, int(listing.customer_id))
+    if (
+        site.id is None
+        or not isinstance(customer, DimCustomer)
+        or str(customer.tenant_id) != site.tenant_id
+        or listing.product_id is not None
+        or str(listing.marketplace).strip().lower() != site.site_key
+    ):
+        raise ValueError("listing and site must belong to the same tenant and site")
+    row = _open_queue(session, site.id, None, listing_id=int(listing.id))
+    if row is None:
+        row = ListingLinkQueue(
+            tenant_id=site.tenant_id,
+            site_id=int(site.id),
+            product_id=None,
+            customer_id=int(listing.customer_id),
+            listing_id=int(listing.id),
+            status=QUEUE_OPEN,
+            reason=reason,
+            candidates=deepcopy(candidates),
+            evidence=deepcopy(evidence),
+        )
+    else:
+        row.reason = reason
+        row.candidates = deepcopy(candidates)
+        row.evidence = deepcopy(evidence)
+    session.add(row)
+    session.flush()
+    return row
+
+
 def remember_link(
     session: Session,
     *,
@@ -135,6 +200,8 @@ def remember_link(
         if current is not None and current.url != url:
             current.status = LINK_STALE
             session.add(current)
+            # Release the partial unique key before inserting the replacement.
+            session.flush()
         elif current is not None:
             current.evidence = evidence
             current.decided_by = actor
@@ -400,6 +467,85 @@ def _close_open(session: Session, site_id: int, product_id: int, status: str, ac
     session.add(row)
 
 
+def link_product(
+    session: Session,
+    row: ListingLinkQueue,
+    *,
+    product_id: int,
+    actor: str | None,
+) -> ListingLinkQueue:
+    """Resolve a NULL-product queue item using an explicit steward choice."""
+    if row.status != QUEUE_OPEN or row.product_id is not None or row.listing_id is None:
+        raise ValueError("link_product requires an open listing with no product")
+    from app.services.listing_capture.sites import get_site, site_config_from_row
+
+    site_row = get_site(session, int(row.site_id))
+    product = session.scalar(
+        select(DimProduct).where(
+            DimProduct.id == int(product_id),
+            DimProduct.tenant_id == row.tenant_id,
+        )
+    )
+    listing = session.scalar(
+        select(CustomerListing)
+        .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
+        .where(
+            CustomerListing.id == int(row.listing_id),
+            DimCustomer.tenant_id == row.tenant_id,
+            DimCustomer.merged_into_customer_id.is_(None),
+        )
+        .with_for_update(of=CustomerListing)
+        .execution_options(populate_existing=True)
+    )
+    if (
+        site_row is None
+        or str(site_row.tenant_id) != str(row.tenant_id)
+        or product is None
+        or listing is None
+    ):
+        raise ValueError("listing, site and product must belong to this tenant")
+    if (
+        listing.product_id is not None
+        or listing.customer_id != row.customer_id
+        or str(listing.marketplace).strip().lower() != site_row.site_key
+    ):
+        raise ValueError("listing changed since it was queued")
+    evidence = dict(row.evidence or {})
+    queued_url = evidence.get("listing_url")
+    if queued_url is not None and queued_url != listing.url:
+        raise ValueError("listing changed since it was queued")
+    listing.product_id = int(product.id)
+    meta = dict(listing.meta_json or {})
+    meta.pop("discovery_link_undo", None)
+    listing.meta_json = meta
+    session.add(listing)
+    remember_link(
+        session,
+        site=site_config_from_row(site_row),
+        product_id=int(product.id),
+        url=listing.url,
+        status=LINK_CONFIRMED,
+        evidence={
+            **evidence,
+            "queue_id": int(row.id),
+            "steward": True,
+            "selected_product_id": int(product.id),
+        },
+        actor=actor,
+    )
+    # Keep the queue's original NULL target: it records a listing-level decision.
+    row.status = QUEUE_CONFIRMED
+    row.updated_by = actor
+    row.evidence = {
+        **evidence,
+        "selected_product_id": int(product.id),
+        "listing_url": listing.url,
+    }
+    session.add(row)
+    session.flush()
+    return row
+
+
 def decide_queue(
     session: Session,
     row: ListingLinkQueue,
@@ -407,14 +553,19 @@ def decide_queue(
     action: str,
     url: str | None,
     actor: str | None,
+    product_id: int | None = None,
 ) -> ListingLinkQueue:
     if row.status != QUEUE_OPEN:
         raise ValueError(f"queue item is {row.status}")
+    if action == "link_product":
+        if product_id is None:
+            raise ValueError("product_id required")
+        return link_product(session, row, product_id=product_id, actor=actor)
     site_row_id = int(row.site_id)
     from app.services.listing_capture.sites import get_site, site_config_from_row
 
     site_row = get_site(session, site_row_id)
-    if site_row is None:
+    if site_row is None or str(site_row.tenant_id) != str(row.tenant_id):
         raise ValueError("site not found")
     site = site_config_from_row(site_row)
     if action == "not_on_site":
@@ -423,6 +574,8 @@ def decide_queue(
         session.add(row)
         session.flush()
         return row
+    if row.product_id is None:
+        raise ValueError("choose link_product or not_on_site for a listing with no product")
     chosen = (url or "").strip()
     if not chosen:
         raise ValueError("url required")
@@ -460,10 +613,150 @@ def decide_queue(
     return row
 
 
-def list_open_queue(session: Session) -> list[ListingLinkQueue]:
-    rows = list(
-        session.scalars(
-            select(ListingLinkQueue).where(ListingLinkQueue.status == QUEUE_OPEN).order_by(ListingLinkQueue.id)
-        ).all()
-    )
+def list_open_queue(
+    session: Session, tenant_id: str | None = None
+) -> list[ListingLinkQueue]:
+    statement = select(ListingLinkQueue).where(ListingLinkQueue.status == QUEUE_OPEN)
+    if tenant_id is not None:
+        statement = statement.where(ListingLinkQueue.tenant_id == tenant_id)
+    rows = list(session.scalars(statement.order_by(ListingLinkQueue.id)).all())
     return [r for r in rows if isinstance(r, ListingLinkQueue)]
+
+
+def listing_link_state(listing: CustomerListing) -> dict[str, Any]:
+    """Fields needed to detect edits between Preview, Apply and Undo."""
+    return {
+        "id": int(listing.id),
+        "customer_id": int(listing.customer_id),
+        "product_id": listing.product_id,
+        "url": listing.url,
+        "marketplace": listing.marketplace,
+        "external_id": listing.external_id,
+        "meta_json": deepcopy(listing.meta_json),
+        "updated_at": listing.updated_at.isoformat() if listing.updated_at else None,
+    }
+
+
+def proposal_link_state(seed: CstListingSeed) -> dict[str, Any]:
+    return {
+        "id": int(seed.id),
+        "customer_id": int(seed.customer_id),
+        "product_id": seed.product_id,
+        "marketplace": seed.marketplace,
+        "external_id": seed.external_id,
+        "status": seed.status,
+        "raw_json": deepcopy(seed.raw_json),
+        "updated_at": seed.updated_at.isoformat() if seed.updated_at else None,
+    }
+
+
+def undo_auto_link(
+    session: Session,
+    *,
+    tenant_id: str,
+    link_id: int,
+    user: dict,
+) -> dict[str, Any]:
+    """Reverse an S4 automatic link without overwriting subsequent steward work.
+
+    The caller commits. All guards run before any reversal is written. Evidence
+    remains on the link and is also recorded in the steward audit.
+    """
+    link = session.scalar(
+        select(ListingLink)
+        .where(ListingLink.id == link_id, ListingLink.tenant_id == tenant_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if link is None:
+        raise LookupError("link not found")
+    evidence = deepcopy(link.evidence or {})
+    undo = evidence.get("undo")
+    if evidence.get("source") != "discovery_v2" or not isinstance(undo, dict):
+        raise ValueError("this link has no automatic discovery action to undo")
+    result = {
+        "id": int(link.id),
+        "status": link.status,
+        "undone": True,
+        "listing_ids": [int(item["after"]["id"]) for item in undo.get("listings", [])],
+    }
+    if undo.get("undone_at"):
+        return result
+    if link.status != LINK_CONFIRMED:
+        raise ValueError("link changed since apply")
+
+    listings = []
+    for item in sorted(undo.get("listings", []), key=lambda value: value["after"]["id"]):
+        after = item["after"]
+        listing = session.scalar(
+            select(CustomerListing)
+            .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
+            .where(
+                CustomerListing.id == int(after["id"]),
+                DimCustomer.tenant_id == tenant_id,
+            )
+            .with_for_update(of=CustomerListing)
+            .execution_options(populate_existing=True)
+        )
+        if listing is None or listing_link_state(listing) != after:
+            raise ValueError("listing changed since apply")
+        listings.append((listing, item["before"]))
+
+    proposals = []
+    for item in sorted(undo.get("proposals", []), key=lambda value: value["after"]["id"]):
+        after = item["after"]
+        seed = session.scalar(
+            select(CstListingSeed)
+            .join(DimCustomer, DimCustomer.id == CstListingSeed.customer_id)
+            .where(
+                CstListingSeed.id == int(after["id"]),
+                DimCustomer.tenant_id == tenant_id,
+            )
+            .with_for_update(of=CstListingSeed)
+            .execution_options(populate_existing=True)
+        )
+        if (
+            seed is None
+            or seed.status != "proposed"
+            or proposal_link_state(seed) != after
+        ):
+            raise ValueError("proposal changed or was registered since apply")
+        proposals.append((seed, item.get("before")))
+
+    actor = str(user.get("email") or user.get("id") or "unknown")[:256]
+    for listing, before in listings:
+        listing.product_id = before["product_id"]
+        meta = deepcopy(before.get("meta_json") or {})
+        meta["discovery_link_undo"] = {
+            "link_id": int(link.id),
+            "url": listing.url,
+            "product_id": int(link.product_id),
+        }
+        listing.meta_json = meta
+        session.add(listing)
+    for seed, before in proposals:
+        if before is None:
+            session.delete(seed)
+        else:
+            seed.raw_json = deepcopy(before["raw_json"])
+            session.add(seed)
+
+    previous = undo.get("previous_link")
+    link.status = previous["status"] if previous is not None else LINK_REJECTED
+    link.decided_by = actor
+    undo["undone_at"] = datetime.now(UTC).isoformat()
+    undo["undone_by"] = actor
+    evidence["undo"] = undo
+    link.evidence = evidence
+    session.add(link)
+    session.flush()
+    record_steward_audit_sync(
+        {**user, "tenant_id": tenant_id},
+        action="discovery_auto_link_undo",
+        importer="listing_discovery",
+        target_dim="listing_link",
+        target_id=int(link.id),
+        payload={"link_id": int(link.id), "evidence": evidence},
+        db=session,
+    )
+    return {**result, "status": link.status}

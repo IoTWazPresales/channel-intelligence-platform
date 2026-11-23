@@ -928,6 +928,53 @@ def _site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict
     if isinstance(named, str) and named.strip():
         key = named.strip().lower()
         return [key] if SITE_KEY_RE.match(key) else []
+    base = _seed_site_keys(session, tenant_id=tenant_id, customer_id=customer_id, seed=seed)
+    # Web discovery (Discovery V2): the sites a steward or an Apply confirmed for this customer.
+    confirmed = _confirmed_web_site_keys(session, tenant_id=tenant_id, customer_id=customer_id)
+    return sorted(set(base) | set(confirmed)) if confirmed else base
+
+
+def _confirmed_web_site_keys(session: Session, *, tenant_id: str, customer_id: int) -> list[str]:
+    """``listing_site.site_key`` of this customer's confirmed ``customer_web_site`` rows."""
+    from app.models.customer_web_site import WEB_SITE_CONFIRMED, CustomerWebSite
+
+    try:
+        # Its own savepoint: a database without migration 20261123_0066 reads as "none confirmed".
+        with session.begin_nested():
+            found = session.scalars(
+                select(ListingSite.site_key)
+                .join(CustomerWebSite, CustomerWebSite.site_id == ListingSite.id)
+                .where(
+                    CustomerWebSite.tenant_id == tenant_id,
+                    CustomerWebSite.customer_id == int(customer_id),
+                    CustomerWebSite.status == WEB_SITE_CONFIRMED,
+                    ListingSite.tenant_id == tenant_id,
+                )
+            ).all()
+    except Exception:  # noqa: BLE001
+        return []
+    return sorted(
+        {str(key) for key in found if isinstance(key, str) and SITE_KEY_RE.match(key)}
+    )
+
+
+def _confirmed_web_domains(session: Session, *, tenant_id: str, customer_id: int) -> list[str]:
+    """Domains of this customer's confirmed ``customer_web_site`` rows (for ``_seed_origin``'s fallback)."""
+    from app.models.customer_web_site import WEB_SITE_CONFIRMED, CustomerWebSite
+
+    found = session.scalars(
+        select(CustomerWebSite.domain)
+        .where(
+            CustomerWebSite.tenant_id == tenant_id,
+            CustomerWebSite.customer_id == int(customer_id),
+            CustomerWebSite.status == WEB_SITE_CONFIRMED,
+        )
+        .order_by(CustomerWebSite.id)
+    ).all()
+    return [str(domain) for domain in found if isinstance(domain, str) and domain.strip()]
+
+
+def _seed_site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]) -> list[str]:
     origin = _origin_text(_seed_origin(seed))
     if origin:
         # A domain seed describes only that domain, even if this customer already
@@ -1024,7 +1071,8 @@ def _seed(config: CustomerReportConfig) -> dict[str, Any]:
     return seed if isinstance(seed, dict) else {}
 
 
-def _seed_origin(seed: dict[str, Any]) -> str | None:
+def _seed_origin(seed: dict[str, Any], fallback_domain: str | None = None) -> str | None:
+    """The origin the seed names. With none, ``https://<fallback_domain>`` (a confirmed web site)."""
     site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
     for source in (site, seed):
         if not isinstance(source, dict):
@@ -1037,6 +1085,9 @@ def _seed_origin(seed: dict[str, Any]) -> str | None:
             value = source.get(key)
             if isinstance(value, str) and "://" in value:
                 return value.strip()
+    domain = (fallback_domain or "").strip().lower()
+    if domain and "://" not in domain and "/" not in domain:
+        return f"https://{domain}"
     return None
 
 

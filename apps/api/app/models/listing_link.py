@@ -48,12 +48,25 @@ class ListingLinkQueue(Base, TimestampMixin):
             name="ck_listing_link_queue_status",
         ),
         Index("uq_listing_link_queue_open", "site_id", "product_id", unique=True, postgresql_where="status = 'open'"),
+        # A listing with no product yet: one open row per listing (migration 20261123_0066).
+        Index(
+            "uq_listing_link_queue_open_listing",
+            "listing_id",
+            unique=True,
+            postgresql_where="status = 'open' AND product_id IS NULL",
+        ),
+        CheckConstraint(
+            "product_id IS NOT NULL OR listing_id IS NOT NULL",
+            name="ck_listing_link_queue_target",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default")
     site_id: Mapped[int] = mapped_column(ForeignKey("listing_site.id", ondelete="CASCADE"), nullable=False)
-    product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
+    # NULL when the listing has no product yet and a steward must pick one (reason ambiguous_identity,
+    # no_identity_on_page or page_unreadable). Readers must handle None.
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id"), nullable=True)
     listing_id: Mapped[int | None] = mapped_column(ForeignKey("customer_listing.id", ondelete="SET NULL"), nullable=True)
     reason: Mapped[str] = mapped_column(String(32), nullable=False)

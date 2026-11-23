@@ -103,6 +103,13 @@ def parse_snapshot_text(
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
 
+    # Generic reader: schema.org structured data (JSON-LD, microdata, OpenGraph) read by
+    # extruct, the price string read by price-parser. The regex readers below stay as the
+    # fallback for pages without structured offer data.
+    structured = _structured_offer(text, flags)
+    if structured is not None:
+        return structured
+
     # JSON-LD / embedded schema.org Offer price (common on product pages).
     # Prefer currency-tagged Offer blocks; ignore tiny noise values (< 50).
     offer_m = re.search(
@@ -169,6 +176,41 @@ def parse_snapshot_text(
             pass
 
     return ParseResult(parse_status="parse_failed", flags={**flags, "reason": "no_price_found"})
+
+
+_SCHEMA_AVAILABILITY = {"instock": "in_stock", "outofstock": "out_of_stock"}
+
+
+def _availability_from_text(text: str) -> str:
+    if re.search(r"OutOfStock|out of stock", text, flags=re.IGNORECASE):
+        return "out_of_stock"
+    if re.search(r"InStock|in stock", text, flags=re.IGNORECASE):
+        return "in_stock"
+    return "unknown"
+
+
+def _structured_offer(text: str, flags: dict[str, Any]) -> ParseResult | None:
+    """Price and stock from the page's structured Product/Offer data, else None."""
+    try:
+        from app.services.listing_capture.web_discovery.page_facts import page_facts_from_html
+
+        facts = page_facts_from_html(text)
+    except Exception:  # noqa: BLE001 - unreadable markup falls through to the old readers
+        return None
+    amount = facts.price_amount
+    if amount is None or (facts.price_currency or "").upper() != PARSED_PRICE_CURRENCY:
+        return None
+    price_val = float(amount)
+    if price_val < 50:
+        return None
+    raw = str(facts.availability or "").rstrip("/").rsplit("/", 1)[-1].lower()
+    availability = _SCHEMA_AVAILABILITY.get(raw) or _availability_from_text(text)
+    return ParseResult(
+        parse_status="ok",
+        price=price_val,
+        availability=availability,
+        flags={**flags, "method": "structured_data"},
+    )
 
 
 def should_backoff_dead_link(

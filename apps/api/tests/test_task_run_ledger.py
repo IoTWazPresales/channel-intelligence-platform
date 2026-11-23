@@ -183,3 +183,10 @@ def test_heartbeat_task_run_sets_timestamp() -> None:
         heartbeat_task_run("task-5")
     assert row.heartbeat_at is not None
     db.commit.assert_called_once()
+
+
+def test_entity_from_task_args_discovery_preview_text_args() -> None:
+    from app.services.task_run_ledger import ENTITY_DISCOVERY_PREVIEW
+
+    args = ("default", "prev-abc", {"scope": "customer", "customer_id": 1})
+    assert entity_from_task_args("listing_capture.discovery_preview", args) == (ENTITY_DISCOVERY_PREVIEW, 0)

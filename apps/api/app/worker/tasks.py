@@ -918,6 +918,69 @@ def listing_capture_autoconfigure_sites_task(
     return {"skipped": False, **report}
 
 
+@celery_app.task(name="listing_capture.discovery_preview")
+def listing_capture_discovery_preview_task(tenant_id: str, preview_id: str, request: dict) -> dict:
+    """On-demand Discovery V2 preview. Writes nothing to the database.
+
+    The session runs ``SET TRANSACTION READ ONLY`` first and is rolled back at the end; only Redis
+    (the plan, the caches and the site pause records) is written. There is no beat entry: a
+    preview only ever starts from a steward's request. The ``wd:running`` lock is always released.
+    Restart the worker after deploying this task.
+    """
+    import logging
+
+    from app.db.session_sync import SessionLocal
+    from app.services.listing_capture.observation import POLL_RUN_TIME_LIMIT_SECONDS
+    from app.services.listing_capture.site_fetch import FetchPolicy
+    from app.services.listing_capture.web_discovery import preview as web_preview
+    from app.services.listing_capture.web_discovery.cache import HttpCache, RobotsCache, SearchCache
+    from app.services.listing_capture.web_discovery.pages import make_page_finder
+    from app.services.listing_capture.web_discovery.polite import PoliteGetter, dns_resolve
+
+    log = logging.getLogger(__name__)
+    try:
+        store = web_preview.default_plan_store()
+    except web_preview.StoreUnavailable:
+        log.warning("discovery preview %s: plan store unavailable", preview_id)
+        return {"status": web_preview.STATUS_FAILED, "error": "store_unavailable"}
+    try:
+        if not _listing_live_fetch_enabled():
+            web_preview.mark_failed(store, tenant_id, preview_id, "live_fetch_off")
+            return {"status": web_preview.STATUS_FAILED, "error": "live_fetch_off"}
+        getter = PoliteGetter(
+            FetchPolicy(time_limit_seconds=POLL_RUN_TIME_LIMIT_SECONDS),
+            HttpCache(),
+            RobotsCache(),
+            resolve=dns_resolve,
+        )
+        search_cache = SearchCache()
+        with SessionLocal() as session:
+            try:
+                plan = web_preview.run_preview(
+                    session,
+                    tenant_id=tenant_id,
+                    preview_id=preview_id,
+                    request=request,
+                    getter=getter,
+                    resolve=dns_resolve,
+                    plan_store=store,
+                    search_factory=lambda settings: web_preview.default_search_fn(settings, getter, search_cache),
+                    find_pages=make_page_finder(),
+                )
+            finally:
+                session.rollback()
+        return {"status": plan.get("status"), "error": plan.get("error")}
+    except Exception as exc:  # noqa: BLE001 - the plan records the class name, never the message
+        log.exception("discovery preview %s failed", preview_id)
+        try:
+            web_preview.mark_failed(store, tenant_id, preview_id, type(exc).__name__)
+        except Exception:  # noqa: BLE001
+            log.warning("discovery preview %s: could not record the failure", preview_id)
+        return {"status": web_preview.STATUS_FAILED, "error": type(exc).__name__}
+    finally:
+        store.release(tenant_id, preview_id)
+
+
 @celery_app.task(name="listing_capture.poll_listings")
 def listing_capture_poll_listings_task(run: dict | None = None) -> dict:
     """Beat task: one small batch per invocation, then the next batch is queued.

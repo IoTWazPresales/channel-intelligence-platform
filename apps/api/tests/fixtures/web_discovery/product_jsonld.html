@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <title>Widget page</title>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {"@type": "Organization", "name": "Shop"},
+      {
+        "@type": ["Thing", "Product"],
+        "name": "Widget One",
+        "gtin13": "4006381333931",
+        "sku": "STOCK-77",
+        "mpn": "WID-100",
+        "model": "WID 100",
+        "brand": {"@type": "Brand", "name": "Example Brand"},
+        "url": "/products/widget",
+        "offers": {
+          "@type": "Offer",
+          "price": "1,299.95",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>Widget One</body>
+</html>
