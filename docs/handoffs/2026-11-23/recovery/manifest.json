@@ -122,53 +122,64 @@
     {
       "path": "docs/design/dashboard-v2/index.html",
       "origin_worktree": "lane-c-20261120",
-      "sha256": "e73c9f3b55b2eecb4d8a8e262aeec86187f23bb97ac546f0c51e67cf7cd079de"
+      "sha256": "e73c9f3b55b2eecb4d8a8e262aeec86187f23bb97ac546f0c51e67cf7cd079de",
+      "git_blob_sha256": "e73c9f3b55b2eecb4d8a8e262aeec86187f23bb97ac546f0c51e67cf7cd079de"
     },
     {
       "path": "docs/design/dashboard-v2/targets-builder.html",
       "origin_worktree": "lane-c-20261120",
-      "sha256": "7a9fb59da26f9fcaa4976cd2a8fb2be874424f1dfa6cb5ebfe239723d029e563"
+      "sha256": "7a9fb59da26f9fcaa4976cd2a8fb2be874424f1dfa6cb5ebfe239723d029e563",
+      "git_blob_sha256": "7a9fb59da26f9fcaa4976cd2a8fb2be874424f1dfa6cb5ebfe239723d029e563"
     },
     {
       "path": "docs/specs/DASHBOARD_V2.md",
       "origin_worktree": "lane-c-20261120",
-      "sha256": "427a9086cef56c06cca8fb2c214c442e2e4513c5c1f95acc8bd9dc636e38a7c5"
+      "sha256": "427a9086cef56c06cca8fb2c214c442e2e4513c5c1f95acc8bd9dc636e38a7c5",
+      "git_blob_sha256": "427a9086cef56c06cca8fb2c214c442e2e4513c5c1f95acc8bd9dc636e38a7c5"
     },
     {
       "path": "docs/handoffs/2026-11-23/assets/country-REQUIRES-REVISION.png",
       "source": ".tmp/coordinator-20261122/maplibre-proof/preview-2/01-country-preview.png",
-      "sha256": "938cb572e1e7f2afee9d29afd661c9108f10bce88f3298756207ad6755acb932"
+      "sha256": "938cb572e1e7f2afee9d29afd661c9108f10bce88f3298756207ad6755acb932",
+      "git_blob_sha256": "938cb572e1e7f2afee9d29afd661c9108f10bce88f3298756207ad6755acb932"
     },
     {
       "path": "docs/handoffs/2026-11-23/assets/city-REQUIRES-REVISION.png",
       "source": ".tmp/coordinator-20261122/maplibre-proof/preview-4/02-city-preview.png",
-      "sha256": "1055593ccd08c9bad6350cf69e6d2cceb06743909a230eb019368b6bc15439f0"
+      "sha256": "1055593ccd08c9bad6350cf69e6d2cceb06743909a230eb019368b6bc15439f0",
+      "git_blob_sha256": "1055593ccd08c9bad6350cf69e6d2cceb06743909a230eb019368b6bc15439f0"
     },
     {
       "path": "docs/handoffs/2026-11-23/assets/mall-REQUIRES-REVISION.png",
       "source": ".tmp/coordinator-20261122/maplibre-proof/preview-4/03-mall-area-proposed-preview.png",
-      "sha256": "cf3c5996083a3b8a490f6a42895c1122197f8af262961b9649912a29729921ad"
+      "sha256": "cf3c5996083a3b8a490f6a42895c1122197f8af262961b9649912a29729921ad",
+      "git_blob_sha256": "cf3c5996083a3b8a490f6a42895c1122197f8af262961b9649912a29729921ad"
     },
     {
       "path": "docs/handoffs/2026-11-23/evidence/maplibre-preview.md",
       "source": ".tmp/coordinator-20261122/maplibre-proof/preview-report.md",
-      "sha256": "09da835a5113ec328be471a9435999ea5fdc9a608fb1cf763b42cbe2be53ea7f"
+      "sha256": "09da835a5113ec328be471a9435999ea5fdc9a608fb1cf763b42cbe2be53ea7f",
+      "git_blob_sha256": "09da835a5113ec328be471a9435999ea5fdc9a608fb1cf763b42cbe2be53ea7f"
     },
     {
       "path": "docs/handoffs/2026-11-23/evidence/database-map-verification.md",
       "source": ".tmp/coordinator-20261122/database-map-proof/lifecycle-correction/verification-report.md",
-      "sha256": "2253d0daa9d83f8cb7b124ef2369905782f0f271a0a2a7cc96d11cfbb8ccbaff"
+      "sha256": "2253d0daa9d83f8cb7b124ef2369905782f0f271a0a2a7cc96d11cfbb8ccbaff",
+      "git_blob_sha256": "f907d72217eec8a5391df2674b334fa46b766e29c65e65fb28f30667d5cbd949"
     },
     {
       "path": "docs/handoffs/2026-11-23/evidence/source-and-clone-verification.md",
       "source": ".tmp/coordinator-20261122/database-map-proof/lifecycle-correction/full-verification/verification-report.md",
-      "sha256": "279e2d9e05322372e81bb7b537893cc495d7c7aad4d24df3442eeec40ec76c2a"
+      "sha256": "279e2d9e05322372e81bb7b537893cc495d7c7aad4d24df3442eeec40ec76c2a",
+      "git_blob_sha256": "279e2d9e05322372e81bb7b537893cc495d7c7aad4d24df3442eeec40ec76c2a"
     },
     {
       "path": "docs/handoffs/2026-11-23/evidence/database-map-live-browser.md",
       "source": ".tmp/coordinator-20261122/database-map-proof/lifecycle-correction/live-browser-verification.md",
-      "sha256": "b5adb617e5c3a51d5f78ec6e0769e2ae864fff52f114b53e35af8ec589999cae"
+      "sha256": "b5adb617e5c3a51d5f78ec6e0769e2ae864fff52f114b53e35af8ec589999cae",
+      "git_blob_sha256": "b5adb617e5c3a51d5f78ec6e0769e2ae864fff52f114b53e35af8ec589999cae"
     }
   ],
-  "uncommitted_zip_sha256": "43794ea699811fe2e7e75e445de4bdab9c95584f047e7688089fbd93b51b6fcf"
+  "uncommitted_zip_sha256": "43794ea699811fe2e7e75e445de4bdab9c95584f047e7688089fbd93b51b6fcf",
+  "line_ending_note": "sha256 records captured worktree bytes. git_blob_sha256 records normalized committed Git content for copied text files; line endings can differ across checkouts. ZIP entries preserve exact source bytes."
 }
