@@ -283,6 +283,18 @@ def _search_patterns(state: _Site, site: dict[str, Any]) -> list[tuple[str, str]
     )
     if form and state.same_site(form):
         out.append((form, "form"))
+    if not out and state.browser:
+        # The search box may be built by script: read the rendered home page the same way.
+        rendered = state.render(state.origin + "/")
+        if rendered is not None and rendered.body:
+            action = searchaction_pattern(rendered.body, state.origin + "/")
+            if action and state.same_site(action):
+                out.append((action, "structured_data"))
+            form = discovery._discover_search_pattern(  # noqa: SLF001
+                config, {"origin": state.origin}, lambda _url: (200, rendered.body)
+            )
+            if form and state.same_site(form):
+                out.append((form, "form"))
     return list(dict.fromkeys(out))
 
 

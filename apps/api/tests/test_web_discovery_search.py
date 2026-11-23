@@ -746,3 +746,35 @@ def test_ddgs_no_results_is_an_empty_search_and_does_not_pause(monkeypatch) -> N
         pass
     else:
         raise AssertionError("a subclass (rate limit) must still raise")
+
+
+def test_an_empty_provider_lets_the_next_provider_try(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services.listing_capture.web_discovery import search as search_mod
+
+    calls = []
+
+    def run(provider, *_args):
+        calls.append(provider)
+        hits = [] if provider == search_mod.PROVIDER_DDG_HTML else ["hit"]
+        status = search_mod.PARSED_OK if hits else search_mod.PARSED_EMPTY
+        return {"provider": provider, "status": status}, SimpleNamespace(hits=hits, status=status)
+
+    monkeypatch.setattr(search_mod, "_run_provider", run)
+    monkeypatch.setattr(search_mod, "build_results", lambda hits, **_kw: list(hits))
+    options = {"max_results": 5, "timeout_seconds": 5, "min_interval_seconds": 1}
+    outcome = search_mod.web_search(
+        "q", providers=[search_mod.PROVIDER_DDG_HTML, search_mod.PROVIDER_DDGS_AUTO],
+        getter=None, search_options=options,
+    )
+    assert calls == [search_mod.PROVIDER_DDG_HTML, search_mod.PROVIDER_DDGS_AUTO]
+    assert outcome.provider == search_mod.PROVIDER_DDGS_AUTO and outcome.results == ["hit"]
+
+    calls.clear()
+    monkeypatch.setattr(search_mod, "build_results", lambda hits, **_kw: [])
+    outcome = search_mod.web_search(
+        "q", providers=[search_mod.PROVIDER_DDG_HTML, search_mod.PROVIDER_DDGS_AUTO],
+        getter=None, search_options=options,
+    )
+    assert len(calls) == 2 and outcome.status == search_mod.STATUS_EMPTY

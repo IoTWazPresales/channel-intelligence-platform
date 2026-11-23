@@ -412,6 +412,7 @@ def web_search(
         extra_hosts = frozenset()
 
     attempts: list[dict[str, Any]] = []
+    empty: SearchOutcome | None = None  # an empty answer still lets the next provider try
     for provider in providers:
         if provider == PROVIDER_DDG_LITE:
             attempts.append(_attempt(provider, ATTEMPT_ERROR, None, "ddgs_lite_unsupported"))
@@ -426,7 +427,10 @@ def web_search(
         if cached is not None:
             status = STATUS_OK if cached else STATUS_EMPTY
             attempts.append(_attempt(provider, status, None, "cache"))
-            return SearchOutcome(status, provider, cached, attempts)
+            if cached:
+                return SearchOutcome(status, provider, cached, attempts)
+            empty = empty or SearchOutcome(status, provider, cached, attempts)
+            continue
         try:
             attempt, parsed = _run_provider(
                 provider, text_value, getter, searxng_url, options
@@ -446,5 +450,9 @@ def web_search(
         attempt["status"] = status
         attempts.append(attempt)
         _cache_write(cache, provider, text_value, results, configuration)
-        return SearchOutcome(status, provider, results, attempts)
+        if results:
+            return SearchOutcome(status, provider, results, attempts)
+        empty = empty or SearchOutcome(status, provider, results, attempts)
+    if empty is not None:
+        return empty
     return SearchOutcome(status=STATUS_UNAVAILABLE, attempts=attempts)
