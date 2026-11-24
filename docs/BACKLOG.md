@@ -2410,7 +2410,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Gated** (2026-09-21 N-0030 audit: effective `ai_assist_enabled=False`; `_anthropic_client()` returns None at `:57/:61`; fix before the flag is ever flipped; Stage 3.6) · **Parked** · 2026-09-04 |
+| **Status / parked** | **Done** (verified 2026-11-24): with `AI_ASSIST_ENABLED=true` and no key or no `anthropic` package, `_anthropic_client()` raises `AiResolverUnavailable` and `_call_claude` re-raises it, so the import job fails with that message instead of silently matching nothing (`tests/test_ai_resolver_unavailable.py`, 5 cases). API errors from a working client still log and return None. AI assist stays off on live. Earlier: Gated 2026-09-21, Parked 2026-09-04. |
 | **Effort** | Small |
 | **Source** | `apps/api/app/services/imports/ai_import_resolver.py` (`os.environ.get("ANTHROPIC_API_KEY")` after `ai_assist_enabled`); `apps/api/.env` has `AI_ASSIST_ENABLED`; the key name is defined nowhere on this machine (`apps/api/.env.example` and `app/core/config.py` have no `ANTHROPIC_API_KEY` field) |
 | **Idea** | With AI assist enabled and no key, `_anthropic_client()` logs a warning and returns `None` (module header: failures log and return None, never raise). Operators can believe AI-assisted import resolution is on while every call silently no-ops. Verify the resolver **fails loudly** rather than degrading silently — then keep that behaviour. |
@@ -4161,3 +4161,12 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 | **Read-only live sample (suggested settings, not saved)** | 218 listings: 42 active, 73 recently gone, 12 historical, 91 without a product (Evetech 23/45/2/18, Takealot 19/28/10/22, Amazon CS 0/0/0/51). |
 | **Open** | Live Discover needs the API to report live fetch; D-0061 gives it to the worker only (Warren to decide). Scope is not shown per listing on screen yet. |
 
+## BACKLOG-271 - AI-assisted import (layout proposals) per `docs/specs/AI_ASSISTED_IMPORT.md`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Design integrated 2026-11-24 (spec from `4c386d8a`); nothing built. Waiting on Warren's decisions D1-D12 in spec section 20. |
+| **What exists** | Inline resolver `services/imports/ai_import_resolver.py` + `ai_resolver_wiring.py` behind env `AI_ASSIST_ENABLED` (off on live); it fails loudly when on without a key (BACKLOG-168 Done). Deterministic layouts (`cst_layouts.py`, `detect_mapping` / `closest_layout`) and the Import Center are the reuse points. |
+| **Smallest next slice** | S1 intake core (fingerprint v2, fixed rules, intake batch tables, upload API), with the migration renumbered past `20261123_0066_web_discovery`. Needs D6 (v1 = customer sell-through only) and D7 (python-calamine, filetype) answered; without D7 it uses openpyxl/xlrd. No AI call is made in S1. |
+| **Constraints** | AI proposes, steward confirms; second files of a confirmed layout import by fixed rules with no AI; provider is a tenant setting (fails closed); no customer data in logs; no new UI libraries. |
+| **TRIGGER** | Warren answers D1, D2, D6 and D7. |
