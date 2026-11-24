@@ -12,6 +12,7 @@ Read [memory palace](docs/memory/MEMORY_PALACE.md), then [CURRENT](docs/memory/C
 
 ## Changelog ? newest first
 
+- 2026-11-25 — Step 0 process rules: RULES, implementation log, recovery audit, reference PNGs, and CURRENT/BACKLOG corrections on `docs/impl-process-rules-20261125`. Hash follows in the next changelog edit after the docs commit. No product code. No live database write.
 - 2026-11-23 ? Consolidated portable handoff and preserved original drafts, seven separate branch refs, S3a/S4 patches and15untrackedfiles from three dirty worktrees. Bundle/archive/hashes/base patch checks passed; no product implementation/test rerun/deployment/DB change. Recorded map rejection/revisions as BACKLOG-268, design-only Targets/theme status as BACKLOG-269. CURRENT/ROADMAP updated; prior CONTEXT archived without loss. Checkpoint: `05d4f7e4`.
 - 2026-11-22 ? Database map accepted live atc685bf63:291files/1818tests and independent seven-check live browser gate pass; clone layout persistence/isolation and exact cleanup proved with explicit transport/fixture limits. Web-only release and82.349s stability pass; previous failures retained.
 - 2026-11-22 ? Inventory origin correction integrated2d374040, Line-up native double-toggle correction integrated7f2785d4 and verified live. Warren executed0064/65 migrations; separate read-only identity/schema/grant/count/backup checks pass. Earlier canonical stack deployment remains FAILED at busy-solo Celery ping; supplemental evidence is separate (BACKLOG-245).

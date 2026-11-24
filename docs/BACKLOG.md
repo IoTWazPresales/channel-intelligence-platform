@@ -4178,7 +4178,7 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Done** 2026-11-24, updated 2026-11-24 t417u (676fe8c3): typography (13px base, mockup-sized h5), palette.background.elevated chrome, 34px control height, WorkbenchCanvas inset; AppShell main is the only scroller so pages no longer stretch into empty space (Brief/Stock/Lineup). |
+| **Status / parked** | **Partial** 2026-11-25 correction. Token work shipped 2026-11-24 (secondary text 0.82, dark Paper shadow 0.25, 13px base, 34px controls, AppShell as the only scroller, `676fe8c3`). The "mockup-sized h5" claim is wrong: `cipTheme.ts` line 36 sets `h5` to `0.9375rem` (15px at a 16px root) while page titles use `h5` (`PageHeader.tsx` line 29, `DomainHeader.tsx` line 43). The mock-up title is 27px (`docs/design/dashboard-v2/index.html` line 62). Title size, the invalid page gradient (`cipTheme.ts` line 65) and the shell background (`AppShell.tsx` line 129) are Step 4a (BACKLOG-280). |
 | **Audit** | Palette, surfaces, borders, accent, semantic colours and radii (card 12, control 10, chip 8) already matched `docs/design/dashboard-v2/{index,targets-builder}.html` in both modes. Two drifts fixed: secondary text alpha 0.72 -> 0.82 (dark `@cip/ui` tokens and `lightTokens`), dark Paper shadow 0.35 -> 0.25. |
 | **Scope** | Tokens and MUI theme only; no new libraries; per-page `alpha(text.primary, 0.72)` overrides left as they are. Test: `cipTheme.test.ts` asserts the mockup values. |
 | **Not done** | Mockup "ink" colours for status text on tinted tiles (`--good-ink` etc.) are not tokens yet; add them only when a component needs them. |
@@ -4196,7 +4196,7 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 | Field | Detail |
 |-------|--------|
 | **Status / parked** | Merged 2026-11-24 (branch `feat/discovery-live-20261124`, local Cursor). Live: `CIP_LISTING_LIVE_FETCH=1` in `apps/api/.env` (Warren t417u changed D-0061: the API may fetch live pages). |
-| **What** | `listing_live_fetch_enabled()` is true from process env (worker, unchanged) or API Settings `cip_listing_live_fetch`. Discover gating via `previewBlockReason` with a visible reason. Scheduled run (existing `autoconfigure_sites` beat, only when `discovery.schedule_enabled`) previews all reporting customers (`reports_expected`) and applies only exact-evidence outcomes; the rest goes to the steward queue. `browser_available` also checks the Chromium binary; unused `_confirmed_web_domains` removed (review minors 2 and 3). |
+| **What** | `listing_live_fetch_enabled()` (`observation.py` lines 230-243) is true from process env `CIP_LISTING_LIVE_FETCH` or API Settings `cip_listing_live_fetch` (not worker-only; D-0061 text at line 235). Discover buttons disable via `previewBlockReason` (`discoveryApi.ts` line 290). The scheduled beat (`tasks.py` lines 885-895) calls `run_scheduled_reporting_discovery` only when `discovery.schedule_enabled` is true for the tenant. That function previews reporting customers, then `apply_plan(..., sites_only=True)` (`scheduled.py` lines 85-86). `sites_only` skips listing links (`apply.py` lines 376-384). Site rows: user-entered domains are confirmed (`apply.py` lines 283-298); both `auto_accept` and `queue` are saved as **proposed** (`apply.py` lines 300-313), not confirmed. `auto_accept` is the exact-evidence outcome in `scoring.py` lines 230-232, and it is queued for a person. The earlier sentence "applies only exact-evidence outcomes" does not match this code. `web_discovery/__init__.py` lines 9-10 still say the schedule applies auto-linked sites; that comment disagrees with `apply.py`. |
 | **Open** | The scheduled preview runs inside the solo worker, so a long run delays other tasks until the poll time limit. |
 
 ## BACKLOG-275 - Background page loading, selected page first
@@ -4205,3 +4205,140 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 |-------|--------|
 | **Status / parked** | Merged 2026-11-24 (branch `feat/background-prefetch-20261124`, local Cursor). |
 | **What** | React Query defaults (`gcTime` 30 min, keep previous data; 60 s stale unchanged). After the active page settles, a low-priority warm-up (concurrency 2, paused on navigation and active fetches, role-gated, GET only) prefetches other nav pages with their own query options; rail links use Next prefetch. No new libraries. |
+
+---
+
+## BACKLOG-276 — Monitored listings: price matrix as the centrepiece
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open · 2026-11-25 · not started |
+| **Effort** | Medium |
+| **Source** | `docs/audits/RECOVERY_AUDIT_20261124.md`; `docs/handoffs/2026-11-24/RULES.md`. Warren t454u: the matrix stays on monitored listings; other content works around it or above it. |
+| **Idea** | Keep the existing monitored-listings content and the health panel, and put the price matrix in the centre on `EnterpriseDataGrid`, with sales model names and a real SRP. |
+| **Why it matters / deferrable** | The 24 Nov matrix replaced the listings lens (`f1a561cb`, `MarketSurface.tsx` line 918). Deferrable only until Step 1 runs. |
+| **What the work is** | Step 1 prompt `02-step1-listings-matrix-centrepiece.md`. Profile SRP columns read-only. If there is no single clear source, show "SRP source pending Warren". |
+| **Regression traps** | Do not remove the health panel or rewrite failing tests to match a new layout without Warren's yes. No new grid library. Products show `dim_product.sales_model_name`. |
+| **Behavior to retain** | Existing listings content that Warren did not tell us to drop. Health panel returns (ASSUMPTION from t454u "Yes?"). |
+| **Out of scope** | Live database writes. Hardcoded pages or customers. |
+| **TRIGGER** | Step 1 prompt run. |
+
+## BACKLOG-277 — Planner: open sell-through promotions and the mock-up calendar
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open · 2026-11-25 · not started |
+| **Effort** | Medium |
+| **Source** | `docs/audits/RECOVERY_AUDIT_20261124.md`; `docs/handoffs/2026-11-24/RULES.md`. Warren t454u: keep the original page; calendar as per the mock-up; sell-through; sell-out is disti to reseller and is not on this page. |
+| **Idea** | The planner shows open customer sell-through promotions and a promotion calendar that follows the mock-up. |
+| **Why it matters / deferrable** | Today the calendar scope includes Sell out PP (`promotion_type_vocab.py` lines 9-13) and the page loads ended cases (`PromotionPlannerSurface.tsx` lines 194-202). |
+| **What the work is** | Step 2 prompt. ASSUMPTION until Warren says otherwise: Sell-Through PP only, and "original page" means the current `/promotions` page. Report how many Stock PP rows that hides. |
+| **Regression traps** | Do not mix sell-out into the planner. Do not show closed, settled or ended cases, or old years, by default. Do not change stored promotion-type values. Final layout waits on `docs/design/planner-mockup.png` (missing 2026-11-25). |
+| **Behavior to retain** | Sell-out data stays in the system, off this page. |
+| **Out of scope** | Renaming stored sell-out values. Live writes. |
+| **TRIGGER** | Step 2 prompt run. |
+
+## BACKLOG-278 — Discovery libraries work and auto-discover when services are up
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open · 2026-11-25 · not started |
+| **Effort** | Medium-large |
+| **Source** | `docs/audits/RECOVERY_AUDIT_20261124.md`; `docs/handoffs/2026-11-24/RULES.md`. Warren t454u: four libraries must work and auto-discover when services are up; websites confirmed by a user; no hardcoding. |
+| **Idea** | Prove the discovery libraries, auto-discover when the services are up, and put a confirm-websites bar on Monitored listings. |
+| **Why it matters / deferrable** | Only Evetech has `adapter_key=html_page` in the 24 Nov read-only SQL. Amazon and Takealot readers are empty. |
+| **What the work is** | Step 3 code prompt. ASSUMPTION: "four libraries" means prove the Discovery V2 packages (seven packages named in the Discovery V2 merge). No site, URL, customer or reader is written into code. |
+| **Regression traps** | No hardcoded customers, domains or countries. No fuzzy joins. No live writes in the code step. |
+| **Behavior to retain** | Steward confirm before a site is monitored. Provisional masters stay steward-initiated. |
+| **Out of scope** | Flipping `discovery.schedule_enabled` on live (BACKLOG-279). |
+| **TRIGGER** | Step 3 prompt run. |
+
+## BACKLOG-279 — Discovery live activation and reader gaps
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Deferred tonight · 2026-11-25 |
+| **Effort** | Medium |
+| **Source** | `docs/audits/RECOVERY_AUDIT_20261124.md`; `docs/handoffs/2026-11-24/RULES.md`. t455u: live database writes stay a STOP. |
+| **Idea** | After Warren approves: schedule setting, worker restart, confirmations, then reader gaps (script-built pages, unlinked listings). |
+| **Why it matters / deferrable** | The code can land without these writes. The writes change live `cip`. |
+| **What the work is** | Step 3b. pg_dump first, run by Warren (`scripts/ops/backup_cip.ps1` line 24 prints the database URL). |
+| **Regression traps** | Do not restore readers by hardcoding. Warren stopped the 19 Nov restore (`LIVE_SCREEN_AUDIT_20261119.md` line 146). Code deletion was commit `3ea6cce4` on 3 Nov (same file, line 31). |
+| **Behavior to retain** | Read-only checks are allowed. The app's own auto-discovery may run as designed. |
+| **Out of scope** | Writing sites, URLs, customers or readers into source code. |
+| **TRIGGER** | Step 3 is merged and live, and Warren approves the live writes. |
+
+## BACKLOG-280 — Theme: title size, page gradient, Paper clipping
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open · 2026-11-25 · not started |
+| **Effort** | Small |
+| **Source** | `docs/audits/RECOVERY_AUDIT_20261124.md`; `docs/handoffs/2026-11-24/RULES.md`. |
+| **Idea** | Page titles back to the mock-up size, the page background gradient visible, global Paper clipping removed. |
+| **Why it matters / deferrable** | Titles use `h5` at `0.9375rem` (`cipTheme.ts` line 36). The gradient declaration is invalid (`cipTheme.ts` line 65) and the shell paints a solid background (`AppShell.tsx` line 129). |
+| **What the work is** | Step 4a prompt. Shared theme files only. |
+| **Regression traps** | No new libraries. Do not rewrite tests to hide a failure. Check dark and light. |
+| **Behavior to retain** | Token values that already match the mock-up (secondary text, shadow, radii) stay. |
+| **Out of scope** | Per-user appearance settings (BACKLOG-283). |
+| **TRIGGER** | Step 4a prompt run. |
+
+## BACKLOG-281 — Theme drives shared components
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open · 2026-11-25 · not started |
+| **Effort** | Large (several chats, one slice each) |
+| **Source** | `docs/audits/RECOVERY_AUDIT_20261124.md`; `docs/handoffs/2026-11-24/RULES.md`. Warren t454u: current components shared where necessary so later changes stay small. |
+| **Idea** | Icons, tabs, dialogs, menus, nav, KPI tiles, panel heads, grids and charts take their look from the theme through the shared components in RULES.md section 4. |
+| **Why it matters / deferrable** | Page-level overrides will have to be repeated. Deferrable until Step 4a has merged. |
+| **What the work is** | Step 4b, one slice and one PR per chat. |
+| **Regression traps** | No new UI or chart library. Do not fork a second grid. |
+| **Behavior to retain** | Existing shared components listed in RULES.md. |
+| **Out of scope** | A new design system package. |
+| **TRIGGER** | Step 4a is merged, then each Step 4b slice prompt. |
+
+## BACKLOG-282 — Rescue dirty worktrees, then prune only what Warren approves
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Open · 2026-11-25 · not started. Best last. |
+| **Effort** | Medium |
+| **Source** | `docs/audits/RECOVERY_AUDIT_20261124.md`; `docs/handoffs/2026-11-24/RULES.md`. Warren t454u item 5: "Yes fine". |
+| **Idea** | Put uncommitted worktree work onto pushed branches, then delete only worktrees Warren names. |
+| **Why it matters / deferrable** | Dirty worktrees are the only copy of some work. Deleting first would lose it. |
+| **What the work is** | Step 5 prompt. |
+| **Regression traps** | Never `git clean`, reset, or stash the main checkout. Never delete a worktree that still has uncommitted work Warren has not waived. |
+| **Behavior to retain** | The main checkout's untracked files stay where they are until a named step copies what it needs. |
+| **Out of scope** | Promotion to `main`. |
+| **TRIGGER** | Step 5 prompt run, after the other recovery steps or when Warren says to run it earlier. |
+
+## BACKLOG-283 — Appearance settings for users
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Deferred · 2026-11-25 |
+| **Effort** | Unknown until the decision |
+| **Source** | `docs/audits/RECOVERY_AUDIT_20261124.md` step 4c; `docs/handoffs/2026-11-24/RULES.md`. |
+| **Idea** | Let a user change theme appearance (font, colours, and the rest of what Warren listed on 24 Nov) without hardcoding a page. |
+| **Why it matters / deferrable** | Steps 4a and 4b fix the shared theme first. Per-user versus per-tenant is not decided. |
+| **What the work is** | Not scheduled. Record the decision, then a later prompt. |
+| **Regression traps** | No hardcoded theme per page. No new UI library. |
+| **Behavior to retain** | Tenant settings remain the place for tenant-wide values. |
+| **Out of scope** | Inventing the control list. |
+| **TRIGGER** | Warren decides per-user versus per-tenant, and which controls. |
+
+## BACKLOG-284 — Save the planner mock-up image
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Deferred · 2026-11-25. File absent (`Test-Path` on `docs/design/planner-mockup.png` was false). |
+| **Effort** | Small once the file exists |
+| **Source** | `docs/handoffs/2026-11-24/RULES.md`. Handoff section (g): Warren will re-send the planner mock-up. |
+| **Idea** | Commit the planner mock-up so Step 2 can sign off the layout against it. |
+| **Why it matters / deferrable** | Step 2 can build against the written spec and stop before final layout sign-off. |
+| **What the work is** | Save the image as `docs/design/planner-mockup.png` and commit it. |
+| **Regression traps** | Do not invent a layout and call it the mock-up. |
+| **Behavior to retain** | Existing `docs/design/dashboard-v2/` mock-ups stay the dashboard reference. |
+| **Out of scope** | Drawing a replacement mock-up. |
+| **TRIGGER** | The image is saved as `docs/design/planner-mockup.png`. |

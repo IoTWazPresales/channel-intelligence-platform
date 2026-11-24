@@ -1,7 +1,7 @@
 # CURRENT state
 
-**Last updated:** 2026-11-24 — store map review fixes (smaller semi-transparent land dots, Move+undo, shipping-map glow). Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it. Last prior live acceptance: 22 November (`c685bf63`).
-**Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
+**Last updated:** 2026-11-25 — step 0 recovery rules and handoff logs are on `docs/impl-process-rules-20261125` (not merged). Prior note 2026-11-24 — store map review fixes (smaller semi-transparent land dots, Move+undo, shipping-map glow). Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it. Last prior live acceptance: 22 November (`c685bf63`).
+**Branch:** `docs/impl-process-rules-20261125` (this docs unit). Trunk remains `feat/integrate-20261103`, cut from `ca8f5f7f`. Confirm HEAD with `git rev-parse`. Do not treat a hash written here as HEAD.
 **Deploy gate (BACKLOG-245, 2026-11-24):** `cip-deploy.ps1` now gates the worker on a fresh Redis heartbeat (`python -m app.worker.liveness_check --since <restart>`) plus a live pid; `celery inspect ping` is recorded as a diagnostic only (the solo pool cannot answer it while busy). **AI import (2026-11-24):** spec integrated at `docs/specs/AI_ASSISTED_IMPORT.md`; build waits on Warren's decisions (BACKLOG-271). BACKLOG-168 verified Done. **Theme (BACKLOG-272, 2026-11-24):** tokens aligned to the dashboard-v2 mockups (secondary text 0.82, dark Paper shadow 0.25). **Theme/scroll follow-up (t417u, 676fe8c3 / 98e19cf7, live 13:40):** typography and elevated chrome closer to the mockups; nested empty-space page scroll removed (AppShell main is the only scroller). BUILD_ID `FtjQS2XoM4HHQBgL0pHOw`. **Close-off (2026-11-24):** BACKLOG-262/263/264/250 closed (merged and live); stage/wave table at `docs/audits/STAGE_WAVE_STATUS_20261124.md`; EIF nodes N-0102/N-0119 built and live but closable only through EIF. **Deploy (2026-11-24 04:08):** first passing `cip-deploy.ps1 -Execute`; BACKLOG-245 Done; live BUILD_ID `q9HdrTrS8TCvaWBgiNm2y` at `4c8b0355`. **VAT (Opus R-04/R-05, merged 2026-11-24, Warren t417u):** planner SRP uses the tenant VAT rate (Settings -> tenant profile -> VAT rate), new case lines and incl-VAT SOH costs too; no implied 15%; gazetteer from tenant country. Live rate 0.15 saved through Settings at deploy. **Wave t417u (2026-11-24, coding by local Cursor):** VAT live (BACKLOG-273 Done); standalone `/promotions/timeline` reporting-only (BACKLOG-253, 14eb0cfc); planner Timeline by customer reporting-only and 6-month axis (c4f85535, t426u-t430u); timeline full width with detail in a drawer (035ff93c, t435u); reporting-only defaults on planner queues/headline counts, case book, plan templates, store-map chips and sell-through overview (19c7fd46, t437u-t440u); Discovery on live (BACKLOG-274, API live fetch via `apps/api/.env`); background loading (BACKLOG-275). Cursor jobs run one at a time (concurrent sessions tripped EIF SESSION_CLOSURE_REQUIRED). **Next agent:** Dashboard V2 slices 1 and 2 merged (BACKLOG-269 done except light-theme screenshots); BACKLOG-267 panel caption done. Next: BACKLOG-266 audit, then price fixes R-04/R-05. Read [durable handoff](../handoffs/2026-11-23/README.md).
 
 ## Branch, database and topology
@@ -23,7 +23,7 @@
 
 ## Discovery V2 and listing scope (2026-11-24)
 
-- Discovery V2 merged `a6f498ce` (Crawlee, Playwright, extruct, price-parser, tldextract, protego, ddgs; licences in the merge commit). Migration `20261123_0066_web_discovery` applied on live as owner after a 3.36 GB backup. Live Discovery settings saved 24 Nov 00:57 by Warren's approval (ZA, .co.za/.com, free web search, 5 s/10/20 s, browser on); schedule OFF. Live Discover button is disabled while the API reports live fetch off (D-0061 worker-only); Warren to decide.
+- Discovery V2 merged `a6f498ce` (Crawlee, Playwright, extruct, price-parser, tldextract, protego, ddgs; licences in the merge commit). Migration `20261123_0066_web_discovery` applied on live as owner after a 3.36 GB backup. Live Discovery settings saved 24 Nov 00:57 by Warren's approval (ZA, .co.za/.com, free web search, 5 s/10/20 s, browser on); schedule OFF. Discover is not hard-disabled. The buttons stay off only while `previewBlockReason` is set (`DiscoveryLens.tsx` lines 39-45; `discoveryApi.ts` line 290 when `capabilities.live_fetch` is false). `GET /listing-capture/discovery/capabilities` (`listing_discovery.py` lines 69-84) returns `live_fetch` from `listing_live_fetch_enabled()` (`observation.py` lines 230-243), which is true when `CIP_LISTING_LIVE_FETCH` or Settings `cip_listing_live_fetch` is truthy. D-0061 is not worker-only (`observation.py` line 235). This session did not read `.env`. The scheduled beat runs discovery only for tenants with `discovery.schedule_enabled` true (`tasks.py` lines 885-895); a missing `tenant_setting` row is off (migration `20261120_0064` docstring). This session did not query that row. The "schedule OFF" words above are the 24 Nov CURRENT claim, not a new query.
 - Stock-based listing scope (BACKLOG-270) uses existing stock facts and the existing poll beat. Off until `listing_scope.settings` is saved for the tenant.
 
 ## Store map (BACKLOG-268) — OpenFreeMap chosen 2026-11-23
@@ -42,12 +42,32 @@
 - Exact original drafts now preserved in`docs/design/dashboard-v2/` and`docs/specs/DASHBOARD_V2.md`; they retain design-only provenance. See handoff/TARGETS_STATUS.md for source evidence and limitations.
 - Earlier Dashboard visual direction approved in **both themes**, stock health BELOW sales charts. Expanded replenishment/aged-stock mock-up/detail/build pending. Previous saved light screenshot duplicated dark and is not light-theme acceptance evidence. BACKLOG-269 tracks remaining delivery.
 
-## Next ? one task / one delegated agent at a time
+## 24 Nov regressions and recovery
 
-1. Warren reviews the latest live store-map fixes (smaller dots, Move+undo, glow). Do not confirm store locations (BACKLOG-267).
-2. Discovery V2 is next unless reprioritized: committed S1/S2/S3c/S5 not integrated; S3a dirty foundations/incomplete lint; S4 dirty/failed saved checks; S3b Crawlee+Playwright finder pending. Keep live Preview-only and exact GTIN/model evidence. No automatic schedule activation.
-3. Dashboard/Targets delivery per accepted theme/placement decisions, then AI-assisted import implementation/three-customer clone proof. AI proposes; steward confirms fixed rules. Requested library review follows original live lanes.
-4. Recovery manifests name every relevant branch/base and dirty file. Verified Git bundle and ZIP preserve seven separate refs plus three dirty worktrees/15untrackedfiles; restore only into new worktrees after inspection, never blindly into integration.
+Checked in this session against `ca8f5f7f` unless a commit is named. This session did not query live `cip`.
+
+- Theme2 `edbdfc00` (merged `b79b1d33`, ancestor of this tip) sets `h5` to `0.9375rem` (`apps/web/src/theme/cipTheme.ts` line 36). Page titles use `h5` (`PageHeader.tsx` line 29, `DomainHeader.tsx` line 43). The dashboard mock-up `h1` is 27px (`docs/design/dashboard-v2/index.html` line 62). 0.9375rem is 15px when the root is 16px. Step 4a.
+- The page gradient puts a colour in `background-image` (`cipTheme.ts` line 65: `radial-gradient(...), ${t.bg.default}`). A colour is not a valid `background-image` layer, so browsers drop the declaration. The shell root paints `bgcolor: 'background.default'` (`apps/web/src/features/shell/AppShell.tsx` line 129). Step 4a.
+- `f1a561cb` renders `PriceMatrixLens` for the listings lens (`MarketSurface.tsx` line 918) and does not render `ListingCaptureHealth` there. Current tests expect the matrix and expect `listing-capture-health` to be absent (`MarketSurface.test.tsx` lines 135 and 138). `0bd7ed1b` does not rewrite six tests: `git show 0bd7ed1b` is a 5-line `beforeEach` that sets `nav.search = 'tab=observations'` in `MarketSurface.test.tsx`. Step 1.
+- The planner calendar scope sends `reporting_only` and `official_promotion_types` (`planner/plannerCalendarScope.ts` lines 2-10). Official types are Sell out PP, Sell-Through PP, and Stock PP (In-Direct) (`promotion_type_vocab.py` lines 9-13; filter at `cpor_cases.py` line 653). The planner list query does not drop ended rows (`PromotionPlannerSurface.tsx` lines 170-179 and 270-271). Create-case defaults the type to `Sell out PP` (line 991). Ended cases are loaded on purpose (lines 194-202 and 518). Step 2.
+- Live case counts were not re-queried. `terminals\audit-20261124-recovery-sql.txt` section `cpor_superseded` is the row `0 | 310`. The Opus audit reads that as 310 live cases and 0 open (`docs/audits/RECOVERY_AUDIT_20261124.md`). The same file's type/status breakdown includes draft, ended, settled and cancelled rows.
+- Takealot and Amazon `listing_site.adapter_key` values are empty; Evetech is `html_page` (same SQL file, section `listing_site`). Observations in that file: Evetech 2026-11-24, Amazon and Takealot 2026-11-04. The 19 Nov audit says commit `3ea6cce4` (3 Nov) deleted the per-site readers, and Warren stopped the 19 Nov restore because the deletion was on purpose (`docs/audits/LIVE_SCREEN_AUDIT_20261119.md` lines 31 and 146). The step prompt's "removed on 19 Nov" mixes those two dates. Step 3.
+- `web_discovery/__init__.py` lines 9-10 say the scheduled path applies auto-linked sites. `apply.py` lines 300-313 queue both `auto_accept` and `queue` as proposed sites. `scheduled.py` lines 85-86 call `apply_plan(..., sites_only=True)`, which skips `apply_link_items` (`apply.py` lines 376-384). `scoring.py` lines 230-232: `auto_accept` is exact name key plus country, product hits, home HTTP 200 and robots allowed. That outcome is queued, not confirmed.
+
+## Next
+
+One step at a time, from `docs/handoffs/2026-11-24/IMPLEMENTATION_LOG.md`.
+
+1. Step 0 process rules (this branch). Session 1 does not merge.
+2. Step 1: monitored listings keeps its content and health panel and gains the price matrix as the centrepiece.
+3. Step 2: planner shows open customer sell-through promotions, calendar per the mock-up. Mock-up image is not on disk yet.
+4. Step 3: discovery libraries, auto-discover when services are up, confirm bar. No live writes.
+5. Step 3b: live activation and readers. Deferred until Warren approves live writes.
+6. Step 4a: page title size, page gradient, Paper clipping.
+7. Step 4b: theme through shared components, one slice per chat.
+8. Step 5: rescue dirty worktree work, then prune only what Warren approves.
+
+Store-location confirmation stays unauthorised (BACKLOG-267). Do not promote to `main`.
 
 ## Boundaries / blockers
 
