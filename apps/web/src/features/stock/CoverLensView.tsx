@@ -18,6 +18,7 @@ import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridF
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
+import { coverDistributionQueryOptions } from '@/features/stock/coverQueryOptions';
 import { apiGet } from '@/lib/api';
 
 import {
@@ -117,11 +118,7 @@ export function CoverLensView() {
   });
   const [selected, setSelected] = useState<CoverItem | null>(null);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['channel-ops', 'cover-distribution'],
-    queryFn: ({ signal }) => apiGet<CoverDistribution>('/api/v1/channel-ops/cover-distribution', { signal }),
-    staleTime: 60_000,
-  });
+  const { data, isLoading, isError } = useQuery(coverDistributionQueryOptions());
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
   const headlines = data?.headlines;

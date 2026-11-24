@@ -36,6 +36,7 @@ import { CapabilityRail, DOMAIN_ICONS, RAIL_WIDTH, domainBadgesFromSpine } from 
 import { CommandPalette } from '@/features/shell/CommandPalette';
 import { railNavGroups, roleMayAccess } from '@/features/shell/navConfig';
 import { activeNavGroup } from '@/features/shell/navPageChrome';
+import { useNavQueryWarmup } from '@/features/shell/prefetch/useNavQueryWarmup';
 import { useBriefSignals } from '@/features/shell/useBriefSignals';
 import { useCurrentUser, useInvalidateCurrentUser, AUTH_ME_QUERY_KEY } from '@/features/shell/useCurrentUser';
 import { apiPost } from '@/lib/api';
@@ -75,6 +76,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
     (meError ? 'Signed out' : '.');
 
   const { data: briefMeta } = useBriefSignals();
+  useNavQueryWarmup();
   const badges = useMemo(() => domainBadgesFromSpine(briefMeta?.spine_badges), [briefMeta?.spine_badges]);
   const attention = briefMeta?.signal_count ?? briefMeta?.spine_badges?.brief ?? 0;
 

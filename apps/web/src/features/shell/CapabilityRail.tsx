@@ -178,6 +178,7 @@ export function CapabilityRail({
               <ListItemButton
                 component={NextLink}
                 href={d.href ?? d.items[0].href}
+                prefetch
                 onClick={onNavigate}
                 selected={isActive}
                 data-testid={`rail-domain-${d.id}`}
@@ -252,6 +253,7 @@ export function CapabilityRail({
                         key={l.href}
                         component={NextLink}
                         href={l.href}
+                        prefetch
                         onClick={onNavigate}
                         selected={on}
                         sx={{

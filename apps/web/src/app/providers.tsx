@@ -1,6 +1,6 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { keepPreviousData, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useEffect, useState } from 'react';
 
 import { useUiStore } from '@/stores/uiStore';
@@ -42,6 +42,10 @@ export function Providers({ children }: { children: ReactNode }) {
           queries: {
             /** Fewer full refetches when moving between screens; explicit Refresh still works. */
             staleTime: 60_000,
+            /** Keep domain caches warm while moving across the rail (per-query overrides still win). */
+            gcTime: 30 * 60_000,
+            /** Show the last answer while a refetch runs after filter / scope changes unless a query opts out. */
+            placeholderData: keepPreviousData,
             /** Avoid focus-driven refetch racing with navigation / manual refresh (can briefly show new data then older in-flight results). */
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,

@@ -9,21 +9,15 @@ import { inRail, leafStatusLabel, navGroups } from '@/features/shell/navConfig';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { PairedBars, ProportionBar } from '@/features/workbench-ui/charts';
-import { apiGet } from '@/lib/api';
-
 import { fmtInt, fmtPct } from './format';
+import { planningOverviewQueryOptions } from './planningQueryOptions';
 import { planningWorkflowHref } from './planningPaths';
-import type { PlanningOverview as PlanningOverviewPayload } from './types';
 import { useClientReady } from './useClientReady';
 
 export function PlanningOverview() {
   const router = useRouter();
   const ready = useClientReady();
-  const { data: summary, isLoading, isError } = useQuery({
-    queryKey: ['planning', 'overview'],
-    queryFn: ({ signal }) => apiGet<PlanningOverviewPayload>('/api/v1/planning/overview', { signal }),
-    staleTime: 30_000,
-  });
+  const { data: summary, isLoading, isError } = useQuery(planningOverviewQueryOptions());
   const data = ready ? summary : undefined;
   const awaiting = !ready || isLoading;
   const unavailable = !awaiting && Boolean(isError || !data || data.data_unavailable);

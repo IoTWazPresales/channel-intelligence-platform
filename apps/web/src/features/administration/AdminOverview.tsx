@@ -8,11 +8,9 @@ import { CapabilityStatus } from '@/features/shell/CapabilityStatus';
 import { inRail, leafStatusLabel, navGroups } from '@/features/shell/navConfig';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
-import { apiGet } from '@/lib/api';
-
+import { administrationOverviewQueryOptions } from './adminQueryOptions';
 import { adminWorkflowHref } from './adminPaths';
 import { fmtInt } from './format';
-import type { AdministrationOverview } from './types';
 import { useClientReady } from './useClientReady';
 
 function operationSeverity(status: string): 'info' | 'danger' | 'neutral' {
@@ -24,11 +22,7 @@ function operationSeverity(status: string): 'info' | 'danger' | 'neutral' {
 export function AdminOverview() {
   const router = useRouter();
   const ready = useClientReady();
-  const { data: summary, isLoading, isError } = useQuery({
-    queryKey: ['administration', 'overview'],
-    queryFn: ({ signal }) => apiGet<AdministrationOverview>('/api/v1/administration/overview', { signal }),
-    staleTime: 30_000,
-  });
+  const { data: summary, isLoading, isError } = useQuery(administrationOverviewQueryOptions());
   const data = ready ? summary : undefined;
   const awaiting = !ready || isLoading;
   const unavailable = !awaiting && Boolean(isError || !data || data.data_unavailable);

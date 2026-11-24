@@ -7,11 +7,9 @@ import type { ReactNode } from 'react';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { LensTabs } from '@/features/workbench-ui/controls';
-import { apiGet } from '@/lib/api';
-
+import { administrationOverviewQueryOptions } from './adminQueryOptions';
 import { fmtInt } from './format';
 import { ADMIN_DESCRIPTION, ADMIN_LEAVES, ADMIN_TITLE, adminLensFromPath, type AdminLens } from './adminPaths';
-import type { AdministrationOverview } from './types';
 import { useClientReady } from './useClientReady';
 
 export type { AdminLens };
@@ -23,11 +21,7 @@ export function AdminChrome({ children }: { children?: ReactNode }) {
   const router = useRouter();
   const lens = adminLensFromPath(pathname);
   const ready = useClientReady();
-  const { data: summaryData } = useQuery({
-    queryKey: ['administration', 'overview'],
-    queryFn: ({ signal }) => apiGet<AdministrationOverview>('/api/v1/administration/overview', { signal }),
-    staleTime: 30_000,
-  });
+  const { data: summaryData } = useQuery(administrationOverviewQueryOptions());
   const summary = ready ? summaryData : undefined;
   const leaf = ADMIN_LEAVES.find((l) => l.value === lens);
 

@@ -7,11 +7,9 @@ import type { ReactNode } from 'react';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { LensTabs } from '@/features/workbench-ui/controls';
-import { apiGet } from '@/lib/api';
-
 import { fmtInt } from './format';
+import { supplyOverviewQueryOptions } from './supplyQueryOptions';
 import { SUPPLY_LEAVES, supplyLensFromPath, type SupplyLens } from './supplyPaths';
-import type { SupplyOverview } from './types';
 import { useClientReady } from './useClientReady';
 
 export const SUPPLY_TITLE = 'Supply & Inbound';
@@ -28,11 +26,7 @@ export function SupplyChrome({ children }: { children?: ReactNode }) {
   const router = useRouter();
   const lens = supplyLensFromPath(pathname);
   const ready = useClientReady();
-  const { data: summaryData } = useQuery({
-    queryKey: ['supply', 'overview'],
-    queryFn: ({ signal }) => apiGet<SupplyOverview>('/api/v1/supply/overview', { signal }),
-    staleTime: 30_000,
-  });
+  const { data: summaryData } = useQuery(supplyOverviewQueryOptions());
   const summary = ready ? summaryData : undefined;
   const leaf = SUPPLY_LEAVES.find((l) => l.value === lens);
 

@@ -20,13 +20,16 @@ export function dashboardListKey(me: Pick<CurrentUser, 'id' | 'tenant_id'> | nul
 }
 
 /** The current user's dashboard list, under {@link dashboardListKey}. */
+export function dashboardListQueryOptions(me: Pick<CurrentUser, 'id' | 'tenant_id'> | null | undefined) {
+  return {
+    queryKey: dashboardListKey(me),
+    queryFn: ({ signal }: { signal: AbortSignal }) => apiGet<DashboardList>('/api/v1/dashboards', { signal }),
+    retry: false,
+  };
+}
+
 export function useDashboardList() {
   const { data: me } = useCurrentUser();
-  const queryKey = dashboardListKey(me);
-  const query = useQuery({
-    queryKey,
-    queryFn: ({ signal }) => apiGet<DashboardList>('/api/v1/dashboards', { signal }),
-    retry: false,
-  });
-  return { me, queryKey, query };
+  const query = useQuery(dashboardListQueryOptions(me));
+  return { me, queryKey: dashboardListKey(me), query };
 }
