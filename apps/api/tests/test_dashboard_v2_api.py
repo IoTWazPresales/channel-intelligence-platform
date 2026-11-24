@@ -233,7 +233,7 @@ async def test_from_template_makes_three_personal_dashboards_every_widget_planne
     assert listing["sellthrough_stock"]["title"] == "Sell-through & stock across customers"
 
     dm, v1 = default_model(), load_catalog()
-    sizes = {"account_overview": 8, "sellthrough_stock": 6, "cpor_cases": 8, "my_accounts": 8}
+    sizes = {"account_overview": 9, "sellthrough_stock": 7, "cpor_cases": 8, "my_accounts": 8}
     for key, n in sizes.items():
         r = await client.post("/api/v1/dashboards/from-template", json={"key": key}, headers=_h(uid))
         assert r.status_code == 200, r.text

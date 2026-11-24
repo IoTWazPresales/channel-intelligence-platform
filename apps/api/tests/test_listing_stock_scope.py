@@ -116,3 +116,17 @@ def test_scope_filters_due_listings_on_cip_test(db_session: Session):
     # active, unlinked and the recently-gone listing last checked 8 days ago are polled
     assert [r.id for r in kept] == [1, 4, 9]
     assert skipped == {sc.TIER_RECENT: 1, sc.TIER_HISTORICAL: 1}
+
+
+def test_dashboard_job_defaults_setting_only_accepts_known_jobs_and_starters() -> None:
+    """Dashboard V2 reset-to-job-default: the tenant chooses; nothing is filled in."""
+    import pytest as _pytest
+
+    from app.services.tenant_settings import KEY_DASHBOARD_JOB_DEFAULTS, SETTING_VALIDATORS
+
+    check = SETTING_VALIDATORS[KEY_DASHBOARD_JOB_DEFAULTS]
+    assert check({}) == {}
+    assert check({"account_manager": "my_accounts"}) == {"account_manager": "my_accounts"}
+    for bad in ({"sales_manager": "my_accounts"}, {"account_manager": "nope"}, ["my_accounts"]):
+        with _pytest.raises(ValueError):
+            check(bad)

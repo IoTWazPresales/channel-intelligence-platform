@@ -74,6 +74,17 @@ describe('v2 widget rendering', () => {
     expect(screen.getByRole('progressbar', { name: /83% of target/ })).toBeInTheDocument();
   });
 
+  it('draws a monthly target line on an additive trend', () => {
+    const d: DefinitionV2 = { v: 1, query: { measures: [measures[0]], breakdowns: ['period'], period: { grain: 'month' } }, display: { target_line: { value: 450 } } };
+    const columns: V2Response['columns'] = [
+      { id: 'period', kind: 'breakdown', label: 'Period', fields: ['bucket_key', 'bucket_start', 'bucket_end'] },
+      { id: measures[0], kind: 'measure', label: 'Support USD', fields: [measures[0]], unit: 'usd' },
+    ];
+    const r = { ...result, columns, rows: ['2026-07', '2026-08'].map((k) => ({ bucket_key: k, bucket_start: `-01`, bucket_end: `-28`, [measures[0]]: 500 })) };
+    const { container } = renderWithProviders(<V2WidgetBody def={d} visual="line" catalog={catalog} result={r} loading={false} error={null} testKey="tline" />);
+    expect(container.textContent).toMatch(/Target .*450.* per month/);
+  });
+
   it('a KPI without a target shows no target rail', () => {
     const r = { ...result, columns: [result.columns[1]], rows: [{ [measures[0]]: 5 }], totals: { [measures[0]]: 5 } };
     renderWithProviders(<V2WidgetBody def={{ v: 1, query: { measures: [measures[0]] } }} visual="kpi" catalog={catalog} result={r} loading={false} error={null} testKey="notarget" />);

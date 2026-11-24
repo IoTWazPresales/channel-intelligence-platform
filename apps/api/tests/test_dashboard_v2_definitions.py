@@ -153,7 +153,11 @@ def test_definition_valid_model_and_governed_with_v1_mirror() -> None:
         ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": "30000", "direction": "at_least"}}}, "target.value is a number"),
         ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "up"}}}, "at_least or at_most"),
         ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "at_most", "risk_margin": -1}}}, "risk_margin is zero or more"),
-        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "at_most", "period": "q3"}}}, "only value, direction and risk_margin"),
+        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "at_most", "period": "q3"}}}, "period has from and to"),
+        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "at_most", "bad": 1}}}, "only value, direction, risk_margin and period"),
+        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "at_most", "period": {"from": "2026-09-30", "to": "2026-07-01"}}}}, "on or before to"),
+        ({"query": {"measures": ["cst_sellthrough.units"]}, "display": {"target_line": {"value": 10000}}}, "needs a period breakdown"),
+        ({"query": {"measures": ["cst_sellthrough.stores_reporting"], "breakdowns": ["period"], "period": {"grain": "month"}}, "display": {"target_line": {"value": 50}}}, "add up over time"),
     ],
 )
 def test_definition_refused_with_the_planners_text(raw, needle) -> None:
@@ -167,6 +171,10 @@ def test_kpi_target_is_kept_in_the_widget_display() -> None:
     raw = {"query": {"measures": ["cst_sellthrough.units"]}, "display": {"kpi": {"compare": True}, "target": {"value": 30000, "direction": "at_least", "risk_margin": 3000}}}
     c = check_definition(raw, tenant_id="default")
     assert c.definition["display"]["target"] == {"value": 30000, "direction": "at_least", "risk_margin": 3000}
+    period = {"value": 30000, "direction": "at_least", "period": {"from": "2026-07-01", "to": "2026-09-30"}}
+    assert check_definition({"query": {"measures": ["cst_sellthrough.units"]}, "display": {"target": period}}, tenant_id="default").definition["display"]["target"] == period
+    line = {"query": {"measures": ["cst_sellthrough.units"], "breakdowns": ["period"], "period": {"grain": "month"}}, "display": {"target_line": {"value": 10000}}}
+    assert check_definition(line, tenant_id="default").definition["display"]["target_line"] == {"value": 10000}
 
 
 def test_request_from_definition_and_dual_path_switch() -> None:

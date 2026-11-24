@@ -327,6 +327,7 @@ def load_cst_read_model(
     min_observed_weeks: int = DEFAULT_MIN_OBSERVED_WEEKS,
     aged_lookback_weeks: int = DEFAULT_AGED_LOOKBACK_WEEKS,
     tenant_id: str = "default",
+    aged_only: bool = False,
 ) -> dict[str, Any]:
     """Aggregate CST facts → per-entity metrics. Compute-on-read; no writes."""
     tid = (tenant_id or "default").strip() or "default"
@@ -379,11 +380,19 @@ def load_cst_read_model(
             }
         )
 
-    # Most recently reported first, then the busiest sellers.
-    items.sort(
-        key=lambda x: (x["last_period"], x.get("velocity_4wk") or 0.0, -x["customer_id"], -x["product_id"]),
-        reverse=True,
-    )
+    if aged_only:
+        # Dashboard stock health: only aged / no-movement stock, the most units on hand first.
+        items = [x for x in items if x.get("aged_dead_stock")]
+        items.sort(
+            key=lambda x: (float((x.get("aged_factors") or {}).get("latest_soh") or 0), -x["customer_id"], -x["product_id"]),
+            reverse=True,
+        )
+    else:
+        # Most recently reported first, then the busiest sellers.
+        items.sort(
+            key=lambda x: (x["last_period"], x.get("velocity_4wk") or 0.0, -x["customer_id"], -x["product_id"]),
+            reverse=True,
+        )
     total = len(items)
     start = max(0, (page - 1) * page_size)
     page_items = items[start : start + page_size]

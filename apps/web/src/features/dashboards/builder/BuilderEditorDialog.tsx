@@ -44,7 +44,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { DashboardWidget, WidgetVisual } from '../types';
 import { VISUAL_ICON } from '../WidgetEditorDialog';
 import { useV2Query } from './BuilderData';
-import { breakdownLabel, isPickableGoverned, lowerFirst, measureOf, modelOf } from './catalog';
+import { breakdownLabel, isAdditive, isPickableGoverned, lowerFirst, measureOf, modelOf } from './catalog';
 import { BUILDER_VISUALS, effectiveVisualV2, fitsAll, visualsForV2 } from './fit';
 import { FilterValuePicker } from './FilterBar';
 import { requestFor, validFixedWindow, withWindow } from './requestFor';
@@ -224,6 +224,8 @@ export function BuilderEditorDialog({
 
   const filterKeys = governed ? BAR_FILTER_KEYS.filter((k) => first?.honours?.filters.includes(k)) : BAR_FILTER_KEYS.filter((k) => model?.breakdowns.includes(k));
 
+  // A trend target per period only where periods add up (Dashboard V2 s.4).
+  const targetLineAllowed = ['line', 'bar', 'area'].includes(visual) && breakdowns.includes('period') && measures.length === 1 && isAdditive(first);
   const definition: DefinitionV2 = useMemo(() => {
     const filters: Record<string, V2FilterValue[] | V2FilterValue> = {};
     for (const [k, v] of Object.entries(own)) if (v.length) filters[k] = governed ? v[0] : v;
@@ -238,6 +240,7 @@ export function BuilderEditorDialog({
     if (['bar', 'line', 'area', 'table'].includes(visual) && display.compare) disp.compare = true;
     if (visual === 'kpi' && display.kpi) disp.kpi = display.kpi;
     if (visual === 'kpi' && display.target && Number.isFinite(display.target.value)) disp.target = display.target;
+    if (targetLineAllowed && display.target_line && Number.isFinite(display.target_line.value)) disp.target_line = display.target_line;
     if (visual === 'combo' && display.series) disp.series = display.series;
     if (visual === 'dual_axis') disp.series = Object.fromEntries(dualSeries(chosen, display).map((s) => [s.key, { axis: s.axis, kind: s.kind }]));
     if (visual === 'table' && display.table?.rules?.length) disp.table = { rules: display.table.rules.filter((r) => measures.includes(r.measure)).slice(0, MAX_RULES) };
@@ -245,7 +248,7 @@ export function BuilderEditorDialog({
     if (display.caption) disp.caption = display.caption;
     if (Object.keys(disp).length) d.display = disp;
     return d;
-  }, [measures, chosen, breakdowns, grain, own, overrides, sort, limit, visual, display, governed, catalog.limits?.default_limit]);
+  }, [measures, chosen, breakdowns, grain, own, overrides, sort, limit, visual, display, governed, catalog.limits?.default_limit, targetLineAllowed]);
 
   const previewCtx = withDash ? ctx : NO_FILTERS;
   const debounced = useDebounced(definition, 300);
@@ -280,7 +283,8 @@ export function BuilderEditorDialog({
   const setRules = (next: ColourRule[]) => setDisplay((d) => ({ ...d, table: { rules: next } }));
   const spark = sparklineGrain(first, plan);
   const supportsDates = Boolean(first && (!governed || (first.honours?.dates && !first.honours.all_time_only)));
-  const invalidFixed = Boolean(overrides.fixed_window && (!validFixedWindow(overrides.fixed_window) || !supportsDates));
+  const invalidFixed = Boolean(overrides.fixed_window && (!validFixedWindow(overrides.fixed_window) || !supportsDates))
+    || Boolean(visual === 'kpi' && display.target?.period && !validFixedWindow(display.target.period));
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl" fullScreen={phone} data-testid="builder-editor" PaperProps={{ sx: { height: { md: '90vh' } } }}>
@@ -673,6 +677,26 @@ export function BuilderEditorDialog({
 
           {['bar', 'line', 'area', 'table'].includes(visual) && first ? <FormControlLabel label="Compare using the dashboard comparison setting"
             control={<Switch checked={Boolean(display.compare)} onChange={(e) => setDisplay((d) => ({ ...d, compare: e.target.checked }))} />} /> : null}
+          {targetLineAllowed ? (
+            <TextField
+              size="small"
+              type="number"
+              label={'Target per ' + (grain ?? 'period')}
+              helperText="Drawn as a dashed line on the trend. Leave empty for none."
+              value={display.target_line?.value ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const n = Number(raw);
+                setDisplay((d) => {
+                  const { target_line: _t, ...rest } = d;
+                  return raw === '' || !Number.isFinite(n) ? rest : { ...rest, target_line: { value: n } };
+                });
+              }}
+              inputProps={{ 'aria-label': 'Target per period' }}
+              sx={{ maxWidth: 260 }}
+              data-testid="builder-editor-target-line"
+            />
+          ) : null}
 
           {visual === 'kpi' && first ? (
             <Box data-testid="builder-editor-kpi-options">
@@ -757,6 +781,42 @@ export function BuilderEditorDialog({
                   inputProps={{ 'aria-label': 'At-risk margin', min: 0 }}
                 />
               </Stack>
+              <FormControlLabel
+                sx={{ mt: 1 }}
+                control={
+                  <Switch
+                    checked={Boolean(display.target?.period)}
+                    disabled={!display.target}
+                    onChange={(e) =>
+                      setDisplay((d) => {
+                        if (!d.target) return d;
+                        const { period: _p, ...t } = d.target;
+                        return { ...d, target: e.target.checked ? { ...t, period: ctx.window ?? { from: '', to: '' } } : t };
+                      })
+                    }
+                    inputProps={{ 'aria-label': 'Target has its own dates' }}
+                  />
+                }
+                label="Target has its own dates (otherwise the tile's dates)"
+              />
+              {display.target?.period ? (
+                <Stack direction="row" spacing={1} sx={{ mt: 1 }} data-testid="builder-editor-target-period">
+                  {(['from', 'to'] as const).map((key) => (
+                    <TextField
+                      key={key}
+                      type="date"
+                      size="small"
+                      label={key === 'from' ? 'Target from' : 'Target to'}
+                      value={display.target!.period![key]}
+                      InputLabelProps={{ shrink: true }}
+                      error={!validFixedWindow(display.target!.period!)}
+                      onChange={(e) =>
+                        setDisplay((d) => (d.target?.period ? { ...d, target: { ...d.target, period: { ...d.target.period, [key]: e.target.value } } } : d))
+                      }
+                    />
+                  ))}
+                </Stack>
+              ) : null}
             </Box>
           ) : null}
 

@@ -46,6 +46,18 @@ describe('requestFor: model measures', () => {
     expect(plan.notFiltered).toContainEqual(expect.objectContaining({ key: 'customer', reason: expect.stringContaining('ignores') }));
     expect(requestFor(def, { catalog, filters: {}, required: ['customer'], window: W }).status).toBe('ready');
   });
+  it('a KPI target with its own period runs over those dates, not the dashboard bar (Dashboard V2 s.6)', () => {
+    const period = { from: '2026-07-01', to: '2026-09-30' };
+    const def: DefinitionV2 = { v: 1, query: { measures: ['cst_sellthrough.units'] }, display: { target: { value: 30000, direction: 'at_least', period } } };
+    const plan = requestFor(def, { catalog, filters: {}, window: W });
+    expect(plan.status).toBe('ready');
+    if (plan.status !== 'ready') return;
+    expect(plan.window).toEqual(period);
+    expect(plan.notFiltered).toContainEqual(expect.objectContaining({ key: 'date', reason: expect.stringContaining('this target uses its own dates') }));
+    const plain = requestFor({ ...def, display: { target: { value: 1, direction: 'at_least' } } }, { catalog, filters: {}, window: W });
+    expect(plain.status === 'ready' && plain.window).toEqual(W);
+  });
+
   it('runs a fixed widget window independently of the dashboard and rejects invalid fixed dates', () => {
     const fixed = { from: '2026-01-01', to: '2026-01-31' };
     const def: DefinitionV2 = { ...dsi, dashboard: { fixed_window: fixed } };

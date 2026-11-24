@@ -41,6 +41,18 @@ def test_cst_late_missing_signal_links_to_the_steward_worklist() -> None:
     assert one["title"] == "1 customer sell-through report is missing"
 
 
+def test_attention_owner_and_age_are_only_ever_sourced() -> None:
+    """Dashboard V2 s.4: age comes from the oldest due slot; no owner is invented."""
+    from datetime import datetime, timezone
+
+    plain = cst_late_missing_signal(late=1, missing=0)
+    assert plain["owner_label"] is None and plain["age_at"] is None and plain["age_basis"] is None
+    due = datetime(2026, 11, 2, 8, 0, tzinfo=timezone.utc)
+    aged = cst_late_missing_signal(late=1, missing=0, oldest_due_at=due)
+    assert aged["age_at"] == "2026-11-02T08:00:00+00:00" and aged["age_basis"] == "due_at"
+    assert aged["owner_label"] is None and aged["owner_user_id"] is None
+
+
 def test_fx_blocked_means_the_mode_is_missing_not_the_rate() -> None:
     """N-0083: a case with a rate and no mode is FX blocked; a case with no rate is counted apart.
 

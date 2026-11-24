@@ -415,7 +415,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
         label={firstLabel}
         value={formatChartValue(totalNum, unit, 'full')}
         severity={tp ? (tp.status === 'on_track' ? 'good' : tp.status === 'at_risk' ? 'warn' : 'bad') : undefined}
-        target={tp && target ? targetLine(tp, target, fmtTarget) + ' · ' + TARGET_STATUS_LABEL[tp.status] : undefined}
+        target={tp && target ? targetLine(tp, target, fmtTarget) + ' · ' + TARGET_STATUS_LABEL[tp.status] + (target.period ? ' · ' + target.period.from + ' to ' + target.period.to : '') : undefined}
         progress={tp?.attainment != null ? { value: tp.attainment, label: firstLabel + ': ' + Math.round(tp.attainment * 100) + '% of target' } : undefined}
         delta={
           kpi?.compare
@@ -646,6 +646,11 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
   const valueAxis = measureIds.length > 1 ? axisTitle(series.map((s) => s.label).join(' / '), unit) : valueTitle;
   if (hasPeriod) {
     const data = periodRows(result, measureIds);
+    // A target for each period, only where periods add up (the server refuses it otherwise too).
+    const line = def.display?.target_line;
+    const reference = line && measureIds.length === 1 && isAdditive(first)
+      ? { value: line.value, label: 'Target ' + formatChartValue(line.value, unit, 'full') + ' per ' + (def.query.period?.grain ?? 'period') }
+      : undefined;
     return frame(
       <TrendChart
         data={data}
@@ -655,6 +660,7 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
         xAxisTitle={periodTitle}
         yAxisTitle={valueAxis}
         series={series}
+        reference={reference}
         onPointClick={onSelect ? (row, _i, e) => select(periodCat(row), e) : undefined}
         datumActions={onSelect ? 'period' : undefined}
       />,

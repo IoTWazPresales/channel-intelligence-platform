@@ -28,6 +28,7 @@ def get_channel_intelligence(
     page_size: int = Query(default=50, ge=1, le=500),
     min_observed_weeks: int = Query(default=DEFAULT_MIN_OBSERVED_WEEKS, ge=1, le=52),
     aged_lookback_weeks: int = Query(default=DEFAULT_AGED_LOOKBACK_WEEKS, ge=1, le=52),
+    aged_only: bool = Query(default=False),
     user: dict | None = Depends(get_optional_current_user),
 ):
     """Read-only CST channel intelligence. FLAG≠BLOCK; no writes."""
@@ -44,6 +45,7 @@ def get_channel_intelligence(
                 min_observed_weeks=min_observed_weeks,
                 aged_lookback_weeks=aged_lookback_weeks,
                 tenant_id=tenant_id_from_user(user),
+                aged_only=aged_only,
             )
     except Exception as exc:  # pragma: no cover — defensive empty-state
         raise HTTPException(

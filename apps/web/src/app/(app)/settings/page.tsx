@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AdminChrome } from '@/features/administration/AdminChrome';
 import { BusinessCalendarPanel } from '@/features/settings/BusinessCalendarPanel';
 import { MapSettingsPanel } from '@/features/settings/MapSettingsPanel';
+import { DashboardDefaultsPanel } from '@/features/settings/DashboardDefaultsPanel';
 import { DiscoverySettingsPanel } from '@/features/settings/DiscoverySettingsPanel';
 import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { ShippingDigestRecipientsPanel } from '@/features/shipping-mailer';
@@ -425,6 +426,8 @@ export default function SettingsPage() {
           <>
             <Divider sx={{ my: 3 }} />
             <DiscoverySettingsPanel />
+            <Divider sx={{ my: 3 }} />
+            <DashboardDefaultsPanel />
           </>
         ) : null}
 

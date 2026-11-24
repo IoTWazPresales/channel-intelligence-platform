@@ -80,7 +80,13 @@ def _signal_row(
     suggested: bool = False,
     data_unavailable: bool = False,
     figures: dict[str, Any] | None = None,
+    owner_label: str | None = None,
+    owner_user_id: int | None = None,
+    age_at: str | None = None,
+    age_basis: str | None = None,
 ) -> dict[str, Any]:
+    # Owner and age are optional and only ever sourced (Dashboard V2 s.4 Needs attention): no
+    # owner is inferred from the issue type, and response time is never used as an issue age.
     return {
         "id": id,
         "rank": rank,
@@ -94,10 +100,20 @@ def _signal_row(
         "suggested": suggested,
         "data_unavailable": data_unavailable,
         "figures": figures or {},
+        "owner_label": owner_label,
+        "owner_user_id": owner_user_id,
+        "age_at": age_at,
+        "age_basis": age_basis,
     }
 
 
-def cst_late_missing_signal(*, late: int, missing: int) -> dict[str, Any] | None:
+def _iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()
+
+
+def cst_late_missing_signal(*, late: int, missing: int, oldest_due_at: datetime | None = None) -> dict[str, Any] | None:
     """Attention row for expected customer sell-through reports that are late or missing."""
     late_n = max(0, int(late))
     missing_n = max(0, int(missing))
@@ -129,6 +145,8 @@ def cst_late_missing_signal(*, late: int, missing: int) -> dict[str, Any] | None
         action_label="Open CST steward",
         action_href=CST_STEWARD_SLOTS_HREF,
         figures={"late": late_n, "missing": missing_n},
+        age_at=_iso(oldest_due_at),
+        age_basis="due_at" if oldest_due_at is not None else None,
     )
 
 
@@ -168,6 +186,12 @@ def cst_late_missing_count_stmt() -> Select[Any]:
         .where(CustomerCstReportSlot.status.in_(("late", "missing")))
         .group_by(CustomerCstReportSlot.status)
     )
+    return apply_account_predicate(stmt, CustomerCstReportSlot.customer_id)
+
+
+def cst_late_missing_oldest_due_stmt() -> Select[Any]:
+    """Oldest due time among the late and missing slots counted above (same account predicate)."""
+    stmt = select(func.min(CustomerCstReportSlot.due_at)).where(CustomerCstReportSlot.status.in_(("late", "missing")))
     return apply_account_predicate(stmt, CustomerCstReportSlot.customer_id)
 
 
@@ -293,6 +317,7 @@ async def _dsi_freshness(db: AsyncSession, user: dict | None) -> dict[str, Any] 
     age_hours = max(0, int((now - completed_at).total_seconds() // 3600))
     return {
         "completed_at": completed_at.date().isoformat(),
+        "completed_at_ts": completed_at.isoformat(),
         "age_days": max(0, age_hours // 24),
         "stale": age_hours > _STALE_HOURS,
         "import_job_id": int(row[1]) if row[1] is not None else None,
@@ -414,21 +439,23 @@ async def _needs_look_summary(db: AsyncSession, user: dict | None) -> dict[str, 
     return {"lines": int(row[0] or 0), "units": float(row[1] or 0), "days": days}
 
 
-async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int, bool, dict[str, Any] | None, tuple[int, int]]:
-    failed_open = int(
-        await db.scalar(
-            select(func.count())
+async def _brief_small_counts(db: AsyncSession, user: dict | None) -> tuple[int, bool, dict[str, Any] | None, tuple[int, int], dict[str, Any]]:
+    failed_row = (
+        await db.execute(
+            select(func.count(), func.min(ImportJob.completed_at))
             .select_from(ImportJob)
             .where(ImportJob.status == "failed")
             .where(ImportJob.archived_at.is_(None))
             .where(where_tenant(ImportJob.tenant_id, user))
         )
-        or 0
-    )
+    ).one()
+    failed_open = int(failed_row[0] or 0)
     recon_any = bool(await db.scalar(recon_rows_exist_stmt()))
     dsi = await _dsi_freshness(db, user)
     cst_counts = await _cst_late_missing_counts(db)
-    return failed_open, recon_any, dsi, cst_counts
+    cst_oldest = await db.scalar(cst_late_missing_oldest_due_stmt()) if sum(cst_counts) else None
+    ages = {"failed_oldest": failed_row[1], "cst_oldest_due": cst_oldest}
+    return failed_open, recon_any, dsi, cst_counts, ages
 
 
 
@@ -563,7 +590,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         _promo_not_activated_count(user),
     )
     small, cover, settlement, inbound_raw, needs_look = parts
-    failed_open, recon_any, dsi, (cst_late, cst_missing) = small
+    failed_open, recon_any, dsi, (cst_late, cst_missing), ages = small
     soh_recon_not_run = not recon_any
     inbound_open = int(inbound_raw or 0)
 
@@ -587,6 +614,8 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 action_href=FAILED_IMPORTS_HREF,
                 suggested=True,
                 figures={"count": failed_open, "dsi_vintage": dsi_date},
+                age_at=_iso(ages["failed_oldest"]),
+                age_basis="failed_at" if ages["failed_oldest"] is not None else None,
             )
         )
         rank += 1
@@ -619,6 +648,8 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 action_label="Import DSI",
                 action_href="/admin/imports?template=distributor_sales_inventory",
                 figures=dsi,
+                age_at=dsi.get("completed_at_ts"),
+                age_basis="observed_at",
             )
         )
         rank += 1
@@ -639,7 +670,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
     )
     rank += 1
 
-    cst_signal = cst_late_missing_signal(late=cst_late, missing=cst_missing)
+    cst_signal = cst_late_missing_signal(late=cst_late, missing=cst_missing, oldest_due_at=ages["cst_oldest_due"])
     if cst_signal is not None:
         cst_signal["rank"] = rank
         signals.append(cst_signal)

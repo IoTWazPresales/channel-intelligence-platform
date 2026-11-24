@@ -35,6 +35,7 @@ KEY_DISCOVERY_SEARXNG_URL = "discovery.searxng_url"
 KEY_DISCOVERY_EXCLUDED_DOMAINS = "discovery.excluded_domains"
 KEY_DISCOVERY_BROWSER_FALLBACK = "discovery.browser_fallback_enabled"
 KEY_LISTING_SCOPE = "listing_scope.settings"
+KEY_DASHBOARD_JOB_DEFAULTS = "dashboard.job_defaults"
 
 # Keep ddg_lite readable for existing configurations. The adapter reports it unsupported:
 # ddgs has one DuckDuckGo HTML backend, not an independent Lite fallback.
@@ -264,6 +265,23 @@ def _as_listing_scope(value: Any) -> dict[str, Any]:
     return clean
 
 
+def _as_dashboard_job_defaults(value: Any) -> dict[str, str]:
+    """Job -> starter template key (Dashboard V2 "reset to my job default"). Only what the tenant chose."""
+    from app.core.user_job import JOBS
+    from app.services.dashboard_templates import TEMPLATE_BY_KEY
+
+    if not isinstance(value, dict):
+        raise ValueError("job defaults must be an object of job -> starter dashboard")
+    clean: dict[str, str] = {}
+    for job, key in value.items():
+        if job not in JOBS:
+            raise ValueError(f"unknown job: {job}")
+        if not isinstance(key, str) or key not in TEMPLATE_BY_KEY:
+            raise ValueError(f"unknown starter dashboard for {job}: {key}")
+        clean[job] = key
+    return clean
+
+
 # No map defaults or provider URLs are stored or supplied here.
 # PMTiles is deliberately not registered until a client protocol implementation exists.
 SETTING_VALIDATORS: dict[str, Callable[[Any], Any]] = {
@@ -279,6 +297,7 @@ SETTING_VALIDATORS: dict[str, Callable[[Any], Any]] = {
     KEY_DISCOVERY_EXCLUDED_DOMAINS: _as_excluded_domains,
     KEY_DISCOVERY_BROWSER_FALLBACK: _as_bool,
     KEY_LISTING_SCOPE: _as_listing_scope,
+    KEY_DASHBOARD_JOB_DEFAULTS: _as_dashboard_job_defaults,
 }
 
 

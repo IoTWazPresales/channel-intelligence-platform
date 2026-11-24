@@ -26,6 +26,8 @@ export type LocationSuggestion = {
   /** 0 to 1. Lower when the name is fuzzy or the same name exists in several places. */
   confidence?: number | null;
   matched_text?: string | null;
+  /** BACKLOG-267: the label names a shopping centre ("clearwater mall"); the proposed place is only the town of that name. */
+  named_centre?: string | null;
   ambiguous?: boolean;
   alternatives?: LocationAlternative[];
 };

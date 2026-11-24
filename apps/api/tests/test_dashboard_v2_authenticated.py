@@ -125,7 +125,7 @@ async def test_bearer_queries_keep_tenant_scope_product_lines_and_cache_isolatio
 async def test_authenticated_starters_fixed_widget_layout_promote_export_and_delivery(signed_in):
     client, headers, products = signed_in.client, signed_in.headers, signed_in.products
     admin = headers['admin']
-    for key, count in [('account_overview', 8), ('sellthrough_stock', 6), ('cpor_cases', 8)]:
+    for key, count in [('account_overview', 9), ('sellthrough_stock', 7), ('cpor_cases', 8)]:
         r = await client.post('/api/v1/dashboards/from-template', json={'key': key}, headers=admin)
         assert r.status_code == 200, r.text
         assert len(r.json()['widgets']) == count
