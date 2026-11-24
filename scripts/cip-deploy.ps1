@@ -17,7 +17,9 @@
 #   4. pnpm --filter @cip/web build. Record apps/web/.next/BUILD_ID before and after (must change).
 #   5. For api, worker (includes beat), web in that order: scripts\cip-supervisor-stop.ps1 -Component <c> -Restart,
 #      then wait until status.json shows it healthy with a launch after the request.
-#   6. GET http://127.0.0.1:8001/health/ready must be 200; `celery inspect ping` must get a reply.
+#   6. GET http://127.0.0.1:8001/health/ready must be 200; a worker heartbeat written after the worker
+#      restart, at most 45 s old, from a running pid (BACKLOG-245). `celery inspect ping` is recorded as a
+#      diagnostic only: a busy --pool=solo worker cannot answer it.
 #   7. GET http://127.0.0.1:3000/login twice, -StableSeconds apart (default 60), both answering, with every
 #      component's launch count unchanged between the two checks.
 # With -Execute the record is written as JSON and as a CURRENT.md block under %LOCALAPPDATA%\CIP\deploys\,
@@ -108,7 +110,7 @@ if (-not $Execute) {
     Write-Host '  3. pnpm --filter @cip/web build (BUILD_ID unknown until run)'
     $n = 4
     foreach ($c in (Get-DeployRestartOrder)) { Write-Host "  $n. restart $c via cip-supervisor-stop.ps1, wait for healthy"; $n++ }
-    Write-Host "  $n. $ApiBase/health/ready = 200 and celery inspect ping replies"; $n++
+    Write-Host "  $n. $ApiBase/health/ready = 200 and a fresh worker heartbeat (ping recorded as a diagnostic)"; $n++
     Write-Host "  $n. $WebBase/login answers twice $StableSeconds s apart with unchanged launch counts"
     exit 0
 }
@@ -181,9 +183,11 @@ $deployBody = {
     }
 
     # 5. Ordered restarts
+    $restartedAt = @{}
     foreach ($c in (Get-DeployRestartOrder)) {
         Set-DeployStep $record "restart $c"
         $asked = Get-Date
+        $restartedAt[$c] = $asked
         Write-Host "restart $c"
         try { & $stopScript -Component $c -Restart | Write-Host } catch {
             $record.restarts += [ordered]@{ component = $c; result = 'failed'; detail = "$_" }
@@ -210,13 +214,33 @@ $deployBody = {
     $ready = Get-HttpCode "$ApiBase/health/ready"
     $record.api_ready = $ready
     if ($ready -ne 200) { Stop-Deploy "/health/ready answered $ready" }
-    Set-DeployStep $record 'celery ping'
+    Set-DeployStep $record 'worker heartbeat'
+    $since = $(if ($restartedAt.ContainsKey('worker')) { $restartedAt['worker'] } else { Get-Date }).ToString('o')
+    $pidAlive = { param([int]$ProcId) [bool](Get-Process -Id $ProcId -ErrorAction SilentlyContinue) }
+    $beat = $null
+    $lastOut = ''
+    $hbDeadline = (Get-Date).AddSeconds($HealthyTimeoutSeconds)
+    while ((Get-Date) -lt $hbDeadline) {
+        Push-Location $apiDir
+        try {
+            $lastOut = (Invoke-NativeCaptured -FilePath $py -ArgumentList @('-m', 'app.worker.liveness_check', '--since', $since)).Output
+        } finally { Pop-Location }
+        $beat = Select-LiveWorkerBeat -Json $lastOut -PidAlive $pidAlive
+        if ($beat) { break }
+        Start-Sleep -Seconds 5
+    }
+    if (-not $beat) {
+        $record.worker_heartbeat = 'none'
+        Stop-Deploy "no fresh worker heartbeat since $since : $("$lastOut".Trim())"
+    }
+    $record.worker_heartbeat = "$($beat.node) pid $($beat.pid) age $($beat.age_s)s"
+    # Diagnostic only (BACKLOG-245): a busy solo worker cannot answer control messages.
+    Set-DeployStep $record 'celery ping (diagnostic)'
     Push-Location $apiDir
     try {
         $ping = (Invoke-NativeCaptured -FilePath $py -ArgumentList @('-m', 'celery', '-A', 'app.worker.celery_app', 'inspect', 'ping', '--timeout', '10')).Output
     } finally { Pop-Location }
-    $record.celery_ping = $(if (Test-CeleryPingOutput $ping) { 'replied' } else { 'no reply' })
-    if ($record.celery_ping -ne 'replied') { Stop-Deploy "celery ping: $($ping.Trim())" }
+    $record.celery_ping = $(if (Test-CeleryPingOutput $ping) { 'replied' } else { 'no reply (worker busy; heartbeat is the gate)' })
 
     # 7. Web answering twice with unchanged launch counts
     Set-DeployStep $record 'web stability'

@@ -67,6 +67,20 @@ Describe 'Test-ComponentHealthy' {
     }
 }
 
+Describe 'Select-LiveWorkerBeat (BACKLOG-245)' {
+    $alive = { param([int]$ProcId) $ProcId -eq 42 }
+    It 'accepts a fresh beat whose pid is running, ignoring log lines' {
+        $b = Select-LiveWorkerBeat -Json "warn line`n{`"ok`": true, `"beats`": [{`"node`": `"celery@pc`", `"pid`": 42, `"age_s`": 4.0}]}" -PidAlive $alive
+        $b.pid | Should Be 42
+    }
+    It 'refuses a beat from a dead pid, a not-ok result, or junk' {
+        Select-LiveWorkerBeat -Json '{"ok": true, "beats": [{"node": "n", "pid": 7, "age_s": 1}]}' -PidAlive $alive | Should Be $null
+        Select-LiveWorkerBeat -Json '{"ok": false, "reason": "no_heartbeat", "beats": []}' -PidAlive $alive | Should Be $null
+        Select-LiveWorkerBeat -Json 'Traceback ...' -PidAlive $alive | Should Be $null
+        Select-LiveWorkerBeat -Json '' -PidAlive $alive | Should Be $null
+    }
+}
+
 Describe 'Test-CeleryPingOutput' {
     It 'accepts a node reply' {
         Test-CeleryPingOutput "-> celery@PC: OK`n        pong`n`n1 node online." | Should Be $true
@@ -83,7 +97,7 @@ Describe 'deploy record' {
         $r.sha_before = 'aaa'; $r.sha_after = 'bbb'; $r.lockfile_changed = $false; $r.install = 'skipped'
         $r.build = 'ok'; $r.build_id_before = 'old'; $r.build_id_after = 'new'
         $r.restarts += [ordered]@{ component = 'api'; result = 'healthy'; detail = 'state=healthy launches=2' }
-        $r.api_ready = 200; $r.celery_ping = 'replied'
+        $r.api_ready = 200; $r.worker_heartbeat = 'celery@pc pid 42 age 3s'; $r.celery_ping = 'replied'
         $r.web_checks += [ordered]@{ at = 't1'; code = 200 }
         $r.launches_first = [ordered]@{ api = 2 }; $r.launches_second = [ordered]@{ api = 2 }
         $r.result = 'OK'
@@ -91,7 +105,7 @@ Describe 'deploy record' {
         $b | Should Match 'OK\. Branch `trunk` `aaa` -> `bbb`'
         $b | Should Match 'BUILD_ID `old` -> `new`'
         $b | Should Match 'Restart api: healthy'
-        $b | Should Match '/health/ready: 200; Celery ping: replied'
+        $b | Should Match '/health/ready: 200; worker heartbeat: celery@pc pid 42 age 3s; Celery ping \(diagnostic\): replied'
         $b | Should Match 'web 3000 at t1: HTTP 200'
     }
 }
