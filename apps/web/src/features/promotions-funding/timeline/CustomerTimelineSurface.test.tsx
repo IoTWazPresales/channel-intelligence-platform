@@ -9,8 +9,11 @@ vi.mock('@/lib/api', () => ({ apiGet: mocks.get }));
 vi.mock('@/features/shell/useCurrentUser', () => ({ useCurrentUser: () => ({ data: { role: 'viewer' } }) }));
 vi.mock('./CalendarUploadPanel', () => ({ CalendarUploadPanel: () => <div>Calendar uploader</div> }));
 vi.mock('@/features/commercial-planner/EntitySearchAutocomplete', () => ({
-  EntitySearchAutocomplete: ({ onChange }: { onChange: (v: unknown) => void }) => (
-    <button onClick={() => onChange({ id: 17, customer_name: 'Selected account', customer_code: 'A' })}>Pick customer</button>
+  EntitySearchAutocomplete: ({ onChange, label }: { onChange: (v: unknown) => void; label?: string }) => (
+    <div>
+      {label ? <span>{label}</span> : null}
+      <button onClick={() => onChange({ id: 17, customer_name: 'Selected account', customer_code: 'A' })}>Pick customer</button>
+    </div>
   ),
 }));
 
