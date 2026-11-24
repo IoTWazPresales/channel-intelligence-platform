@@ -161,15 +161,15 @@ describe('planner layout (mock-up)', () => {
     expect(within(bar).getByLabelText('Product')).toBeInTheDocument();
   });
 
-  it('orders the page: header, KPIs, filters, timeline + detail, then the action queue', async () => {
+  it('orders the page: header, KPIs, filters, timeline, then the action queue', async () => {
     renderPlanner();
-    const ids = ['planner-header', 'planner-kpi-strip', 'planner-filter-bar', 'planner-timeline', 'planner-detail', 'planner-queue-section'];
+    const ids = ['planner-header', 'planner-kpi-strip', 'planner-filter-bar', 'planner-timeline', 'planner-queue-section'];
     const nodes = await Promise.all(ids.map((i) => screen.findByTestId(i)));
     for (let i = 1; i < nodes.length; i += 1) {
       const rel = nodes[i - 1].compareDocumentPosition(nodes[i]);
-      // The detail panel sits beside the timeline (a following sibling column); everything else follows.
       expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
+    expect(screen.queryByTestId('planner-detail-empty')).toBeNull();
   });
 
   it('draws one timeline row per customer, with the bars coloured by status and a legend of the four statuses', async () => {
@@ -198,10 +198,11 @@ describe('planner layout (mock-up)', () => {
     expect(within(tl).getByText('Nov 2026')).toBeInTheDocument();
   });
 
-  it('selecting a promotion fills the detail panel with the seven sections', async () => {
+  it('selecting a promotion fills the detail drawer with the seven sections', async () => {
     renderPlanner();
-    expect(await screen.findByTestId('planner-detail-empty')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-detail-empty')).toBeNull();
     fireEvent.click(await screen.findByTestId('planner-timeline-bar-1'));
+    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
     const detail = screen.getByTestId('planner-detail');
     for (const s of ['support', 'units', 'stock', 'claims', 'evidence', 'risks', 'next-actions']) {
       expect(within(detail).getByTestId(`planner-detail-${s}`)).toBeInTheDocument();

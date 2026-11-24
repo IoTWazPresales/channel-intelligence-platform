@@ -1,6 +1,7 @@
 'use client';
 
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import CloseIcon from '@mui/icons-material/Close';
 import type { ColDef, RowClickedEvent } from 'ag-grid-community';
 import {
   Alert,
@@ -13,6 +14,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
+  IconButton,
   MenuItem,
   Snackbar,
   Stack,
@@ -256,6 +259,8 @@ function PlannerList({
   });
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const detailOpen = selectedId != null;
+  const closeDetail = useCallback(() => setSelectedId(null), []);
 
   const counts = data?.status_counts ?? {};
   const rowsAll = data?.items ?? [];
@@ -637,16 +642,9 @@ function PlannerList({
             />
           </Box>
 
-          {/* 4. Timeline by customer (left) and the detail of the selected promotion (right) */}
-          <Box
-            sx={{
-              display: 'grid',
-              gap: 2,
-              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 3fr) minmax(300px, 2fr)' },
-              alignItems: 'start',
-            }}
-          >
-            <Stack spacing={2} sx={{ minWidth: 0 }}>
+          {/* 4. Timeline by customer (full width); promotion detail opens in a drawer when a case is selected */}
+          <Box data-testid="planner-timeline-section" sx={{ minWidth: 0 }}>
+            <Stack spacing={2}>
               <CustomerRowsTimeline
                 cases={rows}
                 today={today}
@@ -713,19 +711,48 @@ function PlannerList({
               )}
             </ModuleDataSection>
             </Stack>
-
-            <PlannerDetailPanel
-              row={selectedRow}
-              unavailableId={selectedId != null && !selectedRow ? selectedId : null}
-              actions={
-                selectedRow && queueFigureState === 'ready' && !queueIncomplete
-                  ? queue.filter((a) => a.caseId === selectedRow.id)
-                  : undefined
-              }
-              onOpen={onOpen}
-              onClear={() => setSelectedId(null)}
-            />
           </Box>
+
+          <Drawer
+            anchor={isMobile ? 'bottom' : 'right'}
+            open={detailOpen}
+            onClose={closeDetail}
+            keepMounted={false}
+            data-testid="planner-detail-drawer"
+            slotProps={{
+              paper: {
+                sx: {
+                  width: isMobile ? '100%' : 'min(440px, 92vw)',
+                  maxHeight: isMobile ? '92vh' : undefined,
+                },
+              },
+            }}
+          >
+            <Stack sx={{ p: 2, height: '100%', minHeight: 0 }} spacing={1}>
+              <Stack direction="row" alignItems="flex-start" justifyContent="flex-end">
+                <IconButton
+                  aria-label="Close promotion detail"
+                  onClick={closeDetail}
+                  data-testid="planner-detail-close"
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Stack>
+              <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                <PlannerDetailPanel
+                  row={selectedRow}
+                  unavailableId={selectedId != null && !selectedRow ? selectedId : null}
+                  actions={
+                    selectedRow && queueFigureState === 'ready' && !queueIncomplete
+                      ? queue.filter((a) => a.caseId === selectedRow.id)
+                      : undefined
+                  }
+                  onOpen={onOpen}
+                  onClear={closeDetail}
+                />
+              </Box>
+            </Stack>
+          </Drawer>
 
           {/* 5. Action queue */}
           <PlannerQueueSection

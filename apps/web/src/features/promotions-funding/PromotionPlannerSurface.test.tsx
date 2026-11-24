@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -216,13 +217,40 @@ describe('PromotionPlannerSurface', () => {
     expect(replaceMock).toHaveBeenCalledWith('/promotions?stage=proposed', { scroll: false });
   });
 
-  it('selecting a case on the timeline fills the side panel, which opens the plan workspace', async () => {
+  it('keeps the timeline full width with no detail column until a case is selected', async () => {
     renderPlanner();
-    expect(await screen.findByTestId('planner-detail-empty')).toBeInTheDocument();
+    await screen.findByTestId('planner-timeline-section');
+    await screen.findByTestId('planner-timeline');
+    expect(screen.queryByTestId('planner-detail-empty')).toBeNull();
+    expect(screen.queryByTestId('planner-detail-drawer')).toBeNull();
+  });
+
+  it('selecting a case on the timeline opens the detail drawer and opens the plan workspace from there', async () => {
+    renderPlanner();
     fireEvent.click(await screen.findByTestId('planner-timeline-bar-41'));
+    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
     expect(screen.getByTestId('planner-detail')).toHaveTextContent('CPR-26-1204');
     fireEvent.click(screen.getByTestId('planner-side-open'));
     expect(replaceMock).toHaveBeenCalledWith('/promotions?plan=41', { scroll: false });
+  });
+
+  it('closes the detail drawer with the close control, Clear, or Escape', async () => {
+    const user = userEvent.setup();
+    renderPlanner();
+    fireEvent.click(await screen.findByTestId('planner-timeline-bar-41'));
+    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
+    fireEvent.click(screen.getByTestId('planner-detail-close'));
+    await waitFor(() => expect(screen.queryByTestId('planner-detail-drawer')).toBeNull());
+
+    fireEvent.click(screen.getByTestId('planner-timeline-bar-41'));
+    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
+    fireEvent.click(screen.getByTestId('planner-side-clear'));
+    await waitFor(() => expect(screen.queryByTestId('planner-detail-drawer')).toBeNull());
+
+    fireEvent.click(screen.getByTestId('planner-timeline-bar-41'));
+    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByTestId('planner-detail-drawer')).toBeNull());
   });
 
   it('puts a proposed case in the action queue', async () => {
