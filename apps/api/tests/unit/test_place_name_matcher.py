@@ -284,3 +284,16 @@ def test_hundreds_of_unmatched_labels_stay_fast():
     for label in labels:
         pn.propose_store_pin(label)
     assert time.perf_counter() - start < 5.0
+
+
+def test_place_word_before_a_centre_word_is_a_weak_named_centre_hint() -> None:
+    """BACKLOG-267 counterexample shape: "<chain> <place> Mall" names a mall, not the town."""
+    table = _table()
+    plain = pn.propose_store_pin("Brightvale", customer_names=["Acme"], table=table)
+    mall = pn.propose_store_pin("Acme Brightvale Mall", customer_names=["Acme"], table=table)
+    chain_left = pn.propose_store_pin("Globex Brightvale Mall", customer_names=["Acme"], table=table)
+    assert plain["named_centre"] is None and plain["confidence"] >= 0.8
+    assert mall["place"] == "Brightvale" and mall["named_centre"] == "brightvale mall"
+    assert mall["confidence"] < 0.55  # Low band: never in the high-confidence bulk selection
+    assert chain_left["named_centre"] == "brightvale mall" and chain_left["confidence"] < 0.55
+    assert pn.suggest_store_location("Acme Brightvale Mall", customer_names=["Acme"], table=table)["reason"] == "match"

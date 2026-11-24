@@ -4113,12 +4113,13 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Open ? 2026-11-22, observed during browser-only MapLibre visual previews. |
+| **Status / parked** | Partly done 2026-11-24 (named-centre confidence rule); UI wording open. |
 | **Effort** | Estimate after the canonical resolver audit. |
 | **Evidence** | Real GET `/api/v1/store-dc/map`: Makro customer15/siteA01 has place name `Walmart Clearwater Mall`, but its proposal is `Clearwater`, confidence0.7/reason`match`, at-28.65,23.98333. The rendered basemap shows a rural area around Schmidtsdrif. It is unconfirmed. Evidence `.tmp/coordinator-20261122/maplibre-proof/preview-2/results.json` and the retained rural-detail PNG. No location was saved or corrected. |
 | **What the work is** | Trace the existing map proposal reader/resolver and canonical confirmation writers before changing rules. Determine whether this is wrong place identity, ambiguity or an insufficiently explained area fallback. Verify mall/city/suburb grain and candidate context; preserve uncertain evidence for steward review. Add a meaningful regression for this counterexample if a rule defect is established. Root cause is not yet proven. |
 | **Behavior / constraints** | Keep the existing proposed/confirmed distinction and explicit steward confirmation. Do not automatically rewrite live coordinates, infer a mall building from a name, weaken validation, or add a second location writer. Current dataset has zero confirmed coordinate pins; the192 proposed points are not verified store positions. |
 | **Out of scope** | Map visual direction/provider selection and automatic confirmation of other proposals. |
+| **Partial fix (2026-11-24)** | Root cause for the Clearwater counterexample: `place_name._proposal_from_text` matched the single word `clearwater` inside `Walmart Clearwater Mall` (method contained, 0.7, Medium) to the GeoNames hamlet Clearwater, Northern Cape. Generic rule added: a matched place directly followed by a centre word (mall, centre, center, plaza, square, junction) is a named shopping centre, so confidence x0.6 (0.7 -> 0.42, Low) and the payload carries `named_centre`. Coordinates unchanged, nothing confirmed, still steward review; it drops out of "Select high confidence". Fourways A02 is unchanged (exact, 0.9). Open: the panel does not yet say "named shopping centre" (map lane file `ProposedPinsPanel.tsx`), and the mall's real suburb needs a steward or a sanctioned geocoder. |
 | **TRIGGER** | Before bulk-confirming store-location proposals, or when store-location accuracy work is authorized. |
 
 

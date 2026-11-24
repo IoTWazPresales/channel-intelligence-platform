@@ -36,6 +36,9 @@ GENERIC_RETAIL_WORDS = frozenset(
     }
 )
 
+# A place word directly followed by one of these names a shopping centre ("Clearwater Mall"),
+# which is often far from the populated place of that name; such a match is only a weak hint.
+_CENTRE_WORDS = frozenset({"mall", "centre", "center", "plaza", "square", "junction"})
 _FUZZY_MIN_LENGTH = 5  # shorter words never match fuzzily
 _FUZZY_MIN_RATIO = 0.86
 _FUZZY_TIE = 0.02  # a different name this close to the best is an ambiguity too
@@ -252,6 +255,16 @@ def _confidence(method: str, *, words: int, ratio: float | None, ambiguous: bool
     return round(value, 3)
 
 
+def _named_centre(key: str, loose: list[str]) -> str | None:
+    """The centre name when the matched words are directly followed by a centre word, else None."""
+    words = key.split()
+    size = len(words)
+    for start in range(len(loose) - size):
+        if loose[start : start + size] == words and loose[start + size] in _CENTRE_WORDS:
+            return " ".join(loose[start : start + size + 1])
+    return None
+
+
 def _proposal_from_text(
     text: str | None, customer_names: list[str | None], table: PlaceTable
 ) -> dict[str, Any] | None:
@@ -277,13 +290,20 @@ def _proposal_from_text(
         method = "fuzzy"
     distinct = _distinct_places(places)
     primary, others = distinct[0], distinct[1:]
+    confidence = _confidence(method, words=key.count(" ") + 1, ratio=ratio, ambiguous=bool(others))
+    centre = _named_centre(key, loose)
+    if centre is not None:
+        # BACKLOG-267: "Walmart Clearwater Mall" is a mall, not the hamlet Clearwater. Keep the
+        # proposal for a steward, but never as high confidence or part of a bulk selection.
+        confidence = round(confidence * _AMBIGUOUS_FACTOR, 3)
     return {
         "place": primary.name,
         "latitude": primary.latitude,
         "longitude": primary.longitude,
         "method": method,
-        "confidence": _confidence(method, words=key.count(" ") + 1, ratio=ratio, ambiguous=bool(others)),
+        "confidence": confidence,
         "matched_text": key,
+        "named_centre": centre,
         "ambiguous": bool(others),
         "alternatives": _alternatives(others),
     }
@@ -323,6 +343,7 @@ def _manual(reason: str) -> dict[str, Any]:
         "method": None,
         "confidence": None,
         "matched_text": None,
+        "named_centre": None,
         "ambiguous": False,
         "alternatives": [],
         "licence": LICENCE_NAME,
