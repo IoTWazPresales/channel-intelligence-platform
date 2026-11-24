@@ -4100,7 +4100,7 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Open - 2026-11-22. Follow-up from the independently reviewed Inventory correction `f8bb446f` / integration `2d374040`. |
+| **Status / parked** | Done - 2026-11-24. Reproduced in the installed Next adapter: with Next's internal URL bound to 127.0.0.1:3107 and a public Host (`inventory.example.test:8443`), all nine non-cover aliases (/, /dashboard, /exceptions, /getting-started, /sell-out, /plan-vs-executed, /shipping, /buy-plans, /stock?lens=inbound) redirected to `localhost:3107`. Localhost Host passed only because Next normalizes 127 to localhost. Fix: one `incomingUrl(request)` helper in `middleware.ts` (request URL plus the incoming Host header, never x-forwarded-host or a query value), used by every branch including the existing cover branch. 18 new adapter cases; middleware suite 70/70. Paths, query filters and canonical destinations unchanged. |
 | **Effort** | Small |
 | **Evidence** | Inventory's loopback origin change was reproduced in the browser and installed Next adapter, then fixed. Other legacy branches in `apps/web/src/middleware.ts` retain `NextURL` cloning. Their origin handling is pre-existing and outside the Inventory correction; those branches have not received the same rebuilt-browser origin proof. |
 | **What the work is** | Audit non-cover aliases (retired Brief routes, stock aliases, buy-plans and inbound) with actual incoming localhost, 127, and public Host/protocol combinations. Reproduce any origin change before extending the existing origin-preserving target construction. Preserve paths, query filters and RSC behavior. |
