@@ -704,7 +704,7 @@ export function BuilderEditorDialog({
                 My target
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                Measured over this tile's dates. Leave the target empty for no target.
+                Measured over the dates this tile uses. Leave the target empty for no target.
               </Typography>
               <Stack direction="row" spacing={1} data-testid="builder-editor-target">
                 <TextField
