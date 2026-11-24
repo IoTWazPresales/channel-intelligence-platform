@@ -14,6 +14,7 @@ import {
 import { tokensFor } from '@/theme/cipTokens';
 
 import { BASEMAP_DOTS, BASEMAP_SIZE } from './basemapDots';
+import { basemapDotStroke, basemapDotStrokeOpacity, basemapUsesLandShade } from './mapBasemap';
 import { MAP_ASPECT_RATIO, basemapStrokeWidth, mapViewBox, type MapBounds } from './mapGeometry';
 
 export type MapSize = { w: number; h: number };
@@ -77,6 +78,9 @@ export const MapCanvas = forwardRef<HTMLDivElement, MapCanvasProps>(function Map
   { label, bounds, svgChildren, children, onSizeChange, panHandlers, grabbing, 'data-testid': testId }, ref,
 ) {
   const theme = useTheme();
+  const landShade = basemapUsesLandShade(bounds);
+  const dotStroke = basemapDotStroke(theme.palette.mode);
+  const dotOpacity = basemapDotStrokeOpacity(bounds);
   const canvasRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => canvasRef.current!);
   useEffect(() => {
@@ -110,7 +114,21 @@ export const MapCanvas = forwardRef<HTMLDivElement, MapCanvasProps>(function Map
         aria-label={label}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }}
       >
-        <path d={BASEMAP_DOTS} fill="none" stroke={theme.palette.mode === 'dark' ? 'rgba(160,185,205,0.42)' : 'rgba(40,70,95,0.45)'} strokeWidth={basemapStrokeWidth(bounds)} strokeLinecap="round" />
+        {landShade ? (
+          <rect
+            width="100%"
+            height="100%"
+            fill={theme.palette.mode === 'dark' ? 'rgba(24, 34, 44, 0.92)' : 'rgba(230, 238, 243, 0.95)'}
+          />
+        ) : null}
+        <path
+          d={BASEMAP_DOTS}
+          fill="none"
+          stroke={dotStroke}
+          strokeOpacity={dotOpacity}
+          strokeWidth={basemapStrokeWidth(bounds)}
+          strokeLinecap="round"
+        />
         {svgChildren}
       </svg>
       {children}

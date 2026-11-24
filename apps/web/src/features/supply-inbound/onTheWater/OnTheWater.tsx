@@ -8,6 +8,7 @@ import { useState, type ReactNode } from 'react';
 
 import { buildOnTheWaterUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
 import { DEFAULT_MAP_SIZE, MapAside, MapCanvas, MapLayout, MapPanel } from '@/features/maps/MapCanvas';
+import { MapHoverCard, MapHoverSectionLabel, MapHoverTitleRow } from '@/features/maps/mapHover';
 import { MapMarker } from '@/features/maps/MapMarker';
 import { apiGet, safeDisplayError } from '@/lib/api';
 import { tokensFor } from '@/theme/cipTokens';
@@ -475,37 +476,25 @@ function ClusterMarker({
 }
 
 function HoverCard({ vessel, cluster, t }: { vessel: Vessel; cluster: Cluster | null; t: Tok }) {
-  const right = vessel.x > 55;
   const multi = (cluster?.vessels.length ?? 1) > 1;
   return (
-    <Box
-      role="tooltip"
-      data-testid="otw-hover-card"
-      sx={{
-        position: 'absolute', zIndex: 5, width: 300, top: `calc(${vessel.y}% - 12px)`, ...(right ? { right: `calc(${100 - vessel.x}% + 26px)` } : { left: `calc(${vessel.x}% + 26px)` }),
-        transform: 'translateY(-50%)', p: 1.5, borderRadius: 1.25, bgcolor: alpha(t.bg.default, 0.97), border: `1px solid ${alpha(t.accent.primary, 0.6)}`, boxShadow: '0 12px 32px rgba(0,0,0,0.35)', pointerEvents: 'none',
-      }}
-    >
+    <MapHoverCard x={vessel.x} y={vessel.y} t={t} testId="otw-hover-card">
       {multi ? (
         <Box sx={{ mb: 1, fontSize: 11, color: t.text.secondary }}>{cluster!.vessels.length} vessels here; this is the soonest. Pick the others from the list.</Box>
       ) : null}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, alignItems: 'baseline' }}>
+      <MapHoverTitleRow>
         <Box component="span" sx={{ fontSize: 13, fontWeight: 700 }}>{vessel.forwarder}</Box>
         <Box component="span" sx={{ fontSize: 11, color: t.text.secondary, fontVariantNumeric: 'tabular-nums' }}>{`ETA at port ${fmtDay(vessel.eta)} · ${fmtUnits(vessel.units)} u · ${fmtMoney(vessel.amount)}`}</Box>
-      </Box>
-      <CardLabel t={t}>Distributors</CardLabel>
+      </MapHoverTitleRow>
+      <MapHoverSectionLabel t={t}>Distributors</MapHoverSectionLabel>
       <Box sx={{ fontSize: 12, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' }}>{nameUnits(vessel.distributors, 5)}</Box>
-      <CardLabel t={t}>Top products · units</CardLabel>
+      <MapHoverSectionLabel t={t}>Top products · units</MapHoverSectionLabel>
       <Box sx={{ fontSize: 12, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' }}>{nameUnits(vessel.products)}</Box>
       <Box sx={{ fontSize: 11, color: t.text.secondary, mt: 0.75 }}>
         {vessel.more_models > 0 ? `+${vessel.more_models} more models · click to see every line` : 'Click to see every line'}
       </Box>
-    </Box>
+    </MapHoverCard>
   );
-}
-
-function CardLabel({ t, children }: { t: Tok; children: ReactNode }) {
-  return <Box sx={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: t.text.muted, mt: 1 }}>{children}</Box>;
 }
 
 function SelectedPanel({ vessel: v, picked, t, amber }: { vessel: Vessel; picked: boolean; t: Tok; amber: string }) {

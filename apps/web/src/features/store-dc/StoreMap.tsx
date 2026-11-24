@@ -13,6 +13,7 @@ import {
   MapLayout,
   MapPanel,
 } from '@/features/maps/MapCanvas';
+import { MapHoverCard, MapHoverSectionLabel, MapHoverTitleRow } from '@/features/maps/mapHover';
 import { MapMarker } from '@/features/maps/MapMarker';
 import { MapViewControls } from '@/features/maps/MapViewControls';
 import { lonSpanOf, panLimits } from '@/features/maps/mapView';
@@ -199,6 +200,7 @@ export function StoreMap() {
   const hoverCluster = clusters.find((group) => group.id === hoverClusterId) ?? null;
   const selected = visible.find((store) => storeKey(store) === selectedKey) ?? null;
   const hover = mapStores.find((store) => storeKey(store) === hoverKey) ?? null;
+  const hoverPin = hoverKey ? placeOf.get(hoverKey) : null;
   const activePin = suggestions.find((store) => storeKey(store) === activePinKey) ?? null;
   const activePosition = activePin ? placeOf.get(storeKey(activePin)) : null;
 
@@ -613,44 +615,58 @@ export function StoreMap() {
                 </Box>
               ) : null}
               {hoverCluster ? (
-                <Box data-testid="store-map-cluster-hover" sx={{
-                  position: 'absolute', left: 8, bottom: 8, maxWidth: '90%', px: 1, py: 0.75,
-                  borderRadius: 1, bgcolor: tokens.bg.elevated,
-                  border: `1px solid ${tokens.border.strong}`, color: tokens.text.primary,
-                  fontSize: 12, pointerEvents: 'none',
-                }}>
-                  <div>{hoverCluster.members.length} stores here · click to zoom in</div>
+                <MapHoverCard
+                  x={hoverCluster.x}
+                  y={hoverCluster.y}
+                  t={tokens}
+                  testId="store-map-cluster-hover"
+                  borderColor={tokens.semantic.warning}
+                >
+                  <Box sx={{ fontSize: 12, lineHeight: 1.45 }}>
+                    {hoverCluster.members.length} stores here · click to zoom in
+                  </Box>
+                  <MapHoverSectionLabel t={tokens}>Stores</MapHoverSectionLabel>
                   {hoverCluster.members.slice(0, CLUSTER_CARD_STORES).map((member) => {
                     const store = storeByKey.get(member.id)!;
                     return (
-                      <div key={member.id}>
+                      <Box key={member.id} sx={{ fontSize: 12, lineHeight: 1.45 }}>
                         {storePlace(store)} · {store.customer_name}
                         {suggestedKeys.has(member.id) ? ' (proposed)' : ''}
-                      </div>
+                      </Box>
                     );
                   })}
                   {hoverCluster.members.length > CLUSTER_CARD_STORES ? (
-                    <div>+{hoverCluster.members.length - CLUSTER_CARD_STORES} more</div>
+                    <Box sx={{ fontSize: 11, color: tokens.text.secondary, mt: 0.75 }}>
+                      +{hoverCluster.members.length - CLUSTER_CARD_STORES} more
+                    </Box>
                   ) : null}
-                </Box>
+                </MapHoverCard>
               ) : null}
-              {hover ? (
-                <Box data-testid="store-map-hover" sx={{
-                  position: 'absolute', left: 8, bottom: 8, maxWidth: '90%', px: 1, py: 0.75,
-                  borderRadius: 1, bgcolor: tokens.bg.elevated,
-                  border: `1px solid ${tokens.border.strong}`, color: tokens.text.primary,
-                  fontSize: 12, pointerEvents: 'none',
-                }}>
-                  <div>{storePlace(hover)}</div>
-                  <div>{hover.site_label}</div>
-                  <div>{hover.customer_name}</div>
-                  <div>Last week {fmt(hover.last_week_units)} units</div>
-                  <div>Stock on hand {fmt(hover.stock_on_hand)}</div>
-                  <div>Weeks of cover {fmt(hover.weeks_of_cover)}</div>
+              {hover && hoverPin ? (
+                <MapHoverCard x={hoverPin.x} y={hoverPin.y} t={tokens} testId="store-map-hover">
+                  <MapHoverTitleRow>
+                    <Box component="span" sx={{ fontSize: 13, fontWeight: 700 }}>{storePlace(hover)}</Box>
+                    <Box component="span" sx={{ fontSize: 11, color: tokens.text.secondary }}>
+                      {hover.site_label}
+                    </Box>
+                  </MapHoverTitleRow>
+                  <Box sx={{ fontSize: 12, color: tokens.text.secondary, mt: 0.5 }}>{hover.customer_name}</Box>
+                  <MapHoverSectionLabel t={tokens}>Sell-through</MapHoverSectionLabel>
+                  <Box sx={{ fontSize: 12, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' }}>
+                    Last week {fmt(hover.last_week_units)} units
+                  </Box>
+                  <Box sx={{ fontSize: 12, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' }}>
+                    Stock on hand {fmt(hover.stock_on_hand)}
+                  </Box>
+                  <Box sx={{ fontSize: 12, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' }}>
+                    Weeks of cover {fmt(hover.weeks_of_cover)}
+                  </Box>
                   {suggestedKeys.has(storeKey(hover)) ? (
-                    <div>confirm location · {hover.location_suggestion?.place} · {hover.location_suggestion?.licence}</div>
+                    <Box sx={{ fontSize: 11, color: tokens.text.secondary, mt: 0.75 }}>
+                      confirm location · {hover.location_suggestion?.place} · {hover.location_suggestion?.licence}
+                    </Box>
                   ) : null}
-                </Box>
+                </MapHoverCard>
               ) : null}
             </MapCanvas>
             <Typography variant="caption" sx={{ display: 'block', px: 0.5, color: tokens.text.muted, fontSize: 11 }}>
