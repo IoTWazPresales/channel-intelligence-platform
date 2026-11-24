@@ -38,8 +38,12 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
   };
   const disabled = (scope: PreviewRequest['scope']) =>
     !previewAllowed(capabilities.data, scope, gateOpts);
-  const blockReason = (scope: PreviewRequest['scope']) =>
-    previewBlockReason(capabilities.data, scope, gateOpts);
+  const blockReason = (scope: PreviewRequest['scope']) => {
+    const reason = previewBlockReason(capabilities.data, scope, gateOpts);
+    if (!reason) return null;
+    if (capabilities.data && !capabilities.data.live_fetch) return null;
+    return reason;
+  };
   const run = (request: PreviewRequest) =>
     start.mutate(request, { onSuccess: (response) => setPreviewId(response.preview_id) });
 

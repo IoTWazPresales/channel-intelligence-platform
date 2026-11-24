@@ -77,8 +77,9 @@ describe('DiscoveryLens', () => {
   it('disables every preview when live page checking is off', async () => {
     state.live = false;
     mount();
-    await screen.findByText(/Live page checking is off on this server/);
-    expect(await screen.findByTestId('discover-reporting-reason')).toHaveTextContent(/Live page checking is off/);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Live page checking is off on this server/);
+    expect(screen.queryByTestId('discover-reporting-reason')).not.toBeInTheDocument();
     for (const button of screen.getAllByRole('button', { name: /^Discover/ })) expect(button).toBeDisabled();
   });
 
