@@ -262,7 +262,10 @@ describe('MarketSurface', () => {
   });
 
 describe('MarketSurface real counts and the intelligence read (BACKLOG-226)', () => {
-  beforeEach(resetState);
+  beforeEach(() => {
+    resetState();
+    nav.search = 'tab=observations';
+  });
   const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const meta = () => screen.getByText(/monitored listings/);
   const page = (n: number) =>
