@@ -83,21 +83,26 @@ TEMPLATES: tuple[Template, ...] = (
             "required": ["customer"],
         },
         widgets=(
-            TemplateWidget("Sell-through units", "kpi", (f"{CST}.units",), layout=(0, 0, 3, 5), display=_KPI_SPARK),
-            TemplateWidget("Units per week", "kpi", (f"{CST}.units_per_week",), layout=(3, 0, 3, 5), display=_KPI_COMPARE),
-            TemplateWidget(
-                "Reported stock on hand (latest report)", "kpi", (f"{CST}.reported_soh",), layout=(6, 0, 3, 5),
-                display={**_KPI_PLAIN, "caption": "as of latest report on or before {to}"},
-            ),
-            TemplateWidget("Stores / sites reporting", "kpi", (f"{CST}.stores_reporting",), layout=(9, 0, 3, 5), display=_KPI_PLAIN),
+            # Dashboard V2 (Warren-approved look): sales KPIs, then sales charts, then stock health below them.
+            TemplateWidget("Sell-through units", "kpi", (f"{CST}.units",), layout=(0, 0, 4, 5), display=_KPI_SPARK),
+            TemplateWidget("Units per week", "kpi", (f"{CST}.units_per_week",), layout=(4, 0, 4, 5), display=_KPI_COMPARE),
+            TemplateWidget("Stores / sites reporting", "kpi", (f"{CST}.stores_reporting",), layout=(8, 0, 4, 5), display=_KPI_PLAIN),
             TemplateWidget("Sell-through units by week", "line", (f"{CST}.units",), ("period",), "week", (0, 5, 8, 8)),
             TemplateWidget("Top products", "hbar", (f"{CST}.units",), ("product",), layout=(8, 5, 4, 8), display=_TOP15),
+            TemplateWidget("Sell-through by store / site", "hbar", (f"{CST}.units",), ("site_label",), layout=(0, 13, 12, 8), display=_TOP15),
+            TemplateWidget(
+                "Reported stock on hand (latest report)", "kpi", (f"{CST}.reported_soh",), layout=(0, 21, 6, 5),
+                display={**_KPI_PLAIN, "caption": "as of latest report on or before {to}"},
+            ),
+            TemplateWidget(
+                "Weeks of cover", "kpi", (f"{CST}.stock_cover",), layout=(6, 21, 6, 5),
+                display={**_KPI_PLAIN, "caption": "4 weeks of sell-through ending on each customer's last reported day"},
+            ),
             TemplateWidget(
                 "Stock beside sell-through, by product", "table",
                 (f"{CST}.units", f"{CST}.units_per_week", f"{CST}.reported_soh", f"{CST}.stock_cover"), ("product",),
-                layout=(0, 13, 12, 10), sort=(f"{CST}.units", "desc"),
+                layout=(0, 26, 12, 10), sort=(f"{CST}.units", "desc"),
             ),
-            TemplateWidget("Sell-through by store / site", "hbar", (f"{CST}.units",), ("site_label",), layout=(0, 23, 12, 8), display=_TOP15),
         ),
         left_out=(
             LeftOut("Restock flags", pending=f"{CST}.restock_flag"),
@@ -122,21 +127,25 @@ TEMPLATES: tuple[Template, ...] = (
             "required": [],
         },
         widgets=(
-            TemplateWidget("Sell-through units", "kpi", (f"{CST}.units",), layout=(0, 0, 4, 5), display=_KPI_SPARK),
-            TemplateWidget("Units per week", "kpi", (f"{CST}.units_per_week",), layout=(4, 0, 4, 5), display=_KPI_COMPARE),
-            TemplateWidget(
-                "Reported stock on hand (latest report)", "kpi", (f"{CST}.reported_soh",), layout=(8, 0, 4, 5),
-                display={**_KPI_PLAIN, "caption": "as of latest report on or before {to}"},
-            ),
+            TemplateWidget("Sell-through units", "kpi", (f"{CST}.units",), layout=(0, 0, 6, 5), display=_KPI_SPARK),
+            TemplateWidget("Units per week", "kpi", (f"{CST}.units_per_week",), layout=(6, 0, 6, 5), display=_KPI_COMPARE),
             TemplateWidget("Sell-through by customer", "hbar", (f"{CST}.units",), ("customer",), layout=(0, 5, 6, 8), display=_TOP15),
             TemplateWidget(
                 "Sell-through by customer, monthly", "line", (f"{CST}.units",), ("customer", "period"), "month", (6, 5, 6, 8),
             ),
             TemplateWidget(
+                "Reported stock on hand (latest report)", "kpi", (f"{CST}.reported_soh",), layout=(0, 13, 6, 5),
+                display={**_KPI_PLAIN, "caption": "as of latest report on or before {to}"},
+            ),
+            TemplateWidget(
+                "Weeks of cover", "kpi", (f"{CST}.stock_cover",), layout=(6, 13, 6, 5),
+                display={**_KPI_PLAIN, "caption": "4 weeks of sell-through ending on each customer's last reported day"},
+            ),
+            TemplateWidget(
                 "Stock beside sell-through, by customer", "table",
                 (f"{CST}.units", f"{CST}.units_per_week", f"{CST}.reported_soh", f"{CST}.stock_cover", f"{CST}.stores_reporting"),
                 ("customer",),
-                layout=(0, 13, 12, 8), sort=(f"{CST}.units", "desc"),
+                layout=(0, 18, 12, 8), sort=(f"{CST}.units", "desc"),
             ),
         ),
         left_out=(
@@ -192,30 +201,30 @@ TEMPLATES: tuple[Template, ...] = (
             "required": [],
         },
         widgets=(
-            TemplateWidget("Sell-through units", "kpi", (f"{CST}.units",), layout=(0, 0, 3, 5), display=_KPI_SPARK),
-            TemplateWidget("Units per week", "kpi", (f"{CST}.units_per_week",), layout=(3, 0, 3, 5), display=_KPI_COMPARE),
+            TemplateWidget("Sell-through units", "kpi", (f"{CST}.units",), layout=(0, 0, 6, 5), display=_KPI_SPARK),
+            TemplateWidget("Units per week", "kpi", (f"{CST}.units_per_week",), layout=(6, 0, 6, 5), display=_KPI_COMPARE),
+            TemplateWidget("Sell-through by account", "hbar", (f"{CST}.units",), ("customer",), layout=(0, 5, 12, 8), display=_TOP15),
+            # Monthly: an assigned book can mix weekly and monthly reporters, and sell-through is
+            # never split finer than it was reported (W-ONE-STORED-PERIOD). BACKLOG-229.
             TemplateWidget(
-                "Reported stock on hand (latest report)", "kpi", (f"{CST}.reported_soh",), layout=(6, 0, 3, 5),
+                "Sell-through units by month", "line", (f"{CST}.units",), ("period",), "month", (0, 13, 12, 8),
+            ),
+            TemplateWidget(
+                "Reported stock on hand (latest report)", "kpi", (f"{CST}.reported_soh",), layout=(0, 21, 6, 5),
                 display={**_KPI_PLAIN, "caption": "as of latest report on or before {to}"},
             ),
             TemplateWidget(
-                "Weeks of cover", "kpi", (f"{CST}.stock_cover",), layout=(9, 0, 3, 5),
+                "Weeks of cover", "kpi", (f"{CST}.stock_cover",), layout=(6, 21, 6, 5),
                 display={**_KPI_PLAIN, "caption": "4 weeks of sell-through ending on each customer's last reported day"},
             ),
-            TemplateWidget("Sell-through by account", "hbar", (f"{CST}.units",), ("customer",), layout=(0, 5, 6, 8), display=_TOP15),
             TemplateWidget(
-                "Weeks of cover by account", "hbar", (f"{CST}.stock_cover",), ("customer",), layout=(6, 5, 6, 8), display=_TOP15,
+                "Weeks of cover by account", "hbar", (f"{CST}.stock_cover",), ("customer",), layout=(0, 26, 12, 8), display=_TOP15,
             ),
             TemplateWidget(
                 "Stock, cover and sell-through by account", "table",
                 (f"{CST}.units", f"{CST}.units_per_week", f"{CST}.reported_soh", f"{CST}.stock_cover"),
                 ("customer",),
-                layout=(0, 13, 12, 8), sort=(f"{CST}.units", "desc"),
-            ),
-            # Monthly: an assigned book can mix weekly and monthly reporters, and sell-through is
-            # never split finer than it was reported (W-ONE-STORED-PERIOD). BACKLOG-229.
-            TemplateWidget(
-                "Sell-through units by month", "line", (f"{CST}.units",), ("period",), "month", (0, 21, 12, 8),
+                layout=(0, 34, 12, 8), sort=(f"{CST}.units", "desc"),
             ),
         ),
         left_out=(

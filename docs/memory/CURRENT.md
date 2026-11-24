@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-24 — store map review fixes (smaller semi-transparent land dots, Move+undo, shipping-map glow). Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it. Last prior live acceptance: 22 November (`c685bf63`).
 **Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
-**Next agent:** Dashboard V2 slice 1 (KPI targets) merged; next wave item is store location fixes (BACKLOG-267), then BACKLOG-266. Read [durable handoff](../handoffs/2026-11-23/README.md).
+**Next agent:** Dashboard V2 slices 1 and 2 merged (BACKLOG-269 done except light-theme screenshots); BACKLOG-267 panel caption done. Next: BACKLOG-266 audit, then price fixes R-04/R-05. Read [durable handoff](../handoffs/2026-11-23/README.md).
 
 ## Branch, database and topology
 
@@ -34,7 +34,7 @@
 
 ## Targets / Dashboard V2 - slice 1 shipped 2026-11-24
 
-- Personal KPI targets live on existing KPI widgets as `definition_v2.display.target` (no migration). Editor: Number options -> My target. Tile: target line, attainment rail, On track / At risk / Behind. The remaining items are listed in BACKLOG-269 under Still open.
+- Personal KPI targets live on existing KPI widgets as `definition_v2.display.target` (no migration). Editor: Number options -> My target. Tile: target line, attainment rail, On track / At risk / Behind. Slice 2 (2026-11-24) adds the home dashboard choice and role-default reset (`dashboard.home` ui-layout plus the tenant setting `dashboard.job_defaults`, unset on live), stock-below-sales starters, the Overview stock health panel, attention owner/age, target period and the trend target line. See BACKLOG-269.
 
 - Only a design spec and standalone HTML Dashboard/target-builder prototypes were recovered. Submit opens an illustrative dialog; no matching new Targets route/API/product implementation was found. Draft dark/light styling exists; the requested live redesign is not delivered.
 - Exact original drafts now preserved in`docs/design/dashboard-v2/` and`docs/specs/DASHBOARD_V2.md`; they retain design-only provenance. See handoff/TARGETS_STATUS.md for source evidence and limitations.

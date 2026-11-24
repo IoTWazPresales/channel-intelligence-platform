@@ -128,7 +128,9 @@ export type WidgetDisplay = {
   series?: Record<string, { kind?: 'bar' | 'line' | 'area'; axis?: 'left' | 'right' }>;
   kpi?: { compare?: boolean; sparkline?: boolean };
   /** Personal KPI target over this widget's own window (Dashboard V2 s.6). */
-  target?: { value: number; direction: 'at_least' | 'at_most'; risk_margin?: number };
+  target?: { value: number; direction: 'at_least' | 'at_most'; risk_margin?: number; period?: { from: string; to: string } };
+  /** Trend chart target for each period bucket; additive measures only (Dashboard V2 s.4). */
+  target_line?: { value: number };
   table?: { rules?: ColourRule[] };
   /** Starter KPI caption, e.g. "as of latest report on or before {to}". */
   caption?: string;

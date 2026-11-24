@@ -113,7 +113,9 @@ export function requestFor(def: DefinitionV2, ctx: RequestContext): RequestPlan 
   }
 
   const ignored = new Set(def.dashboard?.ignore_filters ?? []);
-  const fixed = def.dashboard?.fixed_window;
+  // A KPI target with its own period measures over those dates (Dashboard V2 s.6), whatever the bar says.
+  const targetPeriod = def.dashboard?.fixed_window ? undefined : def.display?.target?.period;
+  const fixed = def.dashboard?.fixed_window ?? targetPeriod;
   if (fixed && !validFixedWindow(fixed)) {
     return { status: 'blocked', reason: 'invalid_window', message: 'Choose valid fixed dates with the start on or before the end.', notFiltered };
   }
@@ -121,7 +123,10 @@ export function requestFor(def: DefinitionV2, ctx: RequestContext): RequestPlan 
     if (key === 'date' && fixed) continue;
     notFiltered.push({ key, label: key === 'date' ? 'Date' : breakdownLabel(catalog, key), reason: 'this widget explicitly ignores this dashboard filter.' });
   }
-  if (fixed) notFiltered.push({ key: 'date', label: 'Date', reason: `this widget uses fixed dates, ${fixed.from} to ${fixed.to}.` });
+  if (fixed) {
+    const why = targetPeriod ? 'this target uses its own dates' : 'this widget uses fixed dates';
+    notFiltered.push({ key: 'date', label: 'Date', reason: `${why}, ${fixed.from} to ${fixed.to}.` });
+  }
   const requestedWindow = fixed ?? (ignored.has('date') ? null : ctx.window);
 
   // Required bar filters still apply unless the widget explicitly opts out.

@@ -46,7 +46,7 @@ type UsersResponse = {
 const ROLES: UserRole[] = ['admin', 'steward', 'planner', 'viewer'];
 
 /** N-0100 part B: a job is what the person does. It is not a role and grants no access. */
-const JOBS: { value: string; label: string }[] = [
+export const JOBS: { value: string; label: string }[] = [
   { value: 'account_manager', label: 'Account manager' },
   { value: 'product_manager', label: 'Product manager' },
   { value: 'finance', label: 'Finance' },

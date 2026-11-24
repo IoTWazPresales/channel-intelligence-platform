@@ -134,6 +134,11 @@ export function ProposedPinsPanel({ stores, saving, errors, onConfirm, onSkip, i
                       {' '}· {confidenceText(suggestion)}
                       {methodLabel(suggestion?.method) ? ` · ${methodLabel(suggestion?.method)}` : ''}
                     </Typography>
+                    {suggestion?.named_centre ? (
+                      <Typography variant="caption" sx={{ display: 'block', color: tokens.semantic.warning }} data-testid="proposal-named-centre">
+                        Named shopping centre: {suggestion.named_centre}. The proposed place is the town of that name, which may be far from the centre. Check it.
+                      </Typography>
+                    ) : null}
                     {suggestion?.ambiguous ? (
                       <Typography variant="caption" sx={{ display: 'block', color: tokens.semantic.warning }}>
                         More than one place has this name. Check it, or pick another:

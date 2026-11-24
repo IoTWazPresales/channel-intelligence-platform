@@ -19,7 +19,10 @@ import { apiDelete, apiGet } from '@/lib/api';
 import { briefSignalsQueryKey } from '@/lib/myAccounts';
 import { useMyAccountsChoice } from '@/lib/useMyAccountsCleared';
 
+import { HomeDashboardControls, useHomeDashboardId } from './HomeDashboardControls';
+import { attentionAge, pickHome } from './homeDashboard';
 import { overviewAttentionFirst } from './overviewPaths';
+import { StockHealthPanel } from './StockHealthPanel';
 import { useClientReady } from './useClientReady';
 
 type BriefSignalsResponse = {
@@ -124,7 +127,8 @@ export function OverviewHub() {
   const signals = brief?.signals ?? [];
   const urgent = signals.filter((s) => s.severity === 'stop' || s.severity === 'warn');
   const informational = signals.filter((s) => s.severity === 'ok');
-  const active = dashboards[0];
+  const homeId = useHomeDashboardId();
+  const { active } = pickHome(dashboards, homeId);
   const widgets = active?.widgets ?? [];
 
   const awaitingBrief = !ready || briefQ.isLoading;
@@ -139,7 +143,8 @@ export function OverviewHub() {
           : 'No dashboard yet. Open the editor to add widgets.'
       }
       actions={
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          {ready ? <HomeDashboardControls dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))} activeId={active?.id} /> : null}
           <Typography variant="caption" component="span" id="overview-columns-label">
             Charts per row
           </Typography>
@@ -210,6 +215,13 @@ export function OverviewHub() {
     </Panel>
   );
 
+  const dashboardWithStock = (
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
+      {dashboard}
+      {ready ? <StockHealthPanel /> : null}
+    </Stack>
+  );
+
   const attention = (
     <Stack spacing={1.5} data-testid="attention-zone">
       <Panel
@@ -243,7 +255,7 @@ export function OverviewHub() {
                   key={s.id}
                   severity={signalSeverity(s)}
                   primary={s.title}
-                  secondary={s.detail || s.meta || undefined}
+                  secondary={[s.detail || s.meta, s.owner_label ?? 'Unassigned', attentionAge(s.age_at, s.age_basis)].filter(Boolean).join(' · ')}
                   figure={s.meta ?? undefined}
                   href={s.action_href}
                 />
@@ -319,7 +331,7 @@ export function OverviewHub() {
         {stackAttention ? (
           <>
             {attention}
-            {dashboard}
+            {dashboardWithStock}
           </>
         ) : (
           <Box
@@ -332,7 +344,7 @@ export function OverviewHub() {
               '& > *': { minWidth: 0, maxWidth: '100%' },
             }}
           >
-            {dashboard}
+            {dashboardWithStock}
             {attention}
           </Box>
         )}

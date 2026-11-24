@@ -174,7 +174,7 @@ def _shape(raw: Any) -> tuple[dict[str, Any], V2Request]:
     return raw, req
 
 
-_TARGET_KEYS = frozenset({"value", "direction", "risk_margin"})
+_TARGET_KEYS = frozenset({"value", "direction", "risk_margin", "period"})
 _TARGET_DIRECTIONS = frozenset({"at_least", "at_most"})
 
 
@@ -189,7 +189,7 @@ def _check_target(target: Any) -> None:
     measure, filters and dates are never copied into a second query document.
     """
     if not isinstance(target, dict) or set(target) - _TARGET_KEYS:
-        raise _refuse("definition_v2.display.target has only value, direction and risk_margin.")
+        raise _refuse("definition_v2.display.target has only value, direction, risk_margin and period.")
     if not _finite_number(target.get("value")):
         raise _refuse("definition_v2.display.target.value is a number.")
     if target.get("direction") not in _TARGET_DIRECTIONS:
@@ -197,6 +197,35 @@ def _check_target(target: Any) -> None:
     margin = target.get("risk_margin")
     if margin is not None and (not _finite_number(margin) or margin < 0):
         raise _refuse("definition_v2.display.target.risk_margin is zero or more.")
+    period = target.get("period")
+    if period is not None:
+        # The target's own dates (spec s.6 period.kind fixed). The tile then measures over them.
+        if not isinstance(period, dict) or set(period) != {"from", "to"}:
+            raise _refuse("definition_v2.display.target.period has from and to.")
+        try:
+            start, end = date.fromisoformat(str(period["from"])), date.fromisoformat(str(period["to"]))
+        except ValueError as exc:
+            raise _refuse("definition_v2.display.target.period dates are YYYY-MM-DD.") from exc
+        if start > end:
+            raise _refuse("definition_v2.display.target.period.from is on or before to.")
+
+
+def _check_target_line(display: dict[str, Any] | None, plan: Plan, measures: list[str], dm: DataModel) -> None:
+    """A trend chart's target per period bucket (Dashboard V2 s.4): additive measures only.
+
+    Distinct counts, rates, ratios and snapshots are never split into per-period targets.
+    """
+    line = (display or {}).get("target_line")
+    if line is None:
+        return
+    if not isinstance(line, dict) or set(line) != {"value"} or not _finite_number(line.get("value")):
+        raise _refuse("definition_v2.display.target_line is {value: number}, the target for each period.")
+    if "period" not in plan.breakdowns:
+        raise _refuse("definition_v2.display.target_line needs a period breakdown.")
+    for measure_id in measures:
+        m = dm.measure(measure_id)
+        if m is None or getattr(m, "additivity", None) != "additive":
+            raise _refuse("A target line is only for measures that add up over time.", measure_id)
 
 def _clean(plan: Plan) -> bool:
     return plan.ok and not plan.refusals
@@ -308,6 +337,7 @@ def check_definition(
     if not _clean(plan):
         raise DefinitionRefused(plan.refusals or [Refusal(measure=None, reason="definition_v2 refused by the v2 planner.")])
 
+    _check_target_line(raw.get("display"), plan, list(req.measures), dm)
     mirror, v1_equivalent = _v1_mirror(dm, plan, req, v1_catalog)
     if fixed:
         v1_equivalent = False  # v1 delivery cannot carry a stored fixed date window.

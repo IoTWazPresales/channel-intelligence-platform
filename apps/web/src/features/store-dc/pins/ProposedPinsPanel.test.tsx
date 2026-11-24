@@ -55,6 +55,15 @@ describe('ProposedPinsPanel', () => {
     expect(rows[1]).toHaveTextContent('Close spelling');
   });
 
+  it('says when the label names a shopping centre rather than the town (BACKLOG-267)', () => {
+    renderPanel([store('Chain A Examplevale Mall', { confidence: 0.42, named_centre: 'examplevale mall' }), store('Chain B Otherton', {}, 2)]);
+    const rows = screen.getAllByTestId('proposed-pin-row');
+    const mall = rows.find((r) => r.textContent?.includes('Examplevale Mall'))!;
+    const town = rows.find((r) => r.textContent?.includes('Otherton'))!;
+    expect(within(mall).getByTestId('proposal-named-centre')).toHaveTextContent('Named shopping centre: examplevale mall');
+    expect(within(town).queryByTestId('proposal-named-centre')).toBeNull();
+  });
+
   it('shows nothing when there are no proposals', () => {
     renderPanel([]);
     expect(screen.getByTestId('proposed-pins')).toHaveTextContent('No proposed pins');

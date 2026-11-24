@@ -1140,6 +1140,7 @@ export function TrendChart({
   initialControls,
   datumActions,
   rankKey,
+  reference,
 }: {
   data: Row[];
   x: string;
@@ -1193,6 +1194,8 @@ export function TrendChart({
    * right when every row has a value for that series; a chart with one series per category sets it.
    */
   rankKey?: string;
+  /** Horizontal target line on the value axis (Dashboard V2 trend target per period); time charts only. */
+  reference?: { value: number; label: string };
 }) {
   const c = useChartTheme();
   const motion = useChartMotion();
@@ -1375,6 +1378,17 @@ export function TrendChart({
               const s = series.find((s) => s.key === String(item.dataKey));
               return [(s ? seriesFmt(s) : fmt).full(Number(v)), String(name)];
             }} cursor={{ fill: c.cursor }} />
+          {reference && !categoryHorizontal ? (
+            <ReferenceLine
+              y={reference.value}
+              yAxisId={hasRight ? 'left' : 0}
+              stroke={c.warning}
+              strokeDasharray="4 3"
+              ifOverflow="extendDomain"
+              label={{ value: reference.label, position: 'insideTopRight', fill: c.warning, fontSize: 11 }}
+              data-testid="chart-target-line"
+            />
+          ) : null}
           {series.map((s, i) =>
             s.kind === 'bar' ? (
               <Bar

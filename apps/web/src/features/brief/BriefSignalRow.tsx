@@ -16,6 +16,11 @@ export type BriefSignal = {
   action_href: string;
   suggested?: boolean;
   data_unavailable?: boolean;
+  /** Dashboard V2: sourced owner and age only; absent means Unassigned / Age unavailable. */
+  owner_label?: string | null;
+  owner_user_id?: number | null;
+  age_at?: string | null;
+  age_basis?: string | null;
 };
 
 export function BriefSignalRow({ signal }: { signal: BriefSignal }) {
