@@ -18,6 +18,15 @@ from app.services.store_dc.stock_actions import (
 
 
 @pytest.fixture(autouse=True)
+def _tenant_vat_rate(monkeypatch):
+    """Test data: the tenant's own VAT rate (Opus R-05: nothing is built in)."""
+    monkeypatch.setattr(
+        "app.services.commercial_tenant_profile.configured_vat_rate_pct",
+        lambda tenant_id="default": 0.15,
+    )
+
+
+@pytest.fixture(autouse=True)
 def _no_budget_ledger(monkeypatch):
     monkeypatch.setattr("app.services.budget_ledger.used_usd", lambda *_a, **_k: None)
 
@@ -673,13 +682,15 @@ def test_aged_stock_price_is_the_target_customers_sellthrough_price(monkeypatch)
     class Session:
         def execute(self, statement, *_a, **_k):
             seen.append(statement)
-            return _Rows([(9, date(2026, 10, 26), 80)])
+            return _Rows([(9, date(2026, 10, 26), 80, "ex_vat")])
 
     price = actions._srp_for_line(Session(), customer_id=3, product_id=9, tenant_id="tenant-a")
     sql = str(
         seen[0].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
     ).lower()
-    assert price == 80.0
+    # Opus R-04: an ex-VAT price is grossed up by the tenant rate (0.15 test data) to the SRP.
+    assert price == pytest.approx(92.0)
+    assert "vat_basis" in sql
     assert len(seen) == 1
     assert "fact_customer_sellthrough" in sql
     assert "fact_customer_sellthrough.customer_id = 3" in sql

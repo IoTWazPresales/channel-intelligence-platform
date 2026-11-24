@@ -4179,3 +4179,11 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 | **Audit** | Palette, surfaces, borders, accent, semantic colours and radii (card 12, control 10, chip 8) already matched `docs/design/dashboard-v2/{index,targets-builder}.html` in both modes. Two drifts fixed: secondary text alpha 0.72 -> 0.82 (dark `@cip/ui` tokens and `lightTokens`), dark Paper shadow 0.35 -> 0.25. |
 | **Scope** | Tokens and MUI theme only; no new libraries; per-page `alpha(text.primary, 0.72)` overrides left as they are. Test: `cipTheme.test.ts` asserts the mockup values. |
 | **Not done** | Mockup "ink" colours for status text on tinted tiles (`--good-ink` etc.) are not tokens yet; add them only when a component needs them. |
+
+## BACKLOG-273 - Opus R-04/R-05: VAT-inclusive planner SRP, tenant VAT rate, gazetteer from tenant country
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Merged** 2026-11-24 (branch `fix/opus-r04-r05-vat-gazetteer` @ `84db4e0b`; Warren t417u: "whatever is better and fixes this" -> 15%). Live rate 0.15 is saved through Settings -> tenant profile at deploy; Done once live SRP is proven VAT-inclusive on 1-2 products. |
+| **Why** | 2,804 of 2,863 live prices are ex-VAT; the planner and aged-stock Promote showed SRP from them without VAT, and the code assumed an implicit 15%. |
+| **What** | `configured_vat_rate_pct` (None when unset, never a default); `srp_from_price` + `srp` / `srp_reason`; case-line VAT and the SOH check divisor from the tenant rate (`vat_rate_not_configured` when unset); place table chosen by `tenant.country` (`no_gazetteer_for_country` otherwise); VAT rate field in Settings. Tests: 211 pytest, 75 vitest on the branch. |

@@ -65,6 +65,7 @@ type TenantCommercialProfile = {
   lineup_export_sheets?: { net_requirement: string; draft_lineup: string };
   lineup_export_columns?: LineupExportColumn[];
   overrides_present: string[];
+  vat_rate_pct?: number;
   hard_enforce_budget: boolean;
   money_ceiling_usd: number | null;
   support_norms_trailing_quarters: number;
@@ -119,6 +120,8 @@ export default function SettingsPage() {
     useState<LineIdentifierPreference>('sku');
   const [reportingCadence, setReportingCadence] = useState<ReportingCadence>('weekly_monday');
   const [wocMinVelocityDays, setWocMinVelocityDays] = useState(90);
+  // Opus R-05: shown only when the tenant set it; never pre-filled with a country rate.
+  const [vatRatePct, setVatRatePct] = useState('');
   const [exportNetReqSheet, setExportNetReqSheet] = useState('NetRequirement');
   const [exportDraftSheet, setExportDraftSheet] = useState('DraftLineup');
   const [exportColumns, setExportColumns] = useState<LineupExportColumn[]>([]);
@@ -136,6 +139,9 @@ export default function SettingsPage() {
     }
     if (tenantProfileQuery.data.reporting_cadence) {
       setReportingCadence(tenantProfileQuery.data.reporting_cadence);
+    }
+    if (tenantProfileQuery.data.overrides_present?.includes('vat_rate_pct') && typeof tenantProfileQuery.data.vat_rate_pct === 'number') {
+      setVatRatePct(String(tenantProfileQuery.data.vat_rate_pct));
     }
     if (typeof tenantProfileQuery.data.woc_min_velocity_days === 'number') {
       setWocMinVelocityDays(tenantProfileQuery.data.woc_min_velocity_days);
@@ -158,6 +164,7 @@ export default function SettingsPage() {
         line_identifier_preference: lineIdentifierPreference,
         reporting_cadence: reportingCadence,
         woc_min_velocity_days: wocMinVelocityDays,
+        vat_rate_pct: vatRatePct.trim() ? Number(vatRatePct) : undefined,
         lineup_export_net_requirement_sheet: exportNetReqSheet.trim() || undefined,
         lineup_export_draft_sheet: exportDraftSheet.trim() || undefined,
         lineup_export_columns: exportColumns.length ? exportColumns : undefined,
@@ -334,6 +341,17 @@ export default function SettingsPage() {
               fullWidth
               helperText="Thin history below this writes NULL cover (clamp 28-90). Default 90."
               inputProps={{ 'data-testid': 'tenant-profile-woc-min-velocity-days', min: 28, max: 90 }}
+            />
+            <TextField
+              label="VAT rate"
+              type="number"
+              value={vatRatePct}
+              onChange={(ev) => setVatRatePct(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              placeholder="Not set"
+              helperText="As a fraction, for example 0.15. Planner SRP from ex-VAT prices, case-line VAT and the stock cost check use it. Not set means those show as not available."
+              inputProps={{ 'data-testid': 'tenant-profile-vat-rate', min: 0, max: 0.99, step: 0.005 }}
             />
             <TextField
               label="Lineup export - Net requirement sheet"

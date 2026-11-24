@@ -629,8 +629,9 @@ def _compose_suggestion_row(
     volume["grain_filters"] = {"product_id": pid, "customer_id": customer_id}
 
     # Recompute supplies evidence; the client separately preserves deliberate dirty edits.
-    if figures.get("price") is not None:
-        srp, srp_source = float(figures["price"]), planner_sellthrough.SOURCE_LABEL
+    # Opus R-04: SRP is the VAT-inclusive price (ex-VAT grossed up by the tenant rate).
+    if figures.get("srp") is not None:
+        srp, srp_source = float(figures["srp"]), planner_sellthrough.SOURCE_LABEL
     else:
         srp, srp_source = None, None
 
@@ -699,7 +700,9 @@ def _compose_suggestion_row(
         "intake_weighted": cost_json,
         # Why a figure is missing. A key is None when sell-through supplied the figure.
         "missing": {
-            "price": None if srp is not None else figures.get("price_reason"),
+            "price": None
+            if srp is not None
+            else (figures.get("srp_reason") or figures.get("price_reason")),
             "cost": None if cost_json.get("cost_basis") is not None else figures.get("cost_reason"),
             "units": None if volume.get("available") else volume.get("reason"),
             "stock": figures.get("soh_reason"),
@@ -1214,6 +1217,13 @@ def create_case_from_promo_draft(
     session.add(case)
     session.flush()
 
+    # Opus R-05: line VAT is the tenant's own rate; no country rate is built in.
+    from app.services.commercial_tenant_profile import configured_vat_rate_pct
+
+    line_vat_rate = configured_vat_rate_pct(tenant)
+    if line_vat_rate is None:
+        raise ValueError("vat_rate_not_configured")
+
     margin, margin_source = resolve_default_margin(session, case.customer_id)
     if margin is None:
         margin = 0.12
@@ -1301,7 +1311,7 @@ def create_case_from_promo_draft(
             distributor_id=int(did) if did is not None else None,
             pod_quarter=pod,
             srp=float(srp),
-            vat_rate=0.15,
+            vat_rate=line_vat_rate,
             dealer_margin_pct=float(margin),
             margin_source=margin_source or "customer_default",
             cost_basis=cost_basis,

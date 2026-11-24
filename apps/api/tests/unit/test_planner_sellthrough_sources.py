@@ -47,6 +47,17 @@ DROPPED = (
     "cpor_case ",
     "from cpor_case",
 )
+
+
+@pytest.fixture(autouse=True)
+def _tenant_vat_rate(monkeypatch):
+    """Test data: the tenant's own VAT rate (Opus R-05: nothing is built in)."""
+    monkeypatch.setattr(
+        "app.services.commercial_tenant_profile.configured_vat_rate_pct",
+        lambda tenant_id="default": 0.15,
+    )
+
+
 CUTOFF = date(2026, 1, 5)
 LATEST = date(2026, 2, 23)
 
@@ -141,7 +152,8 @@ def _book_data(
     return {
         "cutoff": [(CUTOFF,), (date(2026, 2, 9),)],
         "window": window,
-        "price": [(7, LATEST, price)] if price is not None else [],
+        # Incl-VAT price, so SRP is the price as reported (Opus R-04 gross-up is tested on its own).
+        "price": [(7, LATEST, price, "inc_vat")] if price is not None else [],
         "cost": [(7, LATEST, mac, cost)] if (mac is not None or cost is not None) else [],
         "products": [(7,), (9,)],
     }

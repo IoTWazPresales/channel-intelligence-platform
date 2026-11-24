@@ -18,8 +18,13 @@ from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import CustomerLocation, DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.store_dc import SiteCandidate
+from app.services import tenant_settings
 from app.services.store_dc.candidates import served_customer_ids
-from app.services.store_dc.place_name import place_name_from_raw, suggest_store_location
+from app.services.store_dc.place_name import (
+    place_name_from_raw,
+    place_table_for_country,
+    suggest_store_location,
+)
 from app.services.store_dc.rules import (
     cover_weeks,
     is_weekly,
@@ -51,7 +56,12 @@ def build_store_map(
     include_proposals: bool = True,
 ) -> dict[str, Any]:
     """One row per store per customer. ``location_suggestion`` is the offline pin proposal for an
-    unpinned store; it is computed here and never saved (``include_proposals=False`` skips it)."""
+    unpinned store; it is computed here and never saved (``include_proposals=False`` skips it).
+    Proposals use the gazetteer of the tenant's ``tenant.country`` setting (Opus R-05)."""
+    place_table = None
+    if include_proposals:
+        country = tenant_settings.get_setting(db, tenant_id, tenant_settings.KEY_TENANT_COUNTRY)
+        place_table = place_table_for_country(country.get("code") if isinstance(country, dict) else None)
     stmt = select(
         FactCustomerSellthrough.customer_id,
         FactCustomerSellthrough.product_id,
@@ -188,7 +198,10 @@ def build_store_map(
                 "location_suggestion": None
                 if pinned or not include_proposals
                 else suggest_store_location(
-                    display[key], place_name=place_name, customer_names=customer_words.get(customer_id)
+                    display[key],
+                    place_name=place_name,
+                    customer_names=customer_words.get(customer_id),
+                    table=place_table,
                 ),
                 "location_id": loc.id if loc is not None else None,
                 "last_week_start": last_period.isoformat() if last_period else None,

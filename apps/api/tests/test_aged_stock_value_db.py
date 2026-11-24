@@ -21,6 +21,15 @@ from app.services.store_dc.stock_actions import (
 )
 from sqlalchemy import text
 
+
+@pytest.fixture(autouse=True)
+def _tenant_vat_rate(monkeypatch):
+    """Test data: the tenant's own VAT rate (Opus R-05: nothing is built in)."""
+    monkeypatch.setattr(
+        "app.services.commercial_tenant_profile.configured_vat_rate_pct",
+        lambda tenant_id="default": 0.15,
+    )
+
 AS_OF = date(2026, 11, 19)
 PERIOD = date(2026, 11, 9)
 

@@ -18,6 +18,10 @@ Definitions (one place, so every planner path agrees):
 * **Cover**: stock divided by the run rate. Missing when the run rate is zero or unknown.
 * **Price**: ``unit_sell_price`` of the latest reported week that has a positive price. When
   several sites report that week, the row with the most units sold is used.
+* **SRP** (Opus R-04): the price as VAT-inclusive shelf price, which is what ``CporCaseLine.srp``
+  and the waterfall expect. Incl-VAT prices are used as reported. Ex-VAT prices are grossed up
+  by the tenant's own VAT rate; with no rate set the SRP is missing (``vat_rate_not_configured``).
+  A price whose VAT basis is unknown gives no SRP (``price_vat_basis_unknown``).
 * **Cost**: ``unit_mac`` of the latest reported week that has a positive ``unit_mac`` or
   ``unit_cost``; ``unit_cost`` when that week's ``unit_mac`` is missing or not positive.
 * **Expected units**: run rate times the planning horizon in weeks.
@@ -52,6 +56,30 @@ NO_COST = "no_unit_mac_or_unit_cost_reported"
 NO_SOH = "no_reported_stock"
 NO_RATE = "run_rate_is_zero"
 NO_CUSTOMER = "no_customer"
+PRICE_VAT_UNKNOWN = "price_vat_basis_unknown"
+VAT_RATE_UNSET = "vat_rate_not_configured"
+
+
+def _vat_kind(basis: Any) -> str:
+    from app.services.cpor.customer_soh_check import _vat_kind as kind
+
+    return kind(None if basis is None else str(basis))
+
+
+def srp_from_price(
+    price: float | None, vat_basis: Any, vat_rate: float | None
+) -> tuple[float | None, str | None]:
+    """VAT-inclusive SRP from a reported price, or (None, reason). Never guesses a rate."""
+    if price is None:
+        return None, None
+    kind = _vat_kind(vat_basis)
+    if kind == "inc":
+        return float(price), None
+    if kind == "unknown":
+        return None, PRICE_VAT_UNKNOWN
+    if vat_rate is None:
+        return None, VAT_RATE_UNSET
+    return round(float(price) * (1.0 + float(vat_rate)), 4), None
 
 
 def run_rate_weeks() -> int:
@@ -112,11 +140,13 @@ def figures_from_rows(
     cost_row: tuple[Any, Any, Any] | None,
     *,
     window_weeks: int,
+    vat_rate: float | None = None,
 ) -> dict[str, Any]:
     """Every planner figure for one customer and product.
 
     ``window_rows``: ``(period, grain, kind, units, soh, site)`` inside the run-rate window.
-    ``price_row``: ``(period, unit_sell_price)`` of the latest positive price, or ``None``.
+    ``price_row``: ``(period, unit_sell_price[, vat_basis])`` of the latest positive price, or ``None``.
+    ``vat_rate``: the tenant's configured VAT rate, used only to gross an ex-VAT price up to SRP.
     ``cost_row``: ``(period, unit_mac, unit_cost[, fact_id, vat_basis])`` of the latest week with a
     positive cost, or ``None``.
     """
@@ -146,6 +176,10 @@ def figures_from_rows(
 
     price = _positive(price_row[1]) if price_row is not None else None
     price_reason = None if price is not None else (NO_PRICE if has_any else NO_SELLTHROUGH)
+    price_vat_basis = price_row[2] if price is not None and len(price_row) > 2 else None
+    srp, srp_reason = srp_from_price(price, price_vat_basis, vat_rate)
+    if price is None:
+        srp_reason = price_reason
 
     cost: float | None = None
     cost_field: str | None = None
@@ -171,6 +205,9 @@ def figures_from_rows(
         "price": price,
         "price_as_of": _iso(price_row[0]) if price is not None else None,
         "price_reason": price_reason,
+        "price_vat_basis": price_vat_basis,
+        "srp": srp,
+        "srp_reason": srp_reason,
         "cost": cost,
         "cost_field": cost_field,
         "cost_as_of": cost_as_of,
@@ -273,8 +310,9 @@ class SellthroughBook:
     customer_id: int | None
     window_weeks: int
     cutoff: date | None = None
+    vat_rate: float | None = None
     window_rows: dict[int, list[Any]] = field(default_factory=dict)
-    price_rows: dict[int, tuple[Any, Any]] = field(default_factory=dict)
+    price_rows: dict[int, tuple[Any, ...]] = field(default_factory=dict)
     cost_rows: dict[int, tuple[Any, ...]] = field(default_factory=dict)
 
     def figures(self, product_id: int) -> dict[str, Any]:
@@ -283,6 +321,7 @@ class SellthroughBook:
             out = figures_from_rows([], None, None, window_weeks=self.window_weeks)
             for key in (
                 "price_reason",
+                "srp_reason",
                 "cost_reason",
                 "units_reason",
                 "soh_reason",
@@ -295,6 +334,7 @@ class SellthroughBook:
             self.price_rows.get(pid),
             self.cost_rows.get(pid),
             window_weeks=self.window_weeks,
+            vat_rate=self.vat_rate,
         )
 
 
@@ -343,14 +383,17 @@ def read_book(
             book.window_rows.setdefault(int(row[0]), []).append(tuple(row[1:]))
     if "price" in parts:
         for row in session.execute(
-            select(ST.product_id, ST.period_start_date, ST.unit_sell_price)
+            select(ST.product_id, ST.period_start_date, ST.unit_sell_price, ST.vat_basis)
             .where(*scope, ST.product_id.in_(ids), _weekly_clause(), ST.unit_sell_price > 0)
             .distinct(ST.product_id)
             .order_by(
                 ST.product_id, ST.period_start_date.desc(), ST.units_sold.desc(), ST.id.desc()
             )
         ).all():
-            book.price_rows[int(row[0])] = (row[1], row[2])
+            book.price_rows[int(row[0])] = (row[1], row[2], row[3])
+        from app.services.commercial_tenant_profile import configured_vat_rate_pct
+
+        book.vat_rate = configured_vat_rate_pct(tenant_id)
     if "cost" in parts:
         for row in session.execute(
             select(

@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+import pytest
 from app.services.cpor.customer_soh_check import (
     DEFAULT_SOH_TOLERANCE_PCT,
     FLAG_SOH_TOLERANCE,
@@ -14,6 +15,16 @@ from app.services.cpor.customer_soh_check import (
     resolve_stored_mac_vat,
     summarise_soh_rows,
 )
+
+
+@pytest.fixture(autouse=True)
+def _tenant_vat_rate(monkeypatch):
+    """Test data: the tenant's own VAT rate (Opus R-05: nothing is built in)."""
+    monkeypatch.setattr(
+        "app.services.commercial_tenant_profile.configured_vat_rate_pct",
+        lambda tenant_id="default": 0.15,
+    )
+
 
 AS_OF = date(2026, 9, 21)
 WK = date(2026, 9, 14)
@@ -564,3 +575,19 @@ def test_tolerance_uses_tenant_default_when_pct_omitted(monkeypatch):
     assert out["tolerance_pct"] == 0.10
     assert FLAG_SOH_TOLERANCE in out["flags"]
 
+
+
+def test_incl_vat_cost_is_withheld_when_the_tenant_has_no_vat_rate_opus_r05(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.commercial_tenant_profile.configured_vat_rate_pct",
+        lambda tenant_id="default": None,
+    )
+    out = summarise_soh_rows(
+        [_row(1, 10, unit_mac=230, vat="inc_vat"), _row(2, 10, unit_mac=80, vat="ex_vat")],
+        as_of=AS_OF,
+        derived_mac=Decimal("100"),
+        derived_mac_vat="inc_vat",
+    )
+    assert "vat_rate_not_configured" in out["flags"]
+    assert out["soh_unit_cost"] == pytest.approx(80.0)
+    assert FLAG_SOH_TOLERANCE not in out["flags"]

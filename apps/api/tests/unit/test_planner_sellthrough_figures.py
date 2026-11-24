@@ -204,3 +204,21 @@ def test_a_real_zero_run_rate_is_a_zero_volume_that_is_available():
     vol = st.volume_from_figures(fig, horizon_weeks=13, as_of=date(2026, 3, 2))
     assert vol["forecast_units"] == 0.0
     assert vol["available"] is True
+
+
+def test_srp_is_vat_inclusive_and_never_guesses_a_rate_opus_r04():
+    assert st.srp_from_price(100.0, "inc_vat", None) == (100.0, None)
+    assert st.srp_from_price(100.0, "ex_vat", 0.15) == (pytest.approx(115.0), None)
+    assert st.srp_from_price(100.0, "ex_vat", None) == (None, st.VAT_RATE_UNSET)
+    assert st.srp_from_price(100.0, None, 0.15) == (None, st.PRICE_VAT_UNKNOWN)
+    assert st.srp_from_price(100.0, "gross?", 0.15) == (None, st.PRICE_VAT_UNKNOWN)
+    assert st.srp_from_price(None, "ex_vat", 0.15) == (None, None)
+    fig = st.figures_from_rows(
+        [], (date(2026, 3, 2), 200.0, "ex_vat"), None, window_weeks=8, vat_rate=0.16
+    )
+    assert fig["price"] == 200.0 and fig["price_vat_basis"] == "ex_vat"
+    assert fig["srp"] == pytest.approx(232.0) and fig["srp_reason"] is None
+    unset = st.figures_from_rows([], (date(2026, 3, 2), 200.0, "ex_vat"), None, window_weeks=8)
+    assert unset["srp"] is None and unset["srp_reason"] == st.VAT_RATE_UNSET
+    none = st.figures_from_rows([], None, None, window_weeks=8, vat_rate=0.15)
+    assert none["srp"] is None and none["srp_reason"] == none["price_reason"]

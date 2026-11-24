@@ -233,7 +233,7 @@ def _collect_aged_stock(
 
 
 # Money value of aged stock (Warren 2026-11-19, BACKLOG-254). Computed here, never on the client.
-# Cost source: the customer's reported unit MAC, else unit cost, ex-VAT (incl-VAT divided by 1.15; a
+# Cost source: the customer's reported unit MAC, else unit cost, ex-VAT (incl-VAT divided by 1 + tenant VAT rate; a
 # cost with an unknown VAT basis is left out), SOH-weighted over the customer's latest reported
 # stock period for the product. This is the CST cost that the customer SOH check and the CPOR
 # tier-1 cost suggestion already use (`customer_soh_check` -> `soh_unit_cost`). It is not a price
@@ -362,8 +362,9 @@ def _srp_for_line(
         product_ids=[int(product_id)],
         want=("price",),
     )
-    price = book.figures(int(product_id)).get("price")
-    return float(price) if price is not None else None
+    # Opus R-04: the VAT-inclusive SRP (ex-VAT grossed up by the tenant rate), never the raw price.
+    srp = book.figures(int(product_id)).get("srp")
+    return float(srp) if srp is not None else None
 
 
 def _row_evidence(row: Any) -> dict | None:
