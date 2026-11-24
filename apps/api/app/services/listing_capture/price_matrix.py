@@ -147,7 +147,7 @@ def build_price_matrix(
     tiers = product_tiers(session, tenant_id, product_ids)
     if tiers is not None:
         product_ids = [pid for pid in product_ids if tiers.get(pid, TIER_ACTIVE) != TIER_HISTORICAL]
-    listed_products = {pid for l in listings if l.product_id and int(l.product_id) in product_ids}
+    listed_products = {int(l.product_id) for l in listings if l.product_id and int(l.product_id) in product_ids}
     product_ids = sorted(listed_products)
 
     by_product_customer: dict[tuple[int, int], CustomerListing] = {}
