@@ -11,10 +11,17 @@ import { barPosition, dateAxis, isoDay } from './timelineAxis';
 import type { Timeline } from './types';
 
 type Customer = { id: number; customer_name: string; customer_code: string };
+type ReportingCustomerRow = { id: number; name: string; code: string };
 const customerLabel = (c: Customer) => `${c.customer_code} - ${c.customer_name}`;
-async function findCustomers(q: string, signal: AbortSignal) {
-  const page = await apiGet<{ items: Customer[] }>(`/api/v1/customers?page=1&page_size=25&q=${encodeURIComponent(q.trim())}`, { signal });
-  return page.items;
+async function findReportingCustomers(q: string, signal: AbortSignal) {
+  const res = await apiGet<{ customers: ReportingCustomerRow[] }>(
+    '/api/v1/customer-calendar/reporting-customers',
+    { signal },
+  );
+  const needle = q.trim().toLowerCase();
+  return res.customers
+    .filter(c => !needle || c.name.toLowerCase().includes(needle) || c.code.toLowerCase().includes(needle))
+    .map(c => ({ id: c.id, customer_name: c.name, customer_code: c.code }));
 }
 const rowGrid = { display: 'grid', gridTemplateColumns: '240px minmax(460px, 1fr)', alignItems: 'center', gap: 2 };
 
@@ -91,8 +98,8 @@ export function CustomerTimelineSurface() {
       <Link href="/promotions">Back to promotion planner</Link>
     </Box>
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-      <Box sx={{ minWidth: 300 }}><EntitySearchAutocomplete<Customer> label="Customer" value={customer} onChange={setCustomer}
-        getOptionLabel={customerLabel} fetchOptions={findCustomers} /></Box>
+      <Box sx={{ minWidth: 300 }}><EntitySearchAutocomplete<Customer> label="Reporting customer" value={customer} onChange={setCustomer}
+        getOptionLabel={customerLabel} fetchOptions={findReportingCustomers} /></Box>
       <TextField label="From" type="date" value={from} onChange={e => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} />
       <TextField label="To" type="date" value={to} onChange={e => setTo(e.target.value)} InputLabelProps={{ shrink: true }} />
       <Button disabled={!customer || invalidRange || query.isFetching} onClick={() => void query.refetch()}>Refresh timeline</Button>
@@ -101,7 +108,14 @@ export function CustomerTimelineSurface() {
     {invalidRange && <Alert severity="error">The end date must be on or after the start date.</Alert>}
     {query.isFetching && <LinearProgress />}
     {query.error && <Alert severity="error">{query.error.message}</Alert>}
-    {customer && !invalidRange && query.data && <TimelineRows timeline={query.data} from={from} to={to} />}
-    {customer && canWrite && <CalendarUploadPanel key={customer.id} customerId={customer.id} onApplied={() => void query.refetch()} />}
+    {customer && !invalidRange && query.data?.customer_not_reporting && (
+      <Alert severity="info">{query.data.message ?? 'This customer is not a reporting customer.'}</Alert>
+    )}
+    {customer && !invalidRange && query.data && !query.data.customer_not_reporting && (
+      <TimelineRows timeline={query.data} from={from} to={to} />
+    )}
+    {customer && canWrite && !query.data?.customer_not_reporting && (
+      <CalendarUploadPanel key={customer.id} customerId={customer.id} onApplied={() => void query.refetch()} />
+    )}
   </Stack>;
 }

@@ -45,6 +45,7 @@ it('asks for a customer before fetching and uses that customer in the timeline r
   fireEvent.click(screen.getByText('Pick customer'));
   await screen.findByText('Our promotions');
   expect(mocks.get.mock.calls[0][0]).toContain('customer_id=17');
+  expect(screen.getByText('Reporting customer')).toBeInTheDocument();
   expect(screen.queryByText('Calendar uploader')).not.toBeInTheDocument();
 });
 

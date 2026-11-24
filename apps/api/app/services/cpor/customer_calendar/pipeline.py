@@ -28,6 +28,8 @@ from app.services.cpor.customer_calendar.profiles import (
     validate_profile,
 )
 from app.services.cpor.customer_calendar.scope import bind_calendar_tenant
+from app.services.customer_reporting import WHERE_THE_FLAG_IS_SET
+from app.services.imports.cst_layouts import is_reporting_customer, list_reporting_customers
 
 PREVIEW_EVENT_LIMIT = 200
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -276,7 +278,16 @@ def _plan(
         names = _customer_names(db, tenant_id, {int(customer_id)})
         if int(customer_id) not in names:
             raise CalendarUploadError("customer_not_found", "Customer not found", 404)
+        if not is_reporting_customer(db, int(customer_id)):
+            raise CalendarUploadError(
+                "customer_not_reporting",
+                "Customer calendars are only uploaded for reporting customers. "
+                f"Mark this customer as reporting first ({WHERE_THE_FLAG_IS_SET}).",
+                409,
+            )
         fixed_customer = int(customer_id)
+
+    reporting_ids = {c["id"] for c in list_reporting_customers(db)}
 
     events = parsed["events"]
     tokens = {_norm(e["customer_token"]) for e in events if e.get("customer_token")}
@@ -284,6 +295,7 @@ def _plan(
 
     placed: list[dict[str, Any]] = []
     unresolved: dict[str, dict[str, Any]] = {}
+    non_reporting: dict[str, dict[str, Any]] = {}
     for e in events:
         if fixed_customer is not None:
             cid = fixed_customer
@@ -293,6 +305,11 @@ def _plan(
             if cid is None:
                 label = e.get("customer_token") or ""
                 slot = unresolved.setdefault(token, {"token": label, "rows": 0})
+                slot["rows"] += 1
+                continue
+            if int(cid) not in reporting_ids:
+                label = e.get("customer_token") or ""
+                slot = non_reporting.setdefault(token, {"token": label, "rows": 0})
                 slot["rows"] += 1
                 continue
         placed.append({**e, "customer_id": cid})
@@ -323,6 +340,7 @@ def _plan(
         "profile_code": profile.get("profile_code"),
         "placed": placed,
         "unresolved": list(unresolved.values()),
+        "non_reporting_customers": list(non_reporting.values()),
         "customers": [
             {"customer_id": cid, "customer_name": names.get(cid, ""), "events": n}
             for cid, n in sorted(per_customer.items())
@@ -382,6 +400,7 @@ def preview_upload(
         "will_replace": plan["will_replace"],
         "customers": plan["customers"],
         "unresolved_customers": plan["unresolved"],
+        "non_reporting_customers": plan["non_reporting_customers"],
         "events": [_event_out(e, names) for e in placed[:PREVIEW_EVENT_LIMIT]],
         "events_truncated": len(placed) > PREVIEW_EVENT_LIMIT,
     }
