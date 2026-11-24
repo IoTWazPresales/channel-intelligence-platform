@@ -228,14 +228,19 @@ def should_backoff_dead_link(
 
 
 def listing_live_fetch_enabled() -> bool:
-    """`CIP_LISTING_LIVE_FETCH` truthy values: 1/true/on. Default off.
+    """Live HTTP for listing capture and Discovery. Default off.
 
-    The poll, the autoconfigure beat task, and the steward autoconfigure endpoint
-    all use this switch. Off means no live HTTP.
+    Truthy ``CIP_LISTING_LIVE_FETCH`` in ``os.environ`` (supervisor worker) **or** truthy
+    ``cip_listing_live_fetch`` on API ``Settings`` (``apps/api/.env``) enables live fetch.
+    D-0061 (2026-11-24): the API process may fetch live pages so Discover works from the screen.
     """
     import os
 
-    return os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on")
+    if os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on"):
+        return True
+    from app.core.config import get_settings
+
+    return bool(get_settings().cip_listing_live_fetch)
 
 
 def default_http_get(url: str, *, headers: dict[str, str] | None = None) -> tuple[int, str]:

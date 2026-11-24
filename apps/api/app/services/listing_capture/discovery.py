@@ -958,22 +958,6 @@ def _confirmed_web_site_keys(session: Session, *, tenant_id: str, customer_id: i
     )
 
 
-def _confirmed_web_domains(session: Session, *, tenant_id: str, customer_id: int) -> list[str]:
-    """Domains of this customer's confirmed ``customer_web_site`` rows (for ``_seed_origin``'s fallback)."""
-    from app.models.customer_web_site import WEB_SITE_CONFIRMED, CustomerWebSite
-
-    found = session.scalars(
-        select(CustomerWebSite.domain)
-        .where(
-            CustomerWebSite.tenant_id == tenant_id,
-            CustomerWebSite.customer_id == int(customer_id),
-            CustomerWebSite.status == WEB_SITE_CONFIRMED,
-        )
-        .order_by(CustomerWebSite.id)
-    ).all()
-    return [str(domain) for domain in found if isinstance(domain, str) and domain.strip()]
-
-
 def _seed_site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]) -> list[str]:
     origin = _origin_text(_seed_origin(seed))
     if origin:

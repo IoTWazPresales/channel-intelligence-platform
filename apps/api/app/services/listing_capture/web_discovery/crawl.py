@@ -63,8 +63,31 @@ def crawlee_available() -> bool:
     return importlib.util.find_spec("crawlee") is not None
 
 
+def _chromium_executable_path() -> str | None:
+    """Playwright's chromium path when the package is importable; None otherwise."""
+    if importlib.util.find_spec("playwright") is None:
+        return None
+    try:
+        from playwright.sync_api import sync_playwright
+
+        playwright = sync_playwright().start()
+        try:
+            return str(playwright.chromium.executable_path or "").strip() or None
+        finally:
+            playwright.stop()
+    except Exception:
+        return None
+
+
 def browser_available() -> bool:
-    return crawlee_available() and importlib.util.find_spec("playwright") is not None
+    if not crawlee_available():
+        return False
+    path = _chromium_executable_path()
+    if not path:
+        return False
+    from pathlib import Path
+
+    return Path(path).is_file()
 
 
 _service_lock = threading.Lock()

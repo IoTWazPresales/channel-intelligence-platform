@@ -8,7 +8,7 @@ import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { Panel } from '@/features/workbench-ui/Panel';
 
 import {
-  customerLabel, type CustomerPick, discoveryError, fetchCustomers, previewAllowed,
+  customerLabel, type CustomerPick, discoveryError, fetchCustomers, previewAllowed, previewBlockReason,
   type PreviewRequest, useDiscoveryCapabilities, useStartDiscoveryPreview,
 } from './discoveryApi';
 import { DiscoveryPreview } from './DiscoveryPreview';
@@ -28,8 +28,18 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
   const [domain, setDomain] = useState('');
   const [previewId, setPreviewId] = useState<string | null>(null);
   const busy = start.isPending || Boolean(previewId);
+  const gateOpts = {
+    busy,
+    capabilitiesLoading: capabilities.isPending,
+    capabilitiesError: capabilities.isError,
+    customerPicked: Boolean(customer),
+    siteCustomerPicked: Boolean(siteCustomer),
+    domainFilled: Boolean(domain.trim()),
+  };
   const disabled = (scope: PreviewRequest['scope']) =>
-    busy || capabilities.isError || !previewAllowed(capabilities.data, scope);
+    !previewAllowed(capabilities.data, scope, gateOpts);
+  const blockReason = (scope: PreviewRequest['scope']) =>
+    previewBlockReason(capabilities.data, scope, gateOpts);
   const run = (request: PreviewRequest) =>
     start.mutate(request, { onSuccess: (response) => setPreviewId(response.preview_id) });
 
@@ -50,7 +60,10 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
         </Alert>
       ) : null}
       {capabilities.data && !capabilities.data.live_fetch ? (
-        <Alert severity="info">Live page checking is switched off on this server. Preview is unavailable.</Alert>
+        <Alert severity="info">
+          Live page checking is off on this server. Set CIP_LISTING_LIVE_FETCH in apps/api/.env (or enable it on the worker)
+          so Discover can run previews.
+        </Alert>
       ) : null}
       {start.isError ? <Alert severity="error">{discoveryError(start.error)}</Alert> : null}
       {canEdit ? (
@@ -64,14 +77,26 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
                     value={customer} onChange={setCustomer} fetchOptions={fetchCustomers}
                     getOptionLabel={customerLabel} disabled={busy} />
                 </Box>
-                <Button variant="outlined" aria-label="Discover one customer" disabled={!customer || disabled('customer')}
+                <Button variant="outlined" aria-label="Discover one customer" disabled={disabled('customer')}
                   onClick={() => customer && run({ scope: 'customer', customer_id: customer.id })}>Discover</Button>
               </Stack>
+              {blockReason('customer') ? (
+                <Typography variant="caption" color="text.secondary" data-testid="discover-customer-reason">
+                  {blockReason('customer')}
+                </Typography>
+              ) : null}
             </Stack>
-            <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-              <Typography variant="subtitle2">Discover for all reporting customers</Typography>
-              <Button variant="outlined" aria-label="Discover all reporting customers" disabled={disabled('reporting')}
-                onClick={() => run({ scope: 'reporting' })}>Discover</Button>
+            <Stack spacing={0.5}>
+              <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+                <Typography variant="subtitle2">Discover for all reporting customers</Typography>
+                <Button variant="outlined" aria-label="Discover all reporting customers" disabled={disabled('reporting')}
+                  onClick={() => run({ scope: 'reporting' })}>Discover</Button>
+              </Stack>
+              {blockReason('reporting') ? (
+                <Typography variant="caption" color="text.secondary" data-testid="discover-reporting-reason">
+                  {blockReason('reporting')}
+                </Typography>
+              ) : null}
             </Stack>
             <Stack spacing={1}>
               <Typography variant="subtitle2">Add a site to monitor</Typography>
@@ -85,9 +110,12 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
                 <TextField size="small" label="Domain" value={domain} disabled={busy}
                   onChange={(event) => setDomain(event.target.value)}
                   helperText="Host name only, such as shop.example.test" sx={{ flex: 1 }} />
-                <Button variant="outlined" aria-label="Discover a site" disabled={!siteCustomer || !domain.trim() || disabled('domain')}
+                <Button variant="outlined" aria-label="Discover a site" disabled={disabled('domain')}
                   onClick={() => siteCustomer && run({ scope: 'domain', customer_id: siteCustomer.id, domain: domain.trim() })}>Discover</Button>
               </Stack>
+              {blockReason('domain') ? (
+                <Typography variant="caption" color="text.secondary">{blockReason('domain')}</Typography>
+              ) : null}
             </Stack>
             <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
               <Typography variant="subtitle2">Link listings with no product</Typography>
