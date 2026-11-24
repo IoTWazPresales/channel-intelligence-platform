@@ -3,7 +3,7 @@
 Read-only check of `docs/CIP_ORCHESTRATOR_WAVES.md`, `.eif/PROGRAM.md` (generated, snapshot 2928), `docs/BACKLOG.md` and `docs/memory/CURRENT.md` against integrate `91bdbb00`, which has been live since restart batch3 (03:48 SAST). Main is still at `46368f6c` (nothing promoted).
 
 ## Closed in docs today
-BACKLOG-262, 263, 264 (merged 2026-11-19, live; screenshots waived 2026-11-23), BACKLOG-250 (live read-only check), BACKLOG-168 (verified), 266, 269, 270, 272. BACKLOG-245 closes when its first `-Execute` run passes.
+BACKLOG-262, 263, 264 (merged 2026-11-19, live; screenshots waived 2026-11-23), BACKLOG-250 (live read-only check), BACKLOG-168 (verified), 266, 269, 270, 272. BACKLOG-245 closed after its first passing `-Execute` (04:08 SAST).
 
 ## EIF nodes: list only (closure goes through `.eif/runtime/programme/program.py`, not by editing docs)
 - Built and live tonight, but the node is still `proposed`: **N-0102** (generic discovery and readers; Discovery v2 + BACKLOG-270), **N-0119** (On the water / Shipments map), part of **N-0085** (non-leaf) and **N-0103** (worklist not built).
@@ -21,7 +21,7 @@ BACKLOG-262, 263, 264 (merged 2026-11-19, live; screenshots waived 2026-11-23), 
 | W1-E Close in-progress nodes | Open | 13 nodes `in_progress` (list above) need Codex review + an EIF stage record | PROGRAM.md |
 | Wave 2 web-app verification | Not done | No `docs/audits/WEBAPP_VERIFICATION_<date>.md`; harness only | `docs/audits/WAVE2_VERIFICATION_HARNESS.md` |
 | Wave 3 B1 CI gate | Built | Merge-requires-green (branch protection) not verified | `.github/workflows/ci.yml`, PR #109 `72812f38` (BACKLOG-231) |
-| Wave 3 B2 scripted deploy | Fixed 2026-11-24 | Closes when the first `-Execute` with the heartbeat gate passes | BACKLOG-245, `91bdbb00` |
+| Wave 3 B2 scripted deploy | **Done** 2026-11-24 | - | BACKLOG-245; `-Execute` record deploy-20261124-040848 |
 | Wave 3 B3 promote to main | Not done | N-0099 second look; Warren says "promote to main" | main `46368f6c` |
 | Wave 3 Phase C (N-0089, backups) | In progress | Node `in_progress`; restore test | PROGRAM.md |
 | Final (a) new-customer line-up | Partial-deferred | See BACKLOG-252 | `804b470a` |
