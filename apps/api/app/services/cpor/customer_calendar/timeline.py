@@ -22,6 +22,8 @@ from app.services.cpor.customer_calendar.clashes import compute_clashes
 from app.services.cpor.customer_calendar.scope import bind_calendar_tenant
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.pivot import is_voided_line
+from app.services.customer_reporting import WHERE_THE_FLAG_IS_SET, reporting_customer_ids_select
+from app.services.imports.cst_layouts import is_reporting_customer
 
 # Case statuses that are closed for planning purposes (lifecycle.py: cancelled is terminal and
 # carries zero payable). A superseded case is excluded by superseded_by_case_id.
@@ -146,6 +148,20 @@ def build_timeline(
     )
     if customer is None:
         return None
+    if not is_reporting_customer(db, int(customer_id)):
+        return {
+            "customer": {"id": int(customer.id), "name": customer.name},
+            "customer_not_reporting": True,
+            "message": (
+                "Customer promotion calendars are only available for reporting customers. "
+                f"Mark this customer as reporting first ({WHERE_THE_FLAG_IS_SET})."
+            ),
+            "from": _iso(date_from),
+            "to": _iso(date_to),
+            "promotions": [],
+            "calendar_events": [],
+            "clashes": [],
+        }
     promos = open_case_windows(
         db, tenant_id, customer_id=customer_id, date_from=date_from, date_to=date_to
     )
@@ -198,6 +214,9 @@ def build_clash_summary(
     bind_calendar_tenant(db, tenant_id)
     from app.core.my_accounts import apply_account_predicate
 
+    reporting_ids = {
+        int(cid) for cid in db.scalars(reporting_customer_ids_select()).all()
+    }
     allowed = {
         int(cid)
         for cid in db.scalars(
@@ -206,6 +225,7 @@ def build_clash_summary(
                 DimCustomer.id,
             )
         ).all()
+        if int(cid) in reporting_ids
     }
     promos = [
         p

@@ -14,7 +14,7 @@ export type Clash = {
 export type Timeline = {
   customer?: { id: number; name: string }; from: string | null; to: string | null;
   promotions: Promotion[]; calendar_events: CalendarEvent[]; clashes: Clash[];
-  data_unavailable?: boolean; message?: string;
+  data_unavailable?: boolean; customer_not_reporting?: boolean; message?: string;
 };
 export type CalendarProfile = {
   /** null for the computed generic default that has not been saved (it cannot be edited or deleted). */

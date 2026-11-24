@@ -13,6 +13,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,9 @@ from app.api.v1.endpoints.cpor_cases import _actor
 from app.core.security import Role, get_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user
 from app.db.session_sync import SessionLocal
+from app.models.customer_report_config import CustomerReportConfig
+from app.models.dimensions import DimCustomer
+from app.services.customer_reporting import reporting_customer_clauses
 from app.services.cpor.customer_calendar.pipeline import (
     MAX_UPLOAD_BYTES,
     CalendarUploadError,
@@ -228,6 +232,24 @@ def apply_calendar_upload(
         db=db,
     )
     return out
+
+
+@router.get("/reporting-customers")
+def calendar_reporting_customers(_user: _Reader, db: _Db) -> dict[str, Any]:
+    """Reporting customers of the tenant (same definition as CST / line-up pickers)."""
+    tenant = tenant_id_from_user(_user)
+    rows = db.execute(
+        select(DimCustomer.id, DimCustomer.name, DimCustomer.code)
+        .join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
+        .where(DimCustomer.tenant_id == tenant, *reporting_customer_clauses())
+        .order_by(func.lower(DimCustomer.name), DimCustomer.id)
+    ).all()
+    return {
+        "customers": [
+            {"id": int(cid), "name": name, "code": code}
+            for cid, name, code in rows
+        ]
+    }
 
 
 @router.get("/clashes/summary")

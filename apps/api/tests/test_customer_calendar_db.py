@@ -104,6 +104,15 @@ def _customer(session: Session, tenant: str, tag: str, label: str):
     return row
 
 
+def _mark_reporting(session: Session, customer_id: int, *, reports_expected: bool = True) -> None:
+    from app.models.customer_report_config import CustomerReportConfig
+
+    session.add(
+        CustomerReportConfig(customer_id=int(customer_id), reports_expected=reports_expected)
+    )
+    session.flush()
+
+
 # --------------------------------------------------------------------------- migration
 
 
@@ -247,6 +256,7 @@ def test_apply_is_idempotent_and_never_creates_customers_or_crosses_tenants(conn
     session = Session(bind=conn, join_transaction_mode="create_savepoint")
     try:
         cust_a = _customer(session, t_a, tag, "A")
+        _mark_reporting(session, cust_a.id)
         # A customer with the same name in another tenant must not receive tenant A's events.
         other = DimCustomer(tenant_id=t_b, code=f"CAL-{tag}-B", name=cust_a.name)
         session.add(other)
@@ -298,6 +308,20 @@ def test_apply_is_idempotent_and_never_creates_customers_or_crosses_tenants(conn
         with pytest.raises(CalendarUploadError) as exc:
             apply_upload(session, t_a, filename="plain.csv", data=plain, customer_id=other.id)
         assert exc.value.code == "customer_not_found"
+
+        not_reporting = _customer(session, t_a, tag, "NR")
+        with pytest.raises(CalendarUploadError) as nr_exc:
+            apply_upload(session, t_a, filename="plain.csv", data=plain, customer_id=not_reporting.id)
+        assert nr_exc.value.code == "customer_not_reporting"
+
+        hidden = _customer(session, t_a, tag, "Hidden")
+        data_hidden = (
+            "Retailer,Campaign Name,Type,Start,End\n"
+            f"{hidden.name},Ghost,Campaign,2026-03-01,2026-03-02\n"
+        ).encode("utf-8")
+        hidden_prev = preview_upload(session, t_a, filename="hidden.csv", data=data_hidden)
+        assert hidden_prev["will_insert"] == 0
+        assert hidden_prev["non_reporting_customers"] == [{"token": hidden.name, "rows": 1}]
     finally:
         session.close()
 
@@ -389,6 +413,7 @@ def test_timeline_lists_open_promotions_events_and_clashes_only(conn, migrated) 
     try:
         cust = _customer(session, tenant, tag, "A")
         other_cust = _customer(session, tenant, tag, "B")
+        _mark_reporting(session, cust.id)
         live = _case(session, tenant, cust.id, tag, "live", date(2026, 3, 1), date(2026, 3, 15))
         later = _case(session, tenant, cust.id, tag, "later", date(2026, 6, 1), date(2026, 6, 10))
         _case(
@@ -486,6 +511,13 @@ def test_timeline_lists_open_promotions_events_and_clashes_only(conn, migrated) 
 
         # another tenant cannot read this customer's timeline
         assert build_timeline(session, f"cal-x-{tag}", customer_id=cust.id) is None
+
+        out_nr = build_timeline(session, tenant, customer_id=other_cust.id)
+        assert out_nr is not None
+        assert out_nr["customer_not_reporting"] is True
+        assert out_nr["promotions"] == []
+        assert out_nr["calendar_events"] == []
+        assert out_nr["clashes"] == []
     finally:
         session.close()
 
@@ -502,6 +534,8 @@ def test_clash_summary_counts_exactly_across_customers_with_the_timeline_rules(
     try:
         a = _customer(session, tenant, tag, "A")
         b = _customer(session, tenant, tag, "B")
+        _mark_reporting(session, a.id)
+        _mark_reporting(session, b.id)
         live_a = _case(session, tenant, a.id, tag, "la", date(2026, 3, 1), date(2026, 3, 15))
         _case(session, tenant, b.id, tag, "lb", date(2026, 3, 1), date(2026, 3, 15))
         _case(
@@ -584,6 +618,7 @@ def test_endpoints_preview_apply_and_timeline(conn, migrated) -> None:
             {"id": tenant, "name": "Calendar fixture tenant"},
         )
         cust = _customer(session, tenant, tag, "A")
+        _mark_reporting(session, cust.id)
         case = _case(session, tenant, cust.id, tag, "live", date(2026, 3, 1), date(2026, 3, 15))
         client = TestClient(app)
         csv_bytes = _CSV.format(a=cust.name, unknown="Nobody").encode("utf-8")
@@ -622,6 +657,16 @@ def test_endpoints_preview_apply_and_timeline(conn, migrated) -> None:
         first = r.json()["profiles"][0]
         assert first["profile_code"] == "customer_calendar_default_v1"
         assert first["id"] is None
+
+        r = client.get("/api/v1/customer-calendar/reporting-customers")
+        assert r.status_code == 200
+        assert {c["id"] for c in r.json()["customers"]} == {cust.id}
+
+        nr = _customer(session, tenant, tag, "NR")
+        r = client.get("/api/v1/customer-calendar/timeline", params={"customer_id": nr.id})
+        assert r.status_code == 200
+        assert r.json()["customer_not_reporting"] is True
+        assert r.json()["promotions"] == []
     finally:
         app.dependency_overrides.pop(ep._sync_db, None)
         app.dependency_overrides.pop(get_current_user, None)

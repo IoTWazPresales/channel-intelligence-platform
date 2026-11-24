@@ -10,6 +10,8 @@ def test_preview_without_a_saved_profile_never_writes(monkeypatch):
     db = MagicMock()
     db.scalar.return_value = None
     monkeypatch.setattr(pipeline, "_customer_names", lambda *args: {17: "Customer"})
+    monkeypatch.setattr(pipeline, "is_reporting_customer", lambda *_a, **_k: True)
+    monkeypatch.setattr(pipeline, "list_reporting_customers", lambda *_a: [{"id": 17}])
     out = pipeline.preview_upload(
         db,
         "tenant-a",
@@ -47,6 +49,7 @@ def test_apply_uses_bulk_insert_and_leaves_commit_to_audited_endpoint(monkeypatc
             "profile_id": None,
             "customers": [],
             "unresolved": [],
+            "non_reporting_customers": [],
         },
     )
     out = pipeline.apply_upload(db, "tenant-a", filename="calendar.csv", data=b"bytes")
@@ -118,6 +121,8 @@ def test_named_generic_profile_can_preview_before_it_has_been_seeded(monkeypatch
     db = MagicMock()
     db.scalar.return_value = None
     monkeypatch.setattr(pipeline, "_customer_names", lambda *args: {17: "Customer"})
+    monkeypatch.setattr(pipeline, "is_reporting_customer", lambda *_a, **_k: True)
+    monkeypatch.setattr(pipeline, "list_reporting_customers", lambda *_a: [{"id": 17}])
     out = pipeline.preview_upload(
         db,
         "tenant-a",
