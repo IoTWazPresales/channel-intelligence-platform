@@ -10,7 +10,7 @@ import { navPageChrome } from '@/features/shell/navPageChrome';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { LensTabs } from '@/features/workbench-ui/controls';
-import { apiGet } from '@/lib/api';
+import { stockChromeCoverQueryOptions } from '@/features/stock/coverQueryOptions';
 
 export const STOCK_TITLE = 'Stock & Sell-through';
 
@@ -57,15 +57,7 @@ export function StockChrome({
   const router = useRouter();
   const lens = stockLensFromLocation(pathname, search);
   const inventoryChrome = lens === 'cover' ? navPageChrome('/inventory') : null;
-  const { data: coverDist } = useQuery({
-    queryKey: ['channel-ops', 'cover-distribution', 'stock-chrome'],
-    queryFn: ({ signal }) =>
-      apiGet<{ buckets?: { lt2?: number }; pair_count?: number; cover_as_of_date?: string | null; data_unavailable?: boolean }>(
-        '/api/v1/channel-ops/cover-distribution',
-        { signal },
-      ),
-    staleTime: 60_000,
-  });
+  const { data: coverDist } = useQuery(stockChromeCoverQueryOptions());
   const breachCount = coverDist?.data_unavailable ? undefined : coverDist?.buckets?.lt2;
   const metaText =
     meta ??

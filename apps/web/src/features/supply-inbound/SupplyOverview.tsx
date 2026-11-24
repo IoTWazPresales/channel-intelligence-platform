@@ -9,20 +9,14 @@ import { inRail, navGroups } from '@/features/shell/navConfig';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { CategoryBars, ProportionBar } from '@/features/workbench-ui/charts';
-import { apiGet } from '@/lib/api';
-
 import { fmtInt, fmtPctRatio } from './format';
-import type { SupplyOverview as SupplyOverviewPayload } from './types';
+import { supplyOverviewQueryOptions } from './supplyQueryOptions';
 import { useClientReady } from './useClientReady';
 
 export function SupplyOverview() {
   const router = useRouter();
   const ready = useClientReady();
-  const { data: summary, isLoading, isError } = useQuery({
-    queryKey: ['supply', 'overview'],
-    queryFn: ({ signal }) => apiGet<SupplyOverviewPayload>('/api/v1/supply/overview', { signal }),
-    staleTime: 30_000,
-  });
+  const { data: summary, isLoading, isError } = useQuery(supplyOverviewQueryOptions());
   const data = ready ? summary : undefined;
   const awaiting = !ready || isLoading;
   const unavailable = !awaiting && Boolean(isError || !data || data.data_unavailable);

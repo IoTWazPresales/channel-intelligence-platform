@@ -13,9 +13,7 @@ import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { LensTabs } from '@/features/workbench-ui/controls';
-import { apiGet } from '@/lib/api';
-
-import type { StewardshipSummary } from './types';
+import { stewardshipSummaryQueryOptions } from './stewardshipQueryOptions';
 import { useClientReady } from './useClientReady';
 
 export const DATA_TITLE = 'Data & Stewardship';
@@ -62,11 +60,7 @@ export function DataChrome({
   const tabHrefs = LENSES.map((l) => l.href);
   const alsoHere = dataAlsoHereItems(role, tabHrefs);
   const ready = useClientReady();
-  const { data: summaryData } = useQuery({
-    queryKey: ['imports', 'stewardship-summary'],
-    queryFn: ({ signal }) => apiGet<StewardshipSummary>('/api/v1/imports/stewardship-summary', { signal }),
-    staleTime: 30_000,
-  });
+  const { data: summaryData } = useQuery(stewardshipSummaryQueryOptions());
   const summary = ready ? summaryData : undefined;
 
   const failedPlusPending =

@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiGet } from '@/lib/api';
-import { briefSignalsQueryKey } from '@/lib/myAccounts';
+import { briefSignalsQueryKey, type MyAccountsChoice } from '@/lib/myAccounts';
 import { useMyAccountsChoice } from '@/lib/useMyAccountsCleared';
 
 export const BRIEF_SIGNALS_URL = '/api/v1/brief/signals';
@@ -22,11 +22,17 @@ export type BriefSignalsPayload = {
  * The one reader of `/api/v1/brief/signals` for chrome that every page mounts (the app shell and
  * the overview chrome). Both use the same react-query key, so a page issues one request, not two.
  */
+/** Shared fetcher for useBriefSignals, OverviewHub and nav warm-up. */
+export function briefSignalsQueryOptions(accountsChoice: MyAccountsChoice) {
+  return {
+    queryKey: briefSignalsQueryKey(accountsChoice),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      apiGet<BriefSignalsPayload>(BRIEF_SIGNALS_URL, { signal }),
+    staleTime: 60_000,
+  };
+}
+
 export function useBriefSignals() {
   const accountsChoice = useMyAccountsChoice();
-  return useQuery({
-    queryKey: briefSignalsQueryKey(accountsChoice),
-    queryFn: ({ signal }) => apiGet<BriefSignalsPayload>(BRIEF_SIGNALS_URL, { signal }),
-    staleTime: 60_000,
-  });
+  return useQuery(briefSignalsQueryOptions(accountsChoice));
 }

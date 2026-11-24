@@ -7,9 +7,9 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import { fmtCompact, fmtPct } from '@/features/promotions-funding/format';
 import { countPlanning } from '@/features/promotions-funding/lifecycle';
-import type { CporCasesPage } from '@/features/promotions-funding/types';
-import { apiGet } from '@/lib/api';
+import { cporFundingChromeQueryOptions, cporSettlementBookQueryOptions } from '@/features/promotions-funding/cporQueryOptions';
 import { useBriefSignals } from '@/features/shell/useBriefSignals';
+import { apiGet } from '@/lib/api';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { LensTabs } from '@/features/workbench-ui/controls';
@@ -73,16 +73,8 @@ export function FundingChrome({
   const router = useRouter();
   const lens = fundingLensFromPath(pathname);
 
-  const { data: listPage } = useQuery({
-    queryKey: ['cpor', 'cases', 'funding-chrome'],
-    queryFn: ({ signal }) => apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=1', { signal }),
-    staleTime: 30_000,
-  });
-  const { data: settlement } = useQuery({
-    queryKey: ['cpor', 'settlement', 'book'],
-    queryFn: ({ signal }) => apiGet<SettlementBook>('/api/v1/cpor/settlement/book', { signal }),
-    staleTime: 30_000,
-  });
+  const { data: listPage } = useQuery(cporFundingChromeQueryOptions());
+  const { data: settlement } = useQuery(cporSettlementBookQueryOptions());
   // Only feeds the header meta line, so it is not read when the header is hidden.
   const { data: portfolio } = useQuery({
     queryKey: ['cpor', 'intelligence', 'portfolio'],
