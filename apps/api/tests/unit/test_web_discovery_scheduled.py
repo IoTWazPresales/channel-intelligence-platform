@@ -49,9 +49,11 @@ def test_scheduled_reporting_preview_then_apply(monkeypatch) -> None:
         store.save(kwargs["tenant_id"], pid, plan)
 
     monkeypatch.setattr("app.services.listing_capture.web_discovery.scheduled.web_preview.run_preview", fake_preview)
-    applied = {"sites_confirmed": 1}
+    applied = {"sites_queued": 1}
+    apply_kwargs: list[dict] = []
 
     def fake_apply(_session, _store, **kwargs):
+        apply_kwargs.append(kwargs)
         return applied
 
     monkeypatch.setattr("app.services.listing_capture.web_discovery.scheduled.web_apply.apply_plan", fake_apply)
@@ -62,6 +64,7 @@ def test_scheduled_reporting_preview_then_apply(monkeypatch) -> None:
     )
     assert calls == [{"scope": "reporting"}]
     assert out["skipped"] is False and out["applied"] == applied
+    assert apply_kwargs and apply_kwargs[0].get("sites_only") is True
     session.rollback.assert_called_once()
 
 

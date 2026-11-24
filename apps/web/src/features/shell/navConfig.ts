@@ -322,6 +322,12 @@ export const navGroups: NavGroup[] = [
       { label: 'Channels & regions', href: '/admin/channels-regions', roles: STEWARD_PLUS, what: 'Channel and region dimensions.' },
       { label: 'CST steward', href: '/admin/cst-steward', roles: STEWARD_PLUS, what: 'Retailer sell-through token resolution.' },
       { label: 'Steward audit', href: '/admin/steward-audit', roles: ADMIN_STEWARD, what: 'Who mapped what, when, with which evidence.' },
+      {
+        label: 'Data health',
+        href: '/admin/data-health?tab=sources',
+        roles: STEWARD_PLUS,
+        what: 'Listing capture sources and worker posture; fuller import-evidence health later.',
+      },
     ],
   },
   {

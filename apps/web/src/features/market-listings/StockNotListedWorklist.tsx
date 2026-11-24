@@ -7,6 +7,8 @@ import { useCallback, useState } from 'react';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet } from '@/lib/api';
 
+import { customersListUrl } from './listingCustomerScope';
+
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 
 type StockNotListedRow = {
@@ -41,10 +43,7 @@ export function StockNotListedWorklist() {
   const [customer, setCustomer] = useState<CustomerPick | null>(null);
   const customerId = customer?.id ?? null;
   const fetchCustomers = useCallback(async (q: string, signal: AbortSignal) => {
-    const page = await apiGet<{ items?: CustomerPick[] }>(
-      `/api/v1/customers?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
-      { signal },
-    );
+    const page = await apiGet<{ items?: CustomerPick[] }>(customersListUrl(false, { q: q || undefined }), { signal });
     return page.items ?? [];
   }, []);
   const customerLabel = useCallback((row: CustomerPick) => row.customer_name || row.customer_code, []);

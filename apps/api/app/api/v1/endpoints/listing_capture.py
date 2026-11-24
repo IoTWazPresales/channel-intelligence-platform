@@ -256,6 +256,29 @@ def post_autoconfigure_sites(user: dict = Depends(require_roles(Role.STEWARD))):
         return {**report, "data_unavailable": False}
 
 
+@router.get("/price-matrix")
+def get_price_matrix(
+    customer_id: list[int] | None = Query(default=None),
+    user: dict = Depends(get_current_user),
+):
+    from app.services.listing_capture.price_matrix import build_price_matrix
+
+    tenant_id = tenant_id_from_user(user)
+    with SessionLocal() as session:
+        try:
+            return build_price_matrix(session, tenant_id=tenant_id, customer_ids=customer_id)
+        except Exception:
+            session.rollback()
+            logging.getLogger(__name__).exception("price matrix failed")
+            return {
+                "data_unavailable": True,
+                "customers": [],
+                "products": [],
+                "cells": [],
+                "summary": {"product_count": 0, "cheapest_at": {}, "below_srp_count": 0},
+            }
+
+
 @router.get("/capture-health")
 def get_capture_health(user: dict = Depends(get_current_user)):
     """Per-site capture posture for the caller's tenant: configured, newest price, skips, exclusions."""

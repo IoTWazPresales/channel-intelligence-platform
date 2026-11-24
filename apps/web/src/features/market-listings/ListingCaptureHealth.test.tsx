@@ -62,9 +62,19 @@ const customerListPayload = {
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async (url: string) => {
     if (url.includes('/listing-capture/capture-health')) return healthPayload;
+    if (url.includes('/discovery/site-candidates')) return { items: [] };
     if (url.includes('/customers')) return customerListPayload;
     return {};
   }),
+}));
+
+vi.mock('./discoveryApi', () => ({
+  useSiteCandidates: () => ({ data: { items: [] }, isPending: false, isError: false }),
+  useDecideSiteCandidate: () => ({ mutate: vi.fn(), isPending: false, isError: false, isSuccess: false }),
+}));
+
+vi.mock('@/features/shell/useCurrentUser', () => ({
+  useCurrentUser: () => ({ data: { role: 'steward' } }),
 }));
 
 function renderHealth() {

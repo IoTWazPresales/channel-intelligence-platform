@@ -1,4 +1,4 @@
-"""Scheduled Discovery V2: reporting-customer preview then auto-apply (exact evidence only).
+"""Scheduled Discovery V2: reporting-customer preview then queue proposed sites (no auto-link).
 
 Runs inside the existing ``listing_capture.autoconfigure_sites`` beat task when the tenant has
 ``discovery.schedule_enabled`` on. On-demand steward runs do not use this path.
@@ -33,7 +33,7 @@ def run_scheduled_reporting_discovery(
     plan_store: web_preview.PlanStore | None = None,
     getter: Any | None = None,
 ) -> dict[str, Any]:
-    """Preview all reporting customers for one tenant, then apply (auto + steward queue outcomes)."""
+    """Preview all reporting customers, then queue site candidates (no confirm, no page-reader writes)."""
     if not listing_live_fetch_enabled():
         return {"skipped": True, "reason": "live_fetch_off"}
 
@@ -83,7 +83,7 @@ def run_scheduled_reporting_discovery(
 
     try:
         applied = web_apply.apply_plan(
-            session, store, tenant_id=tenant_id, preview_id=preview_id, user=None
+            session, store, tenant_id=tenant_id, preview_id=preview_id, user=None, sites_only=True
         )
     except web_apply.ApplyError as exc:
         logger.info(
