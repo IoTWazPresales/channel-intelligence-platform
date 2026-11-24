@@ -28,6 +28,8 @@
 
 ## Store map (BACKLOG-268) — OpenFreeMap chosen 2026-11-23
 
+- 2026-11-24 t417u: StoreMap shares On the water's side hover cards and basemap dot/land treatment (pps/web/src/features/maps/mapHover.tsx, mapBasemap.ts). Merged a3fcbd5d to integrate (pending this deploy). Steward pin flows unchanged.
+
 - Sell-through shows the MapLibre store map when this tenant has a TileJSON URL in tenant settings. No provider URL is hardcoded in code or migrations; Warren chose OpenFreeMap and it is stored as this tenant's setting via the existing settings API. The SVG dotted basemap remains the fallback and is still used by On the water. Attribution stays the compact OSM/provider (i) control.
 - Shared land dots stay on the dense 0.7 deg / 4px grid, but are smaller and semi-transparent (SVG stroke 1.0 at about 0.42–0.45 opacity; MapLibre dotted-land uses a tighter, ~0.42 alpha stipple) so the land reads cleanly.
 - Confirmed pins are not draggable until the user presses Move pin. Unconfirmed and proposed pins stay draggable. Pin moves can be undone in the session with Ctrl+Z / Cmd+Z or Undo, through the same save path. Boundary rings were replaced with the shipping-map soft glow (`MapMarker`). No store locations were auto-confirmed. BACKLOG-267 still applies. Fourways A02 and Clearwater A01 stay unverified.
