@@ -69,6 +69,15 @@ class Settings(BaseSettings):
         description="Days late or early that raise an activation timing alert "
         "(env CIP_LISTING_ACTIVATION_ALERT_DAYS).",
     )
+    # D-0061 (2026-11-24): the API process may fetch live pages when this is true, so Discover
+    # works from the screen without relying on the supervisor worker env alone.
+    cip_listing_live_fetch: bool = Field(
+        default=False,
+        description=(
+            "Enable live HTTP for listing capture and Discovery on this process "
+            "(env CIP_LISTING_LIVE_FETCH). Supervisor worker env still wins when set."
+        ),
+    )
 
     # Gates all AI-assisted import resolution / column mapping API calls platform-wide.
     ai_assist_enabled: bool = Field(

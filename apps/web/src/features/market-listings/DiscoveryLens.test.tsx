@@ -77,8 +77,21 @@ describe('DiscoveryLens', () => {
   it('disables every preview when live page checking is off', async () => {
     state.live = false;
     mount();
-    await screen.findByText(/Live page checking is switched off/);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Live page checking is off on this server/);
+    expect(screen.queryByTestId('discover-reporting-reason')).not.toBeInTheDocument();
     for (const button of screen.getAllByRole('button', { name: /^Discover/ })) expect(button).toBeDisabled();
+  });
+
+  it('enables Discover one customer when settings are ready and a customer is picked', async () => {
+    mount();
+    const btn = await screen.findByRole('button', { name: 'Discover one customer' });
+    expect(btn).toBeDisabled();
+    expect(await screen.findByTestId('discover-customer-reason')).toHaveTextContent(/Choose a customer/);
+    fireEvent.change(await screen.findByLabelText('Customer to discover'), { target: { value: 'Fixture' } });
+    fireEvent.click(await screen.findByRole('option', { name: 'Fixture customer' }));
+    await waitFor(() => expect(btn).toBeEnabled());
+    expect(screen.queryByTestId('discover-customer-reason')).not.toBeInTheDocument();
   });
 
   it('starts the reporting preview only on the button and never applies automatically', async () => {

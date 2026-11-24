@@ -88,3 +88,18 @@ def test_beat_entry_is_still_registered_but_the_task_is_the_gate() -> None:
     from app.worker.celery_app import build_beat_schedule
 
     assert "listing-capture-autoconfigure" in build_beat_schedule()
+
+
+def test_preview_reporting_scope_uses_the_shared_reporting_helper(monkeypatch) -> None:
+    from app.services.listing_capture.web_discovery import preview as web_preview
+
+    session = _Session()
+    seen: list[str] = []
+
+    def fake_reporting(_session, tenant_id: str):
+        seen.append(tenant_id)
+        return []
+
+    monkeypatch.setattr("app.services.listing_capture.discovery._reporting_customers", fake_reporting)
+    customers = web_preview._load_customers(session, "t-a", {"scope": "reporting"})  # type: ignore[arg-type]
+    assert seen == ["t-a"] and customers == []

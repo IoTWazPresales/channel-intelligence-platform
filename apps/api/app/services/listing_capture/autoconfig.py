@@ -173,7 +173,15 @@ def autoconfigure_sites(
     found_by_tenant: dict[str, list[dict[str, Any]]] = {}
     entries_by_tenant: dict[str, list[dict[str, Any]]] = {}
     cut_short: list[str] = []
+    scheduled_discovery = tenant_ids is not None
     for tid in order:
+        if scheduled_discovery and live:
+            try:
+                from app.services.listing_capture.web_discovery import scheduled as wd_scheduled
+
+                wd_scheduled.run_scheduled_reporting_discovery(session, tenant_id=tid)
+            except Exception:
+                logger.exception("listing autoconfigure: scheduled web discovery failed for %s", tid)
         found = discover_reporting_customers(
             session, tenant_id=tid, http_get=fetch_get, run_store=run_store, fetch_policy=policy
         )

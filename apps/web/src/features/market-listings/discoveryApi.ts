@@ -252,15 +252,56 @@ export function discoveryError(error: unknown): string {
   }
 }
 
+const SETTINGS_MISSING_LABELS: Record<string, string> = {
+  'tenant.country': 'Set the tenant country in Settings → Discovery.',
+  'tenant.domain_endings': 'Set domain endings in Settings → Discovery.',
+};
+
+export type PreviewGateOpts = {
+  busy?: boolean;
+  capabilitiesLoading?: boolean;
+  capabilitiesError?: boolean;
+  customerPicked?: boolean;
+  siteCustomerPicked?: boolean;
+  domainFilled?: boolean;
+};
+
+/** Human-readable reason a Discover/Preview control stays disabled, or null when it may run. */
+export function previewBlockReason(
+  capabilities: DiscoveryCapabilities | undefined,
+  scope: PreviewRequest['scope'],
+  opts: PreviewGateOpts = {},
+): string | null {
+  if (opts.busy) return 'A discovery preview is already running.';
+  if (opts.capabilitiesLoading) return 'Checking discovery availability…';
+  if (opts.capabilitiesError) return 'Discovery availability could not be loaded.';
+  if (!capabilities?.live_fetch) {
+    return 'Live page checking is off on this server. Enable CIP_LISTING_LIVE_FETCH in apps/api/.env (or on the worker).';
+  }
+  const missing = capabilities.settings.missing;
+  if (scope !== 'unlinked_listings' && missing.includes('tenant.country')) {
+    return SETTINGS_MISSING_LABELS['tenant.country'];
+  }
+  if (
+    (scope === 'customer' || scope === 'reporting') &&
+    missing.includes('tenant.domain_endings')
+  ) {
+    return SETTINGS_MISSING_LABELS['tenant.domain_endings'];
+  }
+  if (scope === 'customer' && !opts.customerPicked) return 'Choose a customer to discover.';
+  if (scope === 'domain') {
+    if (!opts.siteCustomerPicked) return 'Choose the customer for this site.';
+    if (!opts.domainFilled) return 'Enter a domain to discover.';
+  }
+  return null;
+}
+
 export function previewAllowed(
   capabilities: DiscoveryCapabilities | undefined,
   scope: PreviewRequest['scope'],
+  opts: PreviewGateOpts = {},
 ): boolean {
-  if (!capabilities?.live_fetch) return false;
-  const missing = capabilities.settings.missing;
-  if (scope === 'unlinked_listings') return true;
-  if (missing.includes('tenant.country')) return false;
-  return scope === 'domain' || !missing.includes('tenant.domain_endings');
+  return previewBlockReason(capabilities, scope, opts) === null;
 }
 
 function useDiscoveryKeys() {

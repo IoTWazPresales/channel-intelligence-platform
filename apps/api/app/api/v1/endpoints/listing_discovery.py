@@ -7,7 +7,6 @@ nothing to the database: the work runs on the worker in a read-only transaction.
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 from typing import Any
 
@@ -21,6 +20,7 @@ from app.db.session_sync import SessionLocal
 from app.models.customer_web_site import WEB_SITE_CONFIRMED, WEB_SITE_PROPOSED, WEB_SITE_REJECTED
 from app.models.dimensions import DimCustomer
 from app.services.listing_capture.observation import listing_live_fetch_enabled
+from app.services.listing_capture.web_discovery.crawl import browser_available
 from app.services.listing_capture.web_discovery import apply as web_apply
 from app.services.listing_capture.web_discovery import preview as web_preview
 from app.services.listing_capture.web_discovery.settings import (
@@ -78,7 +78,7 @@ def get_capabilities(user: dict = Depends(get_current_user)):
             missing = ["tenant.country", "tenant.domain_endings"]
     return {
         "live_fetch": listing_live_fetch_enabled(),
-        "browser_available": importlib.util.find_spec("playwright") is not None,
+        "browser_available": browser_available(),
         "providers": PROVIDERS,
         "settings": {"missing": missing},
     }
@@ -105,7 +105,11 @@ def post_preview(body: PreviewBody, user: dict = Depends(require_roles(Role.STEW
             missing=missing,
         )
     if not listing_live_fetch_enabled():
-        return _error(409, "live_fetch_off", "Live page fetching is switched off on this server.")
+        return _error(
+            409,
+            "live_fetch_off",
+            "Live page fetching is off. Set CIP_LISTING_LIVE_FETCH=1 in apps/api/.env or enable it on the worker.",
+        )
 
     preview_id = web_preview.new_preview_id()
     try:
