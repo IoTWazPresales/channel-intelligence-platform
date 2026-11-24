@@ -25,4 +25,16 @@ describe('createCipTheme color modes', () => {
     expect(tokensFor('dark').bg.default).toBe('#14161a');
     expect(tokensFor('light').bg.default).toBe(lightTokens.bg.default);
   });
+
+  it('matches the dashboard-v2 mockup tokens (docs/design/dashboard-v2) in both modes', () => {
+    const dark = createCipTheme();
+    expect(dark.palette.text.secondary).toBe('rgba(186, 198, 210, 0.82)');
+    expect(dark.palette.divider).toBe('rgba(120, 160, 190, 0.22)');
+    expect(dark.shape.borderRadius).toBe(10);
+    const light = createCipTheme('comfortable', 'light');
+    expect(light.palette.text.secondary).toBe('rgba(40, 54, 68, 0.82)');
+    expect(light.palette.divider).toBe('rgba(32, 52, 72, 0.14)');
+    expect(light.palette.success.main).toBe('#1f7a4d');
+    expect(light.palette.warning.main).toBe('#9a6418');
+  });
 });

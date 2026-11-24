@@ -71,7 +71,7 @@ export function createCipTheme(
             backgroundColor: t.bg.surface,
             border: `1px solid ${t.border.subtle}`,
             boxShadow:
-              mode === 'dark' ? '0 8px 28px rgba(0,0,0,0.35)' : '0 4px 20px rgba(20, 35, 50, 0.08)',
+              mode === 'dark' ? '0 8px 28px rgba(0,0,0,0.25)' : '0 4px 20px rgba(20, 35, 50, 0.08)',
             borderRadius: t.radius.card,
           },
         },

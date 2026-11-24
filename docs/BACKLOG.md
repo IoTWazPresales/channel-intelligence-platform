@@ -4160,3 +4160,11 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 | **Read-only live sample (suggested settings, not saved)** | 218 listings: 42 active, 73 recently gone, 12 historical, 91 without a product (Evetech 23/45/2/18, Takealot 19/28/10/22, Amazon CS 0/0/0/51). |
 | **Open** | Live Discover needs the API to report live fetch; D-0061 gives it to the worker only (Warren to decide). Scope is not shown per listing on screen yet. |
 
+## BACKLOG-272 - Align app theme tokens to the dashboard-v2 mockups
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** 2026-11-24. |
+| **Audit** | Palette, surfaces, borders, accent, semantic colours and radii (card 12, control 10, chip 8) already matched `docs/design/dashboard-v2/{index,targets-builder}.html` in both modes. Two drifts fixed: secondary text alpha 0.72 -> 0.82 (dark `@cip/ui` tokens and `lightTokens`), dark Paper shadow 0.35 -> 0.25. |
+| **Scope** | Tokens and MUI theme only; no new libraries; per-page `alpha(text.primary, 0.72)` overrides left as they are. Test: `cipTheme.test.ts` asserts the mockup values. |
+| **Not done** | Mockup "ink" colours for status text on tinted tiles (`--good-ink` etc.) are not tokens yet; add them only when a component needs them. |

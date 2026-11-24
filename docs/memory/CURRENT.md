@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-24 — store map review fixes (smaller semi-transparent land dots, Move+undo, shipping-map glow). Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it. Last prior live acceptance: 22 November (`c685bf63`).
 **Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
-**Next agent:** Dashboard V2 slices 1 and 2 merged (BACKLOG-269 done except light-theme screenshots); BACKLOG-267 panel caption done. Next: BACKLOG-266 audit, then price fixes R-04/R-05. Read [durable handoff](../handoffs/2026-11-23/README.md).
+**Theme (BACKLOG-272, 2026-11-24):** tokens aligned to the dashboard-v2 mockups (secondary text 0.82, dark Paper shadow 0.25). **Next agent:** Dashboard V2 slices 1 and 2 merged (BACKLOG-269 done except light-theme screenshots); BACKLOG-267 panel caption done. Next: BACKLOG-266 audit, then price fixes R-04/R-05. Read [durable handoff](../handoffs/2026-11-23/README.md).
 
 ## Branch, database and topology
 
