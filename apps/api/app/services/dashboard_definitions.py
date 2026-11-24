@@ -23,6 +23,7 @@ grains = [], period_grain = NULL, filters = {}.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -156,6 +157,8 @@ def _shape(raw: Any) -> tuple[dict[str, Any], V2Request]:
             rules = table.get("rules") if isinstance(table, dict) else None
             if not isinstance(table, dict) or (rules is not None and (not isinstance(rules, list) or len(rules) > 3)):
                 raise _refuse("definition_v2.display.table.rules is a list of at most 3 rules.")
+        if display.get("target") is not None:
+            _check_target(display["target"])
     migrated = raw.get("migrated_from")
     if migrated is not None and (not isinstance(migrated, dict) or _json_size(migrated) > _MAX_MIGRATED_BYTES):
         raise _refuse("definition_v2.migrated_from is a small object.")
@@ -170,6 +173,30 @@ def _shape(raw: Any) -> tuple[dict[str, Any], V2Request]:
     )
     return raw, req
 
+
+_TARGET_KEYS = frozenset({"value", "direction", "risk_margin"})
+_TARGET_DIRECTIONS = frozenset({"at_least", "at_most"})
+
+
+def _finite_number(value: Any) -> bool:
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value)
+
+
+def _check_target(target: Any) -> None:
+    """A KPI widget's personal target (Dashboard V2 s.6).
+
+    The target belongs to the widget and is measured over the widget's own window, so its
+    measure, filters and dates are never copied into a second query document.
+    """
+    if not isinstance(target, dict) or set(target) - _TARGET_KEYS:
+        raise _refuse("definition_v2.display.target has only value, direction and risk_margin.")
+    if not _finite_number(target.get("value")):
+        raise _refuse("definition_v2.display.target.value is a number.")
+    if target.get("direction") not in _TARGET_DIRECTIONS:
+        raise _refuse("definition_v2.display.target.direction is at_least or at_most.")
+    margin = target.get("risk_margin")
+    if margin is not None and (not _finite_number(margin) or margin < 0):
+        raise _refuse("definition_v2.display.target.risk_margin is zero or more.")
 
 def _clean(plan: Plan) -> bool:
     return plan.ok and not plan.refusals

@@ -150,6 +150,10 @@ def test_definition_valid_model_and_governed_with_v1_mirror() -> None:
         ({"query": {"measures": ["cst_sellthrough.reported_soh"], "breakdowns": ["period"]}}, "never added up across dates"),
         ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"top_n": 0}}, "top_n"),
         ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"compare": "false"}}, "compare is true or false"),
+        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": "30000", "direction": "at_least"}}}, "target.value is a number"),
+        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "up"}}}, "at_least or at_most"),
+        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "at_most", "risk_margin": -1}}}, "risk_margin is zero or more"),
+        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"target": {"value": 1, "direction": "at_most", "period": "q3"}}}, "only value, direction and risk_margin"),
     ],
 )
 def test_definition_refused_with_the_planners_text(raw, needle) -> None:
@@ -157,6 +161,12 @@ def test_definition_refused_with_the_planners_text(raw, needle) -> None:
         check_definition(raw, tenant_id="default")
     detail = exc.value.detail()
     assert needle in detail["message"] and detail["refusals"] and needle in detail["refusals"][0]["reason"]
+
+
+def test_kpi_target_is_kept_in_the_widget_display() -> None:
+    raw = {"query": {"measures": ["cst_sellthrough.units"]}, "display": {"kpi": {"compare": True}, "target": {"value": 30000, "direction": "at_least", "risk_margin": 3000}}}
+    c = check_definition(raw, tenant_id="default")
+    assert c.definition["display"]["target"] == {"value": 30000, "direction": "at_least", "risk_margin": 3000}
 
 
 def test_request_from_definition_and_dual_path_switch() -> None:

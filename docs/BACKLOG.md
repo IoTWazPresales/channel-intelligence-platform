@@ -4138,11 +4138,13 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Open ? verified2026-11-23 as design/prototype only, not shipped requested module/theme. |
+| **Status / parked** | In progress - slice 1 (personal KPI targets) shipped 2026-11-24; rest open (see Still open). |
 | **Evidence** | `docs/handoffs/2026-11-23/TARGETS_STATUS.md`; original `docs/specs/DASHBOARD_V2.md` and `docs/design/dashboard-v2/{index,targets-builder}.html` now preserved in Git. Submit previews a dialog; no production target persistence. |
 | **Accepted direction** | Both light/dark themes; stock health below sales charts. Expanded replenishment and aged-stock detail/mock-up/build remain pending. Old saved lightPNG duplicated dark and must not be used as rendered proof. |
 | **Work / constraints** | Extend existing Overview/dashboard/widget/query engine and canonical theme tokens; implement scoped target persistence/validation/API/UI and verify actual behavior. Do not invent another metrics or storage system, alter job/role authorization, or claim illustrative values are real. Preserve original design provenance and review outstanding detail. |
 | **TRIGGER** | Dashboard/Targets delivery resumes after current higher-priority work, or Warren explicitly reprioritizes it. |
+| **Slice 1 shipped (2026-11-24)** | Personal KPI targets. A target is `definition_v2.display.target = {value, direction at_least|at_most, risk_margin?}` on an existing KPI widget (spec s.6: one-to-one with the widget, no copied query; measured over the widget's own dashboard or fixed window). Validated in `dashboard_definitions._check_target`; no migration, no new storage. Widget editor -> Number options -> My target. The KPI tile shows the target line (target, attainment % for at-least, gap as short/headroom/over), On track / At risk / Behind as the existing 3px severity edge, and a narrow MUI progress rail (`HeadlineFigure.progress`). A missed target stays Behind even when the comparison is up. No values are seeded. |
+| **Still open** | Personal home dashboard selection and job-default reset; stock health below sales charts in the starter layout; Brief attention owner/age fields; per-target period separate from the widget window (use the widget fixed window for now); monthly target overlay on the trend chart; expanded replenishment/aged-stock detail; light-theme screenshot acceptance. |
 
 ## BACKLOG-270 - Stock-based listing monitoring scope (active / recently gone / historical)
 

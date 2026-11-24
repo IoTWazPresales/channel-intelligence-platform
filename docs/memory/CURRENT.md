@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-24 - Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it.
 **Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
-**Next agent:** Next wave item: Dashboard V2 and Targets (BACKLOG-269) unless Warren reprioritizes. Read [durable handoff](../handoffs/2026-11-23/README.md).
+**Next agent:** Dashboard V2 slice 1 (KPI targets) merged; next wave item is store location fixes (BACKLOG-267), then BACKLOG-266. Read [durable handoff](../handoffs/2026-11-23/README.md).
 
 ## Branch, database and topology
 
@@ -32,7 +32,9 @@
 - Shared land dots were regenerated denser (0.7 deg / ~4.4 viewBox units, stroke 1.8) and the MapLibre `dotted-land` pattern was tightened to a 4px tile so the two maps stay visually matched at world scale.
 - Pins, proposed pins, details and confirm/skip controls remain in the right-hand panel. No store locations were confirmed. BACKLOG-267 still applies. Fourways A02 and Clearwater A01 stay unverified.
 
-## Targets / Dashboard V2 ? not done
+## Targets / Dashboard V2 - slice 1 shipped 2026-11-24
+
+- Personal KPI targets live on existing KPI widgets as `definition_v2.display.target` (no migration). Editor: Number options -> My target. Tile: target line, attainment rail, On track / At risk / Behind. The remaining items are listed in BACKLOG-269 under Still open.
 
 - Only a design spec and standalone HTML Dashboard/target-builder prototypes were recovered. Submit opens an illustrative dialog; no matching new Targets route/API/product implementation was found. Draft dark/light styling exists; the requested live redesign is not delivered.
 - Exact original drafts now preserved in`docs/design/dashboard-v2/` and`docs/specs/DASHBOARD_V2.md`; they retain design-only provenance. See handoff/TARGETS_STATUS.md for source evidence and limitations.
