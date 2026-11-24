@@ -8,7 +8,7 @@ Overnight rule (`00-EIF-FLOW.md` wins over the step prompts): session 1 does not
 
 | Step | Prompt file | Step log | Branch | PR | Status |
 |---|---|---|---|---|---|
-| 0 | `01-step0-process-rules.md` | `steps/01-step0-process-rules.md` | `docs/impl-process-rules-20261125` | compare URL after push | Session 1 in progress. Not merged. |
+| 0 | `01-step0-process-rules.md` | `steps/01-step0-process-rules.md` | `docs/impl-process-rules-20261125` | compare URL, not merged | Session 1 docs commit `6ab1ce71`. Not merged. |
 | 1 | `02-step1-listings-matrix-centrepiece.md` | `steps/02-step1-listings-matrix-centrepiece.md` | — | — | Not started |
 | 2 | `03-step2-planner-calendar-sellthrough.md` | `steps/03-step2-planner-calendar-sellthrough.md` | — | — | Not started |
 | 3 | `04-step3-discovery-libraries-autodiscover.md` | `steps/04-step3-discovery-libraries-autodiscover.md` | — | — | Not started |

@@ -5,7 +5,7 @@
 - **Worktree:** `C:\Users\warren_eliason\channel-intelligence-platform\.worktrees\impl-step0`
 - **Base:** `origin/feat/integrate-20261103` at `ca8f5f7f`
 - **PR:** compare URL after the docs push. `gh` was not used in this session.
-- **Commits:** `4a076379` merged `docs/live-screen-audit-20261119` (docs file only). Further docs commits are listed in Resume notes after they exist.
+- **Commits:** `4a076379` merged `docs/live-screen-audit-20261119` (docs file only). `6ab1ce71` docs rules, logs, audit copy, reference PNGs, CURRENT, BACKLOG, CONTEXT.
 - **EIF node:** `N-0120` (explicit id). Events through `program.py`: `node.add`, `baseline.add` (`BLN-0019`), `node.lease.acquire`, `node.baseline`, `node.stage` to `implement`. Run `IMPL_step0_20261125`.
 
 ## Checklist
@@ -19,7 +19,7 @@
 - [x] 19 Nov audit merged (`docs/` only): `docs/audits/LIVE_SCREEN_AUDIT_20261119.md`
 - [x] CURRENT and BACKLOG corrections cite file:line or commit
 - [x] Planner mock-up checked: not on disk
-- [ ] Docs commit and push (filled in when that commit exists)
+- [x] Docs commit `6ab1ce71` (push recorded in Resume notes)
 - [ ] Programme ledger commit (may be blocked; see below)
 
 ## ASSUMPTIONS
