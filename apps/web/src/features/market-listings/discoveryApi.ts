@@ -212,6 +212,13 @@ export async function fetchReportingCustomers(signal: AbortSignal): Promise<Cust
   return page.items ?? [];
 }
 
+/** EntitySearchAutocomplete: reporting list when empty; full directory when query length ≥ 2. */
+export async function fetchDiscoveryCustomerOptions(q: string, signal: AbortSignal): Promise<CustomerPick[]> {
+  const trimmed = q.trim();
+  if (trimmed.length >= 2) return fetchCustomers(trimmed, signal);
+  return fetchReportingCustomers(signal);
+}
+
 export async function fetchProducts(q: string, signal: AbortSignal): Promise<ProductPick[]> {
   const page = await apiGet<{ items?: ProductPick[] }>(
     `/api/v1/products?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,

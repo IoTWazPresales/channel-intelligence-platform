@@ -7,7 +7,7 @@ import { useCallback, useState } from 'react';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet } from '@/lib/api';
 
-import { customersListUrl } from './listingCustomerScope';
+import { fetchEntityCustomerOptions } from './listingCustomerScope';
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 
@@ -42,10 +42,10 @@ const COVERAGE_LABEL: Record<string, string> = {
 export function StockNotListedWorklist() {
   const [customer, setCustomer] = useState<CustomerPick | null>(null);
   const customerId = customer?.id ?? null;
-  const fetchCustomers = useCallback(async (q: string, signal: AbortSignal) => {
-    const page = await apiGet<{ items?: CustomerPick[] }>(customersListUrl(false, { q: q || undefined }), { signal });
-    return page.items ?? [];
-  }, []);
+  const fetchCustomers = useCallback(
+    (q: string, signal: AbortSignal) => fetchEntityCustomerOptions(q, signal),
+    [],
+  );
   const customerLabel = useCallback((row: CustomerPick) => row.customer_name || row.customer_code, []);
   const query = useQuery({
     queryKey: ['listing-capture', 'stock-not-listed', customerId],

@@ -24,7 +24,7 @@ import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
-import { customersListUrl } from '@/features/market-listings/listingCustomerScope';
+import { fetchEntityCustomerOptions } from '@/features/market-listings/listingCustomerScope';
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type ProductPick = { id: number; sku: string; name: string; sales_model_name?: string | null };
@@ -100,11 +100,10 @@ export function ChannelIntelligenceWorkspace() {
       apiGet<IntelResponse>(`/api/v1/channel-intelligence?${params.toString()}`, { signal }),
   });
 
-  const fetchCustomers = useCallback(async (query: string, signal: AbortSignal) => {
-    const q = query.trim();
-    const res = await apiGet<{ items: CustomerPick[] }>(customersListUrl(false, { q: q || undefined }), { signal });
-    return res.items ?? [];
-  }, []);
+  const fetchCustomers = useCallback(
+    (query: string, signal: AbortSignal) => fetchEntityCustomerOptions(query, signal),
+    [],
+  );
 
   const fetchProducts = useCallback(async (query: string, signal: AbortSignal) => {
     const q = query.trim();

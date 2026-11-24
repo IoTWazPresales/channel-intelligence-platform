@@ -15,7 +15,7 @@ import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySe
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
-import { customersListUrl } from './listingCustomerScope';
+import { fetchEntityCustomerOptions } from './listingCustomerScope';
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 
@@ -74,10 +74,10 @@ export function ListingSitesLens() {
   const [exampleUrls, setExampleUrls] = useState('');
   const [onboardNote, setOnboardNote] = useState<string | null>(null);
 
-  const fetchCustomers = useCallback(async (q: string, signal: AbortSignal) => {
-    const page = await apiGet<{ items?: CustomerPick[] }>(customersListUrl(false, { q: q || undefined }), { signal });
-    return page.items ?? [];
-  }, []);
+  const fetchCustomers = useCallback(
+    (q: string, signal: AbortSignal) => fetchEntityCustomerOptions(q, signal),
+    [],
+  );
   const customerLabel = useCallback((row: CustomerPick) => row.customer_name || row.customer_code, []);
 
   const rows = sites.data?.items ?? [];

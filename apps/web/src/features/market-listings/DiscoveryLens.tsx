@@ -8,7 +8,7 @@ import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { Panel } from '@/features/workbench-ui/Panel';
 
 import {
-  customerLabel, type CustomerPick, discoveryError, fetchCustomers, previewAllowed, previewBlockReason,
+  customerLabel, type CustomerPick, discoveryError, fetchDiscoveryCustomerOptions, previewAllowed, previewBlockReason,
   type PreviewRequest, useDiscoveryCapabilities, useStartDiscoveryPreview,
 } from './discoveryApi';
 import { DiscoveryPreview } from './DiscoveryPreview';
@@ -78,7 +78,7 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'flex-start' }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <EntitySearchAutocomplete<CustomerPick> label="Customer to discover" size="small"
-                    value={customer} onChange={setCustomer} fetchOptions={fetchCustomers}
+                    value={customer} onChange={setCustomer} fetchOptions={fetchDiscoveryCustomerOptions}
                     getOptionLabel={customerLabel} disabled={busy} />
                 </Box>
                 <Button variant="outlined" aria-label="Discover one customer" disabled={disabled('customer')}
@@ -108,7 +108,7 @@ function DiscoveryWorkspace({ canEdit }: { canEdit: boolean }) {
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'flex-start' }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <EntitySearchAutocomplete<CustomerPick> label="Customer for this site" size="small"
-                    value={siteCustomer} onChange={setSiteCustomer} fetchOptions={fetchCustomers}
+                    value={siteCustomer} onChange={setSiteCustomer} fetchOptions={fetchDiscoveryCustomerOptions}
                     getOptionLabel={customerLabel} disabled={busy} />
                 </Box>
                 <TextField size="small" label="Domain" value={domain} disabled={busy}

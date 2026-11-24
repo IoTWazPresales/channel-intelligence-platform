@@ -113,3 +113,11 @@ export async function searchCustomers(q: string, signal: AbortSignal): Promise<L
   const page = await apiGet<CustomerList>(customersListUrl(false, { q }), { signal });
   return page.items ?? [];
 }
+
+/** Default open list = reporting customers; typed search (2+ chars) searches the full directory. */
+export async function fetchEntityCustomerOptions(q: string, signal: AbortSignal): Promise<ListingCustomerPick[]> {
+  const trimmed = q.trim();
+  if (trimmed.length >= 2) return searchCustomers(trimmed, signal);
+  const page = await apiGet<CustomerList>(customersListUrl(true), { signal });
+  return page.items ?? [];
+}
