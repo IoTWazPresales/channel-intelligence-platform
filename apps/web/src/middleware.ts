@@ -13,21 +13,31 @@ const LINEUP_LEGACY_REDIRECTS: Record<string, string> = {
   '/buy-plans': '/lineup/cases',
 };
 
+/** Redirect target on the incoming origin. Next's internal URL can use the bound listener
+ *  instead of the incoming authority (BACKLOG-266), so take the request Host header, never a
+ *  forwarded host or a query value. Path and query are carried as-is. */
+function incomingUrl(request: NextRequest): URL {
+  const url = new URL(request.url);
+  const host = request.headers.get('host');
+  if (host) url.host = host;
+  return url;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname === '/') {
-    const url = request.nextUrl.clone();
+    const url = incomingUrl(request);
     url.pathname = '/brief';
     return NextResponse.redirect(url);
   }
   if (RETIRED_TO_BRIEF.includes(pathname)) {
-    const url = request.nextUrl.clone();
+    const url = incomingUrl(request);
     url.pathname = '/brief';
     return NextResponse.redirect(url);
   }
   const stockTarget = STOCK_LEGACY_REDIRECTS[pathname];
   if (stockTarget) {
-    const url = request.nextUrl.clone();
+    const url = incomingUrl(request);
     const [path, query] = stockTarget.split('?');
     url.pathname = path;
     if (query) {
@@ -38,7 +48,7 @@ export function middleware(request: NextRequest) {
   }
   const lineupTarget = LINEUP_LEGACY_REDIRECTS[pathname];
   if (lineupTarget) {
-    const url = request.nextUrl.clone();
+    const url = incomingUrl(request);
     url.pathname = lineupTarget;
     return NextResponse.redirect(url);
   }
@@ -50,10 +60,7 @@ export function middleware(request: NextRequest) {
       ''
     ).trim().toLowerCase();
     if (legacyCoverPath || !lens || lens === 'cover') {
-      const url = new URL(request.url);
-      // Next's internal URL can use the bound listener instead of the incoming authority.
-      const host = request.headers.get('host');
-      if (host) url.host = host;
+      const url = incomingUrl(request);
       url.pathname = '/inventory';
       url.searchParams.delete('lens');
       if (url.searchParams.get('tab')?.trim().toLowerCase() === 'cover') {
@@ -62,7 +69,7 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     if (lens === 'inbound') {
-      const url = request.nextUrl.clone();
+      const url = incomingUrl(request);
       url.pathname = '/supply/shipments';
       url.searchParams.delete('lens');
       return NextResponse.redirect(url);

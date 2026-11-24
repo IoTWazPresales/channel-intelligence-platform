@@ -127,6 +127,36 @@ describe('legacy Inventory redirects through the installed Next adapter', () => 
     },
   );
 
+  it.each(
+    ['http://localhost:3107', 'https://inventory.example.test:8443'].flatMap(origin => [
+      ['/', '/brief'],
+      ['/dashboard?zone=attention', '/brief?zone=attention'],
+      ['/exceptions', '/brief'],
+      ['/getting-started', '/brief'],
+      ['/sell-out?product=42', '/stock?product=42&lens=movement'],
+      ['/plan-vs-executed', '/stock?lens=execution'],
+      ['/shipping?product=42', '/supply/shipments?product=42'],
+      ['/buy-plans?product=42', '/lineup/cases?product=42'],
+      ['/stock?lens=inbound&product=42', '/supply/shipments?product=42'],
+    ].map(([path, target]) => [origin, path, target])),
+  )('BACKLOG-266: keeps incoming Host on loopback-bound %s for %s', async (origin, path, target) => {
+    const { adapter } = await import('next/dist/server/web/adapter');
+    const incoming = new URL(origin);
+    const { response, waitUntil } = await adapter({
+      page: '/middleware',
+      request: {
+        url: `${incoming.protocol}//127.0.0.1:3107${path}`,
+        method: 'GET',
+        headers: { host: incoming.host, 'x-forwarded-host': 'other.example' },
+        signal: new AbortController().signal,
+      },
+      handler: async req => middleware(req),
+    });
+    await waitUntil;
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(origin + target);
+  });
+
   it.each([
     ['/stock?lens=movement&family=Notebook', null],
     ['/stock?lens=execution', null],
