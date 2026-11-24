@@ -117,7 +117,7 @@ function LineupContainerInner() {
   })();
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 1.5, pt: 1.5 }} data-testid="lineup-container">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 1.5 }} data-testid="lineup-container">
       <Box data-testid="lineup-cases-strip">
         <HeadlineStrip columns={5}>
           <HeadlineFigure
@@ -208,9 +208,7 @@ function LineupContainerInner() {
       >
         Reporting customers only.
       </Typography>
-      <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-        <LineupWorkspace />
-      </Box>
+      <LineupWorkspace />
     </Box>
   );
 }

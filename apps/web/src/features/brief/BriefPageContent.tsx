@@ -39,7 +39,7 @@ export function BriefPageContent() {
 
   if (isLoading) {
     return (
-      <Box sx={{ flex: 1, display: 'grid', placeItems: 'center', py: 8 }} data-testid="brief-loading">
+      <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }} data-testid="brief-loading">
         <CircularProgress size={32} />
       </Box>
     );
@@ -58,7 +58,7 @@ export function BriefPageContent() {
   const signalCount = data?.signal_count ?? signals.length;
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }} data-testid="brief-page">
+    <Box sx={{ display: 'flex', flexDirection: 'column' }} data-testid="brief-page">
       <Box
         sx={{
           display: 'flex',
@@ -79,7 +79,7 @@ export function BriefPageContent() {
         <MyAccountsBar />
       </Box>
       {signals.length > 0 && data?.read ? <ReadStrip text={data.read} /> : null}
-      <Box sx={{ flex: 1, overflow: 'auto' }}>
+      <Box>
         {signals.length > 0 ? signals.map((sig) => <BriefSignalRow key={sig.id} signal={sig} />) : <BriefEmptyState />}
       </Box>
       {data?.as_of ? (

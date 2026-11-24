@@ -10,6 +10,9 @@ declare module '@mui/material/styles' {
   interface ThemeOptions {
     density?: 'comfortable' | 'compact';
   }
+  interface TypeBackground {
+    elevated: string;
+  }
 }
 
 export function createCipTheme(
@@ -25,14 +28,16 @@ export function createCipTheme(
     },
     typography: {
       fontFamily: 'var(--font-inter, "Inter", "Segoe UI", system-ui, sans-serif)',
+      fontSize: 13,
       h1: { fontWeight: 600, letterSpacing: '-0.02em' },
       h2: { fontWeight: 600, letterSpacing: '-0.02em' },
       h3: { fontWeight: 600 },
       h4: { fontWeight: 600 },
-      h5: { fontWeight: 600 },
+      h5: { fontSize: '1.6875rem', fontWeight: 650, lineHeight: 1.1, letterSpacing: '-0.04em' },
       h6: { fontWeight: 600 },
-      body2: { color: t.text.secondary },
-      caption: { color: t.text.muted },
+      body1: { fontSize: 13, lineHeight: 1.45 },
+      body2: { fontSize: 13, lineHeight: 1.45, color: t.text.secondary },
+      caption: { fontSize: 11, lineHeight: 1.45, color: t.text.muted },
     },
     palette: {
       mode,
@@ -44,7 +49,7 @@ export function createCipTheme(
         main: mode === 'dark' ? '#5fd4c8' : '#0f7a72',
         contrastText: mode === 'dark' ? '#0b0c0f' : '#ffffff',
       },
-      background: { default: t.bg.default, paper: t.bg.surface },
+      background: { default: t.bg.default, paper: t.bg.surface, elevated: t.bg.elevated },
       divider: t.border.subtle,
       text: { primary: t.text.primary, secondary: t.text.secondary },
       success: { main: t.semantic.success },
@@ -95,7 +100,18 @@ export function createCipTheme(
       },
       MuiButton: {
         styleOverrides: {
-          root: { textTransform: 'none', fontWeight: 600, borderRadius: t.radius.control },
+          root: {
+            textTransform: 'none',
+            fontWeight: 600,
+            borderRadius: t.radius.control,
+            minHeight: 34,
+            padding: '6px 11px',
+          },
+        },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: { minHeight: 34, borderRadius: t.radius.control },
         },
       },
       MuiChip: {

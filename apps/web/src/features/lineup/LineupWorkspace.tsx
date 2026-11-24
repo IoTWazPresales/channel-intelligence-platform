@@ -33,7 +33,7 @@ export function LineupWorkspace() {
   const scopeKey = `${slice?.customerId ?? ''}|${slice?.periodStart ?? ''}|${productId ?? ''}|${pendingOnly}`;
 
   return (
-    <Box data-testid="lineup-workspace" sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+    <Box data-testid="lineup-workspace" sx={{ display: 'flex', flexDirection: 'column' }}>
       <ModuleDataSection
         isLoading={isLoading}
         isError={isError}

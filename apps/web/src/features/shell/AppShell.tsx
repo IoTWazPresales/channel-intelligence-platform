@@ -136,6 +136,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           flexShrink: 0,
           borderRight: '1px solid',
           borderColor: 'divider',
+          bgcolor: 'background.elevated',
           height: '100vh',
           overflow: 'hidden',
         }}
@@ -167,7 +168,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             px: { xs: 1, md: 2.5 },
             borderBottom: '1px solid',
             borderColor: 'divider',
-            bgcolor: 'background.default',
+            bgcolor: 'background.elevated',
             zIndex: (t) => t.zIndex.appBar,
           }}
         >
@@ -302,7 +303,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
 
         <Box
           component="main"
-          sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto', pb: { xs: 9, md: 0 } }}
+          data-testid="app-shell-main"
+          sx={{ flex: 1, minHeight: 0, overflow: 'auto', pb: { xs: 9, md: 0 } }}
         >
           {children}
         </Box>

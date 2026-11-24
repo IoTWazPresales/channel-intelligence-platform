@@ -13,4 +13,10 @@ describe('AppShell scroll', () => {
     expect(src).toContain("height: '100vh'");
     expect(src).toContain("overflow: 'hidden'");
   });
+
+  it('uses a single shell scroller (main is not a flex column stretch container)', () => {
+    const mainBlock = src.slice(src.indexOf('data-testid="app-shell-main"'), src.indexOf('{children}', src.indexOf('data-testid="app-shell-main"')));
+    expect(mainBlock).not.toContain("flexDirection: 'column'");
+    expect(mainBlock).not.toContain('display: \'flex\'');
+  });
 });

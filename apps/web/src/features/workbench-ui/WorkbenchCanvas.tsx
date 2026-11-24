@@ -12,9 +12,9 @@ export function WorkbenchCanvas({ children }: { children: ReactNode }) {
     <Box
       data-testid="workbench-canvas"
       sx={{
-        px: { xs: 1.5, md: 2.5 },
-        pt: { xs: 1.5, md: 2 },
-        pb: { xs: 10, md: 3 },
+        px: { xs: 1.5, md: 2.75 },
+        pt: { xs: 1.5, md: 2.25 },
+        pb: { xs: 10, md: 2.75 },
       }}
     >
       {children}

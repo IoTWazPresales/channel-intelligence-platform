@@ -54,7 +54,7 @@ function StockContainerInner() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }} data-testid="stock-container">
+    <Box data-testid="stock-container">
       <StockChrome>
         <StockLensBody lens={lens} />
       </StockChrome>
