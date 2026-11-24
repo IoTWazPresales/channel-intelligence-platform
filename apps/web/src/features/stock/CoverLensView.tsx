@@ -18,8 +18,7 @@ import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridF
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
-import { coverDistributionQueryOptions } from '@/features/stock/coverQueryOptions';
-import { apiGet } from '@/lib/api';
+import { type CoverItem, coverDistributionQueryOptions } from '@/features/stock/coverQueryOptions';
 
 import {
   COVER_UNDER_4W_FILTER,
@@ -28,59 +27,7 @@ import {
   coverStatusLabel,
   coverStatusTone,
   fmtCoverInt,
-  type CoverPairStatus,
 } from './coverStatus';
-
-type CoverItem = {
-  id: string;
-  distributor_id: number;
-  distributor_code: string;
-  distributor_name: string;
-  product_id: number;
-  sku: string;
-  sales_model_name?: string | null;
-  product_name: string;
-  family: string;
-  weeks_of_cover: number | null;
-  derived_stock: number;
-  weekly_velocity: number | null;
-  inbound_open: number;
-  vintage_days: number;
-  status: CoverPairStatus | null;
-  lab_bucket: string | null;
-  replenishment_flag: boolean;
-  cover_as_of_date: string;
-};
-
-type CoverDistribution = {
-  data_unavailable?: boolean;
-  pair_count: number;
-  under_4w: number;
-  mean_woc: number | null;
-  buckets: Record<string, number>;
-  lab_buckets?: { bucket: string; pairs: number }[];
-  headlines?: {
-    soh: number;
-    network_cover: number | null;
-    pairs: number;
-    with_woc: number;
-    distributor_count: number;
-    breach: number;
-    watch: number;
-    excess: number;
-  };
-  items?: CoverItem[];
-  cover_as_of_date?: string | null;
-  weekly_flow?: {
-    points: { week: string; week_start: string; sellOut: number; shipped: number }[];
-    sell_out_through: string | null;
-    shipped_through: string | null;
-  };
-  scopes?: {
-    distributors: { id: number; code: string; name: string; pairs: number }[];
-    families: { family: string; pairs: number }[];
-  };
-};
 
 function useParam(key: string) {
   const router = useRouter();
