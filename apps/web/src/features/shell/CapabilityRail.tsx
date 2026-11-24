@@ -32,7 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NAV_STORAGE_GROUP_EXPANDED, railNavGroups, type NavGroup } from '@/features/shell/navConfig';
 import { activeNavGroup } from '@/features/shell/navPageChrome';
 
-export const RAIL_WIDTH = 252;
+export const RAIL_WIDTH = 172;
 
 /** Opaque-safe hover lift for the raised domain header (bgcolor stays solid so a pinned header never shows leaves through). */
 const raisedHoverOverlay = (t: Theme) => {
@@ -137,7 +137,7 @@ export function CapabilityRail({
       data-testid="capability-rail"
       sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
     >
-      <Box sx={{ px: 2, pt: 2, pb: 1.5 }}>
+      <Box sx={{ px: 1.75, pt: 3, pb: 1.5 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
           <Box
             sx={{
@@ -167,14 +167,15 @@ export function CapabilityRail({
         </Stack>
       </Box>
       <Divider />
-      <List dense component="nav" aria-label="Capability areas" sx={{ flex: 1, overflowY: 'auto', py: 1 }}>
+      <List dense component="nav" aria-label="Capability areas" sx={{ flex: 1, overflowY: 'auto', py: 1, px: 0.5 }}>
         {groups.map((d: NavGroup) => {
           const Icon = DOMAIN_ICONS[d.id] ?? AppsOutlinedIcon;
           const isActive = active?.id === d.id;
           const expanded = open[d.id] ?? isActive;
           const badge = badges?.[d.id];
+          const activeWash = (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.15 : 0.12);
           return (
-            <Box key={d.id} sx={{ px: 1 }}>
+            <Box key={d.id} sx={{ px: 0.75 }}>
               <ListItemButton
                 component={NextLink}
                 href={d.href ?? d.items[0].href}
@@ -183,43 +184,57 @@ export function CapabilityRail({
                 selected={isActive}
                 data-testid={`rail-domain-${d.id}`}
                 sx={{
-                  borderRadius: 1.5,
-                  py: 0.75,
+                  borderRadius: '0 8px 8px 0',
+                  py: 1.1,
+                  px: 1.25,
                   // Sticky within its own group Box: the header holds parent context while
                   // long domains scroll, and is pushed out by the next domain.
                   position: 'sticky',
                   top: 0,
                   zIndex: 2,
-                  ...(expanded
+                  borderLeft: '2px solid',
+                  borderColor: isActive ? 'primary.main' : 'transparent',
+                  ...(isActive
                     ? {
-                        // Raised, fully opaque surface so the open group reads as a container
-                        // and leaves never bleed through the pinned header.
-                        bgcolor: 'background.paper',
-                        '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
+                        color: 'primary.main',
+                        bgcolor: activeWash,
+                        '&:hover': { bgcolor: activeWash },
                         '&.Mui-selected': {
-                          bgcolor: 'background.paper',
-                          '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
+                          bgcolor: activeWash,
+                          '&:hover': { bgcolor: activeWash },
                         },
                       }
-                    : {
-                        // Collapsed-active: no fill, no 3px bar. The bar is leaf language;
-                        // the raised paper surface is expanded-group language. Location is
-                        // carried by primary icon colour + label weight 600 only (LabShell
-                        // after 130189e). Hover may show action.hover; that is not selected fill.
-                        '&.Mui-selected': { bgcolor: 'transparent' },
-                      }),
+                    : expanded
+                      ? {
+                          bgcolor: 'background.paper',
+                          '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
+                          '&.Mui-selected': {
+                            bgcolor: 'background.paper',
+                            '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
+                          },
+                        }
+                      : {
+                          '&.Mui-selected': { bgcolor: 'transparent' },
+                        }),
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 34, color: isActive ? 'primary.main' : 'text.secondary' }}>
-                  <Icon fontSize="small" />
+                <ListItemIcon sx={{ minWidth: 28, color: isActive ? 'primary.main' : 'text.secondary' }}>
+                  <Icon sx={{ fontSize: 18 }} />
                 </ListItemIcon>
                 <ListItemText
                   primary={d.label}
                   primaryTypographyProps={{
-                    variant: 'body2',
-                    fontWeight: isActive ? 600 : 500,
+                    variant: 'caption',
+                    fontWeight: isActive ? 600 : 700,
                     noWrap: false,
-                    sx: { overflow: 'visible', textOverflow: 'clip' },
+                    sx: {
+                      overflow: 'visible',
+                      textOverflow: 'clip',
+                      fontSize: 10,
+                      letterSpacing: '1.4px',
+                      textTransform: 'uppercase',
+                      lineHeight: 1.3,
+                    },
                   }}
                 />
                 {badge != null && badge > 0 ? (
@@ -257,30 +272,25 @@ export function CapabilityRail({
                         onClick={onNavigate}
                         selected={on}
                         sx={{
-                          py: 0.4,
-                          pl: 1.5,
-                          borderRadius: 1,
+                          py: 0.55,
+                          pl: 1.25,
+                          pr: 1,
+                          borderRadius: '0 8px 8px 0',
                           position: 'relative',
-                          // Selection on a leaf is carried by the ::before bar plus text weight
-                          // alone. The Mui-selected fill is dropped: it tripled the signal and
-                          // its tone sat too close to the expanded header's raised surface,
-                          // merging parent and child into one block. Hover feedback is kept.
+                          borderLeft: '2px solid',
+                          borderColor: on ? 'primary.main' : 'transparent',
+                          ...(on
+                            ? {
+                                color: 'primary.main',
+                                bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.15 : 0.12),
+                                '&:hover': {
+                                  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.15 : 0.12),
+                                },
+                              }
+                            : {}),
                           '&.Mui-selected': {
-                            bgcolor: 'transparent',
-                            '&:hover': { bgcolor: 'action.hover' },
-                          },
-                          // Short rounded bar left of the label: position and shape carry the
-                          // active state, not colour alone.
-                          '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            left: '2px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            width: '3px',
-                            height: '15px',
-                            borderRadius: '2px',
-                            bgcolor: on ? 'primary.main' : 'transparent',
+                            bgcolor: on ? undefined : 'transparent',
+                            '&:hover': on ? undefined : { bgcolor: 'action.hover' },
                           },
                         }}
                       >

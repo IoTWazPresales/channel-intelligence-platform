@@ -39,7 +39,7 @@ import { signals } from '../fixtures/operations';
 import { CommandPalette } from './CommandPalette';
 import { domainForPath, labDomains, visibleDomains, visibleLeaves, type LabDomain, type Role } from './labNav';
 
-export const RAIL_WIDTH = 252;
+export const RAIL_WIDTH = 172;
 
 /** Opaque-safe hover lift for the raised domain header (bgcolor stays solid so a pinned header never shows leaves through). */
 const raisedHoverOverlay = (t: Theme) =>

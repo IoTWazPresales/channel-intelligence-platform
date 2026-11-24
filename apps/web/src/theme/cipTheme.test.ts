@@ -33,7 +33,11 @@ describe('createCipTheme color modes', () => {
     expect(dark.palette.background.elevated).toBe('#1a1d23');
     expect(dark.palette.background.paper).toBe('#22262e');
     expect(dark.typography.fontSize).toBe(13);
-    expect(dark.typography.h5?.fontSize).toBe('1.6875rem');
+    expect(dark.typography.h1?.fontSize).toBe('1.6875rem');
+    expect(dark.typography.h5?.fontSize).toBe('0.9375rem');
+    expect(dark.palette.primary.contrastText).toBe('#14161a');
+    const cssBody = dark.components?.MuiCssBaseline?.styleOverrides as { body?: { backgroundImage?: string } } | undefined;
+    expect(cssBody?.body?.backgroundImage).toContain('radial-gradient(ellipse at 25% 0');
     expect(dark.shape.borderRadius).toBe(10);
     const light = createCipTheme('comfortable', 'light');
     expect(light.palette.text.secondary).toBe('rgba(40, 54, 68, 0.82)');
