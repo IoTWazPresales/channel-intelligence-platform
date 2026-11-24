@@ -149,6 +149,20 @@ describe('PromotionPlannerSurface', () => {
     expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/support-bias'))).toBe(false);
   });
 
+  it('loads the timeline case list scoped to reporting customers and official promotion types', async () => {
+    renderPlanner();
+    await waitFor(() =>
+      expect(
+        apiGetMock.mock.calls.some(
+          ([u]) =>
+            String(u).includes('/cpor/cases?') &&
+            String(u).includes('reporting_only=true') &&
+            String(u).includes('official_promotion_types=true'),
+        ),
+      ).toBe(true),
+    );
+  });
+
   it('asks the count endpoint for windows starting in the next 28 days, leaving out cancelled and rejected', async () => {
     renderPlanner();
     await screen.findByTestId('planner-card-starting');

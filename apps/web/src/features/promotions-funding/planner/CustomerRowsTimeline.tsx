@@ -2,13 +2,18 @@
 
 import { Box, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { STAGE_LABEL, type PlanStage } from '@/features/promotions-funding/lifecycle';
 import {
+  axisMonthCount,
   buildTimeline,
-  monthTicks,
+  defaultTimelineViewWindow,
+  monthTicksForAxis,
+  scrollLeftForViewWindow,
   statusLane,
+  TIMELINE_DEFAULT_VIEW_MONTHS,
+  TIMELINE_MONTH_PX,
   weekTicks,
   type StatusLane,
   type TimelineCase,
@@ -44,13 +49,27 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
   status?: 'ready' | 'loading' | 'error';
 }) {
   const theme = useTheme();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const model = useMemo(() => buildTimeline(cases, today), [cases, today]);
+  const viewWindow = useMemo(() => defaultTimelineViewWindow(today), [today]);
   const [scale, setScale] = useState<'month' | 'week'>('month');
+  const monthCount = useMemo(() => axisMonthCount(model.start, model.end), [model.start, model.end]);
+  const trackWidthPx = Math.max(TIMELINE_DEFAULT_VIEW_MONTHS * TIMELINE_MONTH_PX, monthCount * TIMELINE_MONTH_PX);
   const ticks = useMemo(
-    () => (scale === 'week' ? weekTicks(model.start, model.end) : monthTicks(model.start, model.end)),
-    [scale, model.start, model.end],
+    () =>
+      scale === 'week'
+        ? weekTicks(model.start, model.end)
+        : monthTicksForAxis(model.start, model.end, monthCount > 14 ? 12 : 24),
+    [scale, model.start, model.end, monthCount],
   );
   const rows = useMemo(() => customerRows(model.bars), [model.bars]);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || model.bars.length === 0) return;
+    const viewport = el.clientWidth || TIMELINE_DEFAULT_VIEW_MONTHS * TIMELINE_MONTH_PX;
+    el.scrollLeft = scrollLeftForViewWindow(viewWindow.start, model.start, model.end, trackWidthPx, viewport);
+  }, [model.start, model.end, model.bars.length, trackWidthPx, viewWindow.start]);
 
   const laneColor = (key: StatusLane['key']) => {
     if (key === 'live') return theme.palette.success.main;
@@ -76,7 +95,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
   return (
     <Panel
       title="Timeline by customer"
-      subtitle={`Promotion windows · ${model.start} → ${model.end}`}
+      subtitle={`Reporting customers · scroll for full range · ${model.start} → ${model.end}`}
       actions={
         <Stack direction="row" spacing={1} alignItems="center">
           {model.undated > 0 ? (
@@ -127,8 +146,13 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
             No dated promotions in this scope.
           </Typography>
         ) : (
-          <Box sx={{ overflowX: 'auto' }}>
-            <Box sx={{ minWidth: scale === 'week' ? Math.max(520, LABEL_W + ticks.length * WEEK_PX) : 520 }}>
+          <Box ref={scrollRef} sx={{ overflowX: 'auto' }}>
+            <Box
+              sx={{
+                width: trackWidthPx + LABEL_W,
+                minWidth: scale === 'week' ? Math.max(trackWidthPx + LABEL_W, LABEL_W + ticks.length * WEEK_PX) : trackWidthPx + LABEL_W,
+              }}
+            >
               <Stack direction="row" sx={{ height: 20, mb: 0.5 }}>
                 <Box sx={{ width: LABEL_W, flexShrink: 0 }} />
                 <Box sx={{ position: 'relative', flex: 1 }}>
@@ -176,6 +200,14 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                           const color = laneColor(lane.key);
                           const selected = selectedId === b.id;
                           const stage = STAGE_LABEL[b.row.status as PlanStage] ?? b.row.status;
+                          const fillAlpha =
+                            lane.key === 'ended'
+                              ? selected
+                                ? 0.35
+                                : 0.12
+                              : selected
+                                ? 0.55
+                                : 0.28;
                           return (
                             <Box
                               key={b.id}
@@ -198,7 +230,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                                 borderRadius: 0.5,
                                 cursor: 'pointer',
                                 border: `1px solid ${color}`,
-                                bgcolor: alpha(color, selected ? 0.55 : 0.25),
+                                bgcolor: alpha(color, fillAlpha),
                                 outline: selected ? `2px solid ${theme.palette.primary.main}` : 'none',
                                 outlineOffset: 1,
                                 '&:hover': { bgcolor: alpha(color, 0.45) },

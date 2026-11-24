@@ -48,6 +48,60 @@ function monthEnd(iso: string): string {
   return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
 }
 
+export const TIMELINE_MONTH_PX = 72;
+export const TIMELINE_DEFAULT_VIEW_MONTHS = 6;
+export const TIMELINE_WINDOW_MONTHS_BACK = 3;
+export const TIMELINE_WINDOW_MONTHS_FORWARD = 3;
+
+export function addMonthsIso(iso: string, months: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 + months, d)).toISOString().slice(0, 10);
+}
+
+/** Roughly three months before and after today, snapped to month edges — the default scroll focus. */
+export function defaultTimelineViewWindow(today: string): { start: string; end: string } {
+  return {
+    start: monthStart(addMonthsIso(today, -TIMELINE_WINDOW_MONTHS_BACK)),
+    end: monthEnd(addMonthsIso(today, TIMELINE_WINDOW_MONTHS_FORWARD)),
+  };
+}
+
+export function axisMonthCount(axisStart: string, axisEnd: string): number {
+  let n = 0;
+  let cur = monthStart(axisStart);
+  while (cur <= axisEnd) {
+    n += 1;
+    cur = addDaysIso(monthEnd(cur), 1);
+  }
+  return n;
+}
+
+/** Month ticks for long axes: thin labels instead of stacking every month. */
+export function monthTicksForAxis(
+  axisStart: string,
+  axisEnd: string,
+  maxLabels = 14,
+): { label: string; leftPct: number }[] {
+  const all = monthTicks(axisStart, axisEnd);
+  if (all.length <= maxLabels) return all;
+  const step = Math.ceil(all.length / maxLabels);
+  return all.filter((_, i) => i % step === 0 || i === all.length - 1);
+}
+
+/** Scroll offset so the default view window is centred in the viewport. */
+export function scrollLeftForViewWindow(
+  viewStart: string,
+  axisStart: string,
+  axisEnd: string,
+  trackWidthPx: number,
+  viewportPx: number,
+): number {
+  const total = daysBetween(axisStart, axisEnd) + 1;
+  const leftPct = (Math.max(0, daysBetween(axisStart, viewStart)) / total) * 100;
+  const anchorPx = (leftPct / 100) * trackWidthPx;
+  return Math.max(0, Math.min(anchorPx - viewportPx / 4, trackWidthPx - viewportPx));
+}
+
 /** Left and width as percentages of the axis; the window end day is inclusive. */
 export function barGeometry(start: string, end: string, axisStart: string, axisEnd: string) {
   const total = daysBetween(axisStart, axisEnd) + 1;

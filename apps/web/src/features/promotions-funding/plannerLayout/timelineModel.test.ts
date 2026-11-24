@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   barGeometry,
   buildTimeline,
+  defaultTimelineViewWindow,
   monthTicks,
+  monthTicksForAxis,
   orderByCustomer,
+  scrollLeftForViewWindow,
   statusLane,
   weekTicks,
 } from './timelineModel';
@@ -57,6 +60,30 @@ describe('monthTicks', () => {
     expect(ticks.map((t) => t.label)).toEqual(['Nov 2026', 'Dec 2026']);
     expect(ticks[0].leftPct).toBe(0);
     expect(ticks[1].leftPct).toBeCloseTo((30 / 61) * 100, 5);
+  });
+});
+
+describe('monthTicksForAxis', () => {
+  it('thins labels on a long axis', () => {
+    const ticks = monthTicksForAxis('2020-01-01', '2026-12-31', 6);
+    expect(ticks.length).toBeLessThanOrEqual(7);
+    expect(ticks[0].label).toMatch(/Jan 2020/);
+    expect(ticks[ticks.length - 1].label).toMatch(/Dec 2026/);
+  });
+});
+
+describe('defaultTimelineViewWindow', () => {
+  it('centres roughly six months around today', () => {
+    const w = defaultTimelineViewWindow('2026-06-15');
+    expect(w.start).toBe('2026-03-01');
+    expect(w.end).toBe('2026-09-30');
+  });
+});
+
+describe('scrollLeftForViewWindow', () => {
+  it('offsets scroll so the view window start is visible', () => {
+    const left = scrollLeftForViewWindow('2026-03-01', '2020-01-01', '2026-12-31', 2400, 432);
+    expect(left).toBeGreaterThan(0);
   });
 });
 

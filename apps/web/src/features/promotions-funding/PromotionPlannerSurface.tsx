@@ -69,6 +69,7 @@ import {
 } from '@/features/promotions-funding/plannerCards';
 import { buildActionQueue, queueSummary } from '@/features/promotions-funding/plannerLayout/actionQueue';
 import { CustomerRowsTimeline } from '@/features/promotions-funding/planner/CustomerRowsTimeline';
+import { withPlannerCalendarScope } from '@/features/promotions-funding/planner/plannerCalendarScope';
 import { PlannerDetailPanel } from '@/features/promotions-funding/planner/PlannerDetailPanel';
 import { PlannerKpiCard } from '@/features/promotions-funding/planner/PlannerKpiCard';
 import { PlannerQueueSection, type PlannerQueueCard } from '@/features/promotions-funding/planner/PlannerQueueSection';
@@ -164,9 +165,9 @@ function PlannerList({
   }, [proposeRequested]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['cpor', 'cases', 'planner', stageFilter, scope, testDataOnly],
+    queryKey: ['cpor', 'cases', 'planner', 'reporting-calendar', stageFilter, scope, testDataOnly],
     queryFn: ({ signal }) => {
-      const sp = new URLSearchParams({ page: '1', page_size: '500' });
+      const sp = withPlannerCalendarScope(new URLSearchParams({ page: '1', page_size: '500' }));
       if (stageFilter) sp.set('status', stageFilter);
       if (testDataOnly) sp.set('test_data', 'only');
       caseScopeToQuery(scope).forEach((v, k) => sp.set(k, v));

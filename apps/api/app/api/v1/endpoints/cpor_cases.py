@@ -15,7 +15,9 @@ from app.core.security import Role, get_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine, CporClaimEvidenceLine
+from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.customer_reporting import reporting_customer_clauses
 from app.services.cpor.case_supersession import (
     preview_case_supersession,
     restore_case_supersession,
@@ -578,6 +580,8 @@ def _apply_case_filters(
     test_data: str | None,
     q: str | None,
     evidence_basis: str | None,
+    reporting_only: bool = False,
+    official_promotion_types: bool = False,
 ) -> Any:
     """The case-list filters, shared by the list and the exact-count endpoint so they cannot drift.
 
@@ -641,6 +645,12 @@ def _apply_case_filters(
             | (DimCustomer.code.ilike(needle))
             | (DimCustomer.name.ilike(needle))
         )
+    if reporting_only:
+        stmt = stmt.join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id).where(
+            *reporting_customer_clauses()
+        )
+    if official_promotion_types:
+        stmt = stmt.where(CporCase.promotion_type.in_(tuple(CPOR_PROMOTION_TYPE_SET)))
 
     if evidence_basis:
         basis = evidence_basis.strip().lower()
@@ -686,6 +696,14 @@ def list_cases(
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=500),
     evidence_basis: str | None = Query(default=None),
+    reporting_only: bool = Query(
+        default=False,
+        description="When true, only customers with CST Reports expected (not merged).",
+    ),
+    official_promotion_types: bool = Query(
+        default=False,
+        description="When true, only CPOR promotion types (Sell out PP, Sell-Through PP, Stock PP (In-Direct)).",
+    ),
     user: dict = Depends(get_current_user),
 ):
     """List CPOR cases.
@@ -713,6 +731,8 @@ def list_cases(
             test_data=test_data,
             q=q,
             evidence_basis=evidence_basis,
+            reporting_only=reporting_only,
+            official_promotion_types=official_promotion_types,
         )
 
         paginate = page is not None and page_size is not None
