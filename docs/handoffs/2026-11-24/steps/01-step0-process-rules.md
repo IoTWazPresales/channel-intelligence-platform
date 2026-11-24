@@ -20,7 +20,7 @@
 - [x] CURRENT and BACKLOG corrections cite file:line or commit
 - [x] Planner mock-up checked: not on disk
 - [x] Docs commit `6ab1ce71` (push recorded in Resume notes)
-- [ ] Programme ledger commit (may be blocked; see below)
+- [ ] Programme ledger commit — blocked. `git add` of the `.eif` programme paths was denied `CONTROL_PLANE_PROTECTED` on 2026-11-25. N-0120 exists only in the dirty worktree ledger, not in `7406e1b7`.
 
 ## ASSUMPTIONS
 
