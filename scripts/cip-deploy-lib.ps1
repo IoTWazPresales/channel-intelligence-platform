@@ -62,13 +62,29 @@ function Test-CeleryPingOutput {
     return ($Text -match '(?im)^\s*->\s*\S+:\s*OK\b') -or ($Text -match '(?i)\bpong\b')
 }
 
+function Select-LiveWorkerBeat {
+    # BACKLOG-245: readiness is a fresh worker heartbeat (written by a daemon thread, so a busy solo
+    # worker still reports) whose pid is a running process. Input: the JSON line printed by
+    # `python -m app.worker.liveness_check`. Returns the beat (node, pid, age_s) or $null.
+    param([string]$Json, [scriptblock]$PidAlive)
+    if (-not $Json) { return $null }
+    $line = @($Json -split "`r?`n" | Where-Object { $_.Trim().StartsWith('{') } | Select-Object -Last 1)
+    if (-not $line -or -not $line[0]) { return $null }
+    try { $parsed = $line[0] | ConvertFrom-Json } catch { return $null }
+    if (-not $parsed.ok) { return $null }
+    foreach ($beat in @($parsed.beats)) {
+        if ($null -ne $beat.pid -and (& $PidAlive ([int]$beat.pid))) { return $beat }
+    }
+    return $null
+}
+
 function New-DeployRecord {
     param([string]$Mode, [string]$Branch)
     return [ordered]@{
         started = (Get-Date).ToString('s'); mode = $Mode; branch = $Branch
         sha_before = $null; sha_after = $null; lockfile_changed = $null; install = 'not run'
         build = 'not run'; build_id_before = $null; build_id_after = $null
-        restarts = @(); api_ready = $null; celery_ping = $null
+        restarts = @(); api_ready = $null; worker_heartbeat = $null; celery_ping = $null
         web_checks = @(); launches_first = $null; launches_second = $null; launch_problems = @()
         result = 'incomplete'; failure = $null; current_step = $null; failed_step = $null; steps = @(); finished = $null
     }
@@ -81,7 +97,7 @@ function Format-DeployRecord {
     $lines += "**Deploy $($Record.started) ($($Record.mode)):** $($Record.result). Branch ``$($Record.branch)`` ``$($Record.sha_before)`` -> ``$($Record.sha_after)``."
     $lines += "- Lockfile changed: $($Record.lockfile_changed); install: $($Record.install); build: $($Record.build); BUILD_ID ``$($Record.build_id_before)`` -> ``$($Record.build_id_after)``."
     foreach ($r in @($Record.restarts)) { $lines += "- Restart $($r.component): $($r.result) ($($r.detail))." }
-    $lines += "- /health/ready: $($Record.api_ready); Celery ping: $($Record.celery_ping)."
+    $lines += "- /health/ready: $($Record.api_ready); worker heartbeat: $($Record.worker_heartbeat); Celery ping (diagnostic): $($Record.celery_ping)."
     foreach ($w in @($Record.web_checks)) { $lines += "- web 3000 at $($w.at): HTTP $($w.code)." }
     $lines += "- Launch counts: first $(($Record.launches_first | ConvertTo-Json -Compress)), second $(($Record.launches_second | ConvertTo-Json -Compress)); problems: $(@($Record.launch_problems).Count)."
     if (@($Record.steps).Count -gt 0) {
