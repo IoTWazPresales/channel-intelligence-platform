@@ -15,6 +15,8 @@ import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySe
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
+import { customersListUrl } from './listingCustomerScope';
+
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 
 type Seller = {
@@ -73,10 +75,7 @@ export function ListingSitesLens() {
   const [onboardNote, setOnboardNote] = useState<string | null>(null);
 
   const fetchCustomers = useCallback(async (q: string, signal: AbortSignal) => {
-    const page = await apiGet<{ items?: CustomerPick[] }>(
-      `/api/v1/customers?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
-      { signal },
-    );
+    const page = await apiGet<{ items?: CustomerPick[] }>(customersListUrl(false, { q: q || undefined }), { signal });
     return page.items ?? [];
   }, []);
   const customerLabel = useCallback((row: CustomerPick) => row.customer_name || row.customer_code, []);

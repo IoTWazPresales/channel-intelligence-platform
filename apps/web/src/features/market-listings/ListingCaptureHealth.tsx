@@ -1,12 +1,16 @@
 'use client';
 
-import { Alert, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
+import { Alert, Button, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { apiGet } from '@/lib/api';
+import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { StatusChip } from '@/features/workbench-ui/controls';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
+
+import { useDecideSiteCandidate, useSiteCandidates } from './discoveryApi';
+import { customersListUrl } from './listingCustomerScope';
 
 type NewestObservation = {
   fetched_at: string | null;
@@ -95,13 +99,24 @@ function reasonText(row: DiscoveryRow): string {
 }
 
 export function ListingCaptureHealth() {
+  const me = useCurrentUser();
+  const canEdit = me.data?.role === 'admin' || me.data?.role === 'steward';
+  const siteCandidates = useSiteCandidates();
+  const decideSite = useDecideSiteCandidate();
+  const candidatesByCustomer = useMemo(() => {
+    const m = new Map<number, { id: number; domain: string }>();
+    for (const item of siteCandidates.data?.items ?? []) {
+      if (!m.has(item.customer_id)) m.set(item.customer_id, { id: item.id, domain: item.domain });
+    }
+    return m;
+  }, [siteCandidates.data]);
   const health = useQuery({
     queryKey: ['listing-capture', 'capture-health'],
     queryFn: ({ signal }) => apiGet<CaptureHealth>('/api/v1/listing-capture/capture-health', { signal }),
   });
   const { data: customersPage } = useQuery({
     queryKey: ['customers', 'listing-capture-health-names'],
-    queryFn: ({ signal }) => apiGet<CustomerList>('/api/v1/customers?page=1&page_size=200', { signal }),
+    queryFn: ({ signal }) => apiGet<CustomerList>(customersListUrl(true), { signal }),
     staleTime: 60_000,
   });
   const customerLabelById = useMemo(() => {
@@ -233,6 +248,32 @@ export function ListingCaptureHealth() {
             <Typography variant="body2" color="text.secondary">
               {reasonText(row)}
             </Typography>
+            {candidatesByCustomer.has(row.customer_id) ? (
+              <>
+                <StatusChip label="Discovered, waiting for you to confirm" tone="warning" />
+                <Typography variant="caption" color="text.secondary">
+                  {candidatesByCustomer.get(row.customer_id)?.domain}
+                </Typography>
+                {canEdit ? (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={decideSite.isPending}
+                    data-testid={`listing-capture-health-confirm-site-${row.customer_id}`}
+                    onClick={() => {
+                      const candidate = candidatesByCustomer.get(row.customer_id);
+                      if (candidate) decideSite.mutate({ id: candidate.id, action: 'confirm' });
+                    }}
+                  >
+                    Confirm site
+                  </Button>
+                ) : null}
+              </>
+            ) : row.outcome === 'excluded' && (row.reasons ?? []).includes('no_site_key') ? (
+              <Typography variant="caption" color="text.secondary">
+                No site discovered yet — discovery will queue a candidate when found.
+              </Typography>
+            ) : null}
           </Stack>
         );
       })}

@@ -34,7 +34,8 @@ import { ActivationTimingAlerts } from '@/features/market-listings/ActivationTim
 import { COMPETITION_CAPABILITIES, LISTING_CAPABILITIES } from '@/features/market-listings/capabilities';
 import { DiscoveryLens } from '@/features/market-listings/DiscoveryLens';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
-import { ListingCaptureHealth } from '@/features/market-listings/ListingCaptureHealth';
+import { PriceMatrixLens } from '@/features/market-listings/PriceMatrixLens';
+import { customersListUrl } from '@/features/market-listings/listingCustomerScope';
 import { type IntelligenceRow, useListingIntelligence } from '@/features/market-listings/listingIntelligence';
 import { ListingLinksLens } from '@/features/market-listings/ListingLinksLens';
 import { ListingOffersSupply } from '@/features/market-listings/ListingOffersSupply';
@@ -353,7 +354,7 @@ export function MarketSurface() {
   const siteChoices = listingMeta?.sites ?? [];
   const { data: customersPage } = useQuery({
     queryKey: ['customers', 'market-names'],
-    queryFn: ({ signal }) => apiGet<CustomerList>('/api/v1/customers?page=1&page_size=200', { signal }),
+    queryFn: ({ signal }) => apiGet<CustomerList>(customersListUrl(true), { signal }),
     staleTime: 60_000,
   });
   const { data: customerHydrate } = useQuery({
@@ -914,8 +915,8 @@ export function MarketSurface() {
           </>
         }
       >
-        {pathname.startsWith('/competition') ? null : <ListingCaptureHealth />}
-        {lens === 'listings' || lens === 'history' ? (
+        {lens === 'listings' ? <PriceMatrixLens /> : null}
+        {lens === 'history' ? (
           <Stack spacing={2} sx={{ mt: 2 }} data-testid="market-listings-lens">
             <Typography variant="body2" color="text.secondary" data-testid="listing-last-check">
               Checks run every 30 minutes while this computer is running. Last check:{' '}
@@ -1193,7 +1194,7 @@ export function MarketSurface() {
                     onChange={(v) => setParams({ customer: v ? String(v.id) : null })}
                     fetchOptions={async (q, signal) => {
                       const page = await apiGet<CustomerList>(
-                        `/api/v1/customers?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+                        customersListUrl(false, { q: q || undefined }),
                         { signal },
                       );
                       return page.items ?? [];

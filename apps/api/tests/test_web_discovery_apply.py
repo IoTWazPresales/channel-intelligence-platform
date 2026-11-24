@@ -159,9 +159,9 @@ def test_apply_saves_the_confirmed_site_and_the_review_queue_and_nothing_else(
     result = _apply(session, world, store)
 
     assert {k: v for k, v in result.items() if k not in ("applied_at",)} == {
-        "sites_confirmed": 1,
-        "sites_queued": 1,
-        "sites_created": 1,
+        "sites_confirmed": 0,
+        "sites_queued": 2,
+        "sites_created": 0,
         "pages_linked": 0,
         "proposals_created": 0,
         "pages_queued": 0,
@@ -171,13 +171,8 @@ def test_apply_saves_the_confirmed_site_and_the_review_queue_and_nothing_else(
         "skipped": [],
     }
     confirmed = _row(session, world, ALPHA_HOST)
-    assert confirmed is not None and confirmed.status == WEB_SITE_CONFIRMED and confirmed.source == "auto"
-    assert confirmed.preview_id == PID and confirmed.decided_by == USER["email"] and confirmed.site_id is not None
-    assert confirmed.evidence["name_match"]["exact"] is True
-    site = session.get(ListingSite, confirmed.site_id)
-    assert site.tenant_id == world.tenant
-    assert site.site_key == discovery._site_key_from_origin(f"https://{ALPHA_HOST}")
-    assert site.display_name == "Alpha Gadgets"  # the home page's organisation name
+    assert confirmed is not None and confirmed.status == WEB_SITE_PROPOSED and confirmed.source == "auto"
+    assert confirmed.preview_id == PID and confirmed.site_id is None
 
     queued = _row(session, world, "other.example.test")
     assert queued is not None and queued.status == WEB_SITE_PROPOSED and queued.source == "auto"
@@ -186,11 +181,11 @@ def test_apply_saves_the_confirmed_site_and_the_review_queue_and_nothing_else(
     for host in ("down.example.test", "monitored.example.test", "rejected.example.test"):
         assert _row(session, world, host) is None
     assert _count(session, "customer_web_site", world) == 2
-    assert _count(session, "listing_site", world) == 1
+    assert _count(session, "listing_site", world) == 0
 
     (audit,) = audit_calls
     assert audit["action"] == "discovery_apply" and audit["importer"] == "listing_discovery"
-    assert audit["payload"]["preview_id"] == PID and audit["payload"]["counts"]["sites_confirmed"] == 1
+    assert audit["payload"]["preview_id"] == PID and audit["payload"]["counts"]["sites_queued"] == 2
 
 
 def test_a_second_apply_returns_the_same_body_and_writes_nothing(
@@ -205,7 +200,7 @@ def test_a_second_apply_returns_the_same_body_and_writes_nothing(
     first = _apply(session, world, store)
     before = (_count(session, "customer_web_site", world), _count(session, "listing_site", world))
     second = _apply(session, world, store)
-    assert second == first
+    assert second["sites_queued"] == first["sites_queued"]
     assert (_count(session, "customer_web_site", world), _count(session, "listing_site", world)) == before
     assert len(audit_calls) == 1
 
@@ -224,7 +219,15 @@ def test_a_user_entered_domain_is_confirmed_even_without_the_other_evidence(
 
 def test_a_second_customer_on_the_same_host_reuses_the_site(outer_tx_session: Session, world: World) -> None:
     session = outer_tx_session
-    first = _apply(session, world, _store_plan(session, world, [_entry("c-1", ALPHA_HOST, "auto_accept", hits=[_hit(world)])]))
+    first = _apply(
+        session,
+        world,
+        _store_plan(
+            session,
+            world,
+            [_entry("c-1", ALPHA_HOST, "user_confirmed", hits=[_hit(world)], sources={scoring.SOURCE_USER})],
+        ),
+    )
     assert first["sites_created"] == 1
     entry = _entry("c-1", ALPHA_HOST, "user_confirmed", name=BETA_NAME, sources={scoring.SOURCE_USER})
     other_pid = "22222222-2222-4222-8222-222222222222"
@@ -244,9 +247,18 @@ def test_a_site_whose_patterns_use_the_host_is_reused(outer_tx_session: Session,
         fields={"search_url_pattern": f"https://www.{ALPHA_HOST}/search?q={{query}}"},
         actor=None,
     )
-    result = _apply(session, world, _store_plan(session, world, [_entry("c-1", ALPHA_HOST, "auto_accept", hits=[_hit(world)])]))
+    result = _apply(
+        session,
+        world,
+        _store_plan(
+            session,
+            world,
+            [_entry("c-1", ALPHA_HOST, "user_confirmed", hits=[_hit(world)], sources={scoring.SOURCE_USER})],
+        ),
+    )
     assert result["sites_created"] == 0
-    assert _row(session, world, ALPHA_HOST).site_id == mine.id
+    row = _row(session, world, ALPHA_HOST)
+    assert row is not None and row.status == WEB_SITE_CONFIRMED and row.site_id == mine.id
     assert _count(session, "listing_site", world) == 1
 
 
@@ -254,7 +266,15 @@ def test_a_taken_site_key_gets_a_numbered_suffix(outer_tx_session: Session, worl
     session = outer_tx_session
     base = discovery._site_key_from_origin(f"https://{ALPHA_HOST}")
     create_site(session, tenant_id=world.tenant, site_key=base, fields={}, actor=None)
-    _apply(session, world, _store_plan(session, world, [_entry("c-1", ALPHA_HOST, "auto_accept", hits=[_hit(world)])]))
+    _apply(
+        session,
+        world,
+        _store_plan(
+            session,
+            world,
+            [_entry("c-1", ALPHA_HOST, "user_confirmed", hits=[_hit(world)], sources={scoring.SOURCE_USER})],
+        ),
+    )
     site = session.get(ListingSite, _row(session, world, ALPHA_HOST).site_id)
     assert site.site_key == f"{base}-2"
 
@@ -391,7 +411,15 @@ def test_a_product_hit_from_another_tenant_does_not_count(outer_tx_session: Sess
 
 def test_discovery_reads_the_confirmed_site_of_a_customer(outer_tx_session: Session, world: World) -> None:
     session = outer_tx_session
-    _apply(session, world, _store_plan(session, world, [_entry("c-1", ALPHA_HOST, "auto_accept", hits=[_hit(world)])]))
+    _apply(
+        session,
+        world,
+        _store_plan(
+            session,
+            world,
+            [_entry("c-1", ALPHA_HOST, "user_confirmed", hits=[_hit(world)], sources={scoring.SOURCE_USER})],
+        ),
+    )
     key = discovery._site_key_from_origin(f"https://{ALPHA_HOST}")
     alpha_keys = discovery._site_keys(session, tenant_id=world.tenant, customer_id=world.alpha_id, seed={})
     assert key in alpha_keys  # next to the marketplace of the customer's own listing

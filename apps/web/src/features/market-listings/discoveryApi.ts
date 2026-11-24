@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { apiGet, apiPost, apiPut, safeDisplayError } from '@/lib/api';
 
+import { customersListUrl } from './listingCustomerScope';
+
 const ROOT = '/api/v1/listing-capture/discovery';
 
 export type ProviderId = 'ddg_html' | 'ddg_lite' | 'searxng' | 'ddgs_auto';
@@ -198,12 +200,15 @@ export type TenantSettings = {
 export type CustomerPick = { id: number; customer_name: string; customer_code?: string };
 export type ProductPick = { id: number; sku: string; name: string };
 
-// Same customer search contract used by ListingSitesLens; no reporting filter here.
+/** Full directory search (add non-reporting customers to a scope). */
 export async function fetchCustomers(q: string, signal: AbortSignal): Promise<CustomerPick[]> {
-  const page = await apiGet<{ items?: CustomerPick[] }>(
-    `/api/v1/customers?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
-    { signal },
-  );
+  const page = await apiGet<{ items?: CustomerPick[] }>(customersListUrl(false, { q: q || undefined }), { signal });
+  return page.items ?? [];
+}
+
+/** Reporting customers only (default scope). */
+export async function fetchReportingCustomers(signal: AbortSignal): Promise<CustomerPick[]> {
+  const page = await apiGet<{ items?: CustomerPick[] }>(customersListUrl(true), { signal });
   return page.items ?? [];
 }
 

@@ -21,8 +21,10 @@ from app.models.dimensions import (
     DimDistributor,
     DimRegion,
 )
+from app.models.customer_report_config import CustomerReportConfig
 from app.models.import_distributor_si import CustomerSourceTokenAlias
 from app.models.ingestion import ImportJob
+from app.services.customer_reporting import reporting_customer_clauses
 from app.services.customer_duplicate_groups import list_customer_duplicate_groups
 from app.services.customer_usage import (
     cleanup_soft_customer_references,
@@ -262,6 +264,10 @@ async def list_customers(
         default=None,
         description="When true, only key-account customers; when false, only non-key; omit for all",
     ),
+    reporting_only: bool = Query(
+        default=False,
+        description="When true, only customers with reports_expected set and not merged",
+    ),
     disposition: str | None = Query(
         default=None,
         description="Filter no_code_disposition: parked|excluded|set|unset",
@@ -392,6 +398,10 @@ async def list_customers(
 
     if is_key_account is not None:
         filters.append(DimCustomer.is_key_account.is_(bool(is_key_account)))
+
+    if reporting_only:
+        base = base.join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
+        filters.extend(reporting_customer_clauses())
 
     disp = (disposition or "").strip().lower()
     if disp == "parked":

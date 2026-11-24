@@ -24,6 +24,8 @@ import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
+import { customersListUrl } from '@/features/market-listings/listingCustomerScope';
+
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type ProductPick = { id: number; sku: string; name: string; sales_model_name?: string | null };
 
@@ -100,10 +102,7 @@ export function ChannelIntelligenceWorkspace() {
 
   const fetchCustomers = useCallback(async (query: string, signal: AbortSignal) => {
     const q = query.trim();
-    const res = await apiGet<{ items: CustomerPick[] }>(
-      `/api/v1/customers?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
-      { signal },
-    );
+    const res = await apiGet<{ items: CustomerPick[] }>(customersListUrl(false, { q: q || undefined }), { signal });
     return res.items ?? [];
   }, []);
 

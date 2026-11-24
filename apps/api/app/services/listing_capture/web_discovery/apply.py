@@ -280,14 +280,14 @@ def _apply_candidate(
         return
     try:
         with session.begin_nested():
-            if derived in (OUTCOME_AUTO, OUTCOME_USER):
+            if derived == OUTCOME_USER:
                 row, created = confirm_web_site(
                     session,
                     tenant_id=tenant_id,
                     customer_id=int(customer.id),
                     domain=domain,
                     evidence=evidence,
-                    source=WEB_SOURCE_USER if derived == OUTCOME_USER else WEB_SOURCE_AUTO,
+                    source=WEB_SOURCE_USER,
                     preview_id=preview_id,
                     actor=actor,
                     now=now,
@@ -297,7 +297,7 @@ def _apply_candidate(
                     return
                 counts["sites_confirmed"] += 1
                 counts["sites_created"] += 1 if created else 0
-            else:
+            elif derived in (OUTCOME_AUTO, OUTCOME_QUEUE):
                 if existing is not None and existing.status != WEB_SITE_PROPOSED:
                     counts["skipped"].append({"item_id": item_id, "reason": SKIP_CHANGED})
                     return
@@ -326,6 +326,7 @@ def apply_plan(
     preview_id: str,
     user: dict | None,
     now: datetime | None = None,
+    sites_only: bool = False,
 ) -> dict[str, Any]:
     """Write the plan. Commits the session, then stores the result in the plan. Raises ``ApplyError``."""
     plan = plan_store.load(tenant_id, preview_id)
@@ -372,14 +373,15 @@ def apply_plan(
                 now=moment,
                 counts=counts,
             )
-    apply_link_items(
-        session,
-        tenant_id=tenant_id,
-        preview_id=preview_id,
-        result=plan["result"],
-        actor=actor,
-        counts=counts,
-    )
+    if not sites_only:
+        apply_link_items(
+            session,
+            tenant_id=tenant_id,
+            preview_id=preview_id,
+            result=plan["result"],
+            actor=actor,
+            counts=counts,
+        )
 
     record_steward_audit_sync(
         user,

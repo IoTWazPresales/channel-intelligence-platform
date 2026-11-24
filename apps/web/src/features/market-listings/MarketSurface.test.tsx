@@ -27,6 +27,10 @@ vi.mock('@/features/commercial-planner/EntitySearchAutocomplete', () => ({
   EntitySearchAutocomplete: () => null,
 }));
 
+vi.mock('./PriceMatrixLens', () => ({
+  PriceMatrixLens: () => <div data-testid="price-matrix-lens" />,
+}));
+
 const apiState = vi.hoisted(() => ({
   listings: [] as Record<string, unknown>[],
   intel: [] as Record<string, unknown>[],
@@ -128,19 +132,25 @@ describe('MarketSurface', () => {
     );
     await waitFor(() => expect(screen.getByTestId('market-surface')).toBeInTheDocument());
     expect(screen.getByRole('heading', { name: /Market & Listings/i })).toBeInTheDocument();
-    expect(screen.getByTestId('market-listings-lens')).toBeInTheDocument();
+    expect(screen.getByTestId('price-matrix-lens')).toBeInTheDocument();
+    expect(screen.getByTestId('market-add-listing')).toBeInTheDocument();
+    expect(screen.queryByText(/static JSON stub/i)).toBeNull();
+    expect(screen.queryByTestId('listing-capture-health')).toBeNull();
+  });
+
+  it('shows price history lens with last-check caption, not capture health', async () => {
+    nav.search = 'tab=observations';
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('market-listings-lens')).toBeInTheDocument());
     expect(screen.getByTestId('listing-last-check')).toHaveTextContent(
       'Checks run every 30 minutes while this computer is running',
     );
-    // Not "not yet" until the read has answered: first loading, then the real answer.
-    await waitFor(() =>
-      expect(screen.getByTestId('listing-last-check')).toHaveTextContent('Last check: not yet'),
-    );
-    expect(screen.getByTestId('market-add-listing')).toBeInTheDocument();
-    expect(screen.queryByText(/static JSON stub/i)).toBeNull();
-    await waitFor(() => expect(screen.getByTestId('listing-capture-health-due')).toHaveTextContent('3'));
-    expect(screen.getByText('No sites in capture health.')).toBeInTheDocument();
-    expect(screen.getByText('No link-pattern status yet.')).toBeInTheDocument();
+    expect(screen.queryByTestId('listing-capture-health')).toBeNull();
   });
 
   it('leaves capture health off the competitor lenses', async () => {
@@ -252,7 +262,10 @@ describe('MarketSurface', () => {
   });
 
 describe('MarketSurface real counts and the intelligence read (BACKLOG-226)', () => {
-  beforeEach(resetState);
+  beforeEach(() => {
+    resetState();
+    nav.search = 'tab=observations';
+  });
   const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const meta = () => screen.getByText(/monitored listings/);
   const page = (n: number) =>
