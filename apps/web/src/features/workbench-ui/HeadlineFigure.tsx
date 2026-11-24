@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Paper, Skeleton, Stack, Typography } from '@mui/material';
+import { Box, LinearProgress, Paper, Skeleton, Stack, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
 
@@ -32,6 +32,7 @@ export function HeadlineFigure({
   fitBox = false,
   dense = false,
   target,
+  progress,
   sparkline,
   state = 'ready',
   stateNote,
@@ -61,6 +62,8 @@ export function HeadlineFigure({
   dense?: boolean;
   /** Plain target line beside the delta, e.g. "target ≥ 4 weeks". */
   target?: string;
+  /** Narrow target-progress rail under the value (0..1 is clamped); label is the accessible description. */
+  progress?: { value: number; label: string };
   /** Trend under the value; `label` is the accessible description. */
   sparkline?: { values: number[]; label: string };
   state?: FigureState;
@@ -147,6 +150,16 @@ export function HeadlineFigure({
             </Typography>
           ) : null}
         </Stack>
+      ) : null}
+      {progress && !loading && !empty ? (
+        <LinearProgress
+          variant="determinate"
+          value={Math.max(0, Math.min(1, progress.value)) * 100}
+          aria-label={progress.label}
+          color={severity === 'bad' ? 'error' : severity === 'warn' ? 'warning' : severity === 'good' ? 'success' : 'primary'}
+          sx={{ mt: 0.75, height: 4, borderRadius: 2 }}
+          data-testid="figure-target-progress"
+        />
       ) : null}
       {empty && stateNote ? (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, lineHeight: 1.35 }} data-testid="figure-empty-note">

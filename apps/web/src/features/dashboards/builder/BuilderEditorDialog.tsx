@@ -237,6 +237,7 @@ export function BuilderEditorDialog({
     const disp: WidgetDisplay = {};
     if (['bar', 'line', 'area', 'table'].includes(visual) && display.compare) disp.compare = true;
     if (visual === 'kpi' && display.kpi) disp.kpi = display.kpi;
+    if (visual === 'kpi' && display.target && Number.isFinite(display.target.value)) disp.target = display.target;
     if (visual === 'combo' && display.series) disp.series = display.series;
     if (visual === 'dual_axis') disp.series = Object.fromEntries(dualSeries(chosen, display).map((s) => [s.key, { axis: s.axis, kind: s.kind }]));
     if (visual === 'table' && display.table?.rules?.length) disp.table = { rules: display.table.rules.filter((r) => measures.includes(r.measure)).slice(0, MAX_RULES) };
@@ -699,6 +700,63 @@ export function BuilderEditorDialog({
                 }
                 label={spark === false ? 'Trend line: not for this measure (stock is a latest count, or no period)' : 'Trend line'}
               />
+              <Typography variant="overline" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                My target
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                Measured over this tile's dates. Leave the target empty for no target.
+              </Typography>
+              <Stack direction="row" spacing={1} data-testid="builder-editor-target">
+                <TextField
+                  select
+                  size="small"
+                  label="Direction"
+                  value={display.target?.direction ?? 'at_least'}
+                  onChange={(e) =>
+                    setDisplay((d) => (d.target ? { ...d, target: { ...d.target, direction: e.target.value as 'at_least' | 'at_most' } } : d))
+                  }
+                  disabled={!display.target}
+                  sx={{ minWidth: 130 }}
+                >
+                  <MenuItem value="at_least">At least</MenuItem>
+                  <MenuItem value="at_most">At most</MenuItem>
+                </TextField>
+                <TextField
+                  size="small"
+                  type="number"
+                  label="Target"
+                  value={display.target?.value ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const n = Number(raw);
+                    setDisplay((d) => {
+                      if (raw === '' || !Number.isFinite(n)) {
+                        const { target: _drop, ...rest } = d;
+                        return rest;
+                      }
+                      return { ...d, target: { direction: d.target?.direction ?? 'at_least', ...d.target, value: n } };
+                    });
+                  }}
+                  inputProps={{ 'aria-label': 'Target value' }}
+                />
+                <TextField
+                  size="small"
+                  type="number"
+                  label="At-risk margin"
+                  value={display.target?.risk_margin ?? ''}
+                  disabled={!display.target}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const n = Number(raw);
+                    setDisplay((d) => {
+                      if (!d.target) return d;
+                      const { risk_margin: _m, ...t } = d.target;
+                      return { ...d, target: raw === '' || !Number.isFinite(n) || n < 0 ? t : { ...t, risk_margin: n } };
+                    });
+                  }}
+                  inputProps={{ 'aria-label': 'At-risk margin', min: 0 }}
+                />
+              </Stack>
             </Box>
           ) : null}
 

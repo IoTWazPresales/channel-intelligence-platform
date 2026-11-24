@@ -127,6 +127,8 @@ export type WidgetDisplay = {
   top_n?: number;
   series?: Record<string, { kind?: 'bar' | 'line' | 'area'; axis?: 'left' | 'right' }>;
   kpi?: { compare?: boolean; sparkline?: boolean };
+  /** Personal KPI target over this widget's own window (Dashboard V2 s.6). */
+  target?: { value: number; direction: 'at_least' | 'at_most'; risk_margin?: number };
   table?: { rules?: ColourRule[] };
   /** Starter KPI caption, e.g. "as of latest report on or before {to}". */
   caption?: string;

@@ -63,6 +63,23 @@ describe('v2 widget rendering', () => {
     expect(screen.getByTestId('widget-comparison-note')).toHaveTextContent('boundary buckets may be partial');
   });
 
+  it('shows a KPI target as status, attainment rail and gap; a missed target is Behind', () => {
+    const d: DefinitionV2 = { v: 1, query: { measures: [measures[0]] }, display: { target: { value: 30000, direction: 'at_least', risk_margin: 3000 } } };
+    const r = { ...result, columns: [result.columns[1]], rows: [{ [measures[0]]: 24860 }], totals: { [measures[0]]: 24860 } };
+    renderWithProviders(<V2WidgetBody def={d} visual="kpi" catalog={catalog} result={r} loading={false} error={null} testKey="target" />);
+    const tile = screen.getByTestId('dashboard-widget-value-target');
+    expect(tile).toHaveTextContent('83%');
+    expect(tile).toHaveTextContent('short');
+    expect(tile).toHaveTextContent('Behind');
+    expect(screen.getByRole('progressbar', { name: /83% of target/ })).toBeInTheDocument();
+  });
+
+  it('a KPI without a target shows no target rail', () => {
+    const r = { ...result, columns: [result.columns[1]], rows: [{ [measures[0]]: 5 }], totals: { [measures[0]]: 5 } };
+    renderWithProviders(<V2WidgetBody def={{ v: 1, query: { measures: [measures[0]] } }} visual="kpi" catalog={catalog} result={r} loading={false} error={null} testKey="notarget" />);
+    expect(screen.queryByTestId('figure-target-progress')).toBeNull();
+  });
+
   it('adds comparison table columns with the original currency and rate units', () => {
     renderWithProviders(<V2WidgetBody def={{ ...def, display: { compare: true } }} visual="table" catalog={catalog} result={result} loading={false} error={null} testKey="compare-table"
       comparison={{ result, window: null, previousWindow: null, label: 'previous period' }} />);

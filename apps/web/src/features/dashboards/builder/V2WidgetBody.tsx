@@ -34,6 +34,7 @@ import { ComparisonChart } from './ComparisonChart';
 import { mergeComparison, type ComparisonData } from './comparison';
 import type { SelectDatum } from './clickFilters';
 import { kpiDelta } from './dates';
+import { TARGET_STATUS_LABEL, targetLine, targetProgress } from './targets';
 import { effectiveVisualV2 } from './fit';
 import { dualSeries, grainRows, measureHeading, pivotRows, scatterRows } from './advancedShape';
 import { PivotTable } from './PivotTable';
@@ -404,12 +405,18 @@ export function V2WidgetBody(props: V2WidgetBodyProps) {
     const delta = kpi?.compare ? kpiDelta(totalNum, prev, { ratio: isRatio(first) }) : null;
     const spark = kpi?.sparkline?.ok ? periodRows(kpi.sparkline, [measureIds[0]]) : [];
     const values = spark.map((r) => (typeof r[measureIds[0]] === 'number' ? (r[measureIds[0]] as number) : 0));
+    const target = def.display?.target;
+    const tp = targetProgress(totalNum, target);
+    const fmtTarget = (n: number) => formatChartValue(n, unit, 'full');
     return (
       <HeadlineFigure
         compact
         fitBox
         label={firstLabel}
         value={formatChartValue(totalNum, unit, 'full')}
+        severity={tp ? (tp.status === 'on_track' ? 'good' : tp.status === 'at_risk' ? 'warn' : 'bad') : undefined}
+        target={tp && target ? targetLine(tp, target, fmtTarget) + ' · ' + TARGET_STATUS_LABEL[tp.status] : undefined}
+        progress={tp?.attainment != null ? { value: tp.attainment, label: firstLabel + ': ' + Math.round(tp.attainment * 100) + '% of target' } : undefined}
         delta={
           kpi?.compare
             ? delta

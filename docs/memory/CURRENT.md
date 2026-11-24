@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-24 — store map review fixes (smaller semi-transparent land dots, Move+undo, shipping-map glow). Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it. Last prior live acceptance: 22 November (`c685bf63`).
 **Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
-**Next agent:** Next wave item: Dashboard V2 and Targets (BACKLOG-269) unless Warren reprioritizes. Read [durable handoff](../handoffs/2026-11-23/README.md).
+**Next agent:** Dashboard V2 slice 1 (KPI targets) merged; next wave item is store location fixes (BACKLOG-267), then BACKLOG-266. Read [durable handoff](../handoffs/2026-11-23/README.md).
 
 ## Branch, database and topology
 
@@ -32,7 +32,9 @@
 - Shared land dots stay on the dense 0.7 deg / 4px grid, but are smaller and semi-transparent (SVG stroke 1.0 at about 0.42–0.45 opacity; MapLibre dotted-land uses a tighter, ~0.42 alpha stipple) so the land reads cleanly.
 - Confirmed pins are not draggable until the user presses Move pin. Unconfirmed and proposed pins stay draggable. Pin moves can be undone in the session with Ctrl+Z / Cmd+Z or Undo, through the same save path. Boundary rings were replaced with the shipping-map soft glow (`MapMarker`). No store locations were auto-confirmed. BACKLOG-267 still applies. Fourways A02 and Clearwater A01 stay unverified.
 
-## Targets / Dashboard V2 ? not done
+## Targets / Dashboard V2 - slice 1 shipped 2026-11-24
+
+- Personal KPI targets live on existing KPI widgets as `definition_v2.display.target` (no migration). Editor: Number options -> My target. Tile: target line, attainment rail, On track / At risk / Behind. The remaining items are listed in BACKLOG-269 under Still open.
 
 - Only a design spec and standalone HTML Dashboard/target-builder prototypes were recovered. Submit opens an illustrative dialog; no matching new Targets route/API/product implementation was found. Draft dark/light styling exists; the requested live redesign is not delivered.
 - Exact original drafts now preserved in`docs/design/dashboard-v2/` and`docs/specs/DASHBOARD_V2.md`; they retain design-only provenance. See handoff/TARGETS_STATUS.md for source evidence and limitations.
