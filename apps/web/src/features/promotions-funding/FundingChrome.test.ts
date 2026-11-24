@@ -18,6 +18,6 @@ describe('fundingLensFromPath', () => {
 
 describe('lab dimensional tokens', () => {
   it('rail width matches LabShell RAIL_WIDTH', () => {
-    expect(RAIL_WIDTH).toBe(252);
+    expect(RAIL_WIDTH).toBe(172);
   });
 });

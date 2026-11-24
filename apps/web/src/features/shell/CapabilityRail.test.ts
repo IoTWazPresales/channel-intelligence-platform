@@ -11,19 +11,18 @@ const lab = readFileSync(join(here, '../../design-lab/shell/LabShell.tsx'), 'utf
 
 describe('CapabilityRail BACKLOG-181 port', () => {
   it('rail width matches LabShell', () => {
-    expect(RAIL_WIDTH).toBe(252);
-    expect(lab).toContain('export const RAIL_WIDTH = 252');
+    expect(RAIL_WIDTH).toBe(172);
+    expect(lab).toContain('export const RAIL_WIDTH = 172');
   });
 
-  it('carries the lab leaf marker, sticky header, raised group, and no guide rail', () => {
+  it('carries sticky headers, raised groups, mockup accent rails, and no guide rail', () => {
     for (const src of [prod, lab]) {
       expect(src).toContain("position: 'sticky'");
-      expect(src).toContain("width: '3px'");
-      expect(src).toContain("height: '15px'");
-      expect(src).toContain("borderRadius: '2px'");
       expect(src).toContain("bgcolor: 'background.paper'");
-      expect(src).toContain("'&.Mui-selected': { bgcolor: 'transparent' }");
     }
+    expect(prod).toContain("borderLeft: '2px solid'");
+    expect(prod).toContain("textTransform: 'uppercase'");
+    expect(prod).toContain("letterSpacing: '1.4px'");
     expect(prod).not.toContain("borderLeft: '1px solid'");
     expect(lab).not.toContain("borderLeft: '1px solid'");
   });
