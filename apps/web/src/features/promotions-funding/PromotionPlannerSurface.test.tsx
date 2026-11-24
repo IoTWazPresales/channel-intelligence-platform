@@ -164,19 +164,44 @@ describe('PromotionPlannerSurface', () => {
     );
   });
 
+  it('scopes proposed, ended, and headline count requests to reporting customers', async () => {
+    renderPlanner();
+    await waitFor(() =>
+      expect(
+        apiGetMock.mock.calls.some(
+          ([u]) =>
+            String(u).includes('status=proposed') &&
+            String(u).includes('reporting_only=true') &&
+            String(u).includes('official_promotion_types=true'),
+        ),
+      ).toBe(true),
+    );
+    expect(
+      apiGetMock.mock.calls.some(
+        ([u]) =>
+          String(u).includes('status=ended') &&
+          String(u).includes('reporting_only=true') &&
+          String(u).includes('official_promotion_types=true'),
+      ),
+    ).toBe(true);
+    expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/cpor/cases/counts?reporting_only=true'))).toBe(true);
+  });
+
   it('asks the count endpoint for windows starting in the next 28 days, leaving out cancelled and rejected', async () => {
     renderPlanner();
     await screen.findByTestId('planner-card-starting');
     await waitFor(() => {
       expect(
         apiGetMock.mock.calls.some(([u]) =>
-          /\/cpor\/cases\/counts\?window_from=\d{4}-\d{2}-\d{2}&window_to=\d{4}-\d{2}-\d{2}&exclude_status=cancelled&exclude_status=rejected/.test(
+          /\/cpor\/cases\/counts\?reporting_only=true&window_from=\d{4}-\d{2}-\d{2}&window_to=\d{4}-\d{2}-\d{2}&exclude_status=cancelled&exclude_status=rejected/.test(
             String(u),
           ),
         ),
       ).toBe(true);
     });
-    expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/cpor/cases/counts?status=proposed'))).toBe(true);
+    expect(
+      apiGetMock.mock.calls.some(([u]) => String(u).includes('/cpor/cases/counts?reporting_only=true&status=proposed')),
+    ).toBe(true);
   });
 
   it('shows drafts and ended from the exact counts, not from the capped list', async () => {
@@ -402,7 +427,10 @@ describe('PromotionPlannerSurface', () => {
   });
 
   it('shows the drafts and ended cards as failed, not zero, when the count request fails', async () => {
-    countsOverride = (url) => (!url.includes('?') ? new Error('boom') : undefined);
+    countsOverride = (url) =>
+      url.includes('/cpor/cases/counts?reporting_only=true') && !url.includes('status=') && !url.includes('window_from=')
+        ? new Error('boom')
+        : undefined;
     renderPlanner();
     await waitFor(() => expect(screen.getByTestId('planner-card-drafts')).toHaveAttribute('data-state', 'empty'));
     expect(screen.getByTestId('planner-card-ended')).toHaveAttribute('data-state', 'empty');

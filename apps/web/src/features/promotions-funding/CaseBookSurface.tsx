@@ -182,14 +182,14 @@ export function CaseBookSurface() {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'cases', 'book'],
     queryFn: ({ signal }) =>
-      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500', { signal }),
+      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&reporting_only=true', { signal }),
   });
 
   const { data: scopedPage, isLoading: scopedLoading } = useQuery({
     queryKey: ['cpor', 'cases', 'book', 'scoped', scope, testDataOnly],
     enabled: hasGridScope,
     queryFn: ({ signal }) => {
-      const sp = new URLSearchParams({ page: '1', page_size: '500' });
+      const sp = new URLSearchParams({ page: '1', page_size: '500', reporting_only: 'true' });
       if (testDataOnly) sp.set('test_data', 'only');
       caseScopeToQuery(scope).forEach((v, k) => sp.set(k, v));
       return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });

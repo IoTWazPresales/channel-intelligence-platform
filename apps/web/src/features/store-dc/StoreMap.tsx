@@ -2,7 +2,7 @@
 
 import { Box, Button, TextField, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 
@@ -82,6 +82,7 @@ export function StoreMap() {
   const proposalConfirm = useProposalConfirm();
   const mapSettings = useMapSettings();
   const useLibre = !mapSettings.pending && !!mapSettings.settings.tilejsonUrl;
+  const [boardScope, setBoardScope] = useState<'reporting' | 'all'>('reporting');
   const [customerId, setCustomerId] = useState<number | 'all'>('all');
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [hoverClusterId, setHoverClusterId] = useState<string | null>(null);
@@ -126,9 +127,13 @@ export function StoreMap() {
   } | null>(null);
 
   const mapQuery = useQuery({
-    queryKey: ['store-dc-map'],
-    queryFn: ({ signal }) => apiGet<StoreMapPayload>('/api/v1/store-dc/map', { signal }),
+    queryKey: ['store-dc-map', boardScope],
+    queryFn: ({ signal }) => {
+      const suffix = boardScope === 'reporting' ? '?reporting_only=true' : '';
+      return apiGet<StoreMapPayload>(`/api/v1/store-dc/map${suffix}`, { signal });
+    },
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });
 
   const stores = mapQuery.data?.stores ?? [];
@@ -206,6 +211,12 @@ export function StoreMap() {
 
   function chooseCustomer(next: number | 'all') {
     setCustomerId(next);
+    mapView.reset();
+  }
+
+  function showAllBoardCustomers() {
+    setBoardScope('all');
+    setCustomerId('all');
     mapView.reset();
   }
 
@@ -449,7 +460,11 @@ export function StoreMap() {
         </Typography>
       ) : null}
       <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }} data-testid="store-map-customers">
-        <Button size="small" variant={customerId === 'all' ? 'contained' : 'outlined'} onClick={() => chooseCustomer('all')}>
+        <Button
+          size="small"
+          variant={boardScope === 'all' && customerId === 'all' ? 'contained' : 'outlined'}
+          onClick={() => showAllBoardCustomers()}
+        >
           All customers
         </Button>
         {(mapQuery.data?.customers ?? []).map((customer) => (

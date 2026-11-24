@@ -8,7 +8,9 @@ from app.models.dimensions import CustomerLocation
 from app.models.store_dc import SiteCandidate
 from app.services import tenant_settings
 from app.services.store_dc.candidates import decide_candidate, refresh_candidates
+from app.models.customer_report_config import CustomerReportConfig
 from app.services.store_dc.map import build_store_map, confirm_pins, drop_pin
+from app.services.store_dc.read_model import list_board_customers
 from app.services.store_dc.place_name import (
     normalise_place,
     place_name_from_raw,
@@ -464,3 +466,27 @@ def test_proposals_follow_the_tenant_country_setting_opus_r05(world: World):
     za = proposal()
     assert za["outcome"] == "suggest" and za["place"] == place["name"]
     assert place_table_for_country(None) is None and place_table_for_country("za ") is _ZA
+
+
+def test_store_map_and_board_customers_default_to_reporting_only_when_asked(world: World):
+    reporting = world.customer("SDC-REP")
+    other = world.customer("SDC-OTH")
+    product = world.product()
+    site = world.code("SDC-STORE")
+    world.weeks(reporting, product, [4], soh=2, site=site)
+    world.weeks(other, product, [3], soh=2, site=site)
+    cfg = world.db.execute(
+        select(CustomerReportConfig).where(CustomerReportConfig.customer_id == reporting.id)
+    ).scalar_one()
+    cfg.reports_expected = True
+    world.db.flush()
+    full_map = build_store_map(world.db, world.tenant)
+    reporting_map = build_store_map(world.db, world.tenant, reporting_only=True)
+    assert {store["customer_id"] for store in full_map["stores"]} == {reporting.id, other.id}
+    assert {store["customer_id"] for store in reporting_map["stores"]} == {reporting.id}
+    assert {c["id"] for c in full_map["customers"]} == {reporting.id, other.id}
+    assert {c["id"] for c in reporting_map["customers"]} == {reporting.id}
+    board_all = {c["id"] for c in list_board_customers(world.db, world.tenant)}
+    board_reporting = {c["id"] for c in list_board_customers(world.db, world.tenant, reporting_only=True)}
+    assert board_all == {reporting.id, other.id}
+    assert board_reporting == {reporting.id}

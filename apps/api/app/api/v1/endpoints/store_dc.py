@@ -133,8 +133,12 @@ def post_site_level(
 
 
 @router.get("/customers")
-def get_customers(db: Session = Depends(_sync_db), user: dict = Depends(get_current_user)):
-    return {"customers": list_board_customers(db, _tenant(user))}
+def get_customers(
+    reporting_only: bool = Query(default=False),
+    db: Session = Depends(_sync_db),
+    user: dict = Depends(get_current_user),
+):
+    return {"customers": list_board_customers(db, _tenant(user), reporting_only=reporting_only)}
 
 
 @router.get("/customers/{customer_id}")
@@ -250,10 +254,11 @@ def get_lead_times(
 @router.get("/map")
 def get_map(
     customer_id: list[int] = Query(default=[]),
+    reporting_only: bool = Query(default=False),
     db: Session = Depends(_sync_db),
     user: dict = Depends(get_current_user),
 ):
-    return build_store_map(db, _tenant(user), customer_id or None)
+    return build_store_map(db, _tenant(user), customer_id or None, reporting_only=reporting_only)
 
 
 @router.post("/pins/confirm")

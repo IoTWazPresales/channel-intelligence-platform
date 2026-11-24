@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
@@ -153,18 +153,38 @@ const normsPayload = {
   ],
 };
 
-vi.mock('@/lib/api', () => ({
-  apiGet: (url: string) => {
+const { apiGetMock } = vi.hoisted(() => ({
+  apiGetMock: vi.fn((url: string) => {
     if (url.includes('/intelligence/portfolio')) return Promise.resolve(portfolioPayload);
     if (url.includes('/intelligence/norms')) return Promise.resolve(normsPayload);
     if (url.includes('/settlement/book')) return Promise.resolve(bookPayload);
     if (url.includes('/cpor/cases')) return Promise.resolve(listPayload);
     return Promise.resolve({});
-  },
+  }),
+}));
+
+vi.mock('@/lib/api', () => ({
+  apiGet: (url: string) => apiGetMock(url),
   apiPost: vi.fn(),
 }));
 
 describe('CaseBookSurface', () => {
+  beforeEach(() => {
+    apiGetMock.mockClear();
+  });
+
+  it('loads the case book with reporting-only customers by default', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CaseBookSurface />
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('reporting_only=true'))).toBe(true),
+    );
+  });
+
   it('does not mount the settlement desk and labels open-book vs FX-blocked scopes', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderWithProviders(

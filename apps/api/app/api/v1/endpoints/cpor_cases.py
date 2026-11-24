@@ -819,6 +819,7 @@ def count_cases(
     test_data: str | None = Query(default=None, description="commercial (default) | only | all"),
     q: str | None = Query(default=None),
     evidence_basis: str | None = Query(default=None),
+    reporting_only: bool = Query(default=False),
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Exact count of CURRENT cases (``superseded_by_case_id`` null) for the planner cards.
@@ -852,6 +853,7 @@ def count_cases(
             test_data=test_data,
             q=q,
             evidence_basis=evidence_basis,
+            reporting_only=reporting_only,
         )
         if exclude_status:
             stmt = stmt.where(CporCase.status.notin_(exclude_status))

@@ -185,8 +185,10 @@ function PlannerList({
     refetch: refetchProposed,
   } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'proposed'],
-    queryFn: ({ signal }) =>
-      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&status=proposed', { signal }),
+    queryFn: ({ signal }) => {
+      const sp = withPlannerCalendarScope(new URLSearchParams({ page: '1', page_size: '500', status: 'proposed' }));
+      return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
+    },
   });
 
   const {
@@ -196,8 +198,10 @@ function PlannerList({
     refetch: refetchEnded,
   } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'ended'],
-    queryFn: ({ signal }) =>
-      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&status=ended', { signal }),
+    queryFn: ({ signal }) => {
+      const sp = withPlannerCalendarScope(new URLSearchParams({ page: '1', page_size: '500', status: 'ended' }));
+      return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
+    },
   });
 
   // The local calendar day, re-read every minute so the rolling window and today marker follow midnight.

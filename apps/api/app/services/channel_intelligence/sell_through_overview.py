@@ -399,12 +399,11 @@ def product_label(p: DimProduct | None, product_id: int) -> str:
 
 
 def in_view_config_rows_select() -> Any:
-    """Config rows of the customers always in view: reporting customers (the shared definition, flag
-    true and not merged away) and key accounts (unchanged rule)."""
+    """Config rows of the customers always in view: reporting customers only (shared definition)."""
     return (
         select(CustomerReportConfig, DimCustomer)
         .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
-        .where(or_(reporting_customer_expr(), DimCustomer.is_key_account.is_(True)))
+        .where(reporting_customer_expr())
     )
 
 
@@ -1065,8 +1064,7 @@ def filter_options(session: Session, tenant_id: str) -> dict[str, Any]:
         )
     }
     reporting = {int(cid) for cid in session.scalars(reporting_customer_ids_select())}
-    key_accounts = {int(c) for c in session.scalars(select(DimCustomer.id).where(DimCustomer.is_key_account.is_(True)))}
-    ids = set(with_data) | reporting | key_accounts
+    ids = reporting
     custs = list(session.scalars(select(DimCustomer).where(DimCustomer.id.in_(ids or {-1}))))
     prod_ids = select(s.product_id).where(s.tenant_id == tenant_id).distinct().subquery()
 

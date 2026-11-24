@@ -49,11 +49,14 @@ export type CaseCounts = {
   status_counts_current: Record<string, number>;
 };
 
-export const BASE_COUNTS_URL = '/api/v1/cpor/cases/counts';
+/** Planner headline cards default to reporting customers only (same definition as the timeline). */
+const PLANNER_COUNTS_REPORTING = 'reporting_only=true';
+
+export const BASE_COUNTS_URL = `/api/v1/cpor/cases/counts?${PLANNER_COUNTS_REPORTING}`;
 
 /** Awaiting approval: current cases in Proposed. */
 export function awaitingCountUrl(): string {
-  return `${BASE_COUNTS_URL}?status=proposed`;
+  return `${BASE_COUNTS_URL}&status=proposed`;
 }
 
 /** Starting in 4 weeks: window starts in [today, today + 28 days], cancelled and rejected left out. */
@@ -61,7 +64,7 @@ export function startingCountUrl(today: string): { url: string; from: string; to
   const from = todayIso(today);
   const to = addDaysIso(from, STARTING_WINDOW_DAYS);
   const excluded = STARTING_EXCLUDED_STATUSES.map((s) => `&exclude_status=${s}`).join('');
-  return { url: `${BASE_COUNTS_URL}?window_from=${from}&window_to=${to}${excluded}`, from, to };
+  return { url: `${BASE_COUNTS_URL}&window_from=${from}&window_to=${to}${excluded}`, from, to };
 }
 
 /** Count of one status in a counts response; null until the response exists (never a made-up zero). */

@@ -40,14 +40,16 @@ const profiles = {
   ],
 };
 
+const apiGetMock = vi.fn(async (url: string) => {
+  if (String(url).includes('/historical-import/profiles')) return profiles;
+  if (String(url).includes('/cpor/cases')) {
+    return { items: [{ id: 1, origin: 'historical_import' }], total: 1, page: 1, page_size: 500 };
+  }
+  return {};
+});
+
 vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn(async (url: string) => {
-    if (String(url).includes('/historical-import/profiles')) return profiles;
-    if (String(url).includes('/cpor/cases')) {
-      return { items: [{ id: 1, origin: 'historical_import' }], total: 1, page: 1, page_size: 500 };
-    }
-    return {};
-  }),
+  apiGet: (url: string) => apiGetMock(url),
 }));
 
 describe('PlanTemplatesSurface', () => {
@@ -57,6 +59,20 @@ describe('PlanTemplatesSurface', () => {
       SRP: 'srp',
       'Promo RSP': 'srp',
     });
+  });
+
+  it('counts historical-import origins from reporting customers only', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <PlanTemplatesSurface />
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(
+        apiGetMock.mock.calls.some(([u]) => String(u).includes('/cpor/cases') && String(u).includes('reporting_only=true')),
+      ).toBe(true),
+    );
   });
 
   it('lists stored profiles and says export uses the stored layout', async () => {

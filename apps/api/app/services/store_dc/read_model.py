@@ -20,6 +20,7 @@ from app.models.facts import FactInboundShipment, FactInventoryDistributor
 from app.models.store_dc import SiteCandidate
 from app.services.channel_intelligence.customer_stock_gap import grain_of
 from app.services.imports.parsers.customer_sell_through_grain import period_end
+from app.services.customer_reporting import reporting_customer_ids_select
 from app.services.store_dc.candidates import served_customer_ids, tenant_config
 from app.services.store_dc.rules import (
     COLLAPSED_NOTE,
@@ -954,7 +955,7 @@ def set_customer_thresholds(
     }
 
 
-def list_board_customers(db: Session, tenant_id: str) -> list[dict[str, Any]]:
+def list_board_customers(db: Session, tenant_id: str, *, reporting_only: bool = False) -> list[dict[str, Any]]:
     ids = set(
         db.execute(
             select(FactCustomerSellthrough.customer_id).where(FactCustomerSellthrough.tenant_id == tenant_id).distinct()
@@ -968,6 +969,14 @@ def list_board_customers(db: Session, tenant_id: str) -> list[dict[str, Any]]:
             )
         ).scalars().all()
     )
+    if reporting_only and ids:
+        reporting_ids = {
+            int(cid)
+            for cid in db.scalars(
+                reporting_customer_ids_select().where(DimCustomer.tenant_id == tenant_id, DimCustomer.id.in_(ids))
+            )
+        }
+        ids = reporting_ids
     if not ids:
         return []
     rows = db.execute(

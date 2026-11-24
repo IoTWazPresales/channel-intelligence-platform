@@ -218,6 +218,29 @@ def test_filter_options_lists_reporting_customers(session: Session):
     assert "NB" in opts["business_units"]
 
 
+def test_filter_options_omits_non_reporting_key_accounts(session: Session):
+    db = session
+    reporting_id = _customer(db, "STO-RP")
+    non_reporting = DimCustomer(code="STO-NRP", name="Non reporting", is_key_account=True)
+    db.add(non_reporting)
+    db.flush()
+    db.add(
+        CustomerReportConfig(
+            customer_id=non_reporting.id,
+            reports_expected=False,
+            expected_cadence="weekly",
+            overdue_threshold_days=10,
+        )
+    )
+    p = _product(db, "PNRP")
+    _row(db, int(non_reporting.id), p, LAST_WEEK, 2)
+    db.flush()
+    opts = filter_options(db, TENANT)
+    ids = {c["id"] for c in opts["customers"]}
+    assert reporting_id in ids
+    assert int(non_reporting.id) not in ids
+
+
 def test_old_stock_is_kept_and_aged(session: Session):
     """Warren 2026-10-19: stock stays at customers for a long time. An old stock report still counts,
     is shown with its date and stores, and is not used to call a SKU out of stock or low on cover."""

@@ -19,6 +19,7 @@ from app.models.dimensions import CustomerLocation, DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.store_dc import SiteCandidate
 from app.services import tenant_settings
+from app.services.customer_reporting import reporting_customer_ids_select
 from app.services.store_dc.candidates import served_customer_ids
 from app.services.store_dc.place_name import (
     place_name_from_raw,
@@ -54,6 +55,7 @@ def build_store_map(
     customer_ids: list[int] | None = None,
     *,
     include_proposals: bool = True,
+    reporting_only: bool = False,
 ) -> dict[str, Any]:
     """One row per store per customer. ``location_suggestion`` is the offline pin proposal for an
     unpinned store; it is computed here and never saved (``include_proposals=False`` skips it).
@@ -115,6 +117,16 @@ def build_store_map(
         )
     else:
         all_ids = set(customer_id_set)
+    if reporting_only and (all_ids or customer_id_set):
+        reporting_ids = {
+            int(cid)
+            for cid in db.scalars(
+                reporting_customer_ids_select().where(DimCustomer.tenant_id == tenant_id)
+            )
+        }
+        all_ids &= reporting_ids
+        customer_id_set &= reporting_ids
+        grouped = {key: rows for key, rows in grouped.items() if key[0] in reporting_ids}
     customers = []
     if all_ids:
         for cid, code, name in db.execute(

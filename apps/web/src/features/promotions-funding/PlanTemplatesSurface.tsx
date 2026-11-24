@@ -116,7 +116,7 @@ export function PlanTemplatesSurface() {
   const { data: casesPage } = useQuery({
     queryKey: ['cpor', 'cases', 'templates-origin'],
     queryFn: ({ signal }) =>
-      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500', { signal }),
+      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&reporting_only=true', { signal }),
   });
 
   const profiles = useMemo(() => profilePage?.profiles ?? [], [profilePage]);

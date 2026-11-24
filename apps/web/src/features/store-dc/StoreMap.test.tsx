@@ -33,6 +33,7 @@ const hoisted = vi.hoisted(() => ({
   postError: null as Error | null,
   confirmed: [] as { url: string; body: unknown }[],
   rejectLabels: [] as string[],
+  lastGetUrl: '' as string,
 }));
 
 type PinBody = { customer_id: number; site_label: string; latitude?: number; longitude?: number };
@@ -52,7 +53,10 @@ function applyConfirm(body: PinBody) {
 }
 
 vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn(async () => hoisted.payload),
+  apiGet: vi.fn(async (url: string) => {
+    hoisted.lastGetUrl = url;
+    return hoisted.payload;
+  }),
   apiPost: vi.fn(async (url: string, body: PinBody | { pins: PinBody[] }) => {
     if (url.endsWith('/pins/confirm')) {
       hoisted.confirmed.push({ url, body });
@@ -174,6 +178,16 @@ describe('StoreMap', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('loads reporting board customers by default and widens the map when All customers is chosen', async () => {
+    hoisted.payload = payload();
+    const { apiGet } = await import('@/lib/api');
+    wrap(<StoreMap />);
+    await screen.findByRole('button', { name: 'SDC-C1' });
+    expect(hoisted.lastGetUrl).toBe('/api/v1/store-dc/map?reporting_only=true');
+    fireEvent.click(screen.getByRole('button', { name: 'All customers' }));
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/store-dc/map', expect.anything()));
   });
 
   it('draws one dot per store, shows the legend, and saves a pin without writing a place name', async () => {

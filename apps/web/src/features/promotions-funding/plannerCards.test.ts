@@ -33,19 +33,19 @@ describe('pageIsComplete', () => {
 
 describe('exact count requests (API counts, not a capped page)', () => {
   it('awaiting approval asks the count endpoint for Proposed', () => {
-    expect(awaitingCountUrl()).toBe('/api/v1/cpor/cases/counts?status=proposed');
+    expect(awaitingCountUrl()).toBe('/api/v1/cpor/cases/counts?reporting_only=true&status=proposed');
   });
   it('starting asks for the [today, today+28] window and leaves out cancelled and rejected', () => {
     const r = startingCountUrl('2026-11-19');
     expect(r.from).toBe('2026-11-19');
     expect(r.to).toBe('2026-12-17');
     expect(r.url).toBe(
-      '/api/v1/cpor/cases/counts?window_from=2026-11-19&window_to=2026-12-17&exclude_status=cancelled&exclude_status=rejected',
+      '/api/v1/cpor/cases/counts?reporting_only=true&window_from=2026-11-19&window_to=2026-12-17&exclude_status=cancelled&exclude_status=rejected',
     );
     expect([...STARTING_EXCLUDED_STATUSES]).toEqual(['cancelled', 'rejected']);
   });
   it('drafts and ended read the per-status split of the unfiltered counts', () => {
-    expect(BASE_COUNTS_URL).toBe('/api/v1/cpor/cases/counts');
+    expect(BASE_COUNTS_URL).toBe('/api/v1/cpor/cases/counts?reporting_only=true');
     const counts = { total_current: 9, status_counts_current: { draft: 4, ended: 5 } };
     expect(statusCount(counts, 'draft')).toBe(4);
     expect(statusCount(counts, 'ended')).toBe(5);
