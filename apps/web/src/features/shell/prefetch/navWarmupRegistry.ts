@@ -11,7 +11,11 @@ import {
 } from '@/features/promotions-funding/cporQueryOptions';
 import { briefSignalsQueryOptions } from '@/features/shell/useBriefSignals';
 import { filterNavGroupsForRole, isCommercialPlannerEnabled, navGroups } from '@/features/shell/navConfig';
-import { coverDistributionQueryOptions } from '@/features/stock/coverQueryOptions';
+import {
+  COVER_DISTRIBUTION_STALE_MS,
+  coverDistributionQueryKey,
+  fetchCoverDistribution,
+} from '@/features/stock/coverQueryOptions';
 import { supplyOverviewQueryOptions } from '@/features/supply-inbound/supplyQueryOptions';
 import type { CurrentUser } from '@/features/shell/useCurrentUser';
 import { myAccountsChoice, type MyAccountsChoice } from '@/lib/myAccounts';
@@ -35,6 +39,7 @@ function groupsForRole(role: string | null | undefined): typeof navGroups {
   let groups = navGroups;
   if (!isCommercialPlannerEnabled()) {
     groups = navGroups
+      .filter((g) => g.id !== 'funding')
       .map((g) => ({
         ...g,
         items: g.items.filter(
@@ -54,7 +59,13 @@ function domainQueries(id: string, me: CurrentUser | undefined, accountsChoice: 
         dashboardListQueryOptions(me),
       ];
     case 'stock':
-      return [coverDistributionQueryOptions()];
+      return [
+        {
+          queryKey: coverDistributionQueryKey,
+          queryFn: ({ signal }) => fetchCoverDistribution(signal),
+          staleTime: COVER_DISTRIBUTION_STALE_MS,
+        },
+      ];
     case 'supply':
       return [supplyOverviewQueryOptions()];
     case 'planning':

@@ -41,7 +41,6 @@ export class NavWarmupScheduler {
     this.paused = true;
     this.generation += 1;
     this.queue = [];
-    this.inFlight = 0;
   }
 
   /** Resume after idle; does not clear generation (only pause() bumps it). */
@@ -65,8 +64,8 @@ export class NavWarmupScheduler {
           /* warm-up is best-effort */
         })
         .finally(() => {
-          if (gen !== this.generation) return;
           this.inFlight = Math.max(0, this.inFlight - 1);
+          if (gen !== this.generation) return;
           this.tryPump();
         });
     }
