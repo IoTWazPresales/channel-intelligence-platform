@@ -24,7 +24,10 @@ from typing import Any
 _WEEK_BAND_KEY = re.compile(r"(?:^|\s)\d{1,3}[./-]\d{4}$")
 _CALENDAR_DAY_KEY = "Calendar Day"
 _SITE_NAME_KEY = "Site Name"
-_PLACES_PATH = Path(__file__).with_name("data") / "za_populated_places.csv"
+# Opus R-05: the gazetteer follows the tenant country setting (``tenant.country``), never a
+# built-in country. ``data/<code>_populated_places.csv``; no file for the country -> no proposals.
+_PLACES_DIR = Path(__file__).with_name("data")
+_COUNTRY_CODE = re.compile(r"^[A-Z]{2}$")
 LICENCE_NAME = "GeoNames CC BY 4.0"
 
 # Generic retail words only. No brand or chain names: the chain comes from the data
@@ -170,9 +173,24 @@ def build_place_table(rows: Iterable[dict[str, Any]]) -> PlaceTable:
     )
 
 
-@lru_cache(maxsize=1)
-def default_place_table() -> PlaceTable:
-    with _PLACES_PATH.open(encoding="utf-8", newline="") as handle:
+def places_path_for_country(code: str | None) -> Path | None:
+    """The bundled places file for a two-letter country code, or None when there is none."""
+    clean = str(code or "").strip().upper()
+    if not _COUNTRY_CODE.fullmatch(clean):
+        return None
+    path = _PLACES_DIR / f"{clean.lower()}_populated_places.csv"
+    return path if path.is_file() else None
+
+
+def place_table_for_country(code: str | None) -> PlaceTable | None:
+    """The tenant country's place table (indexed once per file), or None when there is no file."""
+    path = places_path_for_country(code)
+    return None if path is None else _load_place_table(path)
+
+
+@lru_cache(maxsize=8)
+def _load_place_table(path: Path) -> PlaceTable:
+    with path.open(encoding="utf-8", newline="") as handle:
         return build_place_table(csv.DictReader(handle))
 
 
@@ -322,7 +340,9 @@ def propose_store_pin(
     the names and codes of the customer the store belongs to; their words are removed so
     the chain is never mistaken for a town.
     """
-    place_table = table or default_place_table()
+    if table is None:
+        return None
+    place_table = table
     names = list(customer_names or ())
     for text in (place_name, store_label):
         if not (text or "").strip():
@@ -357,7 +377,11 @@ def suggest_store_location(
     customer_names: Iterable[str | None] | None = None,
     table: PlaceTable | None = None,
 ) -> dict[str, Any]:
-    """The proposal in the shape the store map sends, or a manual-pin marker. Nothing is saved."""
+    """The proposal in the shape the store map sends, or a manual-pin marker. Nothing is saved.
+
+    ``table`` is the tenant country's place table; None means no gazetteer for that country."""
+    if table is None:
+        return _manual("no_gazetteer_for_country")
     found = propose_store_pin(store_label, place_name=place_name, customer_names=customer_names, table=table)
     if found is None:
         return _manual("none")

@@ -13,6 +13,15 @@ from app.services.cpor.promo_plan_builder import (
 
 
 @pytest.fixture(autouse=True)
+def _tenant_vat_rate(monkeypatch):
+    """Test data: the tenant's own VAT rate (Opus R-05: nothing is built in)."""
+    monkeypatch.setattr(
+        "app.services.commercial_tenant_profile.configured_vat_rate_pct",
+        lambda tenant_id="default": 0.15,
+    )
+
+
+@pytest.fixture(autouse=True)
 def _no_budget_ledger(monkeypatch):
     """N-0079 draws the campaign headroom from the budget ledger (a savepoint query), which these
     hand-built sessions cannot run. Pin "no ledger"; the ledger path has its own test below."""

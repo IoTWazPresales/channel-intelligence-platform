@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-24 — store map review fixes (smaller semi-transparent land dots, Move+undo, shipping-map glow). Discovery V2 merged and live (a6f498ce, migration 0066); stock-based listing scope (BACKLOG-270) merged, off until a tenant saves it. Last prior live acceptance: 22 November (`c685bf63`).
 **Branch:** `feat/integrate-20261103`. Confirm HEAD with `git rev-parse` after merge.
-**Next agent:** Dashboard V2 slices 1 and 2 merged (BACKLOG-269 done except light-theme screenshots); BACKLOG-267 panel caption done. Next: BACKLOG-266 audit, then price fixes R-04/R-05. Read [durable handoff](../handoffs/2026-11-23/README.md).
+**Next agent:** Dashboard V2 slices 1 and 2 merged (BACKLOG-269 done except light-theme screenshots); BACKLOG-267 panel caption done. BACKLOG-266 (legacy redirect origin) and Opus R-04/R-05 (planner SRP VAT basis, tenant VAT rate, gazetteer from tenant country) are on integrate and wait for one batched live restart. **Live needs a VAT rate first:** Settings -> tenant profile -> VAT rate (live has none set, and the code no longer assumes 15%); until then the planner SRP for ex-VAT prices, new case lines and incl-VAT SOH costs show as not available. Read [durable handoff](../handoffs/2026-11-23/README.md).
 
 ## Branch, database and topology
 
@@ -52,3 +52,9 @@
 - No main push/promotion. OpenFreeMap is this tenant's setting only, not a product default. No store-location confirmation is authorized.
 - Codex session registration was absent on22November. Future protected DB work requires installed operator mechanism; never fabricate state/self-grant/borrow a session/use missing hooks as permission. Do not set ALLOW_TESTS_ON_DEV_DB casually. Cloud guard denial is a stop condition.
 - No hook/policy/.claude/CLAUDE.md edits; engineering-rules.mdc missing and not invented. Preserve existing failed artifacts and the two-attempt stop rule. Agent quotas may be exhausted; all outstanding scope is durable outside chat.
+
+## Opus R-04 / R-05 (2026-11-24)
+
+- **R-04:** the planner price read now selects `vat_basis`. `planner_sellthrough.srp_from_price`: incl-VAT price is the SRP; ex-VAT is grossed up by the tenant VAT rate; unknown basis gives `price_vat_basis_unknown`; no rate gives `vat_rate_not_configured`. The planner draft (`promo_plan_builder`) and aged-stock Promote (`stock_actions._srp_for_line`) use `srp`, not the raw price. Live price rows: 2,804 ex_vat, 59 inc_vat, so ex-VAT SRPs were understated by the VAT factor before this.
+- **R-05:** `commercial_tenant_profile.configured_vat_rate_pct` returns only the tenant's own `vat_rate_pct` (None when unset). It is used for case-line `vat_rate` (case create refuses with `vat_rate_not_configured`) and the SOH check divisor (incl-VAT costs are withheld with the flag `vat_rate_not_configured`). Settings -> tenant profile has a VAT rate field that is empty until set. The store-map gazetteer is `data/<tenant.country code>_populated_places.csv`; with no country or no file the proposal is manual `no_gazetteer_for_country`. Live has tenant.country ZA, so the store map is unchanged.
+- **Still built in elsewhere (not in R-05 scope):** `DEFAULT_VAT_RATE_PCT = 0.15` behind `vat_rate_pct()` (sell-through overview and others) and `support_bias` 0.15 fallback.

@@ -4,21 +4,39 @@ import csv
 from pathlib import Path
 
 import pytest
-
-from sqlalchemy import func, select, text
-
 from app.models.dimensions import CustomerLocation
 from app.models.store_dc import SiteCandidate
+from app.services import tenant_settings
 from app.services.store_dc.candidates import decide_candidate, refresh_candidates
 from app.services.store_dc.map import build_store_map, confirm_pins, drop_pin
 from app.services.store_dc.place_name import (
     normalise_place,
     place_name_from_raw,
-    suggest_store_location,
+    place_table_for_country,
 )
+from app.services.store_dc.place_name import (
+    suggest_store_location as _suggest,
+)
+from sqlalchemy import func, select, text
 
 _PLACES = Path(__file__).resolve().parents[1] / "app" / "services" / "store_dc" / "data" / "za_populated_places.csv"
 _LICENCE = _PLACES.with_name("ZA_PLACES_LICENCE.txt")
+# Test data: the bundled places file under test is the ZA one, chosen through the country setting.
+_ZA = place_table_for_country("ZA")
+
+
+def suggest_store_location(label, **kwargs):
+    return _suggest(label, table=_ZA, **kwargs)
+
+
+def _country(world, code: str = "ZA") -> None:
+    tenant_settings.set_setting(
+        world.db,
+        world.tenant,
+        tenant_settings.KEY_TENANT_COUNTRY,
+        {"code": code, "name": code},
+        actor="test",
+    )
 
 
 def _suggesting_place() -> dict[str, str]:
@@ -131,6 +149,7 @@ def test_place_name_columns_do_not_use_the_store_code():
 
 
 def test_place_name_is_read_from_the_source_row_and_the_code_stays_the_key(world: World):
+    _country(world)
     database = world.db.execute(text("select current_database()")).scalar_one()
     print("current_database()", database)
     assert database == "cip_test"
@@ -184,7 +203,7 @@ def test_place_proposal_is_offline_licensed_and_a_miss_is_manual():
     licence = _LICENCE.read_text(encoding="utf-8")
     assert "GeoNames" in licence
     assert "CC BY" in licence
-    source = Path(suggest_store_location.__code__.co_filename).read_text(encoding="utf-8")
+    source = Path(_suggest.__code__.co_filename).read_text(encoding="utf-8")
     assert "urlopen" not in source
     assert "requests" not in source
     place = _suggesting_place()
@@ -204,6 +223,7 @@ def test_place_proposal_is_offline_licensed_and_a_miss_is_manual():
 
 
 def test_a_suggestion_is_not_saved_until_the_steward_pins_it(world: World):
+    _country(world)
     database = world.db.execute(text("select current_database()")).scalar_one()
     print("current_database()", database)
     assert database == "cip_test"
@@ -253,6 +273,7 @@ def _count_locations(world: World) -> int:
 
 
 def test_the_map_proposes_a_place_for_a_chain_shaped_label_and_writes_nothing(world: World):
+    _country(world)
     place = _suggesting_place()
     customer = world.customer("SDC-C")
     product = world.product()
@@ -278,6 +299,7 @@ def test_the_map_proposes_a_place_for_a_chain_shaped_label_and_writes_nothing(wo
 
 
 def test_the_proposal_does_not_treat_the_customer_name_as_the_town(world: World):
+    _country(world)
     place = _suggesting_place()
     # the customer is named like the town, so the town word in the label is the chain
     customer = world.customer(place["name"].upper().replace(" ", "-"))
@@ -290,6 +312,7 @@ def test_the_proposal_does_not_treat_the_customer_name_as_the_town(world: World)
 
 
 def test_confirming_a_proposal_saves_the_proposed_coordinates_through_the_pin_write(world: World):
+    _country(world)
     place = _suggesting_place()
     customer = world.customer("SDC-C")
     product = world.product()
@@ -321,6 +344,7 @@ def test_confirming_a_proposal_saves_the_proposed_coordinates_through_the_pin_wr
 
 
 def test_an_edited_pin_is_saved_as_the_steward_sent_it_not_as_proposed(world: World):
+    _country(world)
     place = _suggesting_place()
     customer = world.customer("SDC-C")
     product = world.product()
@@ -346,6 +370,7 @@ def test_an_edited_pin_is_saved_as_the_steward_sent_it_not_as_proposed(world: Wo
 
 
 def test_confirm_without_a_proposal_or_for_a_pinned_or_unknown_store_writes_nothing(world: World):
+    _country(world)
     place = _suggesting_place()
     customer = world.customer("SDC-C")
     product = world.product()
@@ -386,6 +411,7 @@ def test_confirm_without_a_proposal_or_for_a_pinned_or_unknown_store_writes_noth
 
 
 def test_bulk_confirm_saves_the_good_items_and_reports_the_rest(world: World):
+    _country(world)
     place = _suggesting_place()
     first = world.customer("SDC-C1")
     second = world.customer("SDC-C2")
@@ -417,3 +443,24 @@ def test_bulk_confirm_saves_the_good_items_and_reports_the_rest(world: World):
     too_many = [{"customer_id": first.id, "site_label": "x"}] * 501
     with pytest.raises(ValueError):
         confirm_pins(world.db, tenant_id=world.tenant, items=too_many, actor="steward-test")
+
+
+def test_proposals_follow_the_tenant_country_setting_opus_r05(world: World):
+    """No country, or a country without a bundled places file, proposes nothing (manual)."""
+    customer = world.customer("SDC-C")
+    product = world.product()
+    place = _suggesting_place()
+    world.weeks(customer, product, [2], soh=2, site=f"{world.code('SDC-BRANCH')} - {place['name']}")
+    world.db.flush()
+    def proposal():
+        return build_store_map(world.db, world.tenant, [customer.id])["stores"][0]["location_suggestion"]
+
+    unset = proposal()
+    assert unset["outcome"] == "manual" and unset["reason"] == "no_gazetteer_for_country"
+    _country(world, "QQ")
+    other = proposal()
+    assert other["reason"] == "no_gazetteer_for_country"
+    _country(world, "ZA")
+    za = proposal()
+    assert za["outcome"] == "suggest" and za["place"] == place["name"]
+    assert place_table_for_country(None) is None and place_table_for_country("za ") is _ZA

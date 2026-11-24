@@ -268,21 +268,25 @@ def test_a_bundled_place_name_is_proposed_for_a_label_around_it():
         if counts[pn.normalise_place(r["name"])] == 1 and len(pn.normalise_place(r["name"])) >= 8
         and not set(pn.normalise_place(r["name"]).split()) & pn.GENERIC_RETAIL_WORDS
     )
-    hit = pn.propose_store_pin(f"QXZ WHOLESALE {row['name'].upper()} MALL")
+    za = pn.place_table_for_country("ZA")
+    hit = pn.propose_store_pin(f"QXZ WHOLESALE {row['name'].upper()} MALL", table=za)
     assert hit is not None
     assert pn.normalise_place(hit["place"]) == pn.normalise_place(row["name"])
 
 
 def test_the_bundled_table_is_indexed_once():
-    assert pn.default_place_table() is pn.default_place_table()
+    assert pn.place_table_for_country("ZA") is pn.place_table_for_country("ZA")
+    assert pn.place_table_for_country("QQ") is None
+    assert pn.propose_store_pin("Anything", table=None) is None
+    assert pn.suggest_store_location("Anything", table=None)["reason"] == "no_gazetteer_for_country"
 
 
 def test_hundreds_of_unmatched_labels_stay_fast():
-    pn.default_place_table()
+    za = pn.place_table_for_country("ZA")
     labels = [f"QXZ {chr(97 + i % 26)}{chr(97 + (i // 26) % 26)}ploxarn WHOLESALE {i}" for i in range(300)]
     start = time.perf_counter()
     for label in labels:
-        pn.propose_store_pin(label)
+        pn.propose_store_pin(label, table=za)
     assert time.perf_counter() - start < 5.0
 
 

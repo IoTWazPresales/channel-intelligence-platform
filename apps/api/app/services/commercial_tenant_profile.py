@@ -1078,6 +1078,21 @@ def vat_rate_pct(tenant_id: str = "default") -> float:
     return rate if 0 <= rate < 1 else DEFAULT_VAT_RATE_PCT
 
 
+def configured_vat_rate_pct(tenant_id: str = "default") -> float | None:
+    """The tenant's own VAT rate (0 <= rate < 1), or None when the tenant has not set one.
+
+    Opus R-04/R-05: planner prices, case-line VAT and the SOH check use only this. No country
+    rate is built in, so an unset rate means "not available", never a guessed 15%."""
+    raw = load_tenant_profile_overrides(tenant_id).get("vat_rate_pct")
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        rate = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return rate if 0 <= rate < 1 else None
+
+
 def sales_value_vat_basis(tenant_id: str = "default") -> str:
     raw = str(load_tenant_profile_overrides(tenant_id).get("sales_value_vat_basis") or DEFAULT_SALES_VALUE_VAT_BASIS).strip()
     return raw if raw in _TENANT_PROFILE_VALID_VALUES["sales_value_vat_basis"] else DEFAULT_SALES_VALUE_VAT_BASIS

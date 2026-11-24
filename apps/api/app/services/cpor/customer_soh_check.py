@@ -11,11 +11,12 @@ Rule (customer x product, as of date D):
   stock wherever it sits; D-0038);
 - ``soh_unit_cost`` = ex-VAT ``reported_soh``-weighted average of ``unit_mac`` else
   ``unit_cost`` (same preference as CPOR tier-1 cost). Incl-VAT costs are divided
-  by 1.15 first. A cost with an unknown VAT basis is left out;
+  by (1 + the tenant's VAT rate) first; with no rate set they are left out and flagged
+  ``vat_rate_not_configured`` (Opus R-05). A cost with an unknown VAT basis is left out;
 - ``delta`` = ex-VAT derived MAC - ``soh_unit_cost``. When both sides exist, flag
   ``soh_tolerance`` if abs(delta) / abs(derived MAC) exceeds the tenant
   tolerance (default 10%; D-0038). A stored MAC passed with ``derived_mac_vat``
-  uses the same rule: incl-VAT is divided by 1.15, and an unknown basis
+  uses the same rule: incl-VAT is divided by (1 + tenant VAT rate), and an unknown basis
   withholds the gap. Omitting ``derived_mac_vat`` compares the passed number,
   which is already the ex-VAT operand (a manual cost). Accounts with SOH units
   but no cost stay units-only: no invented cost, no cost-tolerance flag.
@@ -41,11 +42,19 @@ from app.services.cpor.waterfall import _as_decimal
 SOURCE_TABLE = "fact_customer_sellthrough"
 # D-0038 default; live reads prefer commercial_tenant_profile.soh_tolerance_pct.
 DEFAULT_SOH_TOLERANCE_PCT = Decimal("0.10")
-# Decided 2026-11-10: the SOH check compares ex-VAT. Incl-VAT costs divide by 1.15.
-VAT_INCL_DIVISOR = Decimal("1.15")
+# Decided 2026-11-10: the SOH check compares ex-VAT. Incl-VAT costs divide by (1 + tenant VAT
+# rate). Opus R-05: the rate is the tenant's own setting; no country rate is built in.
 COMPARED_VAT = "ex_vat"
 FLAG_SOH_TOLERANCE = "soh_tolerance"
 FLAG_VAT_BASIS_UNKNOWN = "vat_basis_unknown"
+FLAG_VAT_RATE_UNSET = "vat_rate_not_configured"
+
+
+def _vat_incl_divisor(tenant_id: str) -> Decimal | None:
+    from app.services.commercial_tenant_profile import configured_vat_rate_pct
+
+    rate = configured_vat_rate_pct(tenant_id)
+    return None if rate is None else Decimal("1") + Decimal(str(rate))
 # Omitting derived_mac_vat means the caller already passed an ex-VAT operand.
 _MAC_VAT_OMITTED = object()
 
@@ -60,7 +69,7 @@ def _vat_kind(basis: str | None) -> str:
     return "unknown"
 
 
-def _compared_mac(raw: Decimal, vat: Any, flags: list[str]) -> Decimal | None:
+def _compared_mac(raw: Decimal, vat: Any, flags: list[str], divisor: Decimal | None) -> Decimal | None:
     """Ex-VAT operand, or None when a supplied basis is unknown and the gap must be withheld."""
     if vat is _MAC_VAT_OMITTED:
         return raw
@@ -70,7 +79,11 @@ def _compared_mac(raw: Decimal, vat: Any, flags: list[str]) -> Decimal | None:
             flags.append(FLAG_VAT_BASIS_UNKNOWN)
         return None
     if kind == "inc":
-        return raw / VAT_INCL_DIVISOR
+        if divisor is None:
+            if FLAG_VAT_RATE_UNSET not in flags:
+                flags.append(FLAG_VAT_RATE_UNSET)
+            return None
+        return raw / divisor
     return raw
 
 
@@ -226,6 +239,8 @@ def summarise_soh_rows(
     fields: set[str] = set()
     vat_bases: set[str] = set()
     unknown_cost = False
+    rate_unset = False
+    divisor = _vat_incl_divisor(tenant_id)
     for _id, _period, _ptype, soh, unit_mac, unit_cost, vat_basis in rows:
         if vat_basis:
             vat_bases.add(str(vat_basis))
@@ -242,7 +257,10 @@ def summarise_soh_rows(
             continue
         cost_d = _as_decimal(cost)
         if kind == "inc":
-            cost_d = cost_d / VAT_INCL_DIVISOR
+            if divisor is None:
+                rate_unset = True
+                continue
+            cost_d = cost_d / divisor
         num += soh_d * cost_d
         den += soh_d
 
@@ -253,6 +271,8 @@ def summarise_soh_rows(
         flags.append("no_soh_cost")
     if unknown_cost:
         flags.append(FLAG_VAT_BASIS_UNKNOWN)
+    if rate_unset:
+        flags.append(FLAG_VAT_RATE_UNSET)
     out.update(
         status="available",
         period_start_date=rows[0][1].isoformat(),
@@ -267,7 +287,7 @@ def summarise_soh_rows(
     )
     if derived_mac is not None:
         raw_mac = _as_decimal(derived_mac)
-        mac = _compared_mac(raw_mac, derived_mac_vat, flags)
+        mac = _compared_mac(raw_mac, derived_mac_vat, flags, divisor)
         if mac is None:
             # Supplied basis is unknown: keep the stored number and do not invent a gap.
             out["derived_mac"] = float(raw_mac)

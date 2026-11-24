@@ -57,6 +57,7 @@ describe('SettingsPage semantic overlay gate', () => {
           reservation_source: 'derived_from_profit',
           pm_attribution_mode: 'business_line',
           overrides_present: [],
+          vat_rate_pct: 0.15,
           hard_enforce_budget: true,
           money_ceiling_usd: null,
           support_norms_trailing_quarters: 4,
@@ -94,6 +95,13 @@ describe('SettingsPage semantic overlay gate', () => {
     roleState.current = 'admin';
     wrap();
     expect(await screen.findByTestId('shipping-mailer-recipients-heading')).toBeInTheDocument();
+  });
+
+  it('leaves the VAT rate empty until the tenant sets one (Opus R-05)', async () => {
+    roleState.current = 'admin';
+    wrap();
+    const vat = (await screen.findByTestId('tenant-profile-vat-rate')) as HTMLInputElement;
+    expect(vat.value).toBe('');
   });
 
   it('hides the shipping digest recipients panel for non-admin', async () => {

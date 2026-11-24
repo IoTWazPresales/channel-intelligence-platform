@@ -39,6 +39,15 @@ from app.services.store_dc.stock_actions import _srp_for_line
 from sqlalchemy import func, select, update
 from tests.rolled_back_async_session import leftover_counts, rolled_back_async_session
 
+
+@pytest.fixture(autouse=True)
+def _tenant_vat_rate(monkeypatch):
+    """Test data: the tenant's own VAT rate (Opus R-05: nothing is built in)."""
+    monkeypatch.setattr(
+        "app.services.commercial_tenant_profile.configured_vat_rate_pct",
+        lambda tenant_id="default": 0.15,
+    )
+
 PERIOD = "2098Q2"
 START = date(2098, 4, 7)
 
@@ -319,7 +328,8 @@ async def test_planner_price_cost_stock_units_ignore_all_decoys(world):
     )
     assert [row["product_id"] for row in out["lines"]] == [pid]
     row = out["lines"][0]
-    assert row["srp"] == 250
+    # Opus R-04: the fixture price is ex-VAT, so SRP = 250 x (1 + tenant rate 0.15).
+    assert row["srp"] == pytest.approx(287.5)
     assert row["suggested_cost_basis"] == 100
     assert row["volume"]["weekly_run_rate"] == 45
     assert row["volume"]["forecast_units"] == 585
@@ -335,7 +345,7 @@ async def test_planner_price_cost_stock_units_ignore_all_decoys(world):
         await db.run_sync(
             lambda sync: _srp_for_line(sync, customer_id=cid, product_id=pid, tenant_id=tenant)
         )
-        == 250
+        == pytest.approx(287.5)  # ex-VAT 250 grossed up (Opus R-04)
     )
 
 
@@ -351,7 +361,7 @@ async def test_seed_case_values_are_not_planner_evidence(world):
         )
     )
     rows = {r["product_id"]: r for r in out["lines"]}
-    assert rows[pid]["srp"] == 250
+    assert rows[pid]["srp"] == pytest.approx(287.5)  # ex-VAT 250 grossed up (Opus R-04)
     assert rows[pid]["suggested_cost_basis"] == 100
     assert rows[pid]["volume"]["forecast_units"] == 585
     assert rows[decoy]["srp"] is None
