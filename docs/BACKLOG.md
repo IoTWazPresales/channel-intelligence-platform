@@ -4170,3 +4170,12 @@ Open: planned reservation / actual support / funding gaps rebuilt on sell-throug
 | **Smallest next slice** | S1 intake core (fingerprint v2, fixed rules, intake batch tables, upload API), with the migration renumbered past `20261123_0066_web_discovery`. Needs D6 (v1 = customer sell-through only) and D7 (python-calamine, filetype) answered; without D7 it uses openpyxl/xlrd. No AI call is made in S1. |
 | **Constraints** | AI proposes, steward confirms; second files of a confirmed layout import by fixed rules with no AI; provider is a tenant setting (fails closed); no customer data in logs; no new UI libraries. |
 | **TRIGGER** | Warren answers D1, D2, D6 and D7. |
+
+## BACKLOG-272 - Align app theme tokens to the dashboard-v2 mockups
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** 2026-11-24. |
+| **Audit** | Palette, surfaces, borders, accent, semantic colours and radii (card 12, control 10, chip 8) already matched `docs/design/dashboard-v2/{index,targets-builder}.html` in both modes. Two drifts fixed: secondary text alpha 0.72 -> 0.82 (dark `@cip/ui` tokens and `lightTokens`), dark Paper shadow 0.35 -> 0.25. |
+| **Scope** | Tokens and MUI theme only; no new libraries; per-page `alpha(text.primary, 0.72)` overrides left as they are. Test: `cipTheme.test.ts` asserts the mockup values. |
+| **Not done** | Mockup "ink" colours for status text on tinted tiles (`--good-ink` etc.) are not tokens yet; add them only when a component needs them. |

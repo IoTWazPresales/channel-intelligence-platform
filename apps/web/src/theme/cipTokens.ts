@@ -16,7 +16,7 @@ export const lightTokens = {
   },
   text: {
     primary: 'rgba(16, 22, 30, 0.94)',
-    secondary: 'rgba(40, 54, 68, 0.72)',
+    secondary: 'rgba(40, 54, 68, 0.82)',
     muted: 'rgba(60, 76, 92, 0.58)',
   },
   accent: {

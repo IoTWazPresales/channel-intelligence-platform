@@ -11,7 +11,7 @@ export const tokens = {
   },
   text: {
     primary: 'rgba(245, 247, 250, 0.96)',
-    secondary: 'rgba(186, 198, 210, 0.72)',
+    secondary: 'rgba(186, 198, 210, 0.82)',
     muted: 'rgba(160, 176, 192, 0.55)',
   },
   accent: {
