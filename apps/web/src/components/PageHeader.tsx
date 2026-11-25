@@ -26,7 +26,8 @@ export function PageHeader({
           )
         )}
       </Breadcrumbs>
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+      {/* Theme h1 owns the look; `component="h5"` keeps the existing element (PageHeader.test pins it). */}
+      <Typography variant="h1" component="h5" sx={{ mb: 2 }}>
         {title}
       </Typography>
       {actions}

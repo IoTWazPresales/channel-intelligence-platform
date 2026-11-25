@@ -46,4 +46,41 @@ describe('createCipTheme color modes', () => {
     expect(light.palette.success.main).toBe('#1f7a4d');
     expect(light.palette.warning.main).toBe('#9a6418');
   });
+
+  it('page title (h1) equals the dashboard-v2 mock-up h1: 27px / 1.1 / 650 / -1px', () => {
+    for (const mode of ['dark', 'light'] as const) {
+      const h1 = createCipTheme('comfortable', mode).typography.h1;
+      expect(h1?.fontSize).toBe('1.6875rem'); // 27px at the 16px root
+      expect(h1?.lineHeight).toBe(1.1);
+      expect(h1?.fontWeight).toBe(650);
+      expect(h1?.letterSpacing).toBe('-1px');
+    }
+  });
+
+  it('body paints the mock-up gradient as a valid background-image over a background colour, in both modes', () => {
+    for (const mode of ['dark', 'light'] as const) {
+      const theme = createCipTheme('comfortable', mode);
+      const t = tokensFor(mode);
+      const body = (theme.components?.MuiCssBaseline?.styleOverrides as {
+        body?: { backgroundImage?: string; backgroundColor?: string };
+      }).body;
+      expect(body?.backgroundColor).toBe(t.bg.default);
+      expect(body?.backgroundImage).toBe(`radial-gradient(ellipse at 25% 0, ${t.accent.primaryMuted}, transparent 52%)`);
+      // A trailing colour is not a valid background-image layer; it made browsers drop the rule.
+      expect(body?.backgroundImage?.startsWith('radial-gradient')).toBe(true);
+      expect(body?.backgroundImage?.endsWith(t.bg.default)).toBe(false);
+    }
+  });
+
+  it('Paper and TableContainer have no global overflow (it clipped menus, focus rings and sticky headers)', () => {
+    for (const mode of ['dark', 'light'] as const) {
+      const theme = createCipTheme('comfortable', mode);
+      const paper = (theme.components?.MuiPaper?.styleOverrides as { root?: Record<string, unknown> }).root;
+      const table = (theme.components?.MuiTableContainer?.styleOverrides as { root?: Record<string, unknown> }).root;
+      expect(paper).not.toHaveProperty('overflow');
+      expect(table).not.toHaveProperty('overflow');
+      // Toned cards keep clipping so the accent rail follows the rounded corners.
+      expect(paper?.['&[data-cip-tone]']).toEqual({ overflow: 'hidden' });
+    }
+  });
 });
