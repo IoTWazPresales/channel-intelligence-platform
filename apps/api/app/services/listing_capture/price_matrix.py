@@ -1,4 +1,12 @@
-"""Monitored-listings price matrix: scoped products × customers with latest shelf prices."""
+"""Monitored-listings price matrix: scoped products × customers with latest shelf prices.
+
+SRP means Suggested Retail Price (Warren, 24 Nov). Its data source is not chosen yet: the read-only
+profile of live data on 25 Nov found no line-up case covering today, no commercial plan and no
+historical line-up rows (step log 02-step1). Until Warren chooses, every product and cell carries
+``srp=None`` with ``srp_reason="srp_source_pending"``. No rule is invented, and the old "highest
+MSRP ever" query is gone. ``_tenant_srp_by_product`` is the one seam to change when the source
+is chosen.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +16,6 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.commercial_lineup import CommercialLineupLine
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.listing_capture import CustomerListing, ListingObservation
@@ -19,6 +26,10 @@ from app.services.listing_capture.stock_scope import TIER_ACTIVE, TIER_HISTORICA
 
 _ACTIVE_LISTING_STATUSES = frozenset({"active", "out_of_stock"})
 _EXCLUDED_CASE = frozenset({"cancelled", "rejected", "superseded", "draft", "proposed"})
+
+# None until Warren names the SRP data source (step 1, Phase B). Every row carries the reason.
+SRP_SOURCE: str | None = None
+SRP_REASON_PENDING = "srp_source_pending"
 
 
 def _latest_observations(session: Session, listing_ids: list[int]) -> dict[int, ListingObservation]:
@@ -52,15 +63,14 @@ def _latest_observations(session: Session, listing_ids: list[int]) -> dict[int, 
 
 
 def _tenant_srp_by_product(session: Session, tenant_id: str, product_ids: list[int]) -> dict[int, float]:
-    if not product_ids:
+    """SRP per product from the source Warren chooses. None is chosen yet, so nothing is returned.
+
+    The earlier body took MAX(commercial_lineup_line.msrp_local) over every line-up ever. Nobody
+    asked for that rule and it is removed. Callers report ``srp_reason`` for each missing value.
+    """
+    if SRP_SOURCE is None or not product_ids:
         return {}
-    rows = session.execute(
-        select(CommercialLineupLine.product_id, func.max(CommercialLineupLine.msrp_local))
-        .join(DimProduct, DimProduct.id == CommercialLineupLine.product_id)
-        .where(DimProduct.tenant_id == tenant_id, CommercialLineupLine.product_id.in_(product_ids))
-        .group_by(CommercialLineupLine.product_id)
-    ).all()
-    return {int(pid): float(msrp) for pid, msrp in rows if pid is not None and msrp is not None}
+    raise NotImplementedError(f"SRP source {SRP_SOURCE!r} is not implemented")
 
 
 def _active_promos(
@@ -123,7 +133,8 @@ def build_price_matrix(
             "customers": [],
             "products": [],
             "cells": [],
-            "summary": {"product_count": 0, "cheapest_at": {}, "below_srp_count": 0},
+            "summary": _summary(0, 0),
+            "srp_source": SRP_SOURCE,
         }
 
     listings = list(
@@ -140,7 +151,8 @@ def build_price_matrix(
             "customers": _customer_labels(session, customer_ids),
             "products": [],
             "cells": [],
-            "summary": {"product_count": 0, "cheapest_at": {str(c): 0 for c in customer_ids}, "below_srp_count": 0},
+            "summary": _summary(0, 0),
+            "srp_source": SRP_SOURCE,
         }
 
     product_ids = sorted({int(l.product_id) for l in listings if l.product_id is not None})
@@ -172,52 +184,77 @@ def build_price_matrix(
     products = _product_labels(session, tenant_id, product_ids)
     customers = _customer_labels(session, customer_ids)
     cells: list[dict[str, Any]] = []
-    cheapest_at: dict[str, int] = {str(c): 0 for c in customer_ids}
     below_srp_count = 0
 
+    for product in products:
+        product.update(_srp_fields(srp_by_product.get(int(product["id"]))))
+
     for pid in product_ids:
-        row_prices: list[tuple[int, float]] = []
-        tenant_srp = srp_by_product.get(pid)
+        srp = srp_by_product.get(pid)
+        srp_fields = _srp_fields(srp)
         for cid in customer_ids:
             listing = by_product_customer.get((pid, cid))
             if listing is None:
-                cells.append({"product_id": pid, "customer_id": cid, "price": None, "listing_id": None, "listing_url": None, "in_stock": False})
+                cells.append(
+                    {
+                        "product_id": pid,
+                        "customer_id": cid,
+                        "price": None,
+                        "observed_at": None,
+                        "listing_id": None,
+                        "listing_url": None,
+                        "in_stock": False,
+                        **srp_fields,
+                        "promo": None,
+                    }
+                )
                 continue
             obs = latest.get(int(listing.id))
             price = float(obs.extracted_price) if obs and obs.extracted_price is not None else None
             in_stock = listing.status == "active" and price is not None
-            promo = promos.get((cid, pid))
-            cell = {
-                "product_id": pid,
-                "customer_id": cid,
-                "price": price,
-                "listing_id": int(listing.id),
-                "listing_url": listing.url,
-                "in_stock": in_stock,
-                "tenant_srp": tenant_srp,
-                "promo": promo,
-            }
-            if price is not None and in_stock:
-                row_prices.append((cid, price))
-            if tenant_srp is not None and price is not None and price < tenant_srp - 1.0:
+            fetched = obs.fetched_at if obs is not None else None
+            observed_at = fetched.isoformat() if fetched is not None else None
+            cells.append(
+                {
+                    "product_id": pid,
+                    "customer_id": cid,
+                    "price": price,
+                    "observed_at": observed_at,
+                    "listing_id": int(listing.id),
+                    "listing_url": listing.url,
+                    "in_stock": in_stock,
+                    **srp_fields,
+                    "promo": promos.get((cid, pid)),
+                }
+            )
+            # In-stock prices only: an out-of-stock shelf price is not a live offer. Listing
+            # capture has no price-freshness rule, so the age is returned per cell, not used as
+            # a filter (A7).
+            if in_stock and srp is not None and price is not None and price < srp - 1.0:
                 below_srp_count += 1
-            cells.append(cell)
-        if row_prices:
-            min_price = min(p for _, p in row_prices)
-            winners = [cid for cid, p in row_prices if abs(p - min_price) < 0.01]
-            for cid in winners:
-                cheapest_at[str(cid)] = cheapest_at.get(str(cid), 0) + 1
 
     return {
         "customers": customers,
         "products": products,
         "cells": cells,
-        "summary": {
-            "product_count": len(product_ids),
-            "cheapest_at": cheapest_at,
-            "below_srp_count": below_srp_count,
-        },
+        "summary": _summary(len(product_ids), below_srp_count),
+        "srp_source": SRP_SOURCE,
         "as_of": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _srp_fields(srp: float | None) -> dict[str, Any]:
+    if srp is not None:
+        return {"srp": srp, "srp_source": SRP_SOURCE, "srp_reason": None}
+    reason = SRP_REASON_PENDING if SRP_SOURCE is None else "no_srp_for_product"
+    return {"srp": None, "srp_source": None, "srp_reason": reason}
+
+
+def _summary(product_count: int, below_srp_count: int) -> dict[str, Any]:
+    return {
+        "product_count": product_count,
+        # None, not 0, while there is no SRP source: "0 below SRP" would claim a comparison.
+        "below_srp_count": below_srp_count if SRP_SOURCE is not None else None,
     }
 
 
@@ -242,6 +279,7 @@ def _product_labels(session: Session, tenant_id: str, product_ids: list[int]) ->
     return [
         {
             "id": pid,
+            "sales_model_name": by_id[pid].sales_model_name if pid in by_id else None,
             "sku": by_id[pid].sku if pid in by_id else None,
             "name": by_id[pid].name if pid in by_id else None,
         }

@@ -275,7 +275,7 @@ def get_price_matrix(
                 "customers": [],
                 "products": [],
                 "cells": [],
-                "summary": {"product_count": 0, "cheapest_at": {}, "below_srp_count": 0},
+                "summary": {"product_count": 0, "below_srp_count": None},
             }
 
 
