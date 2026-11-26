@@ -8,11 +8,16 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { PromotionPlannerSurface } from './PromotionPlannerSurface';
 
-const { replaceMock, pushMock } = vi.hoisted(() => ({ replaceMock: vi.fn(), pushMock: vi.fn() }));
+const { replaceMock, pushMock, search } = vi.hoisted(() => ({
+  replaceMock: vi.fn(),
+  pushMock: vi.fn(),
+  /** The page URL's query string; empty unless a test sets it (step 2 History tests). */
+  search: { value: '' },
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: replaceMock, push: pushMock }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(search.value),
   usePathname: () => '/promotions',
 }));
 
@@ -58,6 +63,9 @@ const listPayload = {
   test_data_count: 7,
   review_queue_count: 1,
 };
+
+/** The shared Promotions & Funding header's book read (`cporFundingChromeQueryOptions`); not a planner request. */
+const DOMAIN_CHROME_URL = '/api/v1/cpor/cases?page=1&page_size=1';
 
 /** Per-test override of a /cpor/cases response, chosen by URL; return undefined to use the default payload. */
 let casesOverride: ((url: string) => unknown) | null = null;
@@ -109,7 +117,12 @@ const apiGetMock = vi.fn(async (url: string) => {
       },
     };
   }
-  if (url.includes('/promotion-types')) return { promotion_types: ['Sell out PP'] };
+  // Step 2 (N-0122): this mock returned ['Sell out PP'] for the planner's create dialog. The planner now asks for the
+  // customer sell-through family only. Warren (t454u): "Correct, Sell through, sell out is disti to reseller and is
+  // still valuable but not here."
+  if (url.includes('/promotion-types?family=customer_sell_through'))
+    return { promotion_types: ['Sell-Through PP'], family: 'customer_sell_through' };
+  if (url.includes('/promotion-types')) return { promotion_types: ['Sell out PP', 'Sell-Through PP', 'Stock PP (In-Direct)'] };
   return {};
 });
 
@@ -128,6 +141,7 @@ describe('PromotionPlannerSurface', () => {
     casesOverride = null;
     countsOverride = null;
     clashOverride = null;
+    search.value = '';
   });
 
   const renderPlanner = () => {
@@ -150,21 +164,28 @@ describe('PromotionPlannerSurface', () => {
     expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/support-bias'))).toBe(false);
   });
 
-  it('loads the timeline case list scoped to reporting customers and official promotion types', async () => {
+  // Step 2 (N-0122) changed the two tests below: they asserted official_promotion_types=true, which keeps Sell out PP
+  // on the planner. Warren (t454u): "Correct, Sell through, sell out is disti to reseller and is still valuable but not
+  // here." Standing rules: "The promotion planner shows customer promotions, never sell-out." and "The planner never
+  // shows closed, settled or ended cases (or old years) by default."
+  it('loads the timeline case list scoped to reporting customers, customer sell-through and open cases', async () => {
     renderPlanner();
     await waitFor(() =>
       expect(
         apiGetMock.mock.calls.some(
           ([u]) =>
             String(u).includes('/cpor/cases?') &&
+            !String(u).includes('status=') &&
             String(u).includes('reporting_only=true') &&
-            String(u).includes('official_promotion_types=true'),
+            String(u).includes('promotion_family=customer_sell_through') &&
+            String(u).includes('open_only=true'),
         ),
       ).toBe(true),
     );
+    expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('official_promotion_types'))).toBe(false);
   });
 
-  it('scopes proposed, ended, and headline count requests to reporting customers', async () => {
+  it('scopes proposed, ended, and headline count requests to reporting customers and customer sell-through', async () => {
     renderPlanner();
     await waitFor(() =>
       expect(
@@ -172,7 +193,7 @@ describe('PromotionPlannerSurface', () => {
           ([u]) =>
             String(u).includes('status=proposed') &&
             String(u).includes('reporting_only=true') &&
-            String(u).includes('official_promotion_types=true'),
+            String(u).includes('promotion_family=customer_sell_through'),
         ),
       ).toBe(true),
     );
@@ -181,9 +202,16 @@ describe('PromotionPlannerSurface', () => {
         ([u]) =>
           String(u).includes('status=ended') &&
           String(u).includes('reporting_only=true') &&
-          String(u).includes('official_promotion_types=true'),
+          String(u).includes('promotion_family=customer_sell_through'),
       ),
     ).toBe(true);
+    // Every planner case and count request carries the family: none reads sell-out. The one exception is the shared
+    // Promotions & Funding header (FundingChrome, `page_size=1`), which also serves the case book and settlement desk.
+    const caseCalls = apiGetMock.mock.calls
+      .map(([u]) => String(u))
+      .filter((u) => u.includes('/cpor/cases') && u !== DOMAIN_CHROME_URL);
+    expect(caseCalls.length).toBeGreaterThan(0);
+    for (const u of caseCalls) expect(u).toContain('promotion_family=customer_sell_through');
     expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/cpor/cases/counts?reporting_only=true'))).toBe(true);
   });
 
@@ -435,6 +463,72 @@ describe('PromotionPlannerSurface', () => {
     await waitFor(() => expect(screen.getByTestId('planner-card-drafts')).toHaveAttribute('data-state', 'empty'));
     expect(screen.getByTestId('planner-card-ended')).toHaveAttribute('data-state', 'empty');
     expect(screen.getByTestId('planner-card-drafts')).toHaveTextContent(/could not be loaded/i);
+  });
+
+  describe('step 2: open customer sell-through by default, History on request', () => {
+    const mainListCalls = () =>
+      apiGetMock.mock.calls
+        .map(([u]) => String(u))
+        .filter((u) => u.includes('/cpor/cases?') && !u.includes('status=') && u !== DOMAIN_CHROME_URL);
+
+    it('the Open | History toggle defaults to Open and History sets view=history in the URL', async () => {
+      renderPlanner();
+      const open = await screen.findByTestId('planner-view-open');
+      expect(open).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.click(screen.getByTestId('planner-view-history'));
+      expect(replaceMock).toHaveBeenCalledWith('/promotions?view=history', { scroll: false });
+    });
+
+    it('History drops open_only and keeps the customer sell-through family', async () => {
+      search.value = 'view=history';
+      renderPlanner();
+      await waitFor(() => expect(mainListCalls().length).toBeGreaterThan(0));
+      for (const u of mainListCalls()) {
+        expect(u).toContain('promotion_family=customer_sell_through');
+        expect(u).not.toContain('open_only');
+      }
+      expect(screen.getByTestId('planner-view-history')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('a closed stage in the URL is answered from History, not from the open list', async () => {
+      search.value = 'stage=settled';
+      renderPlanner();
+      await waitFor(() =>
+        expect(
+          apiGetMock.mock.calls.some(([u]) => String(u).includes('/cpor/cases?') && String(u).includes('status=settled')),
+        ).toBe(true),
+      );
+      const settled = apiGetMock.mock.calls.map(([u]) => String(u)).find((u) => u.includes('status=settled'))!;
+      expect(settled).not.toContain('open_only');
+      expect(settled).toContain('promotion_family=customer_sell_through');
+    });
+
+    it('with no open customer promotion, says so and offers History', async () => {
+      casesOverride = (url) => (url.includes('status=') ? undefined : { ...listPayload, items: [], total: 0 });
+      renderPlanner();
+      expect(await screen.findByTestId('planner-no-open')).toHaveTextContent(
+        'No open customer promotions. History shows ended and settled cases.',
+      );
+      fireEvent.click(screen.getByTestId('planner-show-history'));
+      expect(replaceMock).toHaveBeenCalledWith('/promotions?view=history', { scroll: false });
+    });
+
+    it('the create dialog offers the customer sell-through family only and defaults to its first type', async () => {
+      renderPlanner();
+      fireEvent.click(await screen.findByTestId('planner-new'));
+      await waitFor(() =>
+        expect(screen.getByTestId('create-case-promotion-type')).toHaveValue('Sell-Through PP'),
+      );
+      expect(
+        apiGetMock.mock.calls.some(([u]) =>
+          String(u).includes('/cpor/meta/promotion-types?family=customer_sell_through'),
+        ),
+      ).toBe(true);
+      fireEvent.mouseDown(screen.getByRole('combobox', { name: /Promotion type/i }));
+      const listbox = await screen.findByRole('listbox');
+      expect(listbox).toHaveTextContent('Sell-Through PP');
+      expect(listbox).not.toHaveTextContent('Sell out PP');
+    });
   });
 
   describe('mock-up alignment (fix round 1)', () => {

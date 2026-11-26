@@ -20,6 +20,8 @@ import {
   Snackbar,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
   useMediaQuery,
@@ -59,6 +61,7 @@ import { PlanWorkspace } from '@/features/promotions-funding/PlanWorkspace';
 import {
   awaitingCountUrl,
   BASE_COUNTS_URL,
+  BOOK_COUNTS_URL,
   calendarClashUrl,
   clashCardFigure,
   pageIsComplete,
@@ -72,7 +75,13 @@ import {
 } from '@/features/promotions-funding/plannerCards';
 import { buildActionQueue, queueSummary } from '@/features/promotions-funding/plannerLayout/actionQueue';
 import { CustomerRowsTimeline } from '@/features/promotions-funding/planner/CustomerRowsTimeline';
-import { withPlannerCalendarScope } from '@/features/promotions-funding/planner/plannerCalendarScope';
+import {
+  PLANNER_PROMOTION_FAMILY,
+  plannerViewFromSearch,
+  stageNeedsHistory,
+  withPlannerCalendarScope,
+  type PlannerView,
+} from '@/features/promotions-funding/planner/plannerCalendarScope';
 import { PlannerDetailPanel } from '@/features/promotions-funding/planner/PlannerDetailPanel';
 import { PlannerKpiCard } from '@/features/promotions-funding/planner/PlannerKpiCard';
 import { PlannerQueueSection, type PlannerQueueCard } from '@/features/promotions-funding/planner/PlannerQueueSection';
@@ -123,6 +132,7 @@ export function PromotionPlannerSurface() {
     <PlannerList
       stageFilter={stageFilter}
       scope={scope}
+      view={plannerViewFromSearch(search.get('view'))}
       testDataOnly={testDataOnly}
       newRequested={search.get('new') === '1'}
       proposeRequested={search.get('propose') === '1'}
@@ -133,9 +143,13 @@ export function PromotionPlannerSurface() {
   );
 }
 
+/** The Open view's empty state (step 2, C-6), shown when no open customer promotion exists. */
+const NO_OPEN_PROMOTIONS = 'No open customer promotions. History shows ended and settled cases.';
+
 function PlannerList({
   stageFilter,
   scope,
+  view,
   testDataOnly,
   newRequested,
   proposeRequested,
@@ -145,6 +159,7 @@ function PlannerList({
 }: {
   stageFilter: PlanStage | null;
   scope: ReturnType<typeof caseScopeFromSearch>;
+  view: PlannerView;
   testDataOnly: boolean;
   newRequested: boolean;
   proposeRequested: boolean;
@@ -167,10 +182,12 @@ function PlannerList({
     if (proposeRequested) setProposeOpen(true);
   }, [proposeRequested]);
 
+  // Open (default) or History. A closed stage (ended, settled, cancelled, rejected) can only be shown by History.
+  const history = view === 'history' || stageNeedsHistory(stageFilter);
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['cpor', 'cases', 'planner', 'reporting-calendar', stageFilter, scope, testDataOnly],
+    queryKey: ['cpor', 'cases', 'planner', 'reporting-calendar', history, stageFilter, scope, testDataOnly],
     queryFn: ({ signal }) => {
-      const sp = withPlannerCalendarScope(new URLSearchParams({ page: '1', page_size: '500' }));
+      const sp = withPlannerCalendarScope(new URLSearchParams({ page: '1', page_size: '500' }), { history });
       if (stageFilter) sp.set('status', stageFilter);
       if (testDataOnly) sp.set('test_data', 'only');
       caseScopeToQuery(scope).forEach((v, k) => sp.set(k, v));
@@ -199,7 +216,10 @@ function PlannerList({
   } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'ended'],
     queryFn: ({ signal }) => {
-      const sp = withPlannerCalendarScope(new URLSearchParams({ page: '1', page_size: '500', status: 'ended' }));
+      // Evidence outstanding reads ended customer cases: the family's history, never another family.
+      const sp = withPlannerCalendarScope(new URLSearchParams({ page: '1', page_size: '500', status: 'ended' }), {
+        history: true,
+      });
       return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
     },
   });
@@ -225,6 +245,16 @@ function PlannerList({
   } = useQuery({
     queryKey: ['cpor', 'cases', 'counts', 'base'],
     queryFn: ({ signal }) => apiGet<CaseCounts>(BASE_COUNTS_URL, { signal }),
+  });
+  // The family's whole current book, for the Ended card (the Open counts never hold an ended case).
+  const {
+    data: bookCounts,
+    isLoading: bookCountsLoading,
+    isError: bookCountsError,
+    refetch: refetchBookCounts,
+  } = useQuery({
+    queryKey: ['cpor', 'cases', 'counts', 'book'],
+    queryFn: ({ signal }) => apiGet<CaseCounts>(BOOK_COUNTS_URL, { signal }),
   });
   const {
     data: awaitingCounts,
@@ -269,10 +299,14 @@ function PlannerList({
   const counts = data?.status_counts ?? {};
   const rowsAll = data?.items ?? [];
   const rows = rowsAll;
+  // The Open view loaded and holds nothing, with no narrowing filter: say so honestly and offer History (step 2, C-6).
+  const noOpenPromotions =
+    !history && !isLoading && !isError && rows.length === 0 && !stageFilter && !testDataOnly && !caseScopeIsActive(scope);
+  const showHistory = () => setParams({ view: 'history' });
   // The stage chips and the lifecycle rail above keep the list's `status_counts` (the whole book, replaced cases
   // included); the headline cards read the exact current-case counts.
   const draftsN = statusCount(baseCounts, 'draft');
-  const endedN = statusCount(baseCounts, 'ended');
+  const endedN = statusCount(bookCounts, 'ended');
   const planningN = countPlanning(counts);
   const bookN = Object.values(counts).reduce((n, v) => n + (Number(v) || 0), 0);
 
@@ -284,6 +318,7 @@ function PlannerList({
   const awaitingState = figureState(awaitingLoading, awaitingError);
   const startingState = figureState(startingLoading, startingError);
   const countsState = figureState(baseCountsLoading, baseCountsError);
+  const bookCountsState = figureState(bookCountsLoading, bookCountsError);
   const clashState = figureState(clashLoading, clashError);
   const clash = clashData ? clashCardFigure(clashData) : null;
   const queueUnavailable = [
@@ -520,10 +555,14 @@ function PlannerList({
             compact
             dense
             testId="planner-card-ended"
-            state={countsState}
-            stateNote={baseCountsError ? 'Could not be loaded. Click to retry.' : undefined}
-            caption="In the book — settle from the case desk, not from this strip"
-            onClick={baseCountsError ? () => void refetchBaseCounts() : () => setParam('stage', 'ended')}
+            state={bookCountsState}
+            stateNote={bookCountsError ? 'Could not be loaded. Click to retry.' : undefined}
+            caption="Customer promotions in the book, shown under History — settle from the case desk, not from this strip"
+            onClick={
+              bookCountsError
+                ? () => void refetchBookCounts()
+                : () => setParams({ stage: 'ended', view: 'history' })
+            }
           />
           <HeadlineFigure
             label="Awaiting approval"
@@ -631,22 +670,49 @@ function PlannerList({
                     ? `${rows.length} matching${stageFilter ? ` ${STAGE_LABEL[stageFilter]}` : ''} · ${bookN} in the book · ${planningN} in planning`
                     : stageFilter
                       ? `${rows.length} of ${counts[stageFilter] ?? 0} ${STAGE_LABEL[stageFilter]} cases · ${bookN} in the book · ${planningN} in planning`
-                      : `${rows.length} of ${bookN} cases (all stages) · ${planningN} in planning`
+                      : history
+                        ? `${rows.length} of ${bookN} customer promotions (history, all stages) · ${planningN} in planning`
+                        : `${rows.length} open of ${bookN} customer promotions · ${planningN} in planning`
               }
-              onClear={() => setParams({ stage: null, test_data: null, ...caseScopeClearPatch() })}
+              onClear={() => setParams({ stage: null, test_data: null, view: null, ...caseScopeClearPatch() })}
               clearAvailable={caseScopeIsActive(scope) || testDataOnly}
               filters={
-                <CaseScopeFilters
-                  scope={scope}
-                  onPatch={setParams}
-                  stage={stageFilter}
-                  onStageChange={(next) => setParam('stage', next)}
-                />
+                <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={history ? 'history' : 'open'}
+                    aria-label="Open promotions or history"
+                    data-testid="planner-view-toggle"
+                    onChange={(_e, next: PlannerView | null) => {
+                      if (!next) return;
+                      // Back to Open also drops a closed stage filter, which only History can answer.
+                      setParams(
+                        next === 'history'
+                          ? { view: 'history' }
+                          : { view: null, ...(stageNeedsHistory(stageFilter) ? { stage: null } : {}) },
+                      );
+                    }}
+                  >
+                    <ToggleButton value="open" sx={{ py: 0.25, px: 1.25 }} data-testid="planner-view-open">
+                      Open
+                    </ToggleButton>
+                    <ToggleButton value="history" sx={{ py: 0.25, px: 1.25 }} data-testid="planner-view-history">
+                      History
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                  <CaseScopeFilters
+                    scope={scope}
+                    onPatch={setParams}
+                    stage={stageFilter}
+                    onStageChange={(next) => setParam('stage', next)}
+                  />
+                </Stack>
               }
             />
           </Box>
 
-          {/* 4. Timeline by customer (full width); promotion detail opens in a drawer when a case is selected */}
+          {/* 4. Promotion timeline (full width); promotion detail opens in a drawer when a case is selected */}
           <Box data-testid="planner-timeline-section" sx={{ minWidth: 0 }}>
             <Stack spacing={2}>
               <CustomerRowsTimeline
@@ -655,6 +721,19 @@ function PlannerList({
                 selectedId={selectedId}
                 onSelect={setSelectedId}
                 status={isLoading ? 'loading' : isError ? 'error' : 'ready'}
+                subtitle={history ? 'Customer promotions, history' : 'Open customer promotions of reporting customers'}
+                emptyState={
+                  noOpenPromotions ? (
+                    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                      <Typography variant="body2" color="text.secondary" data-testid="planner-no-open">
+                        {NO_OPEN_PROMOTIONS}
+                      </Typography>
+                      <Button size="small" variant="outlined" onClick={showHistory} data-testid="planner-show-history">
+                        Show history
+                      </Button>
+                    </Stack>
+                  ) : undefined
+                }
               />
             <ModuleDataSection
               isLoading={isLoading}
@@ -662,11 +741,19 @@ function PlannerList({
               error={error as Error | null}
               onRetry={() => void refetch()}
               isEmpty={rows.length === 0}
-              empty={{
-                title: 'No plans in this stage',
-                description: 'Clear the stage filter, propose a plan from evidence, or start one manually.',
-                primary: { label: 'Clear', onClick: () => setParam('stage', null) },
-              }}
+              empty={
+                noOpenPromotions
+                  ? {
+                      title: 'No open customer promotions',
+                      description: 'History shows ended and settled cases.',
+                      primary: { label: 'Show history', onClick: showHistory },
+                    }
+                  : {
+                      title: 'No plans in this stage',
+                      description: 'Clear the stage filter, propose a plan from evidence, or start one manually.',
+                      primary: { label: 'Clear', onClick: () => setParam('stage', null) },
+                    }
+              }
             >
               {isMobile ? (
                 <Stack spacing={1} data-testid="planner-record-cards">
@@ -988,15 +1075,22 @@ function CreateCaseDialog({
   onError: (m: string) => void;
 }) {
   const [cust, setCust] = useState<CustomerPick | null>(null);
-  const [promoType, setPromoType] = useState('Sell out PP');
+  // Step 2 (N-0122): the planner creates customer promotions only. The types come from the API's family list and the
+  // first is the default (no type name in this file). Warren: "The promotion planner shows customer promotions, never
+  // sell-out."
+  const [promoTypePicked, setPromoType] = useState<string | null>(null);
   const [windowStart, setWindowStart] = useState('');
   const [windowEnd, setWindowEnd] = useState('');
   const [fxRate, setFxRate] = useState('');
   const { data: types } = useQuery({
-    queryKey: ['cpor', 'promotion-types'],
-    queryFn: ({ signal }) => apiGet<PromoTypes>('/api/v1/cpor/meta/promotion-types', { signal }),
+    queryKey: ['cpor', 'promotion-types', PLANNER_PROMOTION_FAMILY],
+    queryFn: ({ signal }) =>
+      apiGet<PromoTypes>(`/api/v1/cpor/meta/promotion-types?family=${PLANNER_PROMOTION_FAMILY}`, { signal }),
     enabled: open,
   });
+  const typeOptions = types?.promotion_types ?? [];
+  const promoType =
+    promoTypePicked != null && typeOptions.includes(promoTypePicked) ? promoTypePicked : (typeOptions[0] ?? '');
   const { data: fxToday } = useQuery({
     queryKey: ['cpor', 'fx', 'today'],
     queryFn: ({ signal }) =>
@@ -1049,8 +1143,18 @@ function CreateCaseDialog({
               return res.items ?? [];
             }}
           />
-          <TextField select size="small" label="Promotion type" value={promoType} onChange={(e) => setPromoType(e.target.value)} fullWidth>
-            {(types?.promotion_types ?? ['Sell out PP']).map((t) => (
+          <TextField
+            select
+            size="small"
+            label="Promotion type"
+            value={promoType}
+            onChange={(e) => setPromoType(e.target.value)}
+            fullWidth
+            disabled={typeOptions.length === 0}
+            helperText={typeOptions.length === 0 ? 'Loading the customer promotion types…' : undefined}
+            inputProps={{ 'data-testid': 'create-case-promotion-type' }}
+          >
+            {typeOptions.map((t) => (
               <MenuItem key={t} value={t}>
                 {t}
               </MenuItem>
@@ -1080,7 +1184,7 @@ function CreateCaseDialog({
         </Button>
         <Button
           variant="contained"
-          disabled={!cust || !windowStart || !windowEnd || create.isPending}
+          disabled={!cust || !promoType || !windowStart || !windowEnd || create.isPending}
           onClick={() => create.mutate()}
         >
           Create

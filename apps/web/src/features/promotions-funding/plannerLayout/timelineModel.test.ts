@@ -4,13 +4,41 @@ import {
   barGeometry,
   buildTimeline,
   defaultTimelineViewWindow,
+  isoWeek,
   monthTicks,
   monthTicksForAxis,
   orderByCustomer,
   scrollLeftForViewWindow,
   statusLane,
+  weekStartIso,
   weekTicks,
 } from './timelineModel';
+
+// Step 2 (N-0122): the mock-up's week header reads "W45 / Nov 2" and marks the current week as a column.
+describe('ISO weeks for the week header', () => {
+  it('numbers weeks per ISO 8601, across year ends', () => {
+    expect(isoWeek('2026-11-02')).toBe(45);
+    expect(isoWeek('2026-11-16')).toBe(47);
+    expect(isoWeek('2026-11-22')).toBe(47); // Sunday stays in its Monday's week
+    expect(isoWeek('2026-12-28')).toBe(53); // 2026 has 53 ISO weeks
+    expect(isoWeek('2027-01-04')).toBe(1);
+    expect(isoWeek('2021-01-01')).toBe(53); // a Friday belongs to the previous year's last week
+  });
+  it('finds the Monday on or before a date', () => {
+    expect(weekStartIso('2026-11-19')).toBe('2026-11-16');
+    expect(weekStartIso('2026-11-16')).toBe('2026-11-16');
+    expect(weekStartIso('2026-11-22')).toBe('2026-11-16');
+    expect(weekStartIso('2027-01-01')).toBe('2026-12-28');
+  });
+  it('week ticks carry the ISO week number', () => {
+    expect(weekTicks('2026-11-01', '2026-11-30').map((t) => t.week)).toEqual([45, 46, 47, 48, 49]);
+  });
+  it('the open view axis starts no earlier than the earliest shown case or today (B5)', () => {
+    const m = buildTimeline([row(1, '2026-12-01', '2026-12-20'), row(2, '2027-01-05', '2027-01-30')], '2026-11-19');
+    expect(m.start).toBe('2026-11-01');
+    expect(m.end).toBe('2027-01-31');
+  });
+});
 
 const row = (id: number, s: string | null, e: string | null, status = 'approved') => ({
   id,

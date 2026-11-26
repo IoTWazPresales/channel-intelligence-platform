@@ -153,16 +153,34 @@ export function buildTimeline<T extends TimelineCase>(cases: readonly T[], today
   };
 }
 
-/** One tick per Monday on the axis (the week view); the label is the day and month, e.g. "2 Nov". */
-export function weekTicks(axisStart: string, axisEnd: string): { label: string; leftPct: number }[] {
+/** ISO 8601 week number of a date (weeks start on Monday; week 1 holds the year's first Thursday). */
+export function isoWeek(iso: string): number {
+  const d = new Date(ms(iso));
+  const dow = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dow);
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+  return Math.ceil(((d.getTime() - yearStart) / DAY_MS + 1) / 7);
+}
+
+/** The Monday on or before a date. */
+export function weekStartIso(iso: string): string {
+  const dow = new Date(ms(iso)).getUTCDay() || 7;
+  return addDaysIso(iso.slice(0, 10), 1 - dow);
+}
+
+/**
+ * One tick per Monday on the axis (the week view); the label is the day and month, e.g. "2 Nov", and `week` is the
+ * ISO week number the mock-up shows above it ("W45").
+ */
+export function weekTicks(axisStart: string, axisEnd: string): { label: string; leftPct: number; week: number }[] {
   const total = daysBetween(axisStart, axisEnd) + 1;
-  const out: { label: string; leftPct: number }[] = [];
+  const out: { label: string; leftPct: number; week: number }[] = [];
   // getUTCDay: 0 = Sunday ... 1 = Monday. Move forward to the first Monday on or after the axis start.
   const dow = new Date(ms(axisStart)).getUTCDay();
   let cur = addDaysIso(axisStart, (8 - dow) % 7);
   while (cur <= axisEnd) {
     const label = new Date(ms(cur)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-    out.push({ label, leftPct: (daysBetween(axisStart, cur) / total) * 100 });
+    out.push({ label, leftPct: (daysBetween(axisStart, cur) / total) * 100, week: isoWeek(cur) });
     cur = addDaysIso(cur, 7);
   }
   return out;

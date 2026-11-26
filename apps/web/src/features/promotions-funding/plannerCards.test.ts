@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BASE_COUNTS_URL,
+  BOOK_COUNTS_URL,
   STARTING_EXCLUDED_STATUSES,
   addDaysIso,
   awaitingCountUrl,
@@ -31,21 +32,36 @@ describe('pageIsComplete', () => {
   });
 });
 
+// Step 2 (N-0122) changed the four exact URLs below: each now ends with the customer sell-through family (and
+// open_only where the card counts open cases). The old URLs had no family, so they counted Sell out PP.
+// Warren (t454u): "Correct, Sell through, sell out is disti to reseller and is still valuable but not here."
+// Warren (standing rule): "The promotion planner shows customer promotions, never sell-out."
 describe('exact count requests (API counts, not a capped page)', () => {
   it('awaiting approval asks the count endpoint for Proposed', () => {
-    expect(awaitingCountUrl()).toBe('/api/v1/cpor/cases/counts?reporting_only=true&status=proposed');
+    expect(awaitingCountUrl()).toBe(
+      '/api/v1/cpor/cases/counts?reporting_only=true&status=proposed&promotion_family=customer_sell_through&open_only=true',
+    );
   });
   it('starting asks for the [today, today+28] window and leaves out cancelled and rejected', () => {
     const r = startingCountUrl('2026-11-19');
     expect(r.from).toBe('2026-11-19');
     expect(r.to).toBe('2026-12-17');
     expect(r.url).toBe(
-      '/api/v1/cpor/cases/counts?reporting_only=true&window_from=2026-11-19&window_to=2026-12-17&exclude_status=cancelled&exclude_status=rejected',
+      '/api/v1/cpor/cases/counts?reporting_only=true&window_from=2026-11-19&window_to=2026-12-17&exclude_status=cancelled&exclude_status=rejected&promotion_family=customer_sell_through&open_only=true',
     );
     expect([...STARTING_EXCLUDED_STATUSES]).toEqual(['cancelled', 'rejected']);
   });
+  it('the Ended card reads the family book (closed cases included); no URL counts another family', () => {
+    expect(BOOK_COUNTS_URL).toBe('/api/v1/cpor/cases/counts?reporting_only=true&promotion_family=customer_sell_through');
+    for (const u of [BASE_COUNTS_URL, BOOK_COUNTS_URL, awaitingCountUrl(), startingCountUrl('2026-11-19').url]) {
+      expect(u).toContain('promotion_family=customer_sell_through');
+      expect(u).not.toContain('official_promotion_types');
+    }
+  });
   it('drafts and ended read the per-status split of the unfiltered counts', () => {
-    expect(BASE_COUNTS_URL).toBe('/api/v1/cpor/cases/counts?reporting_only=true');
+    expect(BASE_COUNTS_URL).toBe(
+      '/api/v1/cpor/cases/counts?reporting_only=true&promotion_family=customer_sell_through&open_only=true',
+    );
     const counts = { total_current: 9, status_counts_current: { draft: 4, ended: 5 } };
     expect(statusCount(counts, 'draft')).toBe(4);
     expect(statusCount(counts, 'ended')).toBe(5);
@@ -110,8 +126,11 @@ describe('unplannedAgedStock (value comes from the API, never priced here)', () 
 });
 
 describe('calendar clash card', () => {
-  it('asks for clashes of promotions ending today or later', () => {
-    expect(calendarClashUrl('2026-11-19')).toBe('/api/v1/customer-calendar/clashes/summary?from=2026-11-19');
+  // Step 2 (N-0122): the clash card counts customer sell-through promotions only (see the quotes above).
+  it('asks for clashes of customer sell-through promotions ending today or later', () => {
+    expect(calendarClashUrl('2026-11-19')).toBe(
+      '/api/v1/customer-calendar/clashes/summary?from=2026-11-19&promotion_family=customer_sell_through',
+    );
   });
   it('shows the exact clash count with the promotions and customers involved', () => {
     expect(
