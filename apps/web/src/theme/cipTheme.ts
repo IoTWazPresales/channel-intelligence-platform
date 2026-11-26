@@ -29,7 +29,9 @@ export function createCipTheme(
     typography: {
       fontFamily: 'var(--font-inter, "Inter", "Segoe UI", system-ui, sans-serif)',
       fontSize: 13,
-      h1: { fontSize: '1.6875rem', fontWeight: 650, lineHeight: 1.1, letterSpacing: '-0.04em' },
+      // h1 is the page title (dashboard-v2 mock-up `h1`: 27px / 1.1 / 650 / -1px). PageHeader and
+      // DomainHeader render it; pages never restyle it.
+      h1: { fontSize: '1.6875rem', fontWeight: 650, lineHeight: 1.1, letterSpacing: '-1px' },
       h2: { fontWeight: 600, letterSpacing: '-0.02em', fontSize: '1.25rem', lineHeight: 1.15 },
       h3: { fontWeight: 600, fontSize: '1.0625rem', lineHeight: 1.2 },
       h4: { fontWeight: 600, fontSize: '1rem' },
@@ -61,8 +63,10 @@ export function createCipTheme(
         styleOverrides: {
           html: { colorScheme: mode },
           body: {
+            // Mock-up body: gradient wash over the page colour. A colour is not a valid
+            // background-image layer, so the colour lives in backgroundColor only.
             backgroundColor: t.bg.default,
-            backgroundImage: `radial-gradient(ellipse at 25% 0, ${t.accent.primaryMuted}, transparent 52%), ${t.bg.default}`,
+            backgroundImage: `radial-gradient(ellipse at 25% 0, ${t.accent.primaryMuted}, transparent 52%)`,
           },
         },
       },
@@ -70,13 +74,16 @@ export function createCipTheme(
         styleOverrides: {
           root: {
             position: 'relative',
-            overflow: 'hidden',
+            // No global overflow: it clipped selects, focus rings and sticky headers inside cards.
+            // Components that need clipping (toned rail below, data grids, rounded media) set it themselves.
             backgroundImage: 'none',
             backgroundColor: t.bg.surface,
             border: `1px solid ${t.border.subtle}`,
             boxShadow:
               mode === 'dark' ? '0 8px 28px rgba(0,0,0,0.25)' : '0 4px 20px rgba(20, 35, 50, 0.08)',
             borderRadius: t.radius.card,
+            // The 3px accent rail is square; clip it to the card's rounded corners.
+            '&[data-cip-tone]': { overflow: 'hidden' },
             '&[data-cip-tone="danger"]::before, &[data-cip-tone="bad"]::before': {
               content: '""',
               position: 'absolute',
@@ -224,7 +231,7 @@ export function createCipTheme(
             borderRadius: t.radius.control,
             backgroundImage: 'none',
             boxShadow: 'none',
-            overflow: 'hidden',
+            // No `overflow: hidden`: it removed MUI's horizontal scroll for wide tables.
           },
         },
       },
