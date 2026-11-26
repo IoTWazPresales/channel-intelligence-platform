@@ -137,6 +137,60 @@ describe('PriceMatrixLens', () => {
     expect(screen.getAllByText('Below SRP')).toHaveLength(1);
   });
 
+  it('shows no per-cell SRP line while no cell has an SRP from any source', async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId('price-matrix-age-10-1')).toBeInTheDocument());
+    expect(screen.queryByTestId('price-matrix-cell-srp-10-1')).toBeNull();
+    expect(screen.queryByTestId('price-matrix-cell-srp-10-2')).toBeNull();
+  });
+
+  it('shows each cell SRP with the label of the source it came from', async () => {
+    const base = matrixPayload();
+    payload.value = {
+      ...base,
+      customers: [...base.customers, { id: 3, name: 'Customer C' }],
+      products: [{ ...base.products[0], srp: null, srp_source: null, srp_reason: 'srp_varies_by_customer' }],
+      cells: [
+        { ...base.cells[0], srp: 120, srp_source: 'sell_out_price', srp_reason: null, below_srp: true },
+        { ...base.cells[1], srp: 1234.5, srp_source: 'lineup_price', srp_reason: null },
+        {
+          ...base.cells[0],
+          customer_id: 3,
+          listing_id: 7,
+          srp: 99,
+          srp_source: 'website_off_promo_price',
+          srp_reason: null,
+          promo: null,
+        },
+      ],
+      srp_source_order: ['sell_out_price', 'lineup_price', 'website_off_promo_price'],
+    };
+    mount();
+    await waitFor(() => expect(screen.getByTestId('price-matrix-cell-srp-10-1')).toBeInTheDocument());
+    expect(screen.getByTestId('price-matrix-cell-srp-10-1')).toHaveTextContent('SRP 120 · Sell-out price');
+    expect(screen.getByTestId('price-matrix-cell-srp-10-2')).toHaveTextContent('SRP 1,234.5 · Line-up price');
+    expect(screen.getByTestId('price-matrix-cell-srp-10-3')).toHaveTextContent('SRP 99 · Website off-promo price');
+    // The product-level column states that the customers' figures differ; the old pending text is gone.
+    expect(screen.getByTestId('price-matrix-srp-10')).toHaveTextContent('Varies by customer');
+    expect(screen.queryByText('SRP source not yet chosen')).toBeNull();
+  });
+
+  it('shows the product SRP once when every customer agrees, and "No SRP" for a gap beside cells that have one', async () => {
+    const base = matrixPayload();
+    payload.value = {
+      ...base,
+      products: [{ ...base.products[0], srp: 120, srp_source: 'sell_out_price', srp_reason: null }],
+      cells: [
+        { ...base.cells[0], srp: 120, srp_source: 'sell_out_price', srp_reason: null },
+        { ...base.cells[1], srp: null, srp_source: null, srp_reason: 'no_srp_for_product' },
+      ],
+    };
+    mount();
+    await waitFor(() => expect(screen.getByTestId('price-matrix-srp-10')).toBeInTheDocument());
+    expect(screen.getByTestId('price-matrix-srp-10')).toHaveTextContent('120');
+    expect(screen.getByTestId('price-matrix-cell-srp-10-2')).toHaveTextContent('No SRP');
+  });
+
   it('has no "Cheapest at" figures', async () => {
     mount();
     await screen.findByTestId('price-matrix-table');

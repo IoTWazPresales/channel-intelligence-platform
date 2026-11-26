@@ -46,7 +46,8 @@ type MatrixPayload = {
   products: MatrixProduct[];
   cells: MatrixCell[];
   summary?: { product_count: number; below_srp_count: number | null };
-  srp_source?: string | null;
+  /** The fallback order of the SRP sources, as the API applies it. */
+  srp_source_order?: string[];
 };
 
 type MatrixRow = { product: MatrixProduct; cells: Record<number, MatrixCell | undefined> };
@@ -55,7 +56,18 @@ type MatrixRow = { product: MatrixProduct; cells: Record<number, MatrixCell | un
 const SRP_REASON_TEXT: Record<string, string> = {
   srp_source_pending: 'SRP source not yet chosen',
   no_srp_for_product: 'No SRP',
+  srp_varies_by_customer: 'Varies by customer',
 };
+
+/** Words for the API's `srp_source` codes (the SRP rule: sell-out, else line-up, else website). */
+const SRP_SOURCE_TEXT: Record<string, string> = {
+  sell_out_price: 'Sell-out price',
+  lineup_price: 'Line-up price',
+  website_off_promo_price: 'Website off-promo price',
+};
+
+/** A priced cell shows three text lines (price, age, SRP and its source); the shared row fits two. */
+const MATRIX_ROW_HEIGHT_FACTOR = 1.5;
 
 function fmtPrice(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return '—';
@@ -70,6 +82,15 @@ export function productLabel(p: MatrixProduct): string {
 function srpText(fields: SrpFields): string {
   if (fields.srp != null) return fmtPrice(fields.srp);
   return SRP_REASON_TEXT[fields.srp_reason ?? ''] ?? fields.srp_reason ?? 'No SRP';
+}
+
+/** `SRP 8,499 · Sell-out price` for a cell with an SRP; "No SRP" for a gap beside cells that have one. */
+function cellSrpText(cell: MatrixCell): string | null {
+  if (cell.srp != null) {
+    const source = cell.srp_source ? (SRP_SOURCE_TEXT[cell.srp_source] ?? cell.srp_source) : null;
+    return source ? `SRP ${fmtPrice(cell.srp)} · ${source}` : `SRP ${fmtPrice(cell.srp)}`;
+  }
+  return cell.srp_reason === 'no_srp_for_product' ? SRP_REASON_TEXT.no_srp_for_product : null;
 }
 
 function ProductCell({ product }: { product: MatrixProduct }) {
@@ -104,6 +125,7 @@ function PriceCell({ cell }: { cell: MatrixCell | undefined }) {
     );
   }
   const promo = cell.promo;
+  const srpText = cellSrpText(cell);
   return (
     <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, width: '100%' }}>
       <Box sx={{ lineHeight: 1.2, minWidth: 0 }}>
@@ -125,6 +147,17 @@ function PriceCell({ cell }: { cell: MatrixCell | undefined }) {
         >
           {attentionAge(cell.observed_at, 'observed_at')}
         </Typography>
+        {srpText ? (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            component="div"
+            data-testid={`price-matrix-cell-srp-${cell.product_id}-${cell.customer_id}`}
+          >
+            {srpText}
+          </Typography>
+        ) : null}
       </Box>
       <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
         {!cell.in_stock ? <StatusChip label="Out of stock" tone="neutral" /> : null}
@@ -222,7 +255,9 @@ export function PriceMatrixLens() {
         tooltipValueGetter: (p) => {
           const cell = p.data?.cells[c.id];
           if (!cell?.observed_at) return undefined;
-          return `Read ${new Date(cell.observed_at).toLocaleString()}`;
+          const read = `Read ${new Date(cell.observed_at).toLocaleString()}`;
+          const srpText = cellSrpText(cell);
+          return srpText ? `${read} · ${srpText}` : read;
         },
         cellRenderer: (p: ICellRendererParams<MatrixRow>) => <PriceCell cell={p.data?.cells[c.id]} />,
       })),
@@ -230,13 +265,16 @@ export function PriceMatrixLens() {
     [customers],
   );
 
-  const { rowHeight, headerHeight } = gridRowMetrics(theme.density);
+  const metrics = gridRowMetrics(theme.density);
+  const rowHeight = Math.round(metrics.rowHeight * MATRIX_ROW_HEIGHT_FACTOR);
+  const { headerHeight } = metrics;
   const gridOptions = useMemo<GridOptions<MatrixRow>>(
     () => ({
       ...OPS_LIST_GRID_PAGINATION,
+      rowHeight,
       getRowId: (p) => String(p.data.product.id),
     }),
-    [],
+    [rowHeight],
   );
 
   const unavailable = matrix.isError || Boolean(matrix.data?.data_unavailable);
