@@ -52,6 +52,17 @@ def dispatch_preview(tenant_id: str, preview_id: str, request: dict[str, Any]) -
     celery_app.send_task(TASK_NAME, args=[tenant_id, preview_id, request], ignore_result=True)
 
 
+def dispatch_autoconfigure(tenant_id: str) -> None:
+    """After a site is confirmed, ask for one on-demand autoconfigure run so its reader gets set.
+
+    The confirm is already committed; a queueing failure is logged and never fails the request
+    (the daily run still configures the site). Tests replace this.
+    """
+    from app.services.listing_capture.autoconfig_schedule import request_autoconfigure_after_confirm
+
+    request_autoconfigure_after_confirm(tenant_id)
+
+
 def _error(status_code: int, code: str, message: str = "", **extra: Any) -> JSONResponse:
     return JSONResponse(status_code=status_code, content={"code": code, "message": message, **extra})
 
@@ -163,10 +174,13 @@ def post_apply(preview_id: str, user: dict = Depends(require_roles(Role.STEWARD)
         store = get_plan_store()
         with SessionLocal() as session:
             try:
-                return web_apply.apply_plan(session, store, tenant_id=tenant_id, preview_id=preview_id, user=user)
+                applied = web_apply.apply_plan(session, store, tenant_id=tenant_id, preview_id=preview_id, user=user)
             except Exception:
                 session.rollback()
                 raise
+        if int(applied.get("sites_confirmed") or 0) > 0:
+            dispatch_autoconfigure(tenant_id)
+        return applied
     except web_apply.ApplyError as exc:
         return _error(exc.status_code, exc.code, str(exc))
     except web_preview.StoreUnavailable:
@@ -190,11 +204,12 @@ def post_site_candidate(
     body: CandidateDecisionBody,
     user: dict = Depends(require_roles(Role.STEWARD)),
 ):
+    tenant_id = tenant_id_from_user(user)
     with SessionLocal() as session:
         try:
             result = web_apply.decide_site_candidate(
                 session,
-                tenant_id=tenant_id_from_user(user),
+                tenant_id=tenant_id,
                 candidate_id=candidate_id,
                 action=body.action,
                 user=user,
@@ -206,4 +221,6 @@ def post_site_candidate(
         except Exception:
             session.rollback()
             raise
-        return result
+    if body.action == "confirm" and result.get("status") == WEB_SITE_CONFIRMED:
+        dispatch_autoconfigure(tenant_id)
+    return result

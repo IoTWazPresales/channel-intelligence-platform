@@ -174,14 +174,26 @@ def autoconfigure_sites(
     entries_by_tenant: dict[str, list[dict[str, Any]]] = {}
     cut_short: list[str] = []
     scheduled_discovery = tenant_ids is not None
+    if scheduled_discovery:
+        # A worker restart inside the daily cadence must not start discovery again
+        # (autoconfig_schedule.run_startup_autoconfigure reads this record).
+        from app.services.listing_capture.autoconfig_schedule import note_scheduled_run
+
+        note_scheduled_run(store=run_store)
     for tid in order:
         if scheduled_discovery and live:
+            # The scheduled step rolls back its read-only preview and commits its own Apply. Save
+            # what the previous tenant in this run already wrote first (a rollback would discard
+            # it), and take the advisory lock again afterwards (ending the transaction releases it).
+            session.commit()
             try:
                 from app.services.listing_capture.web_discovery import scheduled as wd_scheduled
 
                 wd_scheduled.run_scheduled_reporting_discovery(session, tenant_id=tid)
             except Exception:
                 logger.exception("listing autoconfigure: scheduled web discovery failed for %s", tid)
+                session.rollback()
+            _advisory_lock(session)
         found = discover_reporting_customers(
             session, tenant_id=tid, http_get=fetch_get, run_store=run_store, fetch_policy=policy
         )

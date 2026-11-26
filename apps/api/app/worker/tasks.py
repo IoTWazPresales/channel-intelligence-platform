@@ -892,6 +892,7 @@ def listing_capture_autoconfigure_sites_task(
         if tenant_id is not None:
             enabled = [t for t in enabled if t == tenant_id]
         if not enabled:
+            log.info("listing capture autoconfigure skipped: discovery_schedule_off")
             return {"skipped": True, "reason": "discovery_schedule_off"}
         scheduled_tenants = enabled
     else:

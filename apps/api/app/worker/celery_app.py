@@ -98,3 +98,13 @@ import app.worker.liveness  # noqa: E402, F401 — N-0089: worker heartbeat in R
 def _log_worker_code_pin(**_kwargs) -> None:
     # BACKLOG-111: restart this process after lineup parser commits; pin is in worker logs.
     logger.info("%s", describe_worker_code_pin())
+
+
+@worker_ready.connect
+def _discover_when_worker_is_up(**_kwargs) -> None:
+    # Step 3 (Warren, 25 Nov): discovery runs when the services are up, not only at the next 05:20 UTC
+    # slot. Same gates as the beat entry (dev_beat_disabled, the tenant's discovery.schedule_enabled)
+    # plus a restart debounce; see app/services/listing_capture/autoconfig_schedule.py.
+    from app.services.listing_capture.autoconfig_schedule import run_startup_autoconfigure
+
+    run_startup_autoconfigure()
