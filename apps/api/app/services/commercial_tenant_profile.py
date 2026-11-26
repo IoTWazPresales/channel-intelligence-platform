@@ -160,6 +160,7 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "woc_min_velocity_days",
     "stock_gap_highlight_units",
     "soh_tolerance_pct",
+    "below_srp_tolerance",
     "week_calendar",
     "business_calendar",
     "vat_rate_pct",
@@ -189,6 +190,11 @@ STOCK_GAP_HIGHLIGHT_UNITS_MAX = 1_000_000.0
 # D-0038: customer SOH cost-check tolerance as a fraction of derived MAC (0.10 = 10%).
 DEFAULT_SOH_TOLERANCE_PCT = 0.10
 SOH_TOLERANCE_PCT_MAX = 1.0  # exclusive upper bound in save/read (same shape as vat_rate_pct)
+
+# Monitored-listings price matrix: a shelf price counts as below SRP only when it is more than this
+# many currency units under it (absolute, not a percentage). Editable per tenant; 0 means any amount.
+DEFAULT_BELOW_SRP_TOLERANCE = 1.0
+BELOW_SRP_TOLERANCE_MAX = 1_000_000.0
 
 # Governed metric overlay (P3-1). Only label / hidden / allowed_grains persist;
 # formula / source_facts / owner_surface / new metric ids are never stored.
@@ -955,6 +961,17 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
                 raise ValueError("stock_gap_highlight_units: must be more than 0 units")
             clean[key] = units
             continue
+        if key == "below_srp_tolerance":
+            if raw is None or str(raw).strip() == "":
+                continue
+            try:
+                amount = float(str(raw).strip())
+            except (TypeError, ValueError) as exc:
+                raise ValueError("below_srp_tolerance: an amount in currency units is required") from exc
+            if not (0 <= amount <= BELOW_SRP_TOLERANCE_MAX):
+                raise ValueError("below_srp_tolerance: must be 0 or more currency units")
+            clean[key] = amount
+            continue
         if key == "soh_tolerance_pct":
             if raw is None or str(raw).strip() == "":
                 continue
@@ -1022,6 +1039,7 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "woc_min_velocity_days": woc_min_velocity_days(tenant_id),
         "stock_gap_highlight_units": stock_gap_highlight_units(tenant_id),
         "soh_tolerance_pct": soh_tolerance_pct(tenant_id),
+        "below_srp_tolerance": below_srp_tolerance(tenant_id),
         "week_calendar": week_calendar(tenant_id),
         "business_calendar": business_calendar_config(tenant_id),
         "vat_rate_pct": vat_rate_pct(tenant_id),
@@ -1045,6 +1063,18 @@ def stock_gap_highlight_units(tenant_id: str = "default") -> float:
     if not (0 < units <= STOCK_GAP_HIGHLIGHT_UNITS_MAX):
         return DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS
     return units
+
+
+def below_srp_tolerance(tenant_id: str = "default") -> float:
+    """Currency units a shelf price must be under its SRP to count as below it (default 1.0)."""
+    raw = load_tenant_profile_overrides(tenant_id).get("below_srp_tolerance", DEFAULT_BELOW_SRP_TOLERANCE)
+    try:
+        amount = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return DEFAULT_BELOW_SRP_TOLERANCE
+    if not (0 <= amount <= BELOW_SRP_TOLERANCE_MAX):
+        return DEFAULT_BELOW_SRP_TOLERANCE
+    return amount
 
 
 def soh_tolerance_pct(tenant_id: str = "default") -> float:

@@ -170,3 +170,19 @@ def test_shipping_method_pattern_roundtrip_and_refusal() -> None:
     profile.save_tenant_profile_overrides("acme", {"shipping_method_pattern": ""})
     assert "shipping_method_pattern" not in profile.load_tenant_profile_overrides("acme")
     assert split_shipping_method("COSCOckg-WWP--", tenant_shipping_method_pattern("acme")) == ("COSCO", "ckg")
+
+
+def test_below_srp_tolerance_default_save_and_reject() -> None:
+    assert profile.below_srp_tolerance("acme") == profile.DEFAULT_BELOW_SRP_TOLERANCE == 1.0
+    saved = profile.save_tenant_profile_overrides("acme", {"below_srp_tolerance": "2.5"})
+    assert saved["below_srp_tolerance"] == 2.5
+    assert profile.below_srp_tolerance("acme") == 2.5
+    assert profile.profile_snapshot("acme")["below_srp_tolerance"] == 2.5
+    # Another policy save keeps it; zero (any amount below) is allowed.
+    profile.save_tenant_profile_overrides("acme", {"constraint_axis": "money"})
+    assert profile.below_srp_tolerance("acme") == 2.5
+    assert profile.save_tenant_profile_overrides("acme", {"below_srp_tolerance": "0"})["below_srp_tolerance"] == 0.0
+    with pytest.raises(ValueError, match="below_srp_tolerance"):
+        profile.save_tenant_profile_overrides("acme", {"below_srp_tolerance": "-1"})
+    with pytest.raises(ValueError, match="below_srp_tolerance"):
+        profile.save_tenant_profile_overrides("acme", {"below_srp_tolerance": "ten"})
