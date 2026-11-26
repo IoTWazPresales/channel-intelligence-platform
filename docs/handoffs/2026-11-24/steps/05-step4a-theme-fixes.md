@@ -131,6 +131,39 @@ Compared with `dashboard-design-reference-dark.png` and the live dark and light 
 5. Page titles still 15px on `/promotions` (`PromotionPlannerSurface.tsx:412`) and `/directory` (`CapabilityDirectory.tsx:30`); `PageHeader` pages keep an `h5` element (test-pinned).
 6. Light mode: the gradient wash and colours match the mock-up numerically; no layout difference beyond the above.
 
+## Nav rail rebuilt to the mock-up (26 Nov follow-up)
+
+Warren (verbatim): "the previous theme edit that cursor did, completely screwed the navigation bar"; "The sidebar is barely big enough to fit a single 4 letter word and you want to rework its rows? How about you do what was told and follow the mockup layouts?"
+
+**Done:** `CapabilityRail.tsx` rewritten to the mock-up `.sidebar` (docs/design/dashboard-v2/index.html): padding 24px 14px, gap 25px, cube-mark brand ("Channel" / "INTELLIGENCE"), group headings in the `.nav-label` eyebrow style, plain flat items (`.nav-item`, active = accent text + accent-wash fill + 2px accent left border + 600), footer "Your workspace / Only data you can access". Geometry lives in one exported `NAV_MOCK` constant (values copied from the mock-up CSS; colours from theme palette, no hex). Removed from the rail rows: group icon, raised paper band on expanded headings, 28px item indent (mock-up has none). `DOMAIN_ICONS` is still exported (AppShell mobile bar uses it). Nothing removed or renamed: all 8 groups, 50 group items (counted live, admin role), test ids `rail-domain-*`, `rail-badge-*`, `rail-directory`, `rail-tenant-stamp`, `Collapse X`/`Expand X` aria labels and the `Capability areas` nav label are unchanged.
+
+**Width (measured, not assumed):** the mock-up's 172px was used first. At the mock-up's own eyebrow type (10px/700/1.4px, uppercase) the real headings measure (Inter, 1440px viewport, text node width): PROMOTIONS & FUNDING 154.2px, STOCK & SELL-THROUGH 152.6, DATA & STEWARDSHIP 136.7, MARKET & LISTINGS 124.6, SUPPLY & INBOUND 119.7, ADMINISTRATION 108, OVERVIEW 65.1, PLANNING 64. A 172px rail leaves a 144px content box (172 - 2x14), minus the mock-up's 10px label padding = 134px. Overflow at 172px: PROMOTIONS & FUNDING is 20.2px too wide before any chevron or count, STOCK & SELL-THROUGH 18.6px; measured live at 172px the text ended at x=178 and x=177, past the rail's right edge (172). The same widths in the mock-up's Segoe UI stack are within 6px (154.9 / 148.2), so the font is not the cause. Smallest width that fits every heading on one line beside its count chip and chevron: **240px (0px spare)**; shipped **244px** (4px spare for font substitution). Leaf labels also need it: "Customer sell-through files" is 167.2px and wraps below ~218px.
+
+**Tests changed (2 assertions, `CapabilityRail.test.ts`), each with Warren's quote in the test comment and commit message:** (1) `RAIL_WIDTH` 172 -> 244 (LabShell stays 172, untouched); (2) the BACKLOG-181 assertion `bgcolor: 'background.paper'` for the production rail now asserts `background.elevated` (the mock-up sidebar is flat, no raised band); `position: 'sticky'` assertion kept for both files. `AppShell.layout.test.ts` unchanged and passing.
+
+**Visual gate (Playwright, worktree `next dev` :3141 against the read-only API, signed in from the credential file, nothing printed; dev server stopped afterwards).** Pages `/dashboard`, `/stock`, `/promotions`, dark and light, all groups collapsed and all expanded:
+
+| Property | Mock-up | Live | Match |
+|---|---|---|---|
+| Rail width | 172 | 244 | NO, deliberate and measured (above) |
+| Rail padding T/R/B/L | 24/14/24/14 | 24/14/24/14 | yes |
+| Rail gap | 25px | 25px | yes |
+| Rail background | dark rgb(26,29,35), light rgb(255,255,255) | same | yes |
+| Eyebrow size / weight / spacing / case | 10px / 700 / 1.4px / uppercase | same | yes |
+| Eyebrow padding left / bottom | 10px / 7px | 10px / 7px | yes |
+| Eyebrow colour (inactive group) | secondary (dark rgba(186,198,210,.82), light rgba(40,54,68,.82)) | same | yes |
+| Item size / weight / colour | 13px / 400 / secondary | same | yes |
+| Item padding T / L, left border, radius | 9px / 10px, 2px, 8px right corners | same | yes |
+| Active pill colour | dark rgb(61,184,232) text + rgba(61,184,232,.15) fill + accent border, 600; light rgb(21,111,156) + rgba(21,111,156,.12) | same | yes |
+| Footer size / colour / padding / top border | 11px / secondary / 12px 9px 0 / 1px divider (dark rgba(120,160,190,.22), light rgba(32,52,72,.14)) | same | yes |
+| Brand | 15px / 700 / -0.3px, cube mark, "INTELLIGENCE" 10px | same | yes |
+
+Clipping (`scrollWidth` vs `clientWidth`, plus text right edge vs the rail and vs each heading's count/chevron), 12 runs (3 pages x dark/light x collapsed/expanded, 16 rows collapsed, 66 rows expanded): **0 clipped, 0 multi-line headings, 0 wrapped items, 0 scrollbar width; min gap between heading text and its count/chevron 7px**. At 172px the same measurement showed 2 headings (and 1 item) clipped/overflowing the rail.
+
+**Not in the mock-up, kept:** the count chips and chevrons on group headings (needed for collapse and the signal counts), the tenant stamp under the brand, the "What CIP does / Capability directory" link above the footer, the signed-in user line in the footer. The mock-up's "◈" glyph before the active item is not in the nav model and is not drawn.
+
+**QUESTION FOR WARREN:** the rail is 244px, not the mock-up's 172px, because "PROMOTIONS & FUNDING" and "STOCK & SELL-THROUGH" cannot fit 172px at the mock-up's own type size. Options: (a) keep 244px (default); (b) go back to 172px and shorten the heading text for that rail only (e.g. "Promotions", "Stock", the `short` labels already in navConfig; this would be a rename of the rail heading, so I did not do it); (c) 172px with those two headings allowed to wrap onto two lines (you said no wrapping). My default is (a). A 3-digit count chip beside a long heading would overflow (4px spare is for font substitution only).
+
 ## Doc delta for coordinator
 
 **BACKLOG-272 entry (replace/extend):**
