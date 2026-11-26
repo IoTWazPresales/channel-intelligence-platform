@@ -136,6 +136,15 @@ describe('PriceMatrixLens', () => {
     expect(screen.queryByTestId('price-matrix-table')).toBeNull();
   });
 
+  it('keeps every customer column and puts customers with listings first', async () => {
+    const base = matrixPayload();
+    payload.value = { ...base, customers: [{ id: 3, name: 'Customer C' }, ...base.customers] };
+    mount();
+    await waitFor(() => expect(screen.getByText('Customer C')).toBeInTheDocument());
+    const headers = Array.from(document.querySelectorAll('.ag-header-cell-text')).map((e) => e.textContent);
+    expect(headers).toEqual(['Product', 'SRP', 'Customer A', 'Customer B', 'Customer C']);
+  });
+
   it('labels a product by sales model name first', () => {
     expect(productLabel({ id: 1, sales_model_name: 'M', sku: 'S', name: 'N' })).toBe('M');
     expect(productLabel({ id: 1, sales_model_name: null, sku: 'S', name: 'N' })).toBe('S');

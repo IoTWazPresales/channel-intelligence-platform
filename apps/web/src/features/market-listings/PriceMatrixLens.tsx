@@ -161,7 +161,14 @@ export function PriceMatrixLens() {
     staleTime: 30_000,
   });
 
-  const customers = useMemo(() => matrix.data?.customers ?? [], [matrix.data]);
+  /** Every scoped customer keeps a column; customers with more monitored listings come first (stable). */
+  const customers = useMemo(() => {
+    const listed = new Map<number, number>();
+    for (const cell of matrix.data?.cells ?? []) {
+      if (cell.listing_id != null) listed.set(cell.customer_id, (listed.get(cell.customer_id) ?? 0) + 1);
+    }
+    return [...(matrix.data?.customers ?? [])].sort((a, b) => (listed.get(b.id) ?? 0) - (listed.get(a.id) ?? 0));
+  }, [matrix.data]);
   const rows = useMemo<MatrixRow[]>(() => {
     const byProduct = new Map<number, Record<number, MatrixCell | undefined>>();
     for (const cell of matrix.data?.cells ?? []) {
@@ -208,7 +215,7 @@ export function PriceMatrixLens() {
       ...customers.map<ColDef<MatrixRow>>((c) => ({
         colId: `customer-${c.id}`,
         headerName: c.name,
-        minWidth: 200,
+        minWidth: 240,
         flex: 1,
         valueGetter: (p) => p.data?.cells[c.id]?.price ?? null,
         tooltipValueGetter: (p) => {
