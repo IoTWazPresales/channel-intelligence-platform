@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2928
+**Snapshot revision:** 2937
 
 ## Outcome (verbatim)
 
@@ -141,3 +141,4 @@ _none_
 | N-0117 | Store and DC replenishment | inception | ready | ready | yes |  | full loop |
 | N-0118 | Load staged-but-unloaded store-level sell-through | feature | proposed | proposed | yes |  | full loop |
 | N-0119 | On the water: voyage fields, port conditions and the Shipments map (retroactive record) | feature | proposed | proposed | yes | yes | full loop |
+| N-0120 | Step 0: process rules and handoff documents | feature | in_progress | in_progress | yes |  | full loop |
