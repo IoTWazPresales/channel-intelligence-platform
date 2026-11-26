@@ -32,6 +32,18 @@ const ROW_MIN_H = 44;
 const WEEK_PX = 56;
 const LEGEND_LANES: StatusLane['key'][] = ['live', 'approved', 'planned', 'ended'];
 const LANE_ORDER: StatusLane['key'][] = ['live', 'approved', 'planned', 'ended', 'cancelled', 'other'];
+/** One status of each lane, to name a legend lane that has no bar drawn. */
+const LANE_STATUS: Record<StatusLane['key'], string> = {
+  live: 'active',
+  approved: 'approved',
+  planned: 'draft',
+  ended: 'ended',
+  cancelled: 'cancelled',
+  other: 'other',
+};
+/** A bar shows its name from this width (px) and its status label from the next; narrower bars rely on the tooltip. */
+const BAR_NAME_MIN_PX = 44;
+const BAR_STATUS_MIN_PX = 120;
 
 /**
  * Promotion timeline (planner mock-up, `docs/design/planner/Promotion_Planner Mockup.png`): one row per customer with
@@ -72,6 +84,15 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
     [scale, weeks, model.start, model.end, monthCount],
   );
   const rows = useMemo(() => customerRows(model.bars), [model.bars]);
+  // Drawn width of the date track, to decide how much text a bar can carry.
+  const trackPx = scale === 'week' ? Math.max(trackWidthPx, ticks.length * WEEK_PX) : trackWidthPx;
+  // The customer column stays put while the dates scroll (mock-up: the Customer column is fixed).
+  const stickyLabel = {
+    position: 'sticky',
+    left: 0,
+    zIndex: 2,
+    bgcolor: 'background.paper',
+  } as const;
   // The current week (Monday to Sunday), drawn as a highlighted column like the mock-up's "W47" column.
   const todayBand = useMemo(() => {
     const ws = weekStartIso(today);
@@ -106,7 +127,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
     }
     return LANE_ORDER.filter((k) => LEGEND_LANES.includes(k) || present.has(k)).map((k) => ({
       key: k,
-      label: present.get(k)?.label ?? statusLane(k === 'live' ? 'active' : k).label,
+      label: present.get(k)?.label ?? statusLane(LANE_STATUS[k]).label,
       n: present.get(k)?.n ?? 0,
     }));
   }, [model.bars]);
@@ -176,7 +197,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
               <Stack direction="row" sx={{ height: scale === 'week' ? 34 : 22, mb: 0.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
                 <Typography
                   variant="caption"
-                  sx={{ width: LABEL_W, flexShrink: 0, alignSelf: 'flex-end', pb: 0.5, fontWeight: 600, color: 'text.secondary' }}
+                  sx={{ ...stickyLabel, width: LABEL_W, flexShrink: 0, alignSelf: 'stretch', display: 'flex', alignItems: 'flex-end', pb: 0.5, fontWeight: 600, color: 'text.secondary' }}
                   data-testid="planner-timeline-customer-head"
                 >
                   Customer
@@ -239,7 +260,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                       data-testid={`planner-timeline-row-${row.key}`}
                       sx={{ height: rowH, borderTop: `1px solid ${theme.palette.divider}` }}
                     >
-                      <Stack sx={{ width: LABEL_W, flexShrink: 0, pr: 1, justifyContent: 'center', minWidth: 0 }}>
+                      <Stack sx={{ ...stickyLabel, width: LABEL_W, flexShrink: 0, pr: 1, justifyContent: 'center', minWidth: 0 }}>
                         <Typography variant="body2" noWrap sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.25 }} title={name}>
                           {name}
                         </Typography>
@@ -254,6 +275,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                           const color = laneColor(lane.key);
                           const selected = selectedId === b.id;
                           const stage = STAGE_LABEL[b.row.status as PlanStage] ?? b.row.status;
+                          const barPx = (Math.max(b.widthPct, 0.8) / 100) * trackPx;
                           const fillAlpha =
                             lane.key === 'ended'
                               ? selected
@@ -289,7 +311,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                                 font: 'inherit',
                                 color: 'text.primary',
                                 textAlign: 'left',
-                                borderRadius: 1,
+                                borderRadius: 0.6,
                                 cursor: 'pointer',
                                 border: `1px solid ${color}`,
                                 bgcolor: alpha(color, fillAlpha),
@@ -299,20 +321,24 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                                 '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 1 },
                               }}
                             >
-                              <Box
-                                component="span"
-                                aria-hidden
-                                sx={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                              >
-                                {b.row.case_name || b.row.case_code}
-                              </Box>
-                              <Box
-                                component="span"
-                                aria-hidden
-                                sx={{ flexShrink: 0, fontSize: 11, whiteSpace: 'nowrap', color: theme.palette.mode === 'dark' ? color : 'text.secondary' }}
-                              >
-                                {lane.label}
-                              </Box>
+                              {barPx >= BAR_NAME_MIN_PX ? (
+                                <Box
+                                  component="span"
+                                  aria-hidden
+                                  sx={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                >
+                                  {b.row.case_name || b.row.case_code}
+                                </Box>
+                              ) : null}
+                              {barPx >= BAR_STATUS_MIN_PX ? (
+                                <Box
+                                  component="span"
+                                  aria-hidden
+                                  sx={{ flexShrink: 0, fontSize: 11, whiteSpace: 'nowrap', color: theme.palette.mode === 'dark' ? color : 'text.secondary' }}
+                                >
+                                  {lane.label}
+                                </Box>
+                              ) : null}
                             </Box>
                           );
                         })}
