@@ -8,8 +8,8 @@ to Line up price, fall back to website off promo price." It is resolved per cust
    period).
 2. ``lineup_price``: the VAT-inclusive line-up price (``srp_inc_vat_local`` from the price chain,
    else ``msrp_local``) of the customer's latest line-up case whose period started on or before
-   today. Draft, proposed, cancelled, rejected and superseded cases (``_EXCLUDED_CASE``, the same
-   words the promo path uses) never supply an SRP.
+   today. Only accepted cases (``ACCEPTED_OR_LATER_STATUSES``) supply an SRP: validated,
+   pending_review, draft, proposed, rejected, cancelled and superseded never do.
 3. ``website_off_promo_price``: the listing's struck-through regular price the site publishes
    (``parse_flags.rrp_listing_price`` on the latest good observation). No site that does not
    publish one gets a value here.
@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
@@ -39,6 +39,7 @@ from app.services.commercial_tenant_profile import (
     below_srp_tolerance,
     configured_vat_rate_pct,
 )
+from app.services.commercial_planner.lineup_case_status import ACCEPTED_OR_LATER_STATUSES
 from app.services.cpor.planner_sellthrough import srp_from_price
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
 from app.services.customer_reporting import reporting_customer_ids_select
@@ -83,12 +84,6 @@ def is_below_srp(
 ) -> bool:
     """In-stock prices only: an out-of-stock shelf price is not a live offer."""
     return bool(in_stock and price is not None and srp is not None and price < srp - tolerance)
-
-
-def _case_status_excluded(column: ColumnElement[str]) -> ColumnElement[bool]:
-    """A case status the promo path's ``_EXCLUDED_CASE`` names, or one of its stages (``draft_imported``)."""
-    status = func.lower(column)
-    return or_(*(or_(status == word, status.like(f"{word}\\_%", escape="\\")) for word in sorted(_EXCLUDED_CASE)))
 
 
 def _latest_observations(session: Session, listing_ids: list[int]) -> dict[int, ListingObservation]:
@@ -183,8 +178,11 @@ def _lineup_srp(
 
     Warren: the line-up has the price excluding and including VAT. The shelf basis is the VAT-inclusive
     figure, read as stored: the price chain's explicit ``srp_inc_vat_local`` first, ``msrp_local``
-    when the chain does not carry it. A case in a status ``_EXCLUDED_CASE`` names (draft, proposed,
-    cancelled, superseded, rejected, and their stages such as ``draft_imported``) never supplies one.
+    when the chain does not carry it. Only ACCEPTED cases supply one. Warren (26 Nov): "ONLY ACCEPTED ONES
+    FFS". ASSUMPTION: accepted means ``accepted`` or any later ladder status (``ACCEPTED_OR_LATER_STATUSES``:
+    po_pending ... work_closed), since a case a PO was raised against is an accepted case. Draft_imported,
+    validated, pending_review, proposed, rejected, cancelled and superseded never supply one (an
+    allow list, so any status added later is excluded until it is named there).
     The figure carries the case's period start.
 
     No currency check: listings, customers and sell-through rows carry no currency to compare the
@@ -192,6 +190,8 @@ def _lineup_srp(
     """
     line, case = CommercialLineupLine, CommercialLineupCase
     explicit = line.pricing_chain_json["inputs"]["srp_inc_vat_local"].astext
+    # Newest case first; the first line per cell that carries a USABLE figure wins (a newer line whose
+    # chain value is "n/a" or 0 and whose msrp_local is 0 must not hide an older usable one).
     ranked = (
         select(
             line.customer_id,
@@ -199,12 +199,6 @@ def _lineup_srp(
             line.msrp_local,
             explicit.label("srp_inc_vat_local"),
             case.inferred_period_start.label("period_start"),
-            func.row_number()
-            .over(
-                partition_by=(line.customer_id, line.product_id),
-                order_by=(case.inferred_period_start.desc(), case.id.desc()),
-            )
-            .label("rn"),
         )
         .join(case, case.id == line.case_id)
         .join(DimProduct, DimProduct.id == line.product_id)
@@ -214,17 +208,20 @@ def _lineup_srp(
             line.product_id.in_(product_ids),
             or_(line.msrp_local > 0, explicit.is_not(None)),
             case.superseded_by_case_id.is_(None),
-            ~_case_status_excluded(case.commercial_status),
+            func.lower(case.commercial_status).in_(sorted(ACCEPTED_OR_LATER_STATUSES)),
             case.inferred_period_start.is_not(None),
             case.inferred_period_start <= as_of,
         )
-        .subquery()
+        .order_by(case.inferred_period_start.desc(), case.id.desc(), line.id.desc())
     )
     out: dict[CellKey, SrpFigure] = {}
-    for row in session.execute(select(ranked).where(ranked.c.rn == 1)):
+    for row in session.execute(ranked):
+        key = (int(row.customer_id), int(row.product_id))
+        if key in out:
+            continue
         value = _positive(row.srp_inc_vat_local) or _positive(row.msrp_local)
         if value is not None:
-            out[(int(row.customer_id), int(row.product_id))] = (value, row.period_start)
+            out[key] = (value, row.period_start)
     return out
 
 

@@ -508,14 +508,16 @@ def test_pending_wording_only_when_no_cell_has_an_srp(db_session: Session) -> No
             assert cell["below_srp"] is False
 
 
-def test_lineup_tier_ignores_draft_and_proposed_cases_but_takes_an_accepted_older_one(db_session: Session) -> None:  # noqa: F811
-    """Warren (26 Nov): an unaccepted draft line-up does not count as an SRP."""
+def test_lineup_tier_ignores_unaccepted_cases_but_takes_an_accepted_older_one(db_session: Session) -> None:  # noqa: F811
+    """Warren (26 Nov): "ONLY ACCEPTED ONES FFS". validated / pending_review / draft never supply an SRP."""
     s = _sample(db_session)
     a, b = s["a"], s["b"]
     p0, _p1, p2 = s["p"]
     newer = date.today()
     drafts = [
         CommercialLineupCase(period_label="d", commercial_status="draft_imported", inferred_period_start=newer),
+        CommercialLineupCase(period_label="v", commercial_status="validated", inferred_period_start=newer),
+        CommercialLineupCase(period_label="pr", commercial_status="pending_review", inferred_period_start=newer),
         CommercialLineupCase(period_label="p", commercial_status="proposed", inferred_period_start=newer),
         CommercialLineupCase(period_label="r", commercial_status="rejected", inferred_period_start=newer),
     ]
@@ -538,6 +540,69 @@ def test_lineup_tier_ignores_draft_and_proposed_cases_but_takes_an_accepted_olde
     # A product that only a draft prices has no SRP at all.
     b2 = cells[(p2.id, b.id)]
     assert b2["srp"] is None and b2["srp_reason"] == SRP_REASON_NONE
+
+
+def test_lineup_tier_takes_accepted_and_po_pending_cases(db_session: Session) -> None:  # noqa: F811
+    """ASSUMPTION: accepted = accepted or any later ladder status, so a po_pending case supplies an SRP."""
+    s = _sample(db_session)
+    a, b = s["a"], s["b"]
+    p0, _p1, p2 = s["p"]
+    newer = date.today()
+    cases = {
+        "accepted": CommercialLineupCase(
+            period_label="acc", commercial_status="accepted", inferred_period_start=newer
+        ),
+        "po_pending": CommercialLineupCase(
+            period_label="po", commercial_status="po_pending", inferred_period_start=newer
+        ),
+    }
+    db_session.add_all(cases.values())
+    db_session.flush()
+    for case, customer, product, msrp in (
+        (cases["accepted"], a, p0, 7001),
+        (cases["po_pending"], b, p2, 7002),
+    ):
+        db_session.add(
+            CommercialLineupLine(case_id=case.id, product_id=product.id, customer_id=customer.id, msrp_local=msrp)
+        )
+    db_session.flush()
+
+    cells = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
+
+    a0 = cells[(p0.id, a.id)]
+    assert (a0["srp"], a0["srp_source"]) == (7001, SRP_SOURCE_LINEUP)  # newer accepted case wins
+    b2 = cells[(p2.id, b.id)]
+    assert (b2["srp"], b2["srp_source"]) == (7002, SRP_SOURCE_LINEUP)  # po_pending counts as accepted
+
+
+def test_lineup_tier_ranks_only_lines_with_a_usable_figure(db_session: Session) -> None:  # noqa: F811
+    """A newer accepted line with no usable figure (msrp 0, chain "n/a" or 0) must not hide an older usable one."""
+    s = _sample(db_session)
+    a, b = s["a"], s["b"]
+    p0, p1, _p2 = s["p"]
+    newest = CommercialLineupCase(
+        period_label="unusable", commercial_status="accepted", inferred_period_start=date.today()
+    )
+    db_session.add(newest)
+    db_session.flush()  # the id is newer than the sample case's, so it ranks first even on the 1st of a month
+    db_session.add_all(
+        [
+            CommercialLineupLine(
+                case_id=newest.id, product_id=p1.id, customer_id=a.id, msrp_local=0,
+                pricing_chain_json={"inputs": {"srp_inc_vat_local": "n/a"}},
+            ),
+            CommercialLineupLine(
+                case_id=newest.id, product_id=p0.id, customer_id=b.id, msrp_local=0,
+                pricing_chain_json={"inputs": {"srp_inc_vat_local": 0}},
+            ),
+        ]
+    )
+    db_session.flush()
+
+    cells = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
+
+    assert (cells[(p1.id, a.id)]["srp"], cells[(p1.id, a.id)]["srp_source"]) == (800, SRP_SOURCE_LINEUP)
+    assert (cells[(p0.id, b.id)]["srp"], cells[(p0.id, b.id)]["srp_source"]) == (9999, SRP_SOURCE_LINEUP)
 
 
 def test_lineup_srp_reads_the_explicit_vat_inclusive_figure_first(db_session: Session) -> None:  # noqa: F811

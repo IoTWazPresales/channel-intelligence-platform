@@ -35,6 +35,13 @@ PO_LINKED_STATUSES: frozenset[str] = frozenset(
     }
 )
 
+# An accepted case: ``accepted`` or any later step on the ladder (a PO raised against it, fulfilment,
+# closed). ``validated`` and ``pending_review`` come BEFORE acceptance; ``cancelled`` / ``superseded``
+# are off the ladder. Warren (26 Nov): "ONLY ACCEPTED ONES FFS" (line-up SRP). ASSUMPTION: "accepted"
+# includes the later statuses, because po_pending / po_issued cases are accepted cases a PO was raised
+# against (linking a PO never un-accepts a case); live cases are mostly po_pending.
+ACCEPTED_OR_LATER_STATUSES: frozenset[str] = frozenset({"accepted"}) | PO_LINKED_STATUSES
+
 # Default list on Current lineups — hidden unless include_work_closed=true
 DEFAULT_LIST_EXCLUDED_STATUSES: frozenset[str] = frozenset(
     {
