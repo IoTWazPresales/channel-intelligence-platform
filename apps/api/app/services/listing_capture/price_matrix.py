@@ -1,8 +1,8 @@
 """Monitored-listings price matrix: scoped products × customers with latest shelf prices.
 
-SRP means Suggested Retail Price (Warren, 24 Nov). Its data source is not chosen yet: the read-only
-profile of live data on 25 Nov found no line-up case covering today, no commercial plan and no
-historical line-up rows (step log 02-step1). Until Warren chooses, every product and cell carries
+SRP means Suggested Retail Price. Its data source is not chosen yet: the read-only profile of live
+data on 25 Nov found no line-up case covering today, no commercial plan and no historical line-up
+rows (step log 02-step1). Until a source is chosen, every product and cell carries
 ``srp=None`` with ``srp_reason="srp_source_pending"``. No rule is invented, and the old "highest
 MSRP ever" query is gone. ``_tenant_srp_by_product`` is the one seam to change when the source
 is chosen.
@@ -27,9 +27,20 @@ from app.services.listing_capture.stock_scope import TIER_ACTIVE, TIER_HISTORICA
 _ACTIVE_LISTING_STATUSES = frozenset({"active", "out_of_stock"})
 _EXCLUDED_CASE = frozenset({"cancelled", "rejected", "superseded", "draft", "proposed"})
 
-# None until Warren names the SRP data source (step 1, Phase B). Every row carries the reason.
+# None until the SRP data source is chosen (step 1, Phase B). Every row carries the reason.
 SRP_SOURCE: str | None = None
 SRP_REASON_PENDING = "srp_source_pending"
+
+# A price counts as below SRP only when it is more than this many currency units under it. The one
+# place this rule lives: cells carry the resulting ``below_srp`` flag and the UI does no arithmetic.
+BELOW_SRP_TOLERANCE = 1.0
+
+
+def is_below_srp(price: float | None, srp: float | None, *, in_stock: bool) -> bool:
+    """In-stock prices only: an out-of-stock shelf price is not a live offer."""
+    return bool(
+        in_stock and price is not None and srp is not None and price < srp - BELOW_SRP_TOLERANCE
+    )
 
 
 def _latest_observations(session: Session, listing_ids: list[int]) -> dict[int, ListingObservation]:
@@ -63,10 +74,10 @@ def _latest_observations(session: Session, listing_ids: list[int]) -> dict[int, 
 
 
 def _tenant_srp_by_product(session: Session, tenant_id: str, product_ids: list[int]) -> dict[int, float]:
-    """SRP per product from the source Warren chooses. None is chosen yet, so nothing is returned.
+    """SRP per product from the chosen source. None is chosen yet, so nothing is returned.
 
-    The earlier body took MAX(commercial_lineup_line.msrp_local) over every line-up ever. Nobody
-    asked for that rule and it is removed. Callers report ``srp_reason`` for each missing value.
+    The earlier body took MAX(commercial_lineup_line.msrp_local) over every line-up ever. That rule
+    was never requested and is removed. Callers report ``srp_reason`` for each missing value.
     """
     if SRP_SOURCE is None or not product_ids:
         return {}
@@ -204,6 +215,7 @@ def build_price_matrix(
                         "listing_id": None,
                         "listing_url": None,
                         "in_stock": False,
+                        "below_srp": False,
                         **srp_fields,
                         "promo": None,
                     }
@@ -212,6 +224,7 @@ def build_price_matrix(
             obs = latest.get(int(listing.id))
             price = float(obs.extracted_price) if obs and obs.extracted_price is not None else None
             in_stock = listing.status == "active" and price is not None
+            below_srp = is_below_srp(price, srp, in_stock=in_stock)
             fetched = obs.fetched_at if obs is not None else None
             observed_at = fetched.isoformat() if fetched is not None else None
             cells.append(
@@ -223,14 +236,14 @@ def build_price_matrix(
                     "listing_id": int(listing.id),
                     "listing_url": listing.url,
                     "in_stock": in_stock,
+                    "below_srp": below_srp,
                     **srp_fields,
                     "promo": promos.get((cid, pid)),
                 }
             )
-            # In-stock prices only: an out-of-stock shelf price is not a live offer. Listing
-            # capture has no price-freshness rule, so the age is returned per cell, not used as
-            # a filter (A7).
-            if in_stock and srp is not None and price is not None and price < srp - 1.0:
+            # Listing capture has no price-freshness rule, so the age is returned per cell, not
+            # used as a filter (A7).
+            if below_srp:
                 below_srp_count += 1
 
     return {

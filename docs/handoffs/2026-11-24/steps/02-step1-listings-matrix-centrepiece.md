@@ -190,3 +190,7 @@ Code and tracker are pushed on the branch. Next: coordinator review (different m
 **CONTEXT changelog line:**
 
 > - 2026-11-26 `<sha>` Listings: Monitored listings restored to the 9abc4716 page with the price matrix as centrepiece on EnterpriseDataGrid (sales model names, price age, no Cheapest-at, SRP pending Warren) (N-0121).
+
+## Review fixes (26 Nov)
+
+Independent review returned READY_WITH_FIXES. Fixed: below-SRP rule now lives in one API constant (`BELOW_SRP_TOLERANCE`) and each cell carries `below_srp`; the UI reads the flag. Added API tests (in-stock, out-of-stock, boundary) and a component test for the chip. User-facing text is "SRP source not yet chosen" (reason code `srp_source_pending` kept). The promotion chip renders only when the API gives a promotion type: the web app has no production label helper, so no literal fallback. Column minWidths stay: `gridDensity` has row-height tokens only, no width tokens.

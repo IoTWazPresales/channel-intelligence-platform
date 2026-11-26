@@ -35,6 +35,8 @@ type MatrixCell = SrpFields & {
   listing_id: number | null;
   listing_url: string | null;
   in_stock: boolean;
+  /** Decided by the API (in-stock prices only); the UI does no price arithmetic. */
+  below_srp?: boolean;
   promo?: { name: string; window_start: string | null; window_end: string | null; promotion_type?: string } | null;
 };
 
@@ -51,7 +53,7 @@ type MatrixRow = { product: MatrixProduct; cells: Record<number, MatrixCell | un
 
 /** Words for the API's `srp_reason` codes; an unknown code is shown as it came. */
 const SRP_REASON_TEXT: Record<string, string> = {
-  srp_source_pending: 'SRP source pending Warren',
+  srp_source_pending: 'SRP source not yet chosen',
   no_srp_for_product: 'No SRP',
 };
 
@@ -101,7 +103,6 @@ function PriceCell({ cell }: { cell: MatrixCell | undefined }) {
       </Typography>
     );
   }
-  const belowSrp = cell.in_stock && cell.srp != null && cell.price < cell.srp - 1;
   const promo = cell.promo;
   return (
     <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, width: '100%' }}>
@@ -127,13 +128,13 @@ function PriceCell({ cell }: { cell: MatrixCell | undefined }) {
       </Box>
       <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
         {!cell.in_stock ? <StatusChip label="Out of stock" tone="neutral" /> : null}
-        {belowSrp ? <StatusChip label="Below SRP" tone="warning" /> : null}
-        {promo ? (
+        {cell.below_srp ? <StatusChip label="Below SRP" tone="warning" /> : null}
+        {promo?.promotion_type ? (
           <Tooltip
             title={`${promo.name}${promo.window_start ? ` · ${promo.window_start} – ${promo.window_end ?? ''}` : ''}`}
           >
             <span>
-              <StatusChip label={promo.promotion_type ?? 'Promotion'} tone="info" />
+              <StatusChip label={promo.promotion_type} tone="info" />
             </span>
           </Tooltip>
         ) : null}

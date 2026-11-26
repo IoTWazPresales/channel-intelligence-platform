@@ -14,7 +14,13 @@ from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupL
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.listing_capture import CustomerListing, ListingObservation
-from app.services.listing_capture.price_matrix import SRP_REASON_PENDING, build_price_matrix
+from app.services.listing_capture import price_matrix as price_matrix_module
+from app.services.listing_capture.price_matrix import (
+    BELOW_SRP_TOLERANCE,
+    SRP_REASON_PENDING,
+    build_price_matrix,
+    is_below_srp,
+)
 from sqlalchemy.orm import Session
 from test_listing_coverage import db_session  # noqa: F401 - shared cip_test-only fixture
 
@@ -220,3 +226,37 @@ def test_price_matrix_end_to_end(db_session: Session) -> None:  # noqa: F811 - f
         and missing["price"] is None
         and missing["observed_at"] is None
     )
+
+
+def test_is_below_srp_rule() -> None:
+    srp = 1000.0
+    boundary = srp - BELOW_SRP_TOLERANCE
+    assert is_below_srp(boundary - 0.01, srp, in_stock=True) is True
+    assert is_below_srp(boundary, srp, in_stock=True) is False  # exactly at the boundary
+    assert is_below_srp(srp, srp, in_stock=True) is False
+    assert is_below_srp(boundary - 50, srp, in_stock=False) is False  # out of stock
+    assert is_below_srp(500.0, None, in_stock=True) is False  # no SRP
+    assert is_below_srp(None, srp, in_stock=True) is False  # no price
+
+
+def test_below_srp_flag_is_in_stock_only_and_counted(db_session: Session, monkeypatch) -> None:  # noqa: F811
+    s = _sample(db_session)
+    a, b = s["a"], s["b"]
+    p0, p1, p2 = s["p"]
+    # Stub SRP source: p0 SRP 1250 (A in stock at 1200 -> below; B out of stock at 1100 -> not
+    # flagged), p1 SRP 701 (A in stock at 700 = exactly SRP minus tolerance -> not below).
+    stub = {p0.id: 1250.0, p1.id: 700.0 + BELOW_SRP_TOLERANCE}
+    monkeypatch.setattr(price_matrix_module, "SRP_SOURCE", "stub")
+    monkeypatch.setattr(
+        price_matrix_module, "_tenant_srp_by_product", lambda session, tenant_id, product_ids: stub
+    )
+
+    out = build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id])
+    cells = {(c["product_id"], c["customer_id"]): c for c in out["cells"]}
+
+    assert cells[(p0.id, a.id)]["below_srp"] is True
+    assert cells[(p0.id, b.id)]["in_stock"] is False
+    assert cells[(p0.id, b.id)]["below_srp"] is False
+    assert cells[(p1.id, a.id)]["below_srp"] is False
+    assert cells[(p2.id, a.id)]["below_srp"] is False  # no listing
+    assert out["summary"]["below_srp_count"] == 1

@@ -119,8 +119,22 @@ describe('PriceMatrixLens', () => {
   it('shows SRP as pending, never a number, while no SRP source is chosen', async () => {
     mount();
     await waitFor(() => expect(screen.getByTestId('price-matrix-srp-10')).toBeInTheDocument());
-    expect(screen.getByTestId('price-matrix-srp-10')).toHaveTextContent('SRP source pending Warren');
+    expect(screen.getByTestId('price-matrix-srp-10')).toHaveTextContent('SRP source not yet chosen');
     expect(screen.queryByText('Below SRP')).toBeNull();
+  });
+
+  it('shows the Below SRP chip only on cells the API flags below_srp', async () => {
+    const base = matrixPayload();
+    payload.value = {
+      ...base,
+      cells: [
+        { ...base.cells[0], srp: 120, srp_reason: null, below_srp: true },
+        { ...base.cells[1], srp: 120, srp_reason: null, below_srp: false },
+      ],
+    };
+    mount();
+    await waitFor(() => expect(screen.getByTestId('price-matrix-age-10-1')).toBeInTheDocument());
+    expect(screen.getAllByText('Below SRP')).toHaveLength(1);
   });
 
   it('has no "Cheapest at" figures', async () => {
