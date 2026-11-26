@@ -70,10 +70,14 @@ def _sample(session: Session) -> dict:
     # Line-up MSRPs, including an older, higher one for A/p0: the matrix takes the customer's latest
     # live line-up (1500), never the highest MSRP ever (2500).
     older = CommercialLineupCase(
-        period_label="older", inferred_period_start=date.today() - timedelta(days=400)
+        period_label="older",
+        commercial_status="accepted",
+        inferred_period_start=date.today() - timedelta(days=400),
     )
     lineup = CommercialLineupCase(
-        period_label="sample", inferred_period_start=date.today().replace(day=1)
+        period_label="sample",
+        commercial_status="accepted",
+        inferred_period_start=date.today().replace(day=1),
     )
     session.add_all([older, lineup])
     session.flush()
@@ -378,13 +382,16 @@ def test_lineup_tier_skips_cancelled_superseded_and_future_cases(db_session: Ses
             inferred_period_start=date.today() - timedelta(days=1),
         ),
         "superseded": CommercialLineupCase(
-            period_label="s", superseded_by_case_id=live.id,
+            period_label="s", commercial_status="accepted", superseded_by_case_id=live.id,
             inferred_period_start=date.today() - timedelta(days=1),
         ),
         "future": CommercialLineupCase(
-            period_label="f", inferred_period_start=date.today() + timedelta(days=40)
+            period_label="f", commercial_status="accepted",
+            inferred_period_start=date.today() + timedelta(days=40),
         ),
-        "no_period": CommercialLineupCase(period_label="n", inferred_period_start=None),
+        "no_period": CommercialLineupCase(
+            period_label="n", commercial_status="accepted", inferred_period_start=None
+        ),
     }
     db_session.add_all(cases.values())
     db_session.flush()
@@ -499,3 +506,113 @@ def test_pending_wording_only_when_no_cell_has_an_srp(db_session: Session) -> No
         if cell["listing_id"] is not None:
             assert cell["srp"] is None and cell["srp_reason"] == SRP_REASON_PENDING
             assert cell["below_srp"] is False
+
+
+def test_lineup_tier_ignores_draft_and_proposed_cases_but_takes_an_accepted_older_one(db_session: Session) -> None:  # noqa: F811
+    """Warren (26 Nov): an unaccepted draft line-up does not count as an SRP."""
+    s = _sample(db_session)
+    a, b = s["a"], s["b"]
+    p0, _p1, p2 = s["p"]
+    newer = date.today()
+    drafts = [
+        CommercialLineupCase(period_label="d", commercial_status="draft_imported", inferred_period_start=newer),
+        CommercialLineupCase(period_label="p", commercial_status="proposed", inferred_period_start=newer),
+        CommercialLineupCase(period_label="r", commercial_status="rejected", inferred_period_start=newer),
+    ]
+    db_session.add_all(drafts)
+    db_session.flush()
+    for case in drafts:
+        for customer, product, msrp in ((a, p0, 7777), (b, p2, 6666)):
+            db_session.add(
+                CommercialLineupLine(
+                    case_id=case.id, product_id=product.id, customer_id=customer.id, msrp_local=msrp
+                )
+            )
+    db_session.flush()
+
+    cells = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
+
+    # The newer draft cases (7777) never supply the SRP: the accepted case (1500) does.
+    a0 = cells[(p0.id, a.id)]
+    assert (a0["srp"], a0["srp_source"]) == (1500, SRP_SOURCE_LINEUP)
+    # A product that only a draft prices has no SRP at all.
+    b2 = cells[(p2.id, b.id)]
+    assert b2["srp"] is None and b2["srp_reason"] == SRP_REASON_NONE
+
+
+def test_lineup_srp_reads_the_explicit_vat_inclusive_figure_first(db_session: Session) -> None:  # noqa: F811
+    s = _sample(db_session)
+    a, b = s["a"], s["b"]
+    p0, p1, _p2 = s["p"]
+    lines = {
+        (ln.customer_id, ln.product_id): ln
+        for ln in db_session.query(CommercialLineupLine).filter(CommercialLineupLine.case_id == s["lineup"].id)
+    }
+    # A/p0: the price chain states the VAT-inclusive SRP; it wins over msrp_local (1500).
+    lines[(a.id, p0.id)].pricing_chain_json = {
+        "inputs": {"srp_inc_vat_local": 1600},
+        "outputs": {"calc_srp_ex_vat_local": 1391.3},
+    }
+    # B/p0: an unusable chain value falls back to msrp_local (9999).
+    lines[(b.id, p0.id)].pricing_chain_json = {"inputs": {"srp_inc_vat_local": "n/a"}}
+    # A/p1: a chain with no inputs falls back to msrp_local (800); the ex-VAT output is never used.
+    lines[(a.id, p1.id)].pricing_chain_json = {"outputs": {"calc_srp_ex_vat_local": 695.65}}
+    db_session.flush()
+
+    cells = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
+
+    assert cells[(p0.id, a.id)]["srp"] == 1600
+    assert cells[(p0.id, b.id)]["srp"] == 9999
+    assert cells[(p1.id, a.id)]["srp"] == 800
+
+
+def test_srp_period_is_returned_for_sell_out_and_lineup_tiers(db_session: Session, monkeypatch) -> None:  # noqa: F811
+    s = _sample(db_session)
+    a, b = s["a"], s["b"]
+    p0, p1, p2 = s["p"]
+    _tenant_vat(monkeypatch, 0.15)
+    _sell_out(db_session, s, a, p0, key="new", days_ago=14, price=1450, vat_basis="inc_vat")
+    db_session.add(
+        ListingObservation(
+            listing_id=s["listings"]["b2"].id, fetched_at=datetime.now(UTC), extracted_price=1800,
+            parser_version="t", parse_status="ok",
+            parse_flags={"rrp_listing_price": "2000", "vat_basis": "inc_vat"},
+        )
+    )
+    db_session.flush()
+
+    cells = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
+
+    sell_out = cells[(p0.id, a.id)]
+    assert sell_out["srp_source"] == SRP_SOURCE_SELL_OUT
+    assert sell_out["srp_period"] == (date.today() - timedelta(days=14)).isoformat()
+    lineup_cell = cells[(p1.id, a.id)]
+    assert lineup_cell["srp_source"] == SRP_SOURCE_LINEUP
+    assert lineup_cell["srp_period"] == s["lineup"].inferred_period_start.isoformat()
+    website = cells[(p2.id, b.id)]
+    assert website["srp_source"] == SRP_SOURCE_WEBSITE and website["srp_period"] is None
+    # No SRP, no period.
+    assert cells[(p2.id, a.id)]["srp_period"] is None
+
+
+def test_below_srp_tolerance_defaults_to_one_and_follows_the_tenant_override(
+    db_session: Session, monkeypatch, tmp_path  # noqa: F811
+) -> None:
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    s = _sample(db_session)
+    a, b = s["a"], s["b"]
+    _p0, p1, _p2 = s["p"]  # A/p1: in stock at 700, line-up SRP 800
+
+    assert price_matrix_module.below_srp_tolerance(s["tenant"]) == BELOW_SRP_TOLERANCE == 1.0
+    default = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
+    assert default[(p1.id, a.id)]["below_srp"] is True
+
+    # 100 under SRP is exactly the tolerance: not below. 99 is: below.
+    profile.save_tenant_profile_overrides(s["tenant"], {"below_srp_tolerance": "100"})
+    wide = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
+    assert wide[(p1.id, a.id)]["below_srp"] is False
+    profile.save_tenant_profile_overrides(s["tenant"], {"below_srp_tolerance": "99"})
+    narrow = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
+    assert narrow[(p1.id, a.id)]["below_srp"] is True

@@ -151,8 +151,8 @@ describe('PriceMatrixLens', () => {
       customers: [...base.customers, { id: 3, name: 'Customer C' }],
       products: [{ ...base.products[0], srp: null, srp_source: null, srp_reason: 'srp_varies_by_customer' }],
       cells: [
-        { ...base.cells[0], srp: 120, srp_source: 'sell_out_price', srp_reason: null, below_srp: true },
-        { ...base.cells[1], srp: 1234.5, srp_source: 'lineup_price', srp_reason: null },
+        { ...base.cells[0], srp: 120, srp_source: 'sell_out_price', srp_period: '2026-07-06', srp_reason: null, below_srp: true },
+        { ...base.cells[1], srp: 1234.5, srp_source: 'lineup_price', srp_period: '2026-10-01', srp_reason: null },
         {
           ...base.cells[0],
           customer_id: 3,
@@ -167,12 +167,29 @@ describe('PriceMatrixLens', () => {
     };
     mount();
     await waitFor(() => expect(screen.getByTestId('price-matrix-cell-srp-10-1')).toBeInTheDocument());
-    expect(screen.getByTestId('price-matrix-cell-srp-10-1')).toHaveTextContent('SRP 120 · Sell-out price');
-    expect(screen.getByTestId('price-matrix-cell-srp-10-2')).toHaveTextContent('SRP 1,234.5 · Line-up price');
-    expect(screen.getByTestId('price-matrix-cell-srp-10-3')).toHaveTextContent('SRP 99 · Website off-promo price');
+    // The sell-out and line-up labels carry the period the figure came from, formatted by the UI.
+    expect(screen.getByTestId('price-matrix-cell-srp-10-1')).toHaveTextContent('SRP 120 · Sell-out · Jul 2026');
+    expect(screen.getByTestId('price-matrix-cell-srp-10-2')).toHaveTextContent('SRP 1,234.5 · Line-up · Oct 2026');
+    // The website tier has no period: just its label.
+    expect(screen.getByTestId('price-matrix-cell-srp-10-3').textContent).toBe('SRP 99 · Website off-promo price');
     // The product-level column states that the customers' figures differ; the old pending text is gone.
     expect(screen.getByTestId('price-matrix-srp-10')).toHaveTextContent('Varies by customer');
     expect(screen.queryByText('SRP source not yet chosen')).toBeNull();
+  });
+
+  it('shows the source without a period when the API gives none or an unreadable one', async () => {
+    const base = matrixPayload();
+    payload.value = {
+      ...base,
+      cells: [
+        { ...base.cells[0], srp: 120, srp_source: 'sell_out_price', srp_period: null, srp_reason: null },
+        { ...base.cells[1], srp: 121, srp_source: 'lineup_price', srp_period: 'not-a-date', srp_reason: null },
+      ],
+    };
+    mount();
+    await waitFor(() => expect(screen.getByTestId('price-matrix-cell-srp-10-1')).toBeInTheDocument());
+    expect(screen.getByTestId('price-matrix-cell-srp-10-1').textContent).toBe('SRP 120 · Sell-out');
+    expect(screen.getByTestId('price-matrix-cell-srp-10-2').textContent).toBe('SRP 121 · Line-up');
   });
 
   it('shows the product SRP once when every customer agrees, and "No SRP" for a gap beside cells that have one', async () => {

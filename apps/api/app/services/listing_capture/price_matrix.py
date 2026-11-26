@@ -6,8 +6,10 @@ to Line up price, fall back to website off promo price." It is resolved per cust
 1. ``sell_out_price``: the customer's latest sell-through ``unit_sell_price`` for the product
    (latest period with a positive price; the site row with most units when several report that
    period).
-2. ``lineup_price``: ``msrp_local`` of the customer's latest non-cancelled, non-superseded line-up
-   case whose period started on or before today.
+2. ``lineup_price``: the VAT-inclusive line-up price (``srp_inc_vat_local`` from the price chain,
+   else ``msrp_local``) of the customer's latest line-up case whose period started on or before
+   today. Draft, proposed, cancelled, rejected and superseded cases (``_EXCLUDED_CASE``, the same
+   words the promo path uses) never supply an SRP.
 3. ``website_off_promo_price``: the listing's struck-through regular price the site publishes
    (``parse_flags.rrp_listing_price`` on the latest good observation). No site that does not
    publish one gets a value here.
@@ -15,7 +17,8 @@ to Line up price, fall back to website off promo price." It is resolved per cust
 Every tier is stated on the shelf basis, VAT inclusive: a tier on a known ex-VAT basis is grossed up
 with the tenant's own VAT rate, a tier whose basis is unknown or whose rate is unset is skipped
 (same rule as ``planner_sellthrough.srp_from_price``). The highest price ever recorded is never used.
-Each cell carries ``srp``, ``srp_source`` (one of the three codes) and ``below_srp``.
+Each cell carries ``srp``, ``srp_source`` (one of the three codes), ``srp_period`` (ISO start date of
+the sell-out or line-up period the figure came from, None for the website) and ``below_srp``.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
@@ -31,7 +34,11 @@ from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing, ListingObservation
-from app.services.commercial_tenant_profile import configured_vat_rate_pct
+from app.services.commercial_tenant_profile import (
+    DEFAULT_BELOW_SRP_TOLERANCE,
+    below_srp_tolerance,
+    configured_vat_rate_pct,
+)
 from app.services.cpor.planner_sellthrough import srp_from_price
 from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
 from app.services.customer_reporting import reporting_customer_ids_select
@@ -40,7 +47,6 @@ from app.services.listing_capture.stock_scope import TIER_ACTIVE, TIER_HISTORICA
 
 _ACTIVE_LISTING_STATUSES = frozenset({"active", "out_of_stock"})
 _EXCLUDED_CASE = frozenset({"cancelled", "rejected", "superseded", "draft", "proposed"})
-_EXCLUDED_LINEUP_STATUSES = ("cancelled", "superseded")
 
 # The three SRP sources, in the order Warren gave them. The first one with a value wins.
 SRP_SOURCE_SELL_OUT = "sell_out_price"
@@ -58,18 +64,31 @@ SRP_REASON_VARIES = "srp_varies_by_customer"
 _WEBSITE_REGULAR_PRICE_FLAG = "rrp_listing_price"
 _WEBSITE_VAT_BASIS_FLAG = "vat_basis"
 
-# A price counts as below SRP only when it is more than this many currency units under it. The one
-# place this rule lives: cells carry the resulting ``below_srp`` flag and the UI does no arithmetic.
-BELOW_SRP_TOLERANCE = 1.0
+# A price counts as below SRP only when it is more than the tenant's tolerance (currency units) under
+# it: ``below_srp_tolerance`` in the tenant profile, 1.0 when unset. The one place this rule lives:
+# cells carry the resulting ``below_srp`` flag and the UI does no arithmetic.
+BELOW_SRP_TOLERANCE = DEFAULT_BELOW_SRP_TOLERANCE
 
 CellKey = tuple[int, int]  # (customer_id, product_id)
+# One tier's answer for a cell: the SRP and the period it came from (None when the tier has none).
+SrpFigure = tuple[float, date | None]
 
 
-def is_below_srp(price: float | None, srp: float | None, *, in_stock: bool) -> bool:
+def is_below_srp(
+    price: float | None,
+    srp: float | None,
+    *,
+    in_stock: bool,
+    tolerance: float = BELOW_SRP_TOLERANCE,
+) -> bool:
     """In-stock prices only: an out-of-stock shelf price is not a live offer."""
-    return bool(
-        in_stock and price is not None and srp is not None and price < srp - BELOW_SRP_TOLERANCE
-    )
+    return bool(in_stock and price is not None and srp is not None and price < srp - tolerance)
+
+
+def _case_status_excluded(column: ColumnElement[str]) -> ColumnElement[bool]:
+    """A case status the promo path's ``_EXCLUDED_CASE`` names, or one of its stages (``draft_imported``)."""
+    status = func.lower(column)
+    return or_(*(or_(status == word, status.like(f"{word}\\_%", escape="\\")) for word in sorted(_EXCLUDED_CASE)))
 
 
 def _latest_observations(session: Session, listing_ids: list[int]) -> dict[int, ListingObservation]:
@@ -116,8 +135,11 @@ def _sell_out_srp(
     customer_ids: list[int],
     product_ids: list[int],
     vat_rate: float | None,
-) -> dict[CellKey, float]:
-    """Tier 1: latest positive sell-through ``unit_sell_price`` per customer and product, incl. VAT."""
+) -> dict[CellKey, SrpFigure]:
+    """Tier 1: latest positive sell-through ``unit_sell_price`` per customer and product, incl. VAT.
+
+    The figure carries the start of the sell-through period it was reported for.
+    """
     st = FactCustomerSellthrough
     ranked = (
         select(
@@ -125,6 +147,7 @@ def _sell_out_srp(
             st.product_id,
             st.unit_sell_price,
             st.vat_basis,
+            st.period_start_date,
             func.row_number()
             .over(
                 partition_by=(st.customer_id, st.product_id),
@@ -140,11 +163,11 @@ def _sell_out_srp(
         )
         .subquery()
     )
-    out: dict[CellKey, float] = {}
+    out: dict[CellKey, SrpFigure] = {}
     for row in session.execute(select(ranked).where(ranked.c.rn == 1)):
         srp, _reason = srp_from_price(_positive(row.unit_sell_price), row.vat_basis, vat_rate)
         if srp is not None:
-            out[(int(row.customer_id), int(row.product_id))] = srp
+            out[(int(row.customer_id), int(row.product_id))] = (srp, row.period_start_date)
     return out
 
 
@@ -155,18 +178,27 @@ def _lineup_srp(
     product_ids: list[int],
     *,
     as_of: date,
-) -> dict[CellKey, float]:
-    """Tier 2: ``msrp_local`` of the customer's latest live line-up case that started by ``as_of``.
+) -> dict[CellKey, SrpFigure]:
+    """Tier 2: the line-up SRP of the customer's latest live line-up case that started by ``as_of``.
 
-    Line-up MSRP is the consumer SRP including VAT (the line-up price chain starts from
-    ``srp_inc_vat``), so it is used as stored.
+    Warren: the line-up has the price excluding and including VAT. The shelf basis is the VAT-inclusive
+    figure, read as stored: the price chain's explicit ``srp_inc_vat_local`` first, ``msrp_local``
+    when the chain does not carry it. A case in a status ``_EXCLUDED_CASE`` names (draft, proposed,
+    cancelled, superseded, rejected, and their stages such as ``draft_imported``) never supplies one.
+    The figure carries the case's period start.
+
+    No currency check: listings, customers and sell-through rows carry no currency to compare the
+    case's ``currency_code`` with, so a line-up in another currency is not detected here.
     """
     line, case = CommercialLineupLine, CommercialLineupCase
+    explicit = line.pricing_chain_json["inputs"]["srp_inc_vat_local"].astext
     ranked = (
         select(
             line.customer_id,
             line.product_id,
             line.msrp_local,
+            explicit.label("srp_inc_vat_local"),
+            case.inferred_period_start.label("period_start"),
             func.row_number()
             .over(
                 partition_by=(line.customer_id, line.product_id),
@@ -180,19 +212,19 @@ def _lineup_srp(
             DimProduct.tenant_id == tenant_id,
             line.customer_id.in_(customer_ids),
             line.product_id.in_(product_ids),
-            line.msrp_local > 0,
+            or_(line.msrp_local > 0, explicit.is_not(None)),
             case.superseded_by_case_id.is_(None),
-            case.commercial_status.notin_(_EXCLUDED_LINEUP_STATUSES),
+            ~_case_status_excluded(case.commercial_status),
             case.inferred_period_start.is_not(None),
             case.inferred_period_start <= as_of,
         )
         .subquery()
     )
-    out: dict[CellKey, float] = {}
+    out: dict[CellKey, SrpFigure] = {}
     for row in session.execute(select(ranked).where(ranked.c.rn == 1)):
-        value = _positive(row.msrp_local)
+        value = _positive(row.srp_inc_vat_local) or _positive(row.msrp_local)
         if value is not None:
-            out[(int(row.customer_id), int(row.product_id))] = value
+            out[(int(row.customer_id), int(row.product_id))] = (value, row.period_start)
     return out
 
 
@@ -200,20 +232,20 @@ def _website_srp(
     listings: dict[CellKey, CustomerListing],
     latest: dict[int, ListingObservation],
     vat_rate: float | None,
-) -> dict[CellKey, float]:
-    """Tier 3: the regular (struck-through) price the site publishes, incl. VAT.
+) -> dict[CellKey, SrpFigure]:
+    """Tier 3: the regular (struck-through) price the site publishes, incl. VAT (no period: it is current).
 
     Read from the latest good observation's parse flags. A site that publishes none (no flag) has
     no value here: the shelf price itself is never used, it may be a promotional price.
     """
-    out: dict[CellKey, float] = {}
+    out: dict[CellKey, SrpFigure] = {}
     for key, listing in listings.items():
         obs = latest.get(int(listing.id))
         flags = obs.parse_flags if obs is not None and isinstance(obs.parse_flags, dict) else {}
         regular = _positive(flags.get(_WEBSITE_REGULAR_PRICE_FLAG))
         srp, _reason = srp_from_price(regular, flags.get(_WEBSITE_VAT_BASIS_FLAG), vat_rate)
         if srp is not None:
-            out[key] = srp
+            out[key] = (srp, None)
     return out
 
 
@@ -233,23 +265,28 @@ def _srp_by_cell(
     listings: dict[CellKey, CustomerListing],
     latest: dict[int, ListingObservation],
     as_of: date,
-) -> dict[CellKey, tuple[float, str]]:
-    """SRP and its source per (customer, product) that has a monitored listing; gaps are absent."""
+) -> dict[CellKey, tuple[float, str, date | None]]:
+    """SRP, its source and the period it came from per (customer, product) with a monitored listing.
+
+    Gaps are absent. The period is None for a source that has none (the website's current price).
+    """
     if not listings:
         return {}
     customer_ids = sorted({cid for cid, _ in listings})
     product_ids = sorted({pid for _, pid in listings})
     vat_rate = configured_vat_rate_pct(tenant_id)
-    by_source: dict[str, dict[CellKey, float]] = {
+    by_source: dict[str, dict[CellKey, SrpFigure]] = {
         SRP_SOURCE_SELL_OUT: _sell_out_srp(session, tenant_id, customer_ids, product_ids, vat_rate),
         SRP_SOURCE_LINEUP: _lineup_srp(session, tenant_id, customer_ids, product_ids, as_of=as_of),
         SRP_SOURCE_WEBSITE: _website_srp(listings, latest, vat_rate),
     }
-    out: dict[CellKey, tuple[float, str]] = {}
+    out: dict[CellKey, tuple[float, str, date | None]] = {}
     for key in listings:
-        srp, source = resolve_srp({code: values.get(key) for code, values in by_source.items()})
+        srp, source = resolve_srp(
+            {code: (figures[key][0] if key in figures else None) for code, figures in by_source.items()}
+        )
         if srp is not None and source is not None:
-            out[key] = (srp, source)
+            out[key] = (srp, source, by_source[source][key][1])
     return out
 
 
@@ -365,6 +402,7 @@ def build_price_matrix(
         as_of=as_of,
     )
     any_srp = bool(srp_by_cell)
+    tolerance = below_srp_tolerance(tenant_id)
     promo_pairs = {(int(l.customer_id), int(l.product_id)) for l in by_product_customer.values()}
     promos = _active_promos(session, as_of=as_of, pairs=promo_pairs)
 
@@ -375,7 +413,7 @@ def build_price_matrix(
 
     for product in products:
         pid = int(product["id"])
-        found = [srp_by_cell[(cid, pid)] for cid in customer_ids if (cid, pid) in srp_by_cell]
+        found = [srp_by_cell[(cid, pid)][:2] for cid in customer_ids if (cid, pid) in srp_by_cell]
         product.update(_product_srp_fields(found, any_srp=any_srp))
 
     for pid in product_ids:
@@ -394,6 +432,7 @@ def build_price_matrix(
                         "below_srp": False,
                         "srp": None,
                         "srp_source": None,
+                        "srp_period": None,
                         "srp_reason": None,
                         "promo": None,
                     }
@@ -404,7 +443,8 @@ def build_price_matrix(
             in_stock = listing.status == "active" and price is not None
             found_srp = srp_by_cell.get((cid, pid))
             srp = found_srp[0] if found_srp else None
-            below_srp = is_below_srp(price, srp, in_stock=in_stock)
+            below_srp = is_below_srp(price, srp, in_stock=in_stock, tolerance=tolerance)
+            srp_period = found_srp[2] if found_srp else None
             fetched = obs.fetched_at if obs is not None else None
             observed_at = fetched.isoformat() if fetched is not None else None
             cells.append(
@@ -419,6 +459,8 @@ def build_price_matrix(
                     "below_srp": below_srp,
                     "srp": srp,
                     "srp_source": found_srp[1] if found_srp else None,
+                    # ISO date of the start of the period the SRP came from; the UI formats it.
+                    "srp_period": srp_period.isoformat() if srp_period is not None else None,
                     "srp_reason": None if found_srp else _missing_srp_reason(any_srp),
                     "promo": promos.get((cid, pid)),
                 }

@@ -14,13 +14,20 @@ import { OPS_LIST_GRID_PAGINATION, OPS_LIST_PAGE_SIZE } from '@/features/shell/o
 import { Panel } from '@/features/workbench-ui/Panel';
 import { StatusChip } from '@/features/workbench-ui/controls';
 import { apiGet } from '@/lib/api';
-import { gridRowMetrics } from '@/theme/gridDensity';
+import { formatMonthYear } from '@/lib/formatMonthYear';
+import { gridRowMetrics, gridThreeLineRowHeight } from '@/theme/gridDensity';
 
 import { ListingCustomerScopePicker } from './ListingCustomerScopePicker';
 import { useListingCustomerScope } from './listingCustomerScope';
 
 type MatrixCustomer = { id: number; name: string; code?: string | null };
-type SrpFields = { srp?: number | null; srp_source?: string | null; srp_reason?: string | null };
+type SrpFields = {
+  srp?: number | null;
+  srp_source?: string | null;
+  /** ISO start date of the sell-out or line-up period the SRP came from (none for the website). */
+  srp_period?: string | null;
+  srp_reason?: string | null;
+};
 type MatrixProduct = SrpFields & {
   id: number;
   sales_model_name?: string | null;
@@ -61,13 +68,10 @@ const SRP_REASON_TEXT: Record<string, string> = {
 
 /** Words for the API's `srp_source` codes (the SRP rule: sell-out, else line-up, else website). */
 const SRP_SOURCE_TEXT: Record<string, string> = {
-  sell_out_price: 'Sell-out price',
-  lineup_price: 'Line-up price',
+  sell_out_price: 'Sell-out',
+  lineup_price: 'Line-up',
   website_off_promo_price: 'Website off-promo price',
 };
-
-/** A priced cell shows three text lines (price, age, SRP and its source); the shared row fits two. */
-const MATRIX_ROW_HEIGHT_FACTOR = 1.75;
 
 function fmtPrice(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return '—';
@@ -84,10 +88,18 @@ function srpText(fields: SrpFields): string {
   return SRP_REASON_TEXT[fields.srp_reason ?? ''] ?? fields.srp_reason ?? 'No SRP';
 }
 
-/** `SRP 8,499 · Sell-out price` for a cell with an SRP; "No SRP" for a gap beside cells that have one. */
+/** `Sell-out · Jul 2026`: the source of an SRP and, when the API gives one, the period it came from. */
+function srpSourceLabel(cell: SrpFields): string | null {
+  if (!cell.srp_source) return null;
+  const source = SRP_SOURCE_TEXT[cell.srp_source] ?? cell.srp_source;
+  const period = formatMonthYear(cell.srp_period);
+  return period ? `${source} · ${period}` : source;
+}
+
+/** `SRP 8,499 · Sell-out · Jul 2026` for a cell with an SRP; "No SRP" for a gap beside cells that have one. */
 function cellSrpText(cell: MatrixCell): string | null {
   if (cell.srp != null) {
-    const source = cell.srp_source ? (SRP_SOURCE_TEXT[cell.srp_source] ?? cell.srp_source) : null;
+    const source = srpSourceLabel(cell);
     return source ? `SRP ${fmtPrice(cell.srp)} · ${source}` : `SRP ${fmtPrice(cell.srp)}`;
   }
   return cell.srp_reason === 'no_srp_for_product' ? SRP_REASON_TEXT.no_srp_for_product : null;
@@ -268,7 +280,8 @@ export function PriceMatrixLens() {
   );
 
   const metrics = gridRowMetrics(theme.density);
-  const rowHeight = Math.round(metrics.rowHeight * MATRIX_ROW_HEIGHT_FACTOR);
+  // A priced cell stacks three text lines (price, age, SRP and its source); the shared row fits two.
+  const rowHeight = gridThreeLineRowHeight(theme.density);
   const { headerHeight } = metrics;
   const gridOptions = useMemo<GridOptions<MatrixRow>>(
     () => ({
