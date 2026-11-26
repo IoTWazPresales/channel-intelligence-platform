@@ -67,7 +67,7 @@ const SRP_SOURCE_TEXT: Record<string, string> = {
 };
 
 /** A priced cell shows three text lines (price, age, SRP and its source); the shared row fits two. */
-const MATRIX_ROW_HEIGHT_FACTOR = 1.5;
+const MATRIX_ROW_HEIGHT_FACTOR = 1.75;
 
 function fmtPrice(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return '—';
@@ -127,52 +127,54 @@ function PriceCell({ cell }: { cell: MatrixCell | undefined }) {
   const promo = cell.promo;
   const srpText = cellSrpText(cell);
   return (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, width: '100%' }}>
-      <Box sx={{ lineHeight: 1.2, minWidth: 0 }}>
-        <Typography variant="body2" noWrap sx={{ fontVariantNumeric: 'tabular-nums' }}>
-          {cell.listing_url ? (
-            <Link href={cell.listing_url} target="_blank" rel="noopener noreferrer" underline="hover" color="inherit">
-              {fmtPrice(cell.price)}
-            </Link>
-          ) : (
-            fmtPrice(cell.price)
-          )}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          noWrap
-          component="div"
-          data-testid={`price-matrix-age-${cell.product_id}-${cell.customer_id}`}
-        >
-          {attentionAge(cell.observed_at, 'observed_at')}
-        </Typography>
-        {srpText ? (
+    <Box sx={{ minWidth: 0, width: '100%', lineHeight: 1.2 }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, width: '100%' }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="body2" noWrap sx={{ fontVariantNumeric: 'tabular-nums' }}>
+            {cell.listing_url ? (
+              <Link href={cell.listing_url} target="_blank" rel="noopener noreferrer" underline="hover" color="inherit">
+                {fmtPrice(cell.price)}
+              </Link>
+            ) : (
+              fmtPrice(cell.price)
+            )}
+          </Typography>
           <Typography
             variant="caption"
             color="text.secondary"
             noWrap
             component="div"
-            data-testid={`price-matrix-cell-srp-${cell.product_id}-${cell.customer_id}`}
+            data-testid={`price-matrix-age-${cell.product_id}-${cell.customer_id}`}
           >
-            {srpText}
+            {attentionAge(cell.observed_at, 'observed_at')}
           </Typography>
-        ) : null}
-      </Box>
-      <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-        {!cell.in_stock ? <StatusChip label="Out of stock" tone="neutral" /> : null}
-        {cell.below_srp ? <StatusChip label="Below SRP" tone="warning" /> : null}
-        {promo?.promotion_type ? (
-          <Tooltip
-            title={`${promo.name}${promo.window_start ? ` · ${promo.window_start} – ${promo.window_end ?? ''}` : ''}`}
-          >
-            <span>
-              <StatusChip label={promo.promotion_type} tone="info" />
-            </span>
-          </Tooltip>
-        ) : null}
+        </Box>
+        <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+          {!cell.in_stock ? <StatusChip label="Out of stock" tone="neutral" /> : null}
+          {cell.below_srp ? <StatusChip label="Below SRP" tone="warning" /> : null}
+          {promo?.promotion_type ? (
+            <Tooltip
+              title={`${promo.name}${promo.window_start ? ` · ${promo.window_start} – ${promo.window_end ?? ''}` : ''}`}
+            >
+              <span>
+                <StatusChip label={promo.promotion_type} tone="info" />
+              </span>
+            </Tooltip>
+          ) : null}
+        </Stack>
       </Stack>
-    </Stack>
+      {srpText ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          noWrap
+          component="div"
+          data-testid={`price-matrix-cell-srp-${cell.product_id}-${cell.customer_id}`}
+        >
+          {srpText}
+        </Typography>
+      ) : null}
+    </Box>
   );
 }
 

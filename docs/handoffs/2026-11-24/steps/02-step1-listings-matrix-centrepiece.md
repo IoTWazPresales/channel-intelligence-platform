@@ -97,11 +97,7 @@ Reading: the prompt's default rule (line-up case covering today) gives 0 of 105 
 
 ## QUESTION FOR WARREN
 
-1. **Which source is SRP (Suggested Retail Price) in the price matrix?** No line-up case covers today (latest is 2026 Q3), there are no commercial plans and no historical line-ups; see the Phase B tables.
-   - Option a: the latest non-cancelled, non-superseded line-up case for that customer whose period started on or before today (covers 44/69 Evetech and 23/36 Takealot cells; mixes quarters and VAT evidence).
-   - Option b: only a line-up case covering the current quarter (covers 0 cells today; SRP would show "No SRP" until a Q4 line-up is loaded).
-   - Option c: another source you name.
-   - Default until you answer: "SRP source pending Warren" in the SRP column, no Below SRP flags. D4 (VAT basis check) is done after your answer.
+1. ANSWERED 26 Nov (see "SRP rule" below). Open sub-question: **the line-up price VAT basis.** The code uses line-up `msrp_local` as stored (treated as VAT inclusive, matching the line-up price chain). Phase B showed VAT evidence is 0.15 on some cases and null on others. If line-up MSRP is ex-VAT on any case, say so and the tier will gross it up. Default: as stored.
 2. **Health panel on the other listing tabs?** At 9abc4716 it also showed on Price history, Promotion activation and Feed proposals. This branch shows it on Monitored listings only (A2). Default: leave it there only.
 
 ## STOP items (live writes)
@@ -194,3 +190,20 @@ Code and tracker are pushed on the branch. Next: coordinator review (different m
 ## Review fixes (26 Nov)
 
 Independent review returned READY_WITH_FIXES. Fixed: below-SRP rule now lives in one API constant (`BELOW_SRP_TOLERANCE`) and each cell carries `below_srp`; the UI reads the flag. Added API tests (in-stock, out-of-stock, boundary) and a component test for the chip. User-facing text is "SRP source not yet chosen" (reason code `srp_source_pending` kept). The promotion chip renders only when the API gives a promotion type: the web app has no production label helper, so no literal fallback. Column minWidths stay: `gridDensity` has row-height tokens only, no width tokens.
+
+## SRP rule (26 Nov follow-up, commit d5c904b0)
+
+Warren's words, verbatim: "use sell out price, fall back to Line up price, fall back to website off promo price."
+
+Resolved per customer and product (`price_matrix.py`: `_sell_out_srp`, `_lineup_srp`, `_website_srp`, `resolve_srp`). Each cell returns `srp`, `srp_source` (`sell_out_price` | `lineup_price` | `website_off_promo_price`), `srp_reason`, and `below_srp` (in-stock only, `BELOW_SRP_TOLERANCE`). The highest price ever recorded is never used.
+
+- ASSUMPTION 1 (sell-out): the latest period with a positive `unit_sell_price` on the customer's sell-through rows for that product; when several sites report that period, the row with the most units. Ex-VAT rows are grossed up with the tenant's VAT rate; unknown basis or unset rate = tier skipped (same rule as `planner_sellthrough.srp_from_price`). All tiers are stated VAT inclusive, the shelf basis.
+- ASSUMPTION 2 (line-up): `msrp_local` of the customer's latest non-cancelled, non-superseded case whose period started on or before today; used as stored (VAT inclusive). Open sub-question above.
+- ASSUMPTION 3 (website off-promo): the listing has no separate column for a regular price. The only stored regular price is the site's struck-through price in the latest good observation's `parse_flags.rrp_listing_price` (with `vat_basis`). That is what tier 3 reads; a site that publishes none gets nothing here. The shelf price itself is never used (it may be promotional).
+- Product-level SRP column: the figure when every customer agrees, else "Varies by customer". "SRP source not yet chosen" shows only when no cell has an SRP from any tier.
+- UI: each priced cell carries a caption `SRP <value> · <source label>` (Typography caption, no fills, no literals beyond the three source labels); row height factor 1.5 for the third text line.
+- Tests (all pass): API DB on `cip_test` 11 (each tier winning, fallback order, VAT gross-up, ex-VAT skipped without a rate, cancelled/superseded/future line-ups skipped, website flag, in-stock-only below_srp, pending wording) + unit 2; `PriceMatrixLens` 11; `MarketSurface` 25.
+- Gates: eslint clean on touched web files; `tsc --noEmit` no errors; `pnpm --filter @cip/web build` exit 0.
+- Live read-only coverage (one READ ONLY transaction, rolled back, `current_database()` = cip): 100 cells with a listing (not 105; the matrix now shows scoped products only), 93 products. Sell-out 30, line-up 45, website 1, no SRP 24 (all Evetech, `no_srp_for_product`). 21 cells below SRP (42 in-stock cells have an SRP). By customer: Evetech line-up 43, none 24; Takealot sell-out 30, line-up 2, website 1.
+- Observation for Warren: a Takealot cell shows listing price 229 against a sell-out SRP of 21,999 (out of stock, so not flagged). That listing price looks wrong at source; not changed here.
+- Visual gate for the SRP caption (26 Nov, after the layout fix; worktree `next dev` :3101, branch matrix payload built read-only from live cip, dark and light): the first render truncated the source label ("Line-up ...") because the chip shared the line; the caption now sits on its own full-width line and the row factor is 1.75. Measured: row 70px, SRP caption 11px, colour equal to the age caption (dark rgba(186,198,210,.82), light rgba(40,54,68,.82)), 0 truncated SRP captions, 0 vertically clipped cells, every matrix cell background rgba(0,0,0,0) (no fills), 93 products x 8 customers, Below SRP 8 and Out of stock 15 chips on page 1. Mock-up comparison for the new caption: no mock-up element exists for per-cell SRP; it follows the existing age caption. Screenshots untracked in `.step1-scratch/`.
