@@ -246,8 +246,9 @@ export function CapabilityRail({
                   gap: '4px',
                   padding: NAV_MOCK.eyebrow.padding,
                   paddingRight: 0,
-                  // Mock-up `.nav-label`: always the secondary colour; the active leaf carries the accent.
-                  color: 'text.secondary',
+                  // Mock-up `.nav-label`: secondary colour; the active leaf carries the accent. Warren: "YES" to
+                  // highlighting the active group's heading when its leaves are collapsed, so the current area stays visible.
+                  color: isActive && !expanded ? 'text.primary' : 'text.secondary',
                   textDecoration: 'none',
                   '&:hover': { color: 'text.primary' },
                 }}
