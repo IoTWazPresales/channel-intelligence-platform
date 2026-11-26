@@ -280,7 +280,9 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                             lane.key === 'ended'
                               ? selected
                                 ? 0.35
-                                : 0.14
+                                : theme.palette.mode === 'light'
+                                  ? 0.22
+                                  : 0.14
                               : selected
                                 ? 0.55
                                 : 0.3;
