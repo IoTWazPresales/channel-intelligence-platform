@@ -38,9 +38,25 @@ Manual 11-hop chain after a case ends:
 
 - **3, 4** — KAM still asks the customer and the customer still returns a file.
 - **7, 8, 9** — Ken still sends the amount via the KAM; the customer still confirms or disputes.
-- **11** — Ken still takes the settle/close action. The system records it; it does not auto-close.
+- **11** — Ken still takes the settle action. The system records it.
 
-Hop **1** can be detected (window end) but does not auto-settle.
+**Close for review (Warren, 2026-11-27; replaces "it does not auto-close").** Warren's ruling: reconcile open
+promotions from the sales over the period, then close them for review. Do not send to the customer yet. Notify the
+user in charge of that process. Automatic send to the customer comes later, and that send must also notify the person
+in charge.
+
+- When the window ends, the system reconciles the case from the customer's sell-through over the window and closes it
+  for review. It does not send anything to the customer.
+- The person in charge of that process is notified when a case is closed for review.
+- Sending to the customer automatically is a later step. When it is built, that send also notifies the person in
+  charge.
+- Closing for review is not settling. Settle stays a human action (hop 11).
+
+Hop **1** is detected at window end and starts the close-for-review above. It does not auto-settle.
+
+Not built yet (2026-11-27): which sell-through rows count for a window, whether they set `result_qty` beside or
+instead of claim evidence, who "the person in charge" is, and where the notice lands. Tracked in
+`docs/handoffs/2026-11-24/steps/03-step2-planner-calendar-sellthrough.md` ("Close for review").
 
 ---
 
@@ -164,3 +180,4 @@ Backlog: **135–140** (this file’s §9). Do not mint codes or run a migration
 | Over-cap (units) flags and continues | `cap_qty` nullable; money ceiling (095) can **block** export |
 | Terms never mutate; supersede in-case | No line window; unique grain blocks two living lines per SKU |
 | CIP-minted customer codes | `TMP-CUST-*` on named accounts; promote map exists, mint does not |
+| Window end: reconcile from sell-through, close for review, notify the person in charge (2026-11-27) | `end` is a manual transition (`active → ended`); `result_qty` is set from claim evidence only; no notification of a person exists |

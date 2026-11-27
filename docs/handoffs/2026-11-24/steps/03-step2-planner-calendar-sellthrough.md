@@ -282,6 +282,42 @@ New tests: `sellThroughPace.test.ts` (elapsed share, open-only, ended never judg
 1. Should elapsed time stop at the latest sales period loaded for that customer (fewer false alarms when files arrive late), or at today as stated?
 2. `CPOR_SETTLEMENT_SPEC.md` says the system "does not auto-close"; decision 1 says an open promotion closes itself. Which one is current?
 
+## Close for review (Warren, 27 Nov) — STOPPED before code
+
+Warren (via coordinator, verbatim): "Reconcile open promotions from sales over the period, then close them for review. Do not send to the customer yet. Notify the user in charge of that process. Automatic send to the customer comes later, and that send must also notify the person in charge."
+
+Done: `docs/CPOR_SETTLEMENT_SPEC.md` §1 no longer says the system does not auto-close; it states the ruling and what is not built. No code written for the transition.
+
+### Path map (FACT, read from the tree)
+
+| Trigger | API | Writer | Commit model |
+|---|---|---|---|
+| Manual "end" today | `POST /cpor/cases/{id}/transition` `action=end` (`cpor_cases.py` L1786) | sets `status=ended`, `workflow_status`, event `transition_end` | one case, one commit |
+| Claim file import | `POST /cpor/cases/{id}/claim-evidence/import`, `POST .../settlement/rollup` | `settlement.rollup_result_qty_from_claims` writes `cpor_case_line.result_qty` = claim units in each line's window, then `recompute_case_line` (sets `ttl_result`) | per case |
+| Sell-through read (no write) | `GET .../promo-load-recon` (`promo_load_recon.py`) and `settlement._cst_and_claim_units` | none | read only |
+| Scheduler | `worker/celery_app.py` `build_beat_schedule` (no CPOR entry) | none | — |
+| Notification | none for CPOR. `report_delivery` inbox exists, constrained to `trigger IN (manual, schedule, import_event)`, `format IN (xlsx, pdf)`, tied to saved reports | — | — |
+
+Lifecycle (`lifecycle.py`): `active → ended → settled`. "Closed for review" maps onto `ended` with no new status (ASSUMPTION, needs yes/no).
+
+### Data-mapping gate (why this stopped)
+
+Reconcile would write a computed value: `cpor_case_line.result_qty` (and so `ttl_result = support_unit × result_qty`, D-027) from `fact_customer_sellthrough.units_sold`. Today `result_qty` comes only from claim evidence. Before/after for a line with planned 100, claims 0, sell-through 60 in the window: before `result_qty` null, `ttl_result` null; after `result_qty` 60, `ttl_result` 60 × `support_unit`. The tree has two different "in the window" rules for sell-through, and neither pro-rates:
+
+1. `promo_load_recon.py`: periods whose `period_start_date` is inside `[window_start, window_end]`.
+2. `settlement._cst_and_claim_units`: periods starting from `window_start − 31 days` to `window_end` (catches a monthly period that began before the window).
+
+Sell-through rows are weekly or monthly (`period_type` / `period_grain`), can be month-to-date estimates (`is_mtd_estimate`), and can be chain or store grain (`customer_location_id`). Picking one rule silently changes the amount owed.
+
+### WARREN (needed before the close-for-review code)
+
+1. Which sell-through counts for a window: rule 1, rule 2, or week-grain only with straddling weeks flagged (spec §5 "flagged, never silently pro-rated")? Are month-to-date estimates excluded?
+2. Does sell-through set `result_qty` when no claim file exists, with a later claim file replacing it? Or is sell-through stored beside the claim figure (`ttl_result` stays claim-based) and the review shows both? The second needs no change to the amount owed.
+3. Who is "the user in charge of that process"? Nothing in the tree stores it: no owner on `cpor_case`, no setting in the tenant profile (`commercial_tenant_profile.py`, U4), and the spec's Ken role is not in the role enum (§9 gap 2). Options: a tenant-profile setting naming a user (U4's file), a role (needs the role enum), or the case's `created_by`.
+4. Where does the notice land? `report_delivery` cannot hold a case notice without a migration widening its `trigger` / `format` checks, or a new notice table (migration). Email has no adapter for CPOR (`promo_export/notify.py` is a stub).
+5. When does it run: a daily beat task over cases whose window ended, or after each sell-through import?
+6. Is "closed for review" the existing `ended` status?
+
 ## Resume notes
 
 - Build and gates are done. Remaining work is the coordinator's (review, merge, deploy, live proof) and Warren's questions.
