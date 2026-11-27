@@ -8,6 +8,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { fmtCompact, fmtPct } from '@/features/promotions-funding/format';
 import { countPlanning } from '@/features/promotions-funding/lifecycle';
 import { cporFundingChromeQueryOptions, cporSettlementBookQueryOptions } from '@/features/promotions-funding/cporQueryOptions';
+import { BASE_COUNTS_URL, type CaseCounts } from '@/features/promotions-funding/plannerCards';
 import { useBriefSignals } from '@/features/shell/useBriefSignals';
 import { apiGet } from '@/lib/api';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
@@ -105,8 +106,19 @@ export function FundingChrome({
     .filter(Boolean)
     .join(' · ');
 
+  // Step 2 (N-0122): the Promotion planner tab counts what the planner shows, open customer sell-through cases in
+  // planning (same request and cache key as the planner's cards), never the whole book with sell-out. Warren: "The
+  // promotion planner shows customer promotions, never sell-out." The meta line and the Case book tab keep the book.
+  const { data: plannerCounts } = useQuery({
+    queryKey: ['cpor', 'cases', 'counts', 'base'],
+    queryFn: ({ signal }) => apiGet<CaseCounts>(BASE_COUNTS_URL, { signal }),
+    staleTime: 30_000,
+  });
+  const plannerTabN =
+    plannerCounts?.status_counts_current != null ? countPlanning(plannerCounts.status_counts_current) : undefined;
+
   const tabCounts: Partial<Record<FundingLens, number>> = {
-    planner: planningN ?? undefined,
+    planner: plannerTabN,
     book: settlement?.open_case_count ?? listPage?.total,
     ...counts,
   };

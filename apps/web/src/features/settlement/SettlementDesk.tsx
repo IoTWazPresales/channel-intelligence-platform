@@ -355,6 +355,14 @@ export function SettlementDesk({
         </Alert>
       ) : null}
 
+      {view.salesWindowGap ? (
+        <Alert severity="warning" data-testid="settlement-desk-sales-gap">
+          Sales do not cover this window yet ({view.salesWindowGap.label}).
+          {view.salesWindowGap.actor ? ` Ended by ${view.salesWindowGap.actor}.` : ''}
+          {view.salesWindowGap.reason ? ` Reason: ${view.salesWindowGap.reason}.` : ''}
+        </Alert>
+      ) : null}
+
       {view.needsReapproval ? (
         <Alert severity="warning" data-testid="settlement-desk-needs-reapproval">
           Needs reapproval (over budget). The money ceiling is exceeded — reapprove with over-budget

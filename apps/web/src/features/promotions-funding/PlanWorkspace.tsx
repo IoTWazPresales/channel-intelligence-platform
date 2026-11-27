@@ -116,6 +116,8 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
   const [toast, setToast] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
+  const [endOpen, setEndOpen] = useState(false);
+  const [endReason, setEndReason] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [product, setProduct] = useState<ProductPick | null>(null);
@@ -173,6 +175,8 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
     onSuccess: async (_r, vars) => {
       setRejectOpen(false);
       setApproveOpen(false);
+      setEndOpen(false);
+      setEndReason('');
       setToast(`${data?.case_code ?? caseId} → ${ACTION_LABELS[vars.action] ?? vars.action}`);
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
@@ -430,6 +434,20 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
           {nextActions.map(([action, label]) =>
             action === 'reject' ? (
               <Button key={action} size="small" variant="outlined" color="error" onClick={() => setRejectOpen(true)}>
+                {label}
+              </Button>
+            ) : action === 'end' ? (
+              <Button
+                key={action}
+                size="small"
+                variant="contained"
+                disabled={transition.isPending}
+                onClick={() => {
+                  setEndReason('');
+                  setEndOpen(true);
+                }}
+                data-testid="plan-end"
+              >
                 {label}
               </Button>
             ) : action === 'approve' ? (
@@ -803,6 +821,39 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
         caseId={caseId}
         onClose={() => setSelectedLine(null)}
       />
+
+      <Dialog open={endOpen} onClose={() => !transition.isPending && setEndOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>End {data.case_code}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Ending before the customer&apos;s sales cover the window is allowed. A reason is required,
+            and settlement keeps the gap.
+          </Typography>
+          <TextField
+            label="Reason"
+            value={endReason}
+            onChange={(e) => setEndReason(e.target.value)}
+            fullWidth
+            multiline
+            minRows={2}
+            required
+            inputProps={{ 'data-testid': 'plan-end-reason' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEndOpen(false)} disabled={transition.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={transition.isPending || !endReason.trim()}
+            onClick={() => transition.mutate({ action: 'end', comment: endReason.trim() })}
+            data-testid="plan-end-confirm"
+          >
+            End window
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Reject {data.case_code}</DialogTitle>

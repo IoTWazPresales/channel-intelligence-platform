@@ -28,6 +28,7 @@ from app.services.commercial_tenant_profile import (
 )
 from app.services.cpor.historical_import.resolve import case_apply_blockers
 from app.services.cpor.lifecycle import workflow_status_for
+from app.services.cpor.promotion_type_vocab import require_channel
 from app.services.cpor.line_window import follow_case_window
 from app.services.imports.import_job_background_metadata import persist_clear_background_task_metadata
 from app.utils.json_safe import to_jsonable
@@ -174,7 +175,7 @@ def _apply_one_case(
 
     status = (head.lifecycle_status or "settled").strip() or "settled"
     promo = (head.promotion_type or head.promotion_type_raw or "historical").strip() or "historical"
-    channel = (head.channel or "reseller").strip() or "reseller"
+    requested_channel = (head.channel or "").strip() or None
     roe = head.roe_snapshot
 
     existing = db.scalar(select(CporCase).where(CporCase.case_code == case_code))
@@ -183,6 +184,7 @@ def _apply_one_case(
 
     # A new historical case takes the model's default tenant (the apply sets no tenant id).
     tenant = (existing.tenant_id if existing is not None else None) or "default"
+    channel = require_channel(tenant, requested_channel)
     tenant_vat = configured_vat_rate_pct(tenant)
 
     if existing is None:

@@ -50,6 +50,21 @@ def test_parse_frankfurter_payload_reads_only_the_given_currency():
     assert parse_frankfurter_payload(payload, currency="eur")[1] == pytest.approx(0.91)
 
 
+def test_explicit_unset_currency_does_not_borrow_the_default_tenant():
+    # Warren 27 Nov: an unset tenant currency is not configured. It must not use another tenant's.
+    from app.services.cpor import fx_rate
+
+    def _no_fetch(**_kwargs):
+        raise AssertionError("must not fetch when the caller passed an unset currency")
+
+    with patch.object(fx_rate, "tenant_currency_code", return_value="ZAR"), patch.object(
+        fx_rate, "fetch_frankfurter", _no_fetch
+    ):
+        quote = fx_rate.ensure_rate_for_date(MagicMock(), date(2026, 9, 4), currency=None)
+    assert quote.rate is None
+    assert quote.source == "currency_not_configured"
+
+
 def test_no_quote_currency_is_not_configured_and_fetches_nothing():
     from app.services.cpor import fx_rate
 

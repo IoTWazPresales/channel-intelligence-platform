@@ -204,6 +204,23 @@ describe('PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)', (
     expect(screen.queryByTestId('plan-settle')).toBeNull();
   });
 
+  it('requires a reason before a manual end (Warren, 27 Nov: end before sales cover the window)', async () => {
+    detail = { ...baseCase, status: 'active', allowed_next: ['ended', 'cancelled'], needs_reapproval: false };
+    const { apiPost } = await import('@/lib/api');
+    renderWorkspace();
+    fireEvent.click(await screen.findByTestId('plan-end'));
+    expect(vi.mocked(apiPost)).not.toHaveBeenCalled();
+    expect(screen.getByTestId('plan-end-confirm')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('plan-end-reason'), { target: { value: 'Customer pulled the week' } });
+    fireEvent.click(screen.getByTestId('plan-end-confirm'));
+    await waitFor(() =>
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/api/v1/cpor/cases/77/transition', {
+        action: 'end',
+        comment: 'Customer pulled the week',
+      }),
+    );
+  });
+
   it('shows the PM comment on a rejected plan (was a workspace header chip)', async () => {
     detail = {
       ...baseCase,

@@ -35,6 +35,7 @@ from app.services.cpor.customer_calendar.pipeline import (
     save_profile,
 )
 from app.services.cpor.customer_calendar.timeline import build_clash_summary, build_timeline
+from app.services.cpor.promotion_type_vocab import PROMOTION_FAMILIES
 from app.services.steward_audit import record_steward_audit_sync
 
 router = APIRouter()
@@ -258,17 +259,32 @@ def clash_summary(
     db: _Db,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
+    promotion_family: Annotated[
+        str | None,
+        Query(description="customer_sell_through | distributor_sell_out: count only that family's promotions"),
+    ] = None,
 ) -> dict[str, Any]:
     """Exact count of our open promotions that clash with customer calendar events, all customers.
 
     The planner's calendar-clash card. Same rules as ``/timeline`` (superseded, cancelled, fixture
-    and fully voided cases left out; clashes are same-customer date overlaps, inclusive).
+    and fully voided cases left out; clashes are same-customer date overlaps, inclusive). The planner
+    sends ``promotion_family=customer_sell_through`` so sell-out never counts on it.
     """
     if date_from is not None and date_to is not None and date_to < date_from:
         raise HTTPException(status_code=422, detail="'to' is before 'from'")
+    family = promotion_family.strip() if isinstance(promotion_family, str) else None
+    if family is not None and family not in PROMOTION_FAMILIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown promotion_family={family}; allowed={sorted(PROMOTION_FAMILIES)}",
+        )
     try:
         return build_clash_summary(
-            db, tenant_id_from_user(_user), date_from=date_from, date_to=date_to
+            db,
+            tenant_id_from_user(_user),
+            date_from=date_from,
+            date_to=date_to,
+            promotion_family=family,
         )
     except ProgrammingError as exc:
         return _calendar_unavailable(exc, db)

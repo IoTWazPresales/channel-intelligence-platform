@@ -6,6 +6,8 @@
  * Nothing here prices anything or invents a figure: a missing value is `null`, never zero.
  */
 
+import { PLANNER_PROMOTION_FAMILY } from '@/features/promotions-funding/planner/plannerCalendarScope';
+
 /**
  * True when a paged response carries every row the filter matched (`total` <= rows returned). Used by the
  * action queue's partial-view wording; the cards no longer read a page, they read the count endpoint.
@@ -51,12 +53,27 @@ export type CaseCounts = {
 
 /** Planner headline cards default to reporting customers only (same definition as the timeline). */
 const PLANNER_COUNTS_REPORTING = 'reporting_only=true';
+/**
+ * Step 2 (N-0122): every planner count uses the timeline's scope, the customer sell-through family, so no count
+ * includes sell-out (Warren: "The promotion planner shows customer promotions, never sell-out.").
+ */
+const PLANNER_COUNTS_FAMILY = `promotion_family=${PLANNER_PROMOTION_FAMILY}`;
+/** The default (Open) view: open statuses, not replaced, window not ended (the API's `open_only`). */
+const PLANNER_COUNTS_OPEN = 'open_only=true';
+const COUNTS_PATH = '/api/v1/cpor/cases/counts';
 
-export const BASE_COUNTS_URL = `/api/v1/cpor/cases/counts?${PLANNER_COUNTS_REPORTING}`;
+/** The cards' default counts: open customer sell-through cases of reporting customers. */
+export const BASE_COUNTS_URL = `${COUNTS_PATH}?${PLANNER_COUNTS_REPORTING}&${PLANNER_COUNTS_FAMILY}&${PLANNER_COUNTS_OPEN}`;
 
-/** Awaiting approval: current cases in Proposed. */
+/**
+ * The family's whole current book (open and closed), for the cards that count closed cases (Ended). Without it the
+ * Ended card would read a made-up zero under the Open scope.
+ */
+export const BOOK_COUNTS_URL = `${COUNTS_PATH}?${PLANNER_COUNTS_REPORTING}&${PLANNER_COUNTS_FAMILY}`;
+
+/** Awaiting approval: current, open cases in Proposed. */
 export function awaitingCountUrl(): string {
-  return `${BASE_COUNTS_URL}&status=proposed`;
+  return `${COUNTS_PATH}?${PLANNER_COUNTS_REPORTING}&status=proposed&${PLANNER_COUNTS_FAMILY}&${PLANNER_COUNTS_OPEN}`;
 }
 
 /** Starting in 4 weeks: window starts in [today, today + 28 days], cancelled and rejected left out. */
@@ -64,7 +81,11 @@ export function startingCountUrl(today: string): { url: string; from: string; to
   const from = todayIso(today);
   const to = addDaysIso(from, STARTING_WINDOW_DAYS);
   const excluded = STARTING_EXCLUDED_STATUSES.map((s) => `&exclude_status=${s}`).join('');
-  return { url: `${BASE_COUNTS_URL}&window_from=${from}&window_to=${to}${excluded}`, from, to };
+  return {
+    url: `${COUNTS_PATH}?${PLANNER_COUNTS_REPORTING}&window_from=${from}&window_to=${to}${excluded}&${PLANNER_COUNTS_FAMILY}&${PLANNER_COUNTS_OPEN}`,
+    from,
+    to,
+  };
 }
 
 /** Count of one status in a counts response; null until the response exists (never a made-up zero). */
@@ -149,9 +170,9 @@ export type CalendarClashSummary =
   | { clash_count: number; promotion_count: number; customer_count: number; from: string | null; to: string | null }
   | { data_unavailable: true; message?: string };
 
-/** Clashes of our open promotions that end today or later. */
+/** Clashes of our open customer sell-through promotions that end today or later (no sell-out on the planner). */
 export function calendarClashUrl(today: string): string {
-  return `/api/v1/customer-calendar/clashes/summary?from=${todayIso(today)}`;
+  return `/api/v1/customer-calendar/clashes/summary?from=${todayIso(today)}&${PLANNER_COUNTS_FAMILY}`;
 }
 
 export type ClashCardFigure =

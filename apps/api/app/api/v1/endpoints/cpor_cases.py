@@ -6,8 +6,9 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import params as fastapi_params
 from pydantic import BaseModel, Field
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -64,7 +65,10 @@ from app.services.cpor.payment_recon import load_payment_recon_by_case_id
 from app.services.cpor.promo_load_recon import build_promo_load_recon
 from app.services.cpor.promotion_type_vocab import (
     CPOR_CASE_STATUS_SET,
-    promotion_types,
+    CPOR_OPEN_CASE_STATUSES,
+    PROMOTION_FAMILIES,
+    promotion_family_types,
+    promotion_types as tenant_promotion_types,
     require_channel,
     require_promotion_type,
 )
@@ -379,14 +383,63 @@ def _case_line_aggregates(session: Session, case_ids: list[int]) -> dict[int, di
     return out
 
 
-def _status_counts(session: Session, user: dict) -> dict[str, int]:
-    rows = session.execute(
+def _status_counts(
+    session: Session,
+    user: dict,
+    *,
+    promotion_family: str | None = None,
+    reporting_only: bool = False,
+) -> dict[str, int]:
+    """Per-status count of the commercial book.
+
+    With no family this is the whole tenant book (unchanged for existing callers). With a family the
+    count is that family's book (and reporting customers when ``reporting_only``), so a screen scoped to
+    one family never shows another family's cases in its stage counts.
+    """
+    stmt = (
         select(CporCase.status, func.count())
+        .select_from(CporCase)
         .where(where_tenant(CporCase.tenant_id, user))
         .where(where_commercial_intelligence())
-        .group_by(CporCase.status)
-    ).all()
+    )
+    promotion_family = _plain_param(promotion_family, None)
+    if promotion_family is not None:
+        stmt = stmt.where(CporCase.promotion_type.in_(_family_types_or_400(promotion_family)))
+        if _plain_param(reporting_only, False) is True:
+            stmt = stmt.join(DimCustomer, DimCustomer.id == CporCase.customer_id).join(
+                CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id
+            ).where(*reporting_customer_clauses())
+    rows = session.execute(stmt.group_by(CporCase.status)).all()
     return {str(status): int(n) for status, n in rows}
+
+
+def _plain_param(value: Any, default: Any) -> Any:
+    """A query parameter's value when the endpoint is called as a plain function (tests, other endpoints).
+
+    FastAPI fills ``Query(...)`` defaults only for HTTP calls; a direct call that leaves the argument out
+    receives the ``Query`` marker itself, which must read as the default, never as a value.
+    """
+    return default if isinstance(value, fastapi_params.Param) else value
+
+
+def _family_types_or_400(family: str) -> tuple[str, ...]:
+    """The stored types of a promotion family; an unknown family is a 400, never an empty filter."""
+    try:
+        return promotion_family_types(family.strip())
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown promotion_family={family}; allowed={sorted(PROMOTION_FAMILIES)}",
+        ) from exc
+
+
+def _where_open_case(today: date) -> Any:
+    """Open for the planner: an open status, not replaced, and the window has not ended before today."""
+    return and_(
+        CporCase.status.in_(CPOR_OPEN_CASE_STATUSES),
+        CporCase.superseded_by_case_id.is_(None),
+        or_(CporCase.window_end.is_(None), CporCase.window_end >= today),
+    )
 
 
 def _test_data_count(session: Session, user: dict) -> int:
@@ -589,10 +642,16 @@ def _apply_case_filters(
     reporting_only: bool = False,
     official_promotion_types: bool = False,
     tenant_id: str = "default",
+    promotion_family: str | None = None,
+    open_only: bool = False,
+    today: date | None = None,
 ) -> Any:
     """The case-list filters, shared by the list and the exact-count endpoint so they cannot drift.
 
     ``stmt`` must already join ``DimCustomer`` (the ``q`` filter reads the customer name and code).
+    ``promotion_family`` keeps only that family's stored types (``promotion_type_vocab.PROMOTION_FAMILIES``);
+    an unknown family is a 400. ``open_only`` keeps open statuses, current (not replaced) cases whose
+    window has not ended before ``today`` (server date when not given).
     """
     mode = (test_data or "commercial").strip().lower()
     if mode not in {"commercial", "only", "all"}:
@@ -652,16 +711,21 @@ def _apply_case_filters(
             | (DimCustomer.code.ilike(needle))
             | (DimCustomer.name.ilike(needle))
         )
-    if reporting_only:
+    if _plain_param(reporting_only, False) is True:
         stmt = stmt.join(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id).where(
             *reporting_customer_clauses()
         )
-    if official_promotion_types:
-        names = promotion_types(tenant_id)
+    if _plain_param(official_promotion_types, False) is True:
+        names = tenant_promotion_types(tenant_id)
         if names:
             stmt = stmt.where(CporCase.promotion_type.in_(tuple(names)))
         else:
             stmt = stmt.where(CporCase.id == -1)
+    promotion_family = _plain_param(promotion_family, None)
+    if promotion_family is not None:
+        stmt = stmt.where(CporCase.promotion_type.in_(_family_types_or_400(promotion_family)))
+    if _plain_param(open_only, False) is True:
+        stmt = stmt.where(_where_open_case(today or date.today()))
 
     if evidence_basis:
         basis = evidence_basis.strip().lower()
@@ -715,6 +779,15 @@ def list_cases(
         default=False,
         description="When true, only this tenant's saved promotion types.",
     ),
+    promotion_family: str | None = Query(
+        default=None,
+        description="customer_sell_through | distributor_sell_out: only that family's promotion types. "
+        "With a family, status_counts is that family's book too.",
+    ),
+    open_only: bool = Query(
+        default=False,
+        description="When true, only open cases: draft/proposed/approved/active, not replaced, window not ended.",
+    ),
     user: dict = Depends(get_current_user),
 ):
     """List CPOR cases.
@@ -745,6 +818,8 @@ def list_cases(
             reporting_only=reporting_only,
             official_promotion_types=official_promotion_types,
             tenant_id=tenant_id_from_user(user),
+            promotion_family=promotion_family,
+            open_only=open_only,
         )
 
         paginate = page is not None and page_size is not None
@@ -763,7 +838,9 @@ def list_cases(
         basis_by = load_evidence_basis_by_case(session, cases)
         line_agg = _case_line_aggregates(session, [c.id for c in cases])
         claim_sale_by = _last_claim_sale_by_case_id(session, [c.id for c in cases])
-        status_counts = _status_counts(session, user)
+        status_counts = _status_counts(
+            session, user, promotion_family=promotion_family, reporting_only=reporting_only
+        )
         test_data_count = _test_data_count(session, user)
         review_queue_count = _review_queue_count(session, user)
 
@@ -832,6 +909,8 @@ def count_cases(
     q: str | None = Query(default=None),
     evidence_basis: str | None = Query(default=None),
     reporting_only: bool = Query(default=False),
+    promotion_family: str | None = Query(default=None, description="customer_sell_through | distributor_sell_out"),
+    open_only: bool = Query(default=False, description="Open cases only (same rule as GET /cases)"),
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Exact count of CURRENT cases (``superseded_by_case_id`` null) for the planner cards.
@@ -867,6 +946,8 @@ def count_cases(
             evidence_basis=evidence_basis,
             reporting_only=reporting_only,
             tenant_id=tenant_id_from_user(user),
+            promotion_family=promotion_family,
+            open_only=open_only,
         )
         if exclude_status:
             stmt = stmt.where(CporCase.status.notin_(exclude_status))
@@ -1667,6 +1748,9 @@ def transition_case(
             )
 
         drifts: list[dict] = []
+        end_reconciliation: dict | None = None
+        end_gap: str | None = None
+        end_reason: str | None = None
         now = datetime.now(timezone.utc)
         from_status = case.status
         new_status = target_status(action)
@@ -1729,6 +1813,29 @@ def transition_case(
             case.status = "active"
             drifts = _run_drift_check(session, case, actor, user)
         elif action == "end":
+            from app.services.cpor import promotion_type_vocab as vocab
+            from app.services.cpor.close_for_review import reconcile_case_window, sales_window_gap
+
+            reason = (body.comment or "").strip()
+            if vocab.promotion_family(case.promotion_type) == vocab.CUSTOMER_SELL_THROUGH:
+                end_reconciliation = reconcile_case_window(session, case)
+                gap = sales_window_gap(end_reconciliation)
+                # Warren, 27 Nov: ending before sales cover the window is allowed.
+                # The reason is required, the actor is the event actor, and the gap
+                # flag stays on this event for settlement.
+                if gap and not reason:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "code": "end_reason_required",
+                            "message": "Ending this promotion before sales cover the window requires a reason.",
+                            "flag": gap,
+                        },
+                    )
+                if gap:
+                    case.last_comment = reason
+                    end_gap = gap
+                    end_reason = reason
             case.status = "ended"
         elif action == "settle":
             if settle_fx_blocked(case):
@@ -1775,6 +1882,16 @@ def transition_case(
                 "needs_reapproval": bool(case.needs_reapproval),
                 "fx_rate": body.fx_rate,
                 "roe_snapshot": float(case.roe_snapshot) if case.roe_snapshot is not None else None,
+                **(
+                    {"trigger": "manual", "reconciliation": end_reconciliation}
+                    if end_reconciliation
+                    else {}
+                ),
+                **(
+                    {"sales_window_gap": end_gap, "reason": end_reason, "actor": actor}
+                    if end_gap
+                    else {}
+                ),
             },
             user=user,
         )
@@ -2153,8 +2270,20 @@ def cpor_aged_stock_action(
 
 
 @router.get("/meta/promotion-types")
-def promotion_types_meta(user: dict = Depends(get_current_user)):
-    return {"promotion_types": list(promotion_types(tenant_id_from_user(user)))}
+def promotion_types(
+    family: str | None = Query(
+        default=None,
+        description="customer_sell_through | distributor_sell_out: only that family's types, in vocabulary "
+        "order (the first is the default for a new case).",
+    ),
+    user: dict = Depends(get_current_user),
+):
+    """Unfiltered list is the tenant's saved types (Warren, 27 Nov). A family returns that family's stored names."""
+    family = _plain_param(family, None)
+    if family is None:
+        tenant_id = tenant_id_from_user(user) if isinstance(user, dict) else "default"
+        return {"promotion_types": list(tenant_promotion_types(tenant_id))}
+    return {"promotion_types": list(_family_types_or_400(family)), "family": family.strip()}
 
 
 # --- settlement (U5) ---------------------------------------------------------

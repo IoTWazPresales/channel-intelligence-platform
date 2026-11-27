@@ -1343,15 +1343,18 @@ def vat_rate_by_country(tenant_id: str = "default") -> dict[str, float]:
 
 
 def vat_rate_for_data(tenant_id: str, country_code: str | None) -> float | None:
-    """VAT for data that may name its country.
+    """Country rate, else the tenant rate. The caller applies a rate on the row first.
 
-    A row with a country takes the rate saved for that country, and only that rate: another
-    country's rate is never borrowed. A row without a country takes the tenant's own rate.
+    Warren, 27 Nov: VAT comes from the row, else the data's country, else the tenant rate.
+    A saved rate for the named country is used. A named country with no saved rate falls
+    through to the tenant rate. Another country's rate is never borrowed.
     None means not configured (``vat_rate_not_configured``).
     """
     country = (country_code or "").strip().upper()
     if country:
-        return vat_rate_by_country(tenant_id).get(country)
+        country_rate = vat_rate_by_country(tenant_id).get(country)
+        if country_rate is not None:
+            return country_rate
     return configured_vat_rate_pct(tenant_id)
 
 

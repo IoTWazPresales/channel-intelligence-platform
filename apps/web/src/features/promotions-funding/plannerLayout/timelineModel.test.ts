@@ -4,13 +4,45 @@ import {
   barGeometry,
   buildTimeline,
   defaultTimelineViewWindow,
+  formatPlannerWindowLabel,
+  gregorianQuarterLabel,
+  isoWeek,
   monthTicks,
   monthTicksForAxis,
   orderByCustomer,
+  plannerVisibleWindow,
   scrollLeftForViewWindow,
+  shiftPlannerVisibleWindow,
   statusLane,
+  weekStartIso,
   weekTicks,
 } from './timelineModel';
+
+// Step 2 (N-0122): the mock-up's week header reads "W45 / Nov 2" and marks the current week as a column.
+describe('ISO weeks for the week header', () => {
+  it('numbers weeks per ISO 8601, across year ends', () => {
+    expect(isoWeek('2026-11-02')).toBe(45);
+    expect(isoWeek('2026-11-16')).toBe(47);
+    expect(isoWeek('2026-11-22')).toBe(47); // Sunday stays in its Monday's week
+    expect(isoWeek('2026-12-28')).toBe(53); // 2026 has 53 ISO weeks
+    expect(isoWeek('2027-01-04')).toBe(1);
+    expect(isoWeek('2021-01-01')).toBe(53); // a Friday belongs to the previous year's last week
+  });
+  it('finds the Monday on or before a date', () => {
+    expect(weekStartIso('2026-11-19')).toBe('2026-11-16');
+    expect(weekStartIso('2026-11-16')).toBe('2026-11-16');
+    expect(weekStartIso('2026-11-22')).toBe('2026-11-16');
+    expect(weekStartIso('2027-01-01')).toBe('2026-12-28');
+  });
+  it('week ticks carry the ISO week number', () => {
+    expect(weekTicks('2026-11-01', '2026-11-30').map((t) => t.week)).toEqual([45, 46, 47, 48, 49]);
+  });
+  it('the open view axis starts no earlier than the earliest shown case or today (B5)', () => {
+    const m = buildTimeline([row(1, '2026-12-01', '2026-12-20'), row(2, '2027-01-05', '2027-01-30')], '2026-11-19');
+    expect(m.start).toBe('2026-11-01');
+    expect(m.end).toBe('2027-01-31');
+  });
+});
 
 const row = (id: number, s: string | null, e: string | null, status = 'approved') => ({
   id,
@@ -126,5 +158,36 @@ describe('orderByCustomer', () => {
     const ordered = orderByCustomer(t.bars);
     expect(ordered.map((o) => o.bar.id)).toEqual([2, 1]);
     expect(ordered[1].firstOfCustomer).toBe(true);
+  });
+});
+
+describe('planner visible window (mock-up period navigator)', () => {
+  it('is the three months that start with the anchor month', () => {
+    expect(plannerVisibleWindow('2026-11-19')).toEqual({ start: '2026-11-01', end: '2027-01-31' });
+    expect(formatPlannerWindowLabel('2026-11-01', '2027-01-31')).toBe('Nov – Jan 2027');
+  });
+  it('steps a whole block in either direction', () => {
+    expect(shiftPlannerVisibleWindow('2026-11-01', -1)).toEqual({ start: '2026-08-01', end: '2026-10-31' });
+    expect(shiftPlannerVisibleWindow('2026-11-01', 1)).toEqual({ start: '2027-02-01', end: '2027-04-30' });
+  });
+  it('names a gregorian fiscal quarter only when the block is that quarter', () => {
+    // Fiscal year starting February: Nov–Jan is Q4. Calendar year (January) does not label Nov–Jan as one quarter.
+    expect(gregorianQuarterLabel('2026-11-01', '2027-01-31', 2)).toBe('Q4');
+    expect(gregorianQuarterLabel('2026-11-01', '2027-01-31', 1)).toBeNull();
+    expect(gregorianQuarterLabel('2026-10-01', '2026-12-31', 1)).toBe('Q4');
+    expect(gregorianQuarterLabel('2026-11-01', '2027-01-31', 0)).toBeNull();
+  });
+  it('draws only the bars that meet the navigator block, clipping a bar that crosses the edge', () => {
+    const t = buildTimeline(
+      [row(1, '2026-10-01', '2026-10-10'), row(2, '2026-11-20', '2026-12-05'), row(3, null, null)],
+      '2026-11-19',
+      { start: '2026-11-01', end: '2027-01-31' },
+    );
+    expect(t.start).toBe('2026-11-01');
+    expect(t.end).toBe('2027-01-31');
+    expect(t.bars.map((b) => b.id)).toEqual([2]);
+    expect(t.undated).toBe(1);
+    expect(t.bars[0].start).toBe('2026-11-20');
+    expect(t.bars[0].leftPct).toBeGreaterThan(0);
   });
 });

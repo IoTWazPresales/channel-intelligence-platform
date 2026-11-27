@@ -8,6 +8,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  TextField,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -44,7 +45,7 @@ type ClaimImportResult = {
 const LIFECYCLE_COPY: Record<'end' | 'cancel', { title: string; body: string; confirm: string }> = {
   end: {
     title: 'End this case?',
-    body: 'The case moves from active to ended. From ended the only next steps are settle (on this desk) or cancel.',
+    body: 'Ending before sales cover the window is allowed. A reason is required, and settlement keeps the gap. From ended the next steps are settle (on this desk) or cancel.',
     confirm: 'End case',
   },
   cancel: {
@@ -59,6 +60,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
   const [settleOpen, setSettleOpen] = useState(false);
   const [supersedeOpen, setSupersedeOpen] = useState(false);
   const [lifecycleConfirm, setLifecycleConfirm] = useState<'end' | 'cancel' | null>(null);
+  const [endReason, setEndReason] = useState('');
   const [includeOow, setIncludeOow] = useState(false);
 
   const detailQ = useQuery({
@@ -90,10 +92,14 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
   // N-0044 (BACKLOG-202): the post-live transitions and claim/intelligence controls that only the
   // retired CporCaseWorkspace had. Same endpoints; end/cancel go through a confirm dialog.
   const lifecycle = useMutation({
-    mutationFn: (action: 'end' | 'cancel') =>
-      apiPost(`/api/v1/cpor/cases/${caseId}/transition`, { action }),
+    mutationFn: (payload: { action: 'end' | 'cancel'; comment?: string }) =>
+      apiPost(`/api/v1/cpor/cases/${caseId}/transition`, {
+        action: payload.action,
+        ...(payload.comment ? { comment: payload.comment } : {}),
+      }),
     onSuccess: async () => {
       setLifecycleConfirm(null);
+      setEndReason('');
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
@@ -233,7 +239,10 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
         onSupersede={() => setSupersedeOpen(true)}
         onRestoreSupersession={() => restoreSupersession.mutate()}
         restoringSupersession={restoreSupersession.isPending}
-        onLifecycleAction={(a) => setLifecycleConfirm(a)}
+        onLifecycleAction={(a) => {
+          setEndReason('');
+          setLifecycleConfirm(a);
+        }}
         transitioning={lifecycle.isPending}
         plannerHref={`/promotions?plan=${caseId}`}
         includeOutOfWindow={includeOow}
@@ -281,9 +290,21 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
               {LIFECYCLE_COPY[lifecycleConfirm].title}
             </DialogTitle>
             <DialogContent>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ mb: lifecycleConfirm === 'end' ? 1.5 : 0 }}>
                 {view.caseCode} · {view.customerName}. {LIFECYCLE_COPY[lifecycleConfirm].body}
               </Typography>
+              {lifecycleConfirm === 'end' ? (
+                <TextField
+                  label="Reason"
+                  value={endReason}
+                  onChange={(e) => setEndReason(e.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  required
+                  inputProps={{ 'data-testid': 'settlement-end-reason' }}
+                />
+              ) : null}
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setLifecycleConfirm(null)} disabled={lifecycle.isPending}>
@@ -292,8 +313,14 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
               <Button
                 variant="contained"
                 color={lifecycleConfirm === 'cancel' ? 'warning' : 'primary'}
-                disabled={lifecycle.isPending}
-                onClick={() => lifecycle.mutate(lifecycleConfirm)}
+                disabled={lifecycle.isPending || (lifecycleConfirm === 'end' && !endReason.trim())}
+                onClick={() =>
+                  lifecycle.mutate(
+                    lifecycleConfirm === 'end'
+                      ? { action: 'end', comment: endReason.trim() }
+                      : { action: 'cancel' },
+                  )
+                }
                 data-testid="settlement-lifecycle-confirm"
               >
                 {lifecycle.isPending ? 'Saving…' : LIFECYCLE_COPY[lifecycleConfirm].confirm}

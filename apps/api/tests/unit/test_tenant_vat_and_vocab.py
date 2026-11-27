@@ -27,6 +27,17 @@ def test_unset_vat_rate_is_none(tenant_dir):
     assert snap["vat_rate_not_configured"] is True
 
 
+def test_named_country_without_a_rate_uses_the_tenant_rate(tenant_dir):
+    # Warren 27 Nov: VAT comes from the row, else the data's country, else the tenant rate.
+    profile.save_tenant_profile_overrides(
+        "acme",
+        {"vat_rate_pct": "0.2", "vat_rate_by_country": {"ZA": "0.15"}},
+    )
+    assert profile.vat_rate_for_data("acme", "ZA") == pytest.approx(0.15)
+    assert profile.vat_rate_for_data("acme", "DE") == pytest.approx(0.2)
+    assert profile.vat_rate_for_data("acme", None) == pytest.approx(0.2)
+
+
 def test_saved_vat_rate_is_returned(tenant_dir):
     profile.save_tenant_profile_overrides("acme", {"vat_rate_pct": "0.2"})
     assert profile.vat_rate_pct("acme") == pytest.approx(0.2)

@@ -16,6 +16,7 @@ from app.models.cpor import CporCase, CporCaseEvent
 from app.models.cpor_payment import CporPaymentEvidence, ImportCporPaymentStagingLine
 from app.services.commercial_tenant_profile import tenant_currency_code
 from app.services.cpor.lifecycle import workflow_status_for
+from app.services.cpor.promotion_type_vocab import require_channel
 
 
 def _default_promo(raw: str | None) -> str:
@@ -59,7 +60,7 @@ def _ensure_shell_case(
         window_end=we,
         status="draft",
         currency_code=currency_code,
-        channel="reseller",
+        channel=require_channel(tenant_id, None),
         origin="payment_evidence",
         notes=(
             "Shell case created from payment/CN evidence import. "

@@ -38,6 +38,13 @@ logger = logging.getLogger(__name__)
 
 # ``roe_snapshot`` orientation (NS-1a): case currency per 1 USD, the CPOR compute currency.
 BASE_CURRENCY = "USD"
+
+
+class _CurrencyOmitted:
+    """Caller did not pass a currency, so the default tenant's own setting applies."""
+
+
+_CURRENCY_OMITTED = _CurrencyOmitted()
 SOURCE_FRANKFURTER = "frankfurter.ecb"
 SOURCE_LAST_KNOWN = "last_known"
 SOURCE_OPERATOR = "operator"
@@ -96,10 +103,16 @@ class RateQuote:
         }
 
 
-def quote_currency(currency: str | None = None) -> str | None:
-    """The given (case) currency, else the default tenant's ``currency_code``; None when unset."""
+def quote_currency(currency: str | None | _CurrencyOmitted = _CURRENCY_OMITTED) -> str | None:
+    """The caller's currency, or the default tenant's when the caller omitted one.
+
+    An explicit None means that caller already resolved a tenant and it is unset.
+    It does not borrow the default tenant's currency.
+    """
+    if isinstance(currency, _CurrencyOmitted):
+        return tenant_currency_code()
     ccy = (currency or "").strip().upper()
-    return ccy or tenant_currency_code()
+    return ccy or None
 
 
 def quote_pair(currency: str) -> str:
@@ -164,7 +177,7 @@ def _positive_rate(value: Any) -> float | None:
 
 
 def load_rate_on_or_before(
-    session: Session, on_date: date, *, currency: str | None = None
+    session: Session, on_date: date, *, currency: str | None | _CurrencyOmitted = _CURRENCY_OMITTED
 ) -> FxDailyRate | None:
     ccy = quote_currency(currency)
     if ccy is None:
@@ -181,7 +194,7 @@ def load_rate_on_or_before(
 
 
 def load_rate_on_date(
-    session: Session, on_date: date, *, currency: str | None = None
+    session: Session, on_date: date, *, currency: str | None | _CurrencyOmitted = _CURRENCY_OMITTED
 ) -> FxDailyRate | None:
     ccy = quote_currency(currency)
     if ccy is None:
@@ -202,7 +215,7 @@ def upsert_daily_rate(
     source: str,
     is_fallback: bool,
     fetched_at: datetime | None = None,
-    currency: str | None = None,
+    currency: str | None | _CurrencyOmitted = _CURRENCY_OMITTED,
 ) -> FxDailyRate:
     ccy = quote_currency(currency)
     if ccy is None:
@@ -231,7 +244,7 @@ def upsert_daily_rate(
 
 
 def ensure_rate_for_date(
-    session: Session, on_date: date, *, currency: str | None = None
+    session: Session, on_date: date, *, currency: str | None | _CurrencyOmitted = _CURRENCY_OMITTED
 ) -> RateQuote:
     """Fetch the ECB rate for ``on_date``. Persist when the table is writable.
 
@@ -294,7 +307,9 @@ def ensure_rate_for_date(
         )
 
 
-def ensure_today_rate(session: Session, *, currency: str | None = None) -> RateQuote:
+def ensure_today_rate(
+    session: Session, *, currency: str | None | _CurrencyOmitted = _CURRENCY_OMITTED
+) -> RateQuote:
     return ensure_rate_for_date(session, _utc_today(), currency=currency)
 
 
@@ -347,7 +362,7 @@ def rate_for_case_date(
     on_date: date,
     *,
     today: date | None = None,
-    currency: str | None = None,
+    currency: str | None | _CurrencyOmitted = _CURRENCY_OMITTED,
 ) -> RateQuote:
     """The stored daily rate for ``on_date``. Fetches and stores it only when none is stored.
 
