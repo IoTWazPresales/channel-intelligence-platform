@@ -3,7 +3,7 @@
 - **Status:** Code written in the cloud. Not merged, not deployed, no visual gate.
 - **Branch:** `fix/theme-shared-components-20261126` (from `origin/feat/integrate-20261103` at `643b2892`)
 - **Worktree:** cloud checkout
-- **PR:** `[CODE ONLY] U5` against `feat/integrate-20261103` (number is on the PR; this file is committed with the code)
+- **PR:** https://github.com/IoTWazPresales/channel-intelligence-platform/pull/133 — `[CODE ONLY] U5` against `feat/integrate-20261103`
 - **Commits:** the U5 commit on that branch
 
 ## Checklist
