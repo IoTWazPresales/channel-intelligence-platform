@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PromoPlanBuilderPanel } from '@/app/(app)/promotions/PromoPlanBuilderPanel';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { PageHeader } from '@/components/PageHeader';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { AgedStockPanel } from '@/features/promotions-funding/AgedStockPanel';
@@ -549,9 +550,7 @@ function PlannerList({
             justifyContent="space-between"
           >
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="h5" component="h1" sx={{ fontWeight: 600, lineHeight: 1.25 }}>
-                Promotion planner
-              </Typography>
+              <PageHeader crumbs={[]} title="Promotion planner" />
               <Typography variant="body2" color="text.secondary" data-testid="planner-subtitle">
                 Plan, approve and watch promotions by customer, from first draft to settlement.
               </Typography>

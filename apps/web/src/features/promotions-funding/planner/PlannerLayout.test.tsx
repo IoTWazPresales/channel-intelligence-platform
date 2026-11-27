@@ -107,7 +107,10 @@ describe('planner layout (mock-up)', () => {
   it('has the page title with a subtitle and the create-promotion-plan action', async () => {
     renderPlanner();
     const head = await screen.findByTestId('planner-header');
-    expect(within(head).getByRole('heading', { name: 'Promotion planner' })).toBeInTheDocument();
+    // Step 4b left this title on a local h5. The page title is PageHeader's theme h1.
+    // Warren 26 Nov: the element is an h1.
+    const title = within(head).getByRole('heading', { level: 1, name: 'Promotion planner' });
+    expect(title).toHaveClass('MuiTypography-h1');
     expect(within(head).getByTestId('planner-subtitle').textContent?.length).toBeGreaterThan(10);
     expect(within(head).getByRole('button', { name: /Create promotion plan/i })).toBeInTheDocument();
   });

@@ -36,6 +36,7 @@ import { DiscoveryLens } from '@/features/market-listings/DiscoveryLens';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
 import { ListingCaptureHealth } from '@/features/market-listings/ListingCaptureHealth';
 import { PriceMatrixLens } from '@/features/market-listings/PriceMatrixLens';
+import { SiteConfirmBar } from '@/features/market-listings/SiteConfirmBar';
 import { customersListUrl } from '@/features/market-listings/listingCustomerScope';
 import { type IntelligenceRow, useListingIntelligence } from '@/features/market-listings/listingIntelligence';
 import { ListingLinksLens } from '@/features/market-listings/ListingLinksLens';
@@ -987,7 +988,12 @@ export function MarketSurface() {
             </HeadlineStrip>
             {/* Monitored listings: the price matrix sits under the tiles and above the listings table
                 (order 1) and the chart row (order 2). Price history keeps the page without it. */}
-            {lens === 'listings' ? <PriceMatrixLens /> : null}
+            {lens === 'listings' ? (
+              <>
+                <SiteConfirmBar />
+                <PriceMatrixLens />
+              </>
+            ) : null}
 
             <Box
               sx={{

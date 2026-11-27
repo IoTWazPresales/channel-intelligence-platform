@@ -5,8 +5,8 @@ import { Alert, Button, Stack, Typography } from '@mui/material';
 import { discoveryError, useDecideSiteCandidate, useSiteCandidates } from './discoveryApi';
 
 /**
- * Compact confirm/reject for proposed sites. Not mounted: MarketSurface is owned
- * by another unit. See the step 3 tracker for the mount point.
+ * Compact confirm/reject for proposed sites. Mounted on Monitored listings only,
+ * immediately above the price matrix. Step 3 tracker.
  */
 export function SiteConfirmBar() {
   const queue = useSiteCandidates();

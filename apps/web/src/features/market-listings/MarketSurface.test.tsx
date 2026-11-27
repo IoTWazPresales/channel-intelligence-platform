@@ -44,6 +44,7 @@ const apiState = vi.hoisted(() => ({
   intelUnavailable: false,
   intelCalls: 0,
   listingUrls: [] as string[],
+  proposedSites: [] as { id: number; customer_name: string; domain: string }[],
   /** When set, the listings endpoint serves these pages (page=1, page=2, ...). */
   listingPages: null as Record<string, unknown>[][] | null,
 }));
@@ -96,7 +97,7 @@ vi.mock('@/lib/api', () => ({
       };
     }
     if (url.includes('/customers')) return { items: [] };
-    if (url.includes('/site-candidates')) return { items: [] };
+    if (url.includes('/site-candidates')) return { items: apiState.proposedSites };
     if (url.includes('/discovery/capabilities')) {
       return { live_fetch: false, browser_available: false, providers: [], settings: { missing: [] } };
     }
@@ -122,6 +123,7 @@ function resetState() {
   apiState.intelCalls = 0;
   apiState.listingUrls = [];
   apiState.listingPages = null;
+  apiState.proposedSites = [];
 }
 
 describe('MarketSurface', () => {
@@ -171,6 +173,42 @@ describe('MarketSurface', () => {
     // The matrix has no flex order, so it renders before the order-1 listings table and order-2 charts.
     expect(matrix.parentElement).toBe(lens);
     expect(matrix.style.order).toBe('');
+  });
+
+  it('mounts the site confirm bar above the price matrix on Monitored listings only', async () => {
+    apiState.proposedSites = [{ id: 7, customer_name: 'site', domain: 'shop.acme.test' }];
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const listings = renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    const bar = await screen.findByTestId('site-confirm-bar');
+    const matrix = await screen.findByTestId('price-matrix-lens');
+    const lens = screen.getByTestId('market-listings-lens');
+    expect(lens).toContainElement(bar);
+    expect(lens).toContainElement(matrix);
+    expect(Boolean(bar.compareDocumentPosition(matrix) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    listings.unmount();
+
+    nav.search = 'tab=observations';
+    const history = renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('market-listings-lens');
+    expect(screen.queryByTestId('site-confirm-bar')).toBeNull();
+    history.unmount();
+
+    nav.search = 'tab=proposals';
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('market-proposals-lens');
+    expect(screen.queryByTestId('site-confirm-bar')).toBeNull();
   });
 
   it('shows price history lens with last-check caption, not capture health', async () => {
