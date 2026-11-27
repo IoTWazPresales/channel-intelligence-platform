@@ -37,7 +37,13 @@ def test_apply_case_filters_reporting_only_uses_shared_definition():
     assert "merged_into_customer_id" in sql
 
 
-def test_apply_case_filters_official_promotion_types():
+def test_apply_case_filters_official_promotion_types(monkeypatch):
+    # The filter uses the tenant's saved names. These two are this test's config, not a code list.
+    monkeypatch.setattr(
+        cpor_cases,
+        "promotion_types",
+        lambda tenant_id="default": ("Sell out PP", "Sell-Through PP"),
+    )
     stmt = select(CporCase, DimCustomer).join(DimCustomer, DimCustomer.id == CporCase.customer_id)
     out = cpor_cases._apply_case_filters(
         None,
@@ -56,4 +62,5 @@ def test_apply_case_filters_official_promotion_types():
         official_promotion_types=True,
     )
     sql = _sql(out)
-    assert "sell out pp" in sql or "promotion_type" in sql
+    assert "sell out pp" in sql
+    assert "sell-through pp" in sql

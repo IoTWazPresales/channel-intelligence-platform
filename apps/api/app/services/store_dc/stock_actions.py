@@ -20,7 +20,7 @@ from app.models.store_dc import SiteCandidate
 from app.services.cpor import planner_sellthrough
 from app.services.cpor.customer_soh_check import customer_soh_check
 from app.services.cpor.promo_plan_builder import create_case_from_promo_draft
-from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
+from app.services.cpor.promotion_type_vocab import stock_promote_type
 from app.services.store_dc.read_model import build_customer_view, build_lead_index
 from app.services.store_dc.rules import (
     SUGGESTIONS,
@@ -30,7 +30,6 @@ from app.services.store_dc.rules import (
 )
 
 OPEN_CASE_STATUSES = ("draft", "proposed", "approved", "active")
-PROMOTE_TYPE = "Stock PP (In-Direct)"
 CASE_NAMES = {
     "promote": "Aged stock promotion",
     "move": "Move aged stock",
@@ -484,7 +483,8 @@ def execute_aged_stock_action(
 ) -> dict[str, Any]:
     if action not in SUGGESTIONS:
         raise ValueError(f"unknown_stock_action={action}")
-    if PROMOTE_TYPE not in CPOR_PROMOTION_TYPE_SET:
+    promote_type = stock_promote_type(tenant_id)
+    if not promote_type:
         raise ValueError("stock_promotion_type_missing")
     view = build_customer_view(session, tenant_id, int(customer_id))
     line = _matching_line(
@@ -533,7 +533,7 @@ def execute_aged_stock_action(
     created = create_case_from_promo_draft(
         session,
         customer_id=int(customer_id),
-        promotion_type=PROMOTE_TYPE,
+        promotion_type=promote_type,
         tenant_id=tenant_id,
         period_label=period,
         actor=actor,
@@ -670,6 +670,9 @@ def auto_propose_from_intelligence(
     The board list stops at 200 rows. This read does not: a later product or
     customer must still be proposed.
     """
+    promote_type = stock_promote_type(tenant_id)
+    if not promote_type:
+        raise ValueError("stock_promotion_type_missing")
     period = period_label or current_period_label()
     lines, _truncated = _collect_aged_stock(
         session,
@@ -694,7 +697,7 @@ def auto_propose_from_intelligence(
             case = create_case_from_promo_draft(
                 session,
                 customer_id=cid,
-                promotion_type=PROMOTE_TYPE,
+                promotion_type=promote_type,
                 tenant_id=tenant_id,
                 period_label=period,
                 actor=actor,

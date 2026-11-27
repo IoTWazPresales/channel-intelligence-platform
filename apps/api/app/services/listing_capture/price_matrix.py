@@ -41,7 +41,7 @@ from app.services.commercial_tenant_profile import (
 )
 from app.services.commercial_planner.lineup_case_status import ACCEPTED_OR_LATER_STATUSES
 from app.services.cpor.planner_sellthrough import srp_from_price
-from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
+from app.services.cpor.promotion_type_vocab import promotion_types
 from app.services.customer_reporting import reporting_customer_ids_select
 from app.services.listing_capture.cpor_activation import _band_kind
 from app.services.listing_capture.stock_scope import TIER_ACTIVE, TIER_HISTORICAL, product_tiers
@@ -288,9 +288,10 @@ def _srp_by_cell(
 
 
 def _active_promos(
-    session: Session, *, as_of: date, pairs: set[tuple[int, int]]
+    session: Session, *, tenant_id: str, as_of: date, pairs: set[tuple[int, int]]
 ) -> dict[tuple[int, int], dict[str, Any]]:
-    if not pairs:
+    names = promotion_types(tenant_id)
+    if not pairs or not names:
         return {}
     customer_ids = {c for c, _ in pairs}
     product_ids = {p for _, p in pairs}
@@ -303,7 +304,7 @@ def _active_promos(
             CporCase.window_start <= as_of,
             CporCase.window_end >= as_of,
             CporCase.superseded_by_case_id.is_(None),
-            CporCase.promotion_type.in_(tuple(CPOR_PROMOTION_TYPE_SET)),
+            CporCase.promotion_type.in_(tuple(names)),
         )
     ).all()
     out: dict[tuple[int, int], dict[str, Any]] = {}
@@ -401,7 +402,7 @@ def build_price_matrix(
     any_srp = bool(srp_by_cell)
     tolerance = below_srp_tolerance(tenant_id)
     promo_pairs = {(int(l.customer_id), int(l.product_id)) for l in by_product_customer.values()}
-    promos = _active_promos(session, as_of=as_of, pairs=promo_pairs)
+    promos = _active_promos(session, tenant_id=tenant_id, as_of=as_of, pairs=promo_pairs)
 
     products = _product_labels(session, tenant_id, product_ids)
     customers = _customer_labels(session, customer_ids)

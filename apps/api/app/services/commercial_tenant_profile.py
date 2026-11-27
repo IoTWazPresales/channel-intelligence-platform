@@ -1,10 +1,11 @@
 """Commercial tenant profile — TENANT-VARIABLE commercial policy.
 
-Defaults encode the current tenant (ASUS SA answers from Q-001/002/009).
-Other tenants / onboarding must override these — never treat ASUS values as
-application law. BACKLOG-096 (P6): per-tenant overrides persist as JSON files
-under ``{local_storage_path}/tenant_profiles/{tenant_id}.json`` — no migration,
-no new table. `profile_snapshot()` merges the file over the module defaults.
+Some keys still have a module default until that key is saved on the tenant
+profile. VAT, promotion types, channels and the stock-promote type do not:
+unset means not configured. BACKLOG-096 (P6): per-tenant overrides persist as
+JSON files under ``{local_storage_path}/tenant_profiles/{tenant_id}.json`` —
+no migration, no new table. `profile_snapshot()` merges the file over the
+module defaults for the keys that still have one.
 """
 
 from __future__ import annotations
@@ -165,6 +166,10 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "business_calendar",
     "vat_rate_pct",
     "sales_value_vat_basis",
+    # CPOR commercial names. Empty means not configured: no built-in list.
+    "cpor_promotion_types",
+    "cpor_channels",
+    "cpor_stock_promote_type",
     "open_book",
     # On the water: reads forwarder and origin hub out of a shipment's Shipping Method (named groups
     # forwarder and, optionally, hub). Empty means the default in services/imports/shipment_voyage.py.
@@ -180,8 +185,12 @@ DEFAULT_WEEK_CALENDAR = "monday_sunday"
 
 # Warren 2026-10-19: sales value on sell-through screens is units x the reported sell price,
 # shown excluding or including VAT (screens can switch). Rows carry the basis the customer reports in.
-DEFAULT_VAT_RATE_PCT = 0.15
+# Opus R-05: the VAT rate has no built-in value. Unset is vat_rate_not_configured.
 DEFAULT_SALES_VALUE_VAT_BASIS = "ex_vat"
+
+# Bounds on a saved label list (promotion types, channels). A size cap, not a commercial rate.
+_LABEL_LIST_MAX_ITEMS = 40
+_LABEL_LIST_MAX_CHARS = 80
 
 # N-0110: customer stock gap highlight, absolute units (Warren 2026-10-12). Editable.
 DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS = 1.0
@@ -811,6 +820,32 @@ def on_the_water_overrides(tenant_id: str = "default") -> dict[str, Any]:
     return load_tenant_profile_overrides(tenant_id).get("on_the_water") or {}
 
 
+def _normalize_label_list(value: object, *, strict: bool, key: str) -> list[str] | None:
+    """A saved list of commercial names. Loose load drops an unusable value; strict save refuses it."""
+    if not isinstance(value, list):
+        if strict:
+            raise ValueError(f"{key}: a list of names is required")
+        return None
+    out: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            if strict:
+                raise ValueError(f"{key}: each name must be text")
+            continue
+        name = item.strip()
+        if not name or len(name) > _LABEL_LIST_MAX_CHARS or any(ord(ch) < 32 for ch in name):
+            if strict:
+                raise ValueError(f"{key}: each name must be 1 to {_LABEL_LIST_MAX_CHARS} characters")
+            continue
+        if name not in out:
+            out.append(name)
+    if len(out) > _LABEL_LIST_MAX_ITEMS:
+        if strict:
+            raise ValueError(f"{key}: at most {_LABEL_LIST_MAX_ITEMS} names")
+        out = out[:_LABEL_LIST_MAX_ITEMS]
+    return out or None
+
+
 def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
     """Read persisted overrides for ``tenant_id``. Missing/unreadable file → ``{}`` (FLAG != BLOCK)."""
     path = _tenant_profile_override_path(tenant_id)
@@ -864,6 +899,15 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
             except ValueError:
                 continue  # an unusable stored pattern reads as the default (FLAG != BLOCK)
             out[key] = str(value).strip()
+            continue
+        if key in ("cpor_promotion_types", "cpor_channels"):
+            labels = _normalize_label_list(value, strict=False, key=key)
+            if labels:
+                out[key] = labels
+            continue
+        if key == "cpor_stock_promote_type":
+            if isinstance(value, str) and value.strip():
+                out[key] = value.strip()
             continue
         text = str(value).strip()
         if text:
@@ -940,6 +984,29 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
             if not (0 <= rate < 1):
                 raise ValueError("vat_rate_pct: must be between 0 and 1 (0.15 for 15%)")
             clean[key] = rate
+            continue
+        if key in ("cpor_promotion_types", "cpor_channels"):
+            if raw is None or raw == "" or raw == []:
+                continue
+            labels = _normalize_label_list(raw, strict=True, key=key)
+            if labels:
+                clean[key] = labels
+            continue
+        if key == "cpor_stock_promote_type":
+            if raw is None or str(raw).strip() == "":
+                continue
+            name = str(raw).strip()
+            if len(name) > _LABEL_LIST_MAX_CHARS or any(ord(ch) < 32 for ch in name):
+                raise ValueError(
+                    "cpor_stock_promote_type: a name of 1 to "
+                    f"{_LABEL_LIST_MAX_CHARS} characters is required"
+                )
+            types = clean.get("cpor_promotion_types")
+            if not isinstance(types, list):
+                types = existing.get("cpor_promotion_types")
+            if isinstance(types, list) and types and name not in types:
+                raise ValueError("cpor_stock_promote_type: must be one of cpor_promotion_types")
+            clean[key] = name
             continue
         if key == "woc_min_velocity_days":
             if raw is None or str(raw).strip() == "":
@@ -1042,7 +1109,11 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "below_srp_tolerance": below_srp_tolerance(tenant_id),
         "week_calendar": week_calendar(tenant_id),
         "business_calendar": business_calendar_config(tenant_id),
-        "vat_rate_pct": vat_rate_pct(tenant_id),
+        "vat_rate_pct": configured_vat_rate_pct(tenant_id),
+        "vat_rate_not_configured": configured_vat_rate_pct(tenant_id) is None,
+        "cpor_promotion_types": list(cpor_promotion_types(tenant_id)),
+        "cpor_channels": list(cpor_channels(tenant_id)),
+        "cpor_stock_promote_type": cpor_stock_promote_type(tenant_id),
         "sales_value_vat_basis": sales_value_vat_basis(tenant_id),
         "reporting_timezone": REPORTING_TIMEZONE,
         "open_book": {
@@ -1099,13 +1170,13 @@ def business_calendar_config(tenant_id: str = "default") -> dict[str, Any]:
     return normalize_calendar_config(load_tenant_profile_overrides(tenant_id).get("business_calendar"), strict=False)
 
 
-def vat_rate_pct(tenant_id: str = "default") -> float:
-    raw = load_tenant_profile_overrides(tenant_id).get("vat_rate_pct", DEFAULT_VAT_RATE_PCT)
-    try:
-        rate = float(str(raw).strip())
-    except (TypeError, ValueError):
-        return DEFAULT_VAT_RATE_PCT
-    return rate if 0 <= rate < 1 else DEFAULT_VAT_RATE_PCT
+def vat_rate_pct(tenant_id: str = "default") -> float | None:
+    """The tenant's VAT rate, or None when it is not set. No implied rate.
+
+    Same value as ``configured_vat_rate_pct``. Callers that need a number and find None
+    use the existing ``vat_rate_not_configured`` flag instead of a guessed rate.
+    """
+    return configured_vat_rate_pct(tenant_id)
 
 
 def configured_vat_rate_pct(tenant_id: str = "default") -> float | None:
@@ -1121,6 +1192,37 @@ def configured_vat_rate_pct(tenant_id: str = "default") -> float | None:
     except (TypeError, ValueError):
         return None
     return rate if 0 <= rate < 1 else None
+
+
+def cpor_promotion_types(tenant_id: str = "default") -> tuple[str, ...]:
+    """This tenant's CPOR promotion types, in saved order. Empty when not configured."""
+    raw = load_tenant_profile_overrides(tenant_id).get("cpor_promotion_types")
+    if not isinstance(raw, list):
+        return ()
+    return tuple(str(item) for item in raw)
+
+
+def cpor_channels(tenant_id: str = "default") -> tuple[str, ...]:
+    """This tenant's CPOR channels, in saved order. Empty when not configured."""
+    raw = load_tenant_profile_overrides(tenant_id).get("cpor_channels")
+    if not isinstance(raw, list):
+        return ()
+    return tuple(str(item) for item in raw)
+
+
+def cpor_stock_promote_type(tenant_id: str = "default") -> str | None:
+    """The promotion type a stock action writes, or None when the tenant has not set one.
+
+    The name counts only when it is also one of the tenant's promotion types.
+    """
+    overrides = load_tenant_profile_overrides(tenant_id)
+    name = overrides.get("cpor_stock_promote_type")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    types = overrides.get("cpor_promotion_types")
+    if not isinstance(types, list) or name not in types:
+        return None
+    return name
 
 
 def sales_value_vat_basis(tenant_id: str = "default") -> str:

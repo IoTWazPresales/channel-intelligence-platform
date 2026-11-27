@@ -19,10 +19,7 @@ client = TestClient(app)
 
 def test_cpor_models_import_smoke():
     from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine, CporClaimEvidenceLine
-    from app.services.cpor.promotion_type_vocab import (
-        CPOR_CASE_STATUS_SET,
-        CPOR_PROMOTION_TYPES,
-    )
+    from app.services.cpor import promotion_type_vocab as vocab
 
     assert CporCase.__tablename__ == "cpor_case"
     assert CporCaseLine.__tablename__ == "cpor_case_line"
@@ -31,8 +28,10 @@ def test_cpor_models_import_smoke():
     assert "case_code" in CporCase.__table__.c
     assert "source_key" in CporClaimEvidenceLine.__table__.c
     assert "dealer_price" in CporCaseLine.__table__.c
-    assert "cancelled" in CPOR_CASE_STATUS_SET
-    assert "Sell out PP" in CPOR_PROMOTION_TYPES
+    assert "cancelled" in vocab.CPOR_CASE_STATUS_SET
+    # Promotion type names are tenant config. The module no longer ships a built-in list.
+    assert not hasattr(vocab, "CPOR_PROMOTION_TYPES")
+    assert not hasattr(vocab, "CPOR_CHANNELS")
 
 
 def test_cpor_models_exported_from_app_models():

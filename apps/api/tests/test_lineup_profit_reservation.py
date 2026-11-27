@@ -23,6 +23,8 @@ def test_profit_reservation_derived_q002():
         reserve_total_pct=0.10,
         promo_reserve_split_pct=0.5,
         fx_plan_currency_per_cost_currency=1.0,
+        # Explicit calculation input. The product no longer implies a VAT rate (R-05).
+        vat_rate_pct=0.2,
     )
     assert out["reservation"]["source"] == "derived_from_profit"
     assert out["reservation"]["hard_enforce"] is True

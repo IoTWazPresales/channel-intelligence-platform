@@ -21,7 +21,8 @@ export type SellThroughFilterOptions = {
   today: string;
   calendar: { type: string; year: { label: string; start: string; end: string } };
   vat: VatBasis;
-  vat_rate_pct: number;
+  vat_rate_pct: number | null;
+  vat_rate_not_configured?: boolean;
   dimensions?: Array<{ key: string; label: string; group: string; values: string[] }>;
   max_dimensions?: number;
 };
@@ -85,7 +86,8 @@ export type SellThroughOverview = {
     compare_from: string | null;
     compare_to: string | null;
     vat: VatBasis;
-    vat_rate_pct: number;
+    vat_rate_pct: number | null;
+    vat_rate_not_configured?: boolean;
   };
   calendar: { type: string; label: string };
   kpis: {

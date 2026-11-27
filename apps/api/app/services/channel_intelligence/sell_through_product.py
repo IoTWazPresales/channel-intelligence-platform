@@ -22,6 +22,7 @@ from app.services.channel_intelligence.sell_through_overview import (
     _grain_of,
     _inc_vat,
     _period_days,
+    convert_reported_money,
     load_stock_positions,
     product_label,
 )
@@ -35,7 +36,7 @@ def product_detail(
     product_id: int,
     as_of: date,
     vat: str,
-    vat_rate: float,
+    vat_rate: float | None,
     customer_ids: list[int] | None = None,
 ) -> dict[str, Any] | None:
     p = session.get(DimProduct, product_id)
@@ -68,13 +69,13 @@ def product_detail(
 
     want_inc = vat == "inc_vat"
 
-    def conv(price: float, basis: str | None) -> float:
-        row_inc = _inc_vat(basis)
-        if row_inc and not want_inc:
-            return price / (1 + vat_rate)
-        if want_inc and not row_inc:
-            return price * (1 + vat_rate)
-        return price
+    def conv(price: float, basis: str | None) -> float | None:
+        return convert_reported_money(
+            price,
+            row_includes_vat=_inc_vat(basis),
+            want_includes_vat=want_inc,
+            vat_rate=vat_rate,
+        )
 
     weekly: dict[int, list[float]] = defaultdict(lambda: [0.0] * LOOKBACK_WEEKS)
     prices: dict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -91,7 +92,9 @@ def product_detail(
             if hi >= lo:
                 weekly[cid][i] += units * ((hi - lo).days + 1) / days
         if r.avg_price is not None:
-            prices[cid].append({"period": r.period_start_date.isoformat(), "price": round(conv(float(r.avg_price), r.vat_basis), 2)})
+            converted = conv(float(r.avg_price), r.vat_basis)
+            if converted is not None:
+                prices[cid].append({"period": r.period_start_date.isoformat(), "price": round(converted, 2)})
 
     f = OverviewFilters(date_from=first, date_to=as_of, tenant_id=tenant_id, customer_ids=customer_ids or [], product_ids=[product_id])
     stock, stock_dates = load_stock_positions(session, f, as_of)
@@ -147,6 +150,7 @@ def product_detail(
         "as_of": as_of.isoformat(),
         "weeks_from": first.isoformat(),
         "vat": vat,
+        "vat_rate_not_configured": vat_rate is None,
         "customers": rows,
         "lowest_price_customer": {"customer_name": lowest["customer_name"], "price": lowest["latest_price"]} if lowest else None,
     }

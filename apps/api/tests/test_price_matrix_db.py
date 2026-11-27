@@ -36,6 +36,13 @@ from sqlalchemy.orm import Session
 from test_listing_coverage import db_session  # noqa: F401 - shared cip_test-only fixture
 
 
+@pytest.fixture(autouse=True)
+def _isolated_tenant_profiles(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+
+
 def _sample(session: Session) -> dict:
     tag = uuid.uuid4().hex[:10]
     tenant = f"matrix-{tag}"
@@ -65,6 +72,16 @@ def _sample(session: Session) -> dict:
     ]
     session.add_all([cust_a, cust_b, *products])
     session.flush()
+    from app.services.commercial_tenant_profile import save_tenant_profile_overrides
+
+    # The rows below use these names. They are this sample tenant's saved config.
+    save_tenant_profile_overrides(
+        tenant,
+        {
+            "cpor_promotion_types": ["Sell out PP", "Sell-Through PP", "Stock PP (In-Direct)"],
+            "cpor_channels": ["reseller"],
+        },
+    )
     p0, p1, p2 = products
 
     # Line-up MSRPs, including an older, higher one for A/p0: the matrix takes the customer's latest

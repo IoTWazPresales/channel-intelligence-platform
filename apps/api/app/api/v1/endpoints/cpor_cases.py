@@ -61,7 +61,12 @@ from app.services.cpor.settlement_book_read import build_settlement_book_read_mo
 from app.services.cpor.support_bias import build_support_bias
 from app.services.cpor.payment_recon import load_payment_recon_by_case_id
 from app.services.cpor.promo_load_recon import build_promo_load_recon
-from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
+from app.services.cpor.promotion_type_vocab import (
+    CPOR_CASE_STATUS_SET,
+    promotion_types,
+    require_channel,
+    require_promotion_type,
+)
 from app.services.cpor.recompute import recompute_case, recompute_case_line
 from app.services.cpor.evidence_basis import (
     CLAIM_EVIDENCED,
@@ -476,7 +481,7 @@ class CaseCreate(BaseModel):
     fx_proposed_rate: float | None = None
     fx_mode: str | None = None
     currency_code: str = "ZAR"
-    channel: str = "reseller"
+    channel: str | None = None
     notes: str | None = None
 
 
@@ -498,7 +503,7 @@ class LineCreate(BaseModel):
     distributor_id: int | None = None
     pod_quarter: str | None = None
     srp: float
-    vat_rate: float = 0.15
+    vat_rate: float | None = None
     dealer_margin_pct: float | None = None
     cost_basis: float | None = None
     cost_source: str | None = None
@@ -582,6 +587,7 @@ def _apply_case_filters(
     evidence_basis: str | None,
     reporting_only: bool = False,
     official_promotion_types: bool = False,
+    tenant_id: str = "default",
 ) -> Any:
     """The case-list filters, shared by the list and the exact-count endpoint so they cannot drift.
 
@@ -650,7 +656,11 @@ def _apply_case_filters(
             *reporting_customer_clauses()
         )
     if official_promotion_types:
-        stmt = stmt.where(CporCase.promotion_type.in_(tuple(CPOR_PROMOTION_TYPE_SET)))
+        names = promotion_types(tenant_id)
+        if names:
+            stmt = stmt.where(CporCase.promotion_type.in_(tuple(names)))
+        else:
+            stmt = stmt.where(CporCase.id == -1)
 
     if evidence_basis:
         basis = evidence_basis.strip().lower()
@@ -702,7 +712,7 @@ def list_cases(
     ),
     official_promotion_types: bool = Query(
         default=False,
-        description="When true, only CPOR promotion types (Sell out PP, Sell-Through PP, Stock PP (In-Direct)).",
+        description="When true, only this tenant's saved promotion types.",
     ),
     user: dict = Depends(get_current_user),
 ):
@@ -733,6 +743,7 @@ def list_cases(
             evidence_basis=evidence_basis,
             reporting_only=reporting_only,
             official_promotion_types=official_promotion_types,
+            tenant_id=tenant_id_from_user(user),
         )
 
         paginate = page is not None and page_size is not None
@@ -854,6 +865,7 @@ def count_cases(
             q=q,
             evidence_basis=evidence_basis,
             reporting_only=reporting_only,
+            tenant_id=tenant_id_from_user(user),
         )
         if exclude_status:
             stmt = stmt.where(CporCase.status.notin_(exclude_status))
@@ -867,11 +879,12 @@ def create_case(
     user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
-    if body.promotion_type not in CPOR_PROMOTION_TYPE_SET:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown promotion_type; allowed={sorted(CPOR_PROMOTION_TYPE_SET)}",
-        )
+    tenant_id = tenant_id_from_user(user)
+    try:
+        promotion_type = require_promotion_type(tenant_id, body.promotion_type)
+        channel = require_channel(tenant_id, body.channel)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if body.window_end < body.window_start:
         raise HTTPException(status_code=400, detail="window_end must be >= window_start")
     fx_mode = (body.fx_mode or "booked").strip().lower() or "booked"
@@ -887,16 +900,16 @@ def create_case(
         case = CporCase(
             case_code=code,
             case_name=(body.case_name or "").strip() or None,
-            tenant_id=tenant_id_from_user(user),
+            tenant_id=tenant_id,
             customer_id=body.customer_id,
-            promotion_type=body.promotion_type,
+            promotion_type=promotion_type,
             window_start=body.window_start,
             window_end=body.window_end,
             status="draft",
             roe_snapshot=body.roe_snapshot,
             fx_mode=fx_mode,
             currency_code=body.currency_code or "ZAR",
-            channel=body.channel or "reseller",
+            channel=channel,
             notes=body.notes,
             created_by=actor,
             export_version=1,
@@ -974,8 +987,13 @@ def patch_case(
         data = body.model_dump(exclude_unset=True)
         if not data:
             raise HTTPException(status_code=400, detail="No fields to update")
-        if "promotion_type" in data and data["promotion_type"] not in CPOR_PROMOTION_TYPE_SET:
-            raise HTTPException(status_code=400, detail="Unknown promotion_type")
+        if "promotion_type" in data:
+            try:
+                data["promotion_type"] = require_promotion_type(
+                    case.tenant_id or tenant_id_from_user(user), data["promotion_type"]
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         if "fx_mode" in data:
             mode = (data["fx_mode"] or "").strip().lower() if data["fx_mode"] is not None else None
             if mode is not None and mode not in FX_MODES:
@@ -1197,6 +1215,13 @@ def create_line(
     user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
+    from app.services.commercial_tenant_profile import configured_vat_rate_pct
+
+    vat_rate = body.vat_rate
+    if vat_rate is None:
+        vat_rate = configured_vat_rate_pct(tenant_id_from_user(user))
+    if vat_rate is None:
+        raise HTTPException(status_code=400, detail="vat_rate_not_configured")
     with SessionLocal() as session:
         case = _load_case(session, case_id)
         if case.status not in EDITABLE_STATUSES and case.status not in {"proposed", "approved", "active"}:
@@ -1258,7 +1283,7 @@ def create_line(
             distributor_id=body.distributor_id,
             pod_quarter=body.pod_quarter,
             srp=body.srp,
-            vat_rate=body.vat_rate,
+            vat_rate=vat_rate,
             dealer_margin_pct=margin,
             margin_source=margin_source,
             cost_basis=cost_basis,
@@ -2125,8 +2150,8 @@ def cpor_aged_stock_action(
 
 
 @router.get("/meta/promotion-types")
-def promotion_types():
-    return {"promotion_types": sorted(CPOR_PROMOTION_TYPE_SET)}
+def promotion_types_meta(user: dict = Depends(get_current_user)):
+    return {"promotion_types": list(promotion_types(tenant_id_from_user(user)))}
 
 
 # --- settlement (U5) ---------------------------------------------------------

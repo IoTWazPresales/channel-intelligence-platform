@@ -53,7 +53,7 @@ def compute_profit_with_reservation(
     customer_margin_pct: float = 0.12,
     customer_rebate_pct: float = 0.03,
     distributor_margin_pct: float = 0.08,
-    vat_rate_pct: float = 0.15,
+    vat_rate_pct: float,
     fx_plan_currency_per_cost_currency: float = 1.0,
     normal_price_share: float = DEFAULT_NORMAL_PRICE_SHARE,
 ) -> dict[str, Any]:

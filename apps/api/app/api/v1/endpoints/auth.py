@@ -588,6 +588,9 @@ class TenantCommercialProfileUpdate(BaseModel):
     business_calendar: dict[str, Any] | None = None
     vat_rate_pct: float | None = None
     sales_value_vat_basis: str | None = None
+    cpor_promotion_types: list[str] | None = None
+    cpor_channels: list[str] | None = None
+    cpor_stock_promote_type: str | None = None
 
 
 class BusinessCalendarPreviewRequest(BaseModel):

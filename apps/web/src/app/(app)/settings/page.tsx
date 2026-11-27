@@ -65,7 +65,11 @@ type TenantCommercialProfile = {
   lineup_export_sheets?: { net_requirement: string; draft_lineup: string };
   lineup_export_columns?: LineupExportColumn[];
   overrides_present: string[];
-  vat_rate_pct?: number;
+  vat_rate_pct?: number | null;
+  vat_rate_not_configured?: boolean;
+  cpor_promotion_types?: string[];
+  cpor_channels?: string[];
+  cpor_stock_promote_type?: string | null;
   hard_enforce_budget: boolean;
   money_ceiling_usd: number | null;
   support_norms_trailing_quarters: number;
@@ -122,6 +126,9 @@ export default function SettingsPage() {
   const [wocMinVelocityDays, setWocMinVelocityDays] = useState(90);
   // Opus R-05: shown only when the tenant set it; never pre-filled with a country rate.
   const [vatRatePct, setVatRatePct] = useState('');
+  const [promotionTypesText, setPromotionTypesText] = useState('');
+  const [channelsText, setChannelsText] = useState('');
+  const [stockPromoteType, setStockPromoteType] = useState('');
   const [exportNetReqSheet, setExportNetReqSheet] = useState('NetRequirement');
   const [exportDraftSheet, setExportDraftSheet] = useState('DraftLineup');
   const [exportColumns, setExportColumns] = useState<LineupExportColumn[]>([]);
@@ -143,6 +150,9 @@ export default function SettingsPage() {
     if (tenantProfileQuery.data.overrides_present?.includes('vat_rate_pct') && typeof tenantProfileQuery.data.vat_rate_pct === 'number') {
       setVatRatePct(String(tenantProfileQuery.data.vat_rate_pct));
     }
+    setPromotionTypesText((tenantProfileQuery.data.cpor_promotion_types ?? []).join('\n'));
+    setChannelsText((tenantProfileQuery.data.cpor_channels ?? []).join('\n'));
+    setStockPromoteType(tenantProfileQuery.data.cpor_stock_promote_type ?? '');
     if (typeof tenantProfileQuery.data.woc_min_velocity_days === 'number') {
       setWocMinVelocityDays(tenantProfileQuery.data.woc_min_velocity_days);
     }
@@ -165,6 +175,13 @@ export default function SettingsPage() {
         reporting_cadence: reportingCadence,
         woc_min_velocity_days: wocMinVelocityDays,
         vat_rate_pct: vatRatePct.trim() ? Number(vatRatePct) : undefined,
+        cpor_promotion_types: promotionTypesText.trim()
+          ? promotionTypesText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+          : undefined,
+        cpor_channels: channelsText.trim()
+          ? channelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+          : undefined,
+        cpor_stock_promote_type: stockPromoteType.trim() || undefined,
         lineup_export_net_requirement_sheet: exportNetReqSheet.trim() || undefined,
         lineup_export_draft_sheet: exportDraftSheet.trim() || undefined,
         lineup_export_columns: exportColumns.length ? exportColumns : undefined,
@@ -352,6 +369,40 @@ export default function SettingsPage() {
               placeholder="Not set"
               helperText="As a fraction, for example 0.15. Planner SRP from ex-VAT prices, case-line VAT and the stock cost check use it. Not set means those show as not available."
               inputProps={{ 'data-testid': 'tenant-profile-vat-rate', min: 0, max: 0.99, step: 0.005 }}
+            />
+            <TextField
+              label="Promotion types"
+              value={promotionTypesText}
+              onChange={(ev) => setPromotionTypesText(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              multiline
+              minRows={3}
+              placeholder="Not set"
+              helperText="One name per line. Case create, the planner and monitored-listing promos use this list. Empty means not configured."
+              inputProps={{ 'data-testid': 'tenant-profile-promotion-types' }}
+            />
+            <TextField
+              label="Channels"
+              value={channelsText}
+              onChange={(ev) => setChannelsText(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Not set"
+              helperText="One channel per line. Empty means not configured."
+              inputProps={{ 'data-testid': 'tenant-profile-channels' }}
+            />
+            <TextField
+              label="Stock promote type"
+              value={stockPromoteType}
+              onChange={(ev) => setStockPromoteType(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              placeholder="Not set"
+              helperText="Must be one of the promotion types. Aged-stock promote, move and return write this type. Empty means those actions are not configured."
+              inputProps={{ 'data-testid': 'tenant-profile-stock-promote-type' }}
             />
             <TextField
               label="Lineup export - Net requirement sheet"

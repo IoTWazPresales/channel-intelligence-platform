@@ -147,6 +147,27 @@ def _inc_vat(basis: str | None) -> bool:
     return str(basis or "").strip().lower().startswith("inc")
 
 
+def convert_reported_money(
+    amount: float,
+    *,
+    row_includes_vat: bool,
+    want_includes_vat: bool,
+    vat_rate: float | None,
+) -> float | None:
+    """Move a money amount between VAT bases.
+
+    The same basis needs no rate. A change of basis with no tenant rate returns None
+    (withheld) instead of a guessed rate. Callers surface ``vat_rate_not_configured``.
+    """
+    if row_includes_vat == want_includes_vat:
+        return amount
+    if vat_rate is None:
+        return None
+    if row_includes_vat and not want_includes_vat:
+        return amount / (1 + vat_rate)
+    return amount * (1 + vat_rate)
+
+
 def _product_filter(f: OverviewFilters) -> list[Any]:
     conds: list[Any] = []
     if f.product_ids:
@@ -203,7 +224,7 @@ def load_observations(
     load_from: date,
     load_to: date,
     *,
-    vat_rate: float,
+    vat_rate: float | None,
 ) -> list[Obs]:
     s = FactCustomerSellthrough
     priced = s.unit_sell_price.is_not(None)
@@ -255,20 +276,25 @@ def load_observations(
         value: float | None = None
         estimated = False
         if r.value is not None:
-            v = float(r.value)
-            row_inc = _inc_vat(r.vat_basis)
-            if row_inc and not want_inc:
-                v /= 1 + vat_rate
-            elif want_inc and not row_inc:
-                v *= 1 + vat_rate
-            value = v
+            value = convert_reported_money(
+                float(r.value),
+                row_includes_vat=_inc_vat(r.vat_basis),
+                want_includes_vat=want_inc,
+                vat_rate=vat_rate,
+            )
         missing_units = units - priced_units
         if abs(missing_units) > 1e-9:
             lp = listing.get((int(r.customer_id), int(r.product_id)))
             if lp is not None:
-                extra = missing_units * (lp if want_inc else lp / (1 + vat_rate))
-                value = (value or 0.0) + extra
-                estimated = True
+                extra_price = convert_reported_money(
+                    lp,
+                    row_includes_vat=True,
+                    want_includes_vat=want_inc,
+                    vat_rate=vat_rate,
+                )
+                if extra_price is not None:
+                    value = (value or 0.0) + missing_units * extra_price
+                    estimated = True
         key = (int(r.customer_id), int(r.product_id), r.period_start_date, grain)
         soh = float(r.soh) if int(r.soh_rows or 0) > 0 and r.soh is not None else None
         o = merged.get(key)
@@ -407,7 +433,7 @@ def in_view_config_rows_select() -> Any:
     )
 
 
-def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, *, today: date, vat_rate: float) -> dict[str, Any]:
+def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, *, today: date, vat_rate: float | None) -> dict[str, Any]:
     if f.grain not in GRAINS:
         raise ValueError(f"grain must be one of {list(GRAINS)}")
     if f.compare not in COMPARES:
@@ -642,6 +668,7 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
             "compare_to": cmp[1].isoformat() if cmp else None,
             "vat": f.vat,
             "vat_rate_pct": vat_rate,
+            "vat_rate_not_configured": vat_rate is None,
             "customer_ids": f.customer_ids,
             "sites": f.sites,
         },

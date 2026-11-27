@@ -32,10 +32,27 @@ def test_workbook_dealer_still_10347_via_u2():
     assert quantize_money(compute_dealer_price("13999", "0.15", "0.15")) == Decimal("10347.09")
 
 
-def test_meta_promotion_types():
+def test_meta_promotion_types_are_the_saved_tenant_list(tmp_path, monkeypatch):
+    """Requirement change: the meta list is this tenant's saved config, not a built-in list."""
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    profile.save_tenant_profile_overrides(
+        "default",
+        {"cpor_promotion_types": ["Sell out PP", "Sell-Through PP"]},
+    )
     r = client.get("/api/v1/cpor/meta/promotion-types")
     assert r.status_code == 200
-    assert "Sell out PP" in r.json()["promotion_types"]
+    assert r.json()["promotion_types"] == ["Sell out PP", "Sell-Through PP"]
+
+
+def test_meta_promotion_types_empty_when_unset(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    r = client.get("/api/v1/cpor/meta/promotion-types")
+    assert r.status_code == 200
+    assert r.json()["promotion_types"] == []
 
 
 def test_meta_lifecycle():
@@ -45,7 +62,17 @@ def test_meta_lifecycle():
     assert r.json()["actions"]["propose"] == "proposed"
 
 
-def test_create_case_mocked():
+def test_create_case_mocked(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    profile.save_tenant_profile_overrides(
+        "default",
+        {
+            "cpor_promotion_types": ["Sell out PP"],
+            "cpor_channels": ["reseller"],
+        },
+    )
     cust = SimpleNamespace(id=1, code="C1", name="Cust")
 
     case = SimpleNamespace(

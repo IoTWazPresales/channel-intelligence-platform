@@ -102,6 +102,12 @@ describe('SettingsPage semantic overlay gate', () => {
     wrap();
     const vat = (await screen.findByTestId('tenant-profile-vat-rate')) as HTMLInputElement;
     expect(vat.value).toBe('');
+    const types = (await screen.findByTestId('tenant-profile-promotion-types')) as HTMLTextAreaElement;
+    const channels = (await screen.findByTestId('tenant-profile-channels')) as HTMLTextAreaElement;
+    const promote = (await screen.findByTestId('tenant-profile-stock-promote-type')) as HTMLInputElement;
+    expect(types.value).toBe('');
+    expect(channels.value).toBe('');
+    expect(promote.value).toBe('');
   });
 
   it('hides the shipping digest recipients panel for non-admin', async () => {
