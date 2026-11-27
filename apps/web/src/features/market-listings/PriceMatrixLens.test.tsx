@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -227,7 +227,45 @@ describe('PriceMatrixLens', () => {
     mount();
     await waitFor(() => expect(screen.getByText('Customer C')).toBeInTheDocument());
     const headers = Array.from(document.querySelectorAll('.ag-header-cell-text')).map((e) => e.textContent);
-    expect(headers).toEqual(['Product', 'SRP', 'Customer A', 'Customer B', 'Customer C']);
+    expect(headers).toEqual(['Product', 'Sales model', 'SRP', 'Customer A', 'Customer B', 'Customer C']);
+  });
+
+  it('sorts SRP by the amount, so 900 comes before 1,200', async () => {
+    const base = matrixPayload();
+    payload.value = {
+      ...base,
+      products: [
+        { ...base.products[0], id: 2, sales_model_name: 'HIGH', srp: 1200, srp_reason: null },
+        { ...base.products[0], id: 1, sales_model_name: 'LOW', srp: 900, srp_reason: null },
+      ],
+      cells: [],
+      summary: { product_count: 2, below_srp_count: null },
+    };
+    mount();
+    await screen.findByTestId('price-matrix-srp-2');
+    fireEvent.click(screen.getByText('SRP'));
+    await waitFor(() => {
+      const ids = Array.from(document.querySelectorAll('[data-testid^="price-matrix-srp-"]')).map(
+        (el) => el.getAttribute('data-testid'),
+      );
+      expect(ids).toEqual(['price-matrix-srp-1', 'price-matrix-srp-2']);
+    });
+  });
+
+  it('adds a sales model column and a column for each spec present on the products', async () => {
+    const base = matrixPayload();
+    payload.value = {
+      ...base,
+      products: [{ ...base.products[0], sales_model_name: 'MODEL-X1', specs: { ram: '16 GB', cpu: 'i7' } }],
+    };
+    mount();
+    await waitFor(() => expect(screen.getByTestId('price-matrix-sales-model-10')).toHaveTextContent('MODEL-X1'));
+    expect(screen.getByTestId('price-matrix-spec-cpu-10')).toHaveTextContent('i7');
+    expect(screen.getByTestId('price-matrix-spec-ram-10')).toHaveTextContent('16 GB');
+    const headers = Array.from(document.querySelectorAll('.ag-header-cell-text')).map((e) => e.textContent);
+    expect(headers).toEqual(['Product', 'Sales model', 'SRP', 'cpu', 'ram', 'Customer A', 'Customer B']);
+    expect(document.querySelector('.ag-floating-filter')).not.toBeNull();
+    expect(screen.getByTestId('grid-find-price-matrix')).toBeInTheDocument();
   });
 
   it('labels a product by sales model name first', () => {
@@ -240,5 +278,8 @@ describe('PriceMatrixLens', () => {
     const source = readFileSync(join(__dirname, 'PriceMatrixLens.tsx'), 'utf8');
     expect(source).not.toMatch(/rgba?\(/);
     expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    expect(source).not.toMatch(/Cheapest at/i);
+    expect(source).not.toMatch(/Products monitored/);
+    expect(source).not.toMatch(/Prices below SRP/);
   });
 });

@@ -24,10 +24,23 @@ import { activeNavGroup } from '@/features/shell/navPageChrome';
  * headings at the mock-up's own eyebrow type (10px / 700 / 1.4px / uppercase) measure up to 154.2px
  * ("PROMOTIONS & FUNDING"), more than the 144px content box a 172px rail leaves, before any chevron or count.
  * Measured (Playwright, 26 Nov): 240px is the exact minimum at which every heading fits on one line beside its count and
- * chevron (0px spare on "PROMOTIONS & FUNDING"); 244px keeps 4px for font substitution. Everything else in the rail
- * is the mock-up's own geometry (NAV_MOCK).
+ * chevron (0px spare on "PROMOTIONS & FUNDING"); 244px keeps 4px for font substitution at that measured count.
+ * A three-digit count is wider than that count. RAIL_COUNT sizes the chip, gap and chevron so "999" still leaves
+ * at least 4px (see CapabilityRail.test.ts). The label ellipsizes if a wider font would push the count out.
+ * Everything else in the rail is the mock-up's own geometry (NAV_MOCK).
  */
 export const RAIL_WIDTH = 244;
+
+/**
+ * Heading-row slots for the count chip. Not tenant config: fixed so a three-digit count stays inside RAIL_WIDTH.
+ * rowGapPx is the flex gap (two gaps: label|chip and chip|chevron). chipPadXPx is horizontal padding each side.
+ * chevronPx is the expand control's box.
+ */
+export const RAIL_COUNT = {
+  rowGapPx: 2,
+  chipPadXPx: 4,
+  chevronPx: 16,
+} as const;
 
 /**
  * Navigation rail geometry, copied value for value from the mock-up (`docs/design/dashboard-v2/index.html`:
@@ -215,6 +228,7 @@ export function CapabilityRail({
         sx={{
           flex: 1,
           minHeight: 0,
+          minWidth: 0,
           overflowY: 'auto',
           overflowX: 'hidden',
           scrollbarWidth: 'thin',
@@ -228,7 +242,7 @@ export function CapabilityRail({
           const expanded = open[d.id] ?? isActive;
           const badge = badges?.[d.id];
           return (
-            <Box key={d.id} sx={{ display: 'grid', gap: NAV_MOCK.groupGap, alignContent: 'start' }}>
+            <Box key={d.id} sx={{ display: 'grid', gap: NAV_MOCK.groupGap, alignContent: 'start', minWidth: 0 }}>
               <Box
                 component={NextLink}
                 href={d.href ?? d.items[0].href}
@@ -243,7 +257,9 @@ export function CapabilityRail({
                   bgcolor: 'background.elevated',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
+                  gap: `${RAIL_COUNT.rowGapPx}px`,
+                  minWidth: 0,
+                  overflow: 'hidden',
                   padding: NAV_MOCK.eyebrow.padding,
                   paddingRight: 0,
                   // Mock-up `.nav-label`: secondary colour; the active leaf carries the accent. Warren: "YES" to
@@ -258,6 +274,8 @@ export function CapabilityRail({
                   sx={{
                     flex: 1,
                     minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                     color: 'inherit',
                     fontSize: NAV_MOCK.eyebrow.fontSize,
@@ -275,7 +293,17 @@ export function CapabilityRail({
                     color={d.id === 'overview' || d.id === 'data' ? 'warning' : 'default'}
                     label={badge}
                     data-testid={`rail-badge-${d.id}`}
-                    sx={{ height: 16, fontSize: 10, '& .MuiChip-label': { px: '6px' } }}
+                    sx={{
+                      flexShrink: 0,
+                      height: 16,
+                      fontSize: 10,
+                      fontWeight: 500,
+                      // Beat the theme chip label padding (9px) so a three-digit count keeps its measured width.
+                      '&& .MuiChip-label': {
+                        paddingLeft: `${RAIL_COUNT.chipPadXPx}px`,
+                        paddingRight: `${RAIL_COUNT.chipPadXPx}px`,
+                      },
+                    }}
                   />
                 ) : null}
                 <IconButton
@@ -286,7 +314,15 @@ export function CapabilityRail({
                     e.stopPropagation();
                     setOpen(d.id, !expanded);
                   }}
-                  sx={{ p: 0, color: 'inherit', transform: expanded ? 'rotate(180deg)' : undefined, transition: 'transform 120ms' }}
+                  sx={{
+                    p: 0,
+                    width: RAIL_COUNT.chevronPx,
+                    height: RAIL_COUNT.chevronPx,
+                    flexShrink: 0,
+                    color: 'inherit',
+                    transform: expanded ? 'rotate(180deg)' : undefined,
+                    transition: 'transform 120ms',
+                  }}
                 >
                   <ExpandMoreIcon sx={{ fontSize: 16 }} />
                 </IconButton>

@@ -83,6 +83,9 @@ def _sample(session: Session) -> dict:
         },
     )
     p0, p1, p2 = products
+    # A present spec becomes a matrix column. A blank value does not.
+    p0.specs_json = {"screen": "14 in", "blank": " "}
+    session.flush()
 
     # Line-up MSRPs, including an older, higher one for A/p0: the matrix takes the customer's latest
     # live line-up (1500), never the highest MSRP ever (2500).
@@ -238,6 +241,8 @@ def test_price_matrix_end_to_end(db_session: Session) -> None:  # noqa: F811 - f
     assert products[p0.id]["sales_model_name"] == p0.sales_model_name
     assert products[p0.id]["sku"] == p0.sku
     assert products[p0.id]["name"] == p0.name
+    assert products[p0.id]["specs"] == {"screen": "14 in"}
+    assert products[p1.id]["specs"] == {}
     # Product-level SRP is a figure only when every customer's SRP agrees.
     assert products[p0.id]["srp"] is None and products[p0.id]["srp_reason"] == SRP_REASON_VARIES
     assert products[p1.id]["srp"] == 800 and products[p1.id]["srp_source"] == SRP_SOURCE_LINEUP

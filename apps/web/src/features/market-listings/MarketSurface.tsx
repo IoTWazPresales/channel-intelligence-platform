@@ -916,7 +916,6 @@ export function MarketSurface() {
           </>
         }
       >
-        {lens === 'listings' ? <ListingCaptureHealth /> : null}
         {lens === 'listings' || lens === 'history' ? (
           <Stack spacing={2} sx={{ mt: 2 }} data-testid="market-listings-lens">
             <Typography variant="body2" color="text.secondary" data-testid="listing-last-check">
@@ -1373,6 +1372,7 @@ export function MarketSurface() {
 
         {lens === 'proposals' ? (
           <Stack spacing={2} sx={{ mt: 2 }} data-testid="market-proposals-lens">
+            <ListingCaptureHealth />
             <Alert severity="info" variant="outlined">
               Retailer sell-through feeds carry listing ids. CIP proposes them for the registry; a steward confirms.
               Same governance boundary as every other master-data proposal — nothing is auto-created.
@@ -1657,7 +1657,12 @@ export function MarketSurface() {
         ) : null}
 
         {lens === 'quality' ? <ListingQualityLens /> : null}
-        {lens === 'discovery' ? <DiscoveryLens /> : null}
+        {lens === 'discovery' ? (
+          <Stack spacing={2}>
+            <ListingCaptureHealth />
+            <DiscoveryLens />
+          </Stack>
+        ) : null}
         {lens === 'sites' ? <ListingSitesLens /> : null}
         {lens === 'links' ? <ListingLinksLens /> : null}
         {lens === 'coverage' ? <ListingCoverageLens /> : null}
