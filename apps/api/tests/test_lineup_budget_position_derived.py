@@ -14,6 +14,12 @@ from app.services.lineup.budget_position import (
     period_label_sql_variants,
 )
 
+_MARGINS = {
+    "customer_margin_pct": 0.11,
+    "customer_rebate_pct": 0.02,
+    "distributor_margin_pct": 0.07,
+}
+
 
 def test_normalize_period_label_variants():
     assert normalize_period_label("26Q2") == "2026Q2"
@@ -53,21 +59,71 @@ def test_derive_planned_reservations_from_fact_lineup(monkeypatch):
         return_value=MagicMock(all=MagicMock(return_value=[(10, 1000.0, None, 99)]))
     )
 
+    # Warren 2026-11-27 decisions: the margins are read from the tenant profile.
     monkeypatch.setattr(
-        "app.services.lineup.budget_position.compute_profit_with_reservation",
-        lambda **kwargs: {
-            "reservation": {"total": 42.5},
-            "oem_sell_in_per_unit": 800.0,
-        },
+        "app.services.lineup.budget_position.tenant_profile.profit_reservation_margins",
+        lambda _tenant: dict(_MARGINS),
+    )
+    seen: dict = {}
+
+    def _fake(**kwargs):
+        seen.update(kwargs)
+        return {"reservation": {"total": 42.5}, "oem_sell_in_per_unit": 800.0}
+
+    monkeypatch.setattr(
+        "app.services.lineup.budget_position.compute_profit_with_reservation", _fake
     )
 
     planned = asyncio.run(derive_planned_reservations_from_lineup(db, period_label="26Q2"))
+    assert {k: seen[k] for k in _MARGINS} == _MARGINS
     assert len(planned) == 1
     assert planned[0]["reserved_amount"] == 42.5
     assert planned[0]["product_id"] == 10
     assert planned[0]["revenue"] == 800.0 * 100
     assert planned[0]["target_srp_local"] == 1000.0
     assert planned[0]["srp_source"] == "commercial_lineup_evidence"
+
+
+def test_derive_skips_when_margins_not_configured(monkeypatch):
+    item = SimpleNamespace(
+        id=1, product_id=10, customer_id=20, planned_volume_units=100, period_label="26Q2"
+    )
+    sku = SimpleNamespace(
+        product_id=10,
+        controlled_cost_amount=500.0,
+        reserve_total_pct=0.1,
+        promo_reserve_split_pct=0.5,
+        vat_rate_pct=0.2,
+        fx_plan_currency_per_cost_currency=1.0,
+    )
+    db = AsyncMock()
+    db.scalars = AsyncMock(
+        side_effect=[
+            MagicMock(all=MagicMock(return_value=[item])),
+            MagicMock(all=MagicMock(return_value=[sku])),
+        ]
+    )
+    db.execute = AsyncMock(
+        return_value=MagicMock(all=MagicMock(return_value=[(10, 1000.0, None, 99)]))
+    )
+    monkeypatch.setattr(
+        "app.services.lineup.budget_position.tenant_profile.profit_reservation_margins",
+        lambda _tenant: None,
+    )
+
+    def _boom(**_kwargs):
+        raise AssertionError("must not compute a reservation without configured margins")
+
+    monkeypatch.setattr(
+        "app.services.lineup.budget_position.compute_profit_with_reservation", _boom
+    )
+
+    planned, diag = asyncio.run(
+        derive_planned_reservations_with_diagnostics(db, period_label="26Q2")
+    )
+    assert planned == []
+    assert diag["profit_reservation_margins_not_configured"] is True
+    assert diag["skipped_margins_not_configured"] == 1
 
 
 def test_derive_skips_missing_srp_without_fabricating(monkeypatch):

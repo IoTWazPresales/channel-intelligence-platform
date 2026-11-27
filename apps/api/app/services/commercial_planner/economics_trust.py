@@ -20,6 +20,7 @@ BLOCKING_TRUST_FLAGS: frozenset[str] = frozenset(
         "impossible_economics",
         "non_positive_target_units",
         "non_positive_target_srp",
+        "vat_rate_not_configured",
     }
 )
 

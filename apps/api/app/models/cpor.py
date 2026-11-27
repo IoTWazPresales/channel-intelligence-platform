@@ -51,8 +51,10 @@ class CporCase(Base, TimestampMixin):
     fx_booked_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     fx_booked_rate_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     fx_override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="ZAR")
-    channel: Mapped[str] = mapped_column(String(32), nullable=False, default="reseller")
+    # Set on create from the request or the tenant profile ``currency_code``; no default currency.
+    currency_code: Mapped[str] = mapped_column(String(8), nullable=False)
+    # The writer supplies a channel from the tenant list. No built-in channel.
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)
     origin: Mapped[str] = mapped_column(String(32), nullable=False, default="native", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)

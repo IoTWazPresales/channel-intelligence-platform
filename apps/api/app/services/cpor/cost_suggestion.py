@@ -19,9 +19,11 @@ from sqlalchemy.orm import Session
 
 from app.models.commercial_planner import CommercialCustomerTerm
 from app.models.cpor import CporCase, CporCaseLine
+from app.models.dimensions import DimCustomer
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.facts import FactSalesSellout
-from app.services.cpor.config import ASSUMED_SELLOUT_CURRENCY, DEFAULT_SELLOUT_LOOKBACK_DAYS
+from app.services.commercial_tenant_profile import tenant_currency_code
+from app.services.cpor.config import DEFAULT_SELLOUT_LOOKBACK_DAYS
 from app.services.cpor.waterfall import _as_decimal
 
 
@@ -178,8 +180,13 @@ def _tier2_sellout(
         return None
 
     avg = weighted_num / weighted_den
+    assumed_ccy: str | None = None
     if assumed_currency:
         flags.append("assumed_currency")
+        customer = session.get(DimCustomer, customer_id)
+        assumed_ccy = tenant_currency_code(getattr(customer, "tenant_id", None) or "default")
+        if assumed_ccy is None:
+            flags.append("currency_not_configured")
 
     return CostSuggestion(
         cost_basis=avg,
@@ -196,7 +203,7 @@ def _tier2_sellout(
             "row_count": len(rows),
             "units_sum": float(weighted_den),
             "weighted_avg": float(avg),
-            "assumed_sellout_currency": ASSUMED_SELLOUT_CURRENCY if assumed_currency else None,
+            "assumed_sellout_currency": assumed_ccy,
         },
         flags=flags,
     )

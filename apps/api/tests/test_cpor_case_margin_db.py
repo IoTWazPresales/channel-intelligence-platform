@@ -57,7 +57,7 @@ def _case_with_distributor_line(db: Session) -> tuple[CporCase, CporCaseLine]:
 def _upsert_terms(db: Session, case: CporCase, line: CporCaseLine, *, landed: float | None) -> None:
     sku = db.scalar(select(CommercialSkuAssumption).where(CommercialSkuAssumption.product_id == line.product_id))
     if sku is None:
-        sku = CommercialSkuAssumption(product_id=line.product_id, controlled_cost_amount=1.0)
+        sku = CommercialSkuAssumption(vat_rate_pct=0.15, product_id=line.product_id, controlled_cost_amount=1.0)
         db.add(sku)
     sku.controlled_cost_amount = 100.0
     sku.controlled_cost_currency_code = "USD"

@@ -1,6 +1,7 @@
 """CPOR tenant config constants (module-level, same pattern as lineup archive config).
 
-Spec §4: assumed_sellout_currency when sell-out currency_code is blank/0-filled.
+Spec §4: a blank/0-filled sell-out currency_code is assumed to be the tenant profile's
+``currency_code`` and flagged (see ``cost_suggestion``); no currency is built in.
 Default lookback when no prior CPOR case exists for (customer, product).
 """
 
@@ -13,9 +14,6 @@ from app.services.commercial_tenant_profile import (
     support_norms_trailing_quarters,
 )
 
-# Spec §4 — sell-out currency_code is 0-filled on cip; assume ZAR and flag.
-ASSUMED_SELLOUT_CURRENCY = "ZAR"
-
 # Spec §4 — lookback when no prior CPOR case window_end for that product/customer.
 DEFAULT_SELLOUT_LOOKBACK_DAYS = 180
 
@@ -24,7 +22,6 @@ MONEY_QUANTIZE = "0.01"
 STORAGE_QUANTIZE = "0.0001"
 
 __all__ = [
-    "ASSUMED_SELLOUT_CURRENCY",
     "DEFAULT_SELLOUT_LOOKBACK_DAYS",
     "SUPPORT_NORMS_TRAILING_QUARTERS",
     "support_norms_trailing_quarters",

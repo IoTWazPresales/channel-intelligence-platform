@@ -26,6 +26,18 @@ WEEK = date(1999, 1, 4)
 T0 = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def _tenant_reporting_timezone(monkeypatch, tmp_path):
+    # Warren 2026-11-27 decisions: the upload-day rule uses the tenant's reporting timezone.
+    import json
+
+    from app.services import commercial_tenant_profile
+
+    monkeypatch.setattr(commercial_tenant_profile, "_tenant_profiles_dir", lambda: tmp_path)
+    for tenant in ("default", TENANT):
+        (tmp_path / f"{tenant}.json").write_text(json.dumps({"reporting_timezone": "Africa/Johannesburg"}))
+
+
 @pytest.fixture
 def session():
     engine = create_engine(sqlalchemy_sync_engine_url(get_settings().database_url_sync))

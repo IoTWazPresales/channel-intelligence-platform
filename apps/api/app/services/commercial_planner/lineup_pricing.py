@@ -34,7 +34,7 @@ from app.services.profit_definition import compute_profit
 @dataclass(frozen=True)
 class LineupPricingInputs:
     srp_inc_vat_local: float
-    vat_rate_pct: float
+    vat_rate_pct: float | None  # None: no rate known for this line (vat_rate_not_configured)
     dealer_margin_pct: float
     rebate_pct: float
     distributor_margin_pct: float
@@ -76,7 +76,7 @@ def compute_lineup_pricing(inputs: LineupPricingInputs) -> LineupPricingResult:
     flags: list[str] = []
 
     srp = inputs.srp_inc_vat_local or 0.0
-    vat = max(inputs.vat_rate_pct or 0.0, 0.0)
+    vat = max(inputs.vat_rate_pct, 0.0) if inputs.vat_rate_pct is not None else None
     dealer_m = inputs.dealer_margin_pct or 0.0
     rebate = inputs.rebate_pct or 0.0
     disti_m = inputs.distributor_margin_pct or 0.0
@@ -87,6 +87,8 @@ def compute_lineup_pricing(inputs: LineupPricingInputs) -> LineupPricingResult:
         flags.append("missing_or_invalid_srp")
     if roe <= 0:
         flags.append("invalid_roe")
+    if vat is None:
+        flags.append("vat_rate_not_configured")
     for pct, flag in (
         (dealer_m, "invalid_dealer_margin"),
         (rebate, "invalid_rebate"),
@@ -95,8 +97,8 @@ def compute_lineup_pricing(inputs: LineupPricingInputs) -> LineupPricingResult:
         if pct >= 1.0 or pct < 0.0:
             flags.append(flag)
 
-    # Cannot derive a meaningful DAP without a positive SRP and ROE.
-    if srp <= 0 or roe <= 0 or any(
+    # Cannot derive a meaningful DAP without a positive SRP and ROE and a known VAT rate.
+    if srp <= 0 or roe <= 0 or vat is None or any(
         f in flags for f in ("invalid_dealer_margin", "invalid_rebate", "invalid_distributor_margin")
     ):
         return LineupPricingResult(

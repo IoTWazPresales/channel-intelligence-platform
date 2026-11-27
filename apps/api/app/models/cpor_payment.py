@@ -105,7 +105,7 @@ class CporPaymentEvidence(Base, TimestampMixin):
     payment_status: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     payment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     amount: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
-    currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="ZAR")
+    currency_code: Mapped[str] = mapped_column(String(8), nullable=False)
     customer_token: Mapped[str | None] = mapped_column(String(256), nullable=True)
     distributor_token: Mapped[str | None] = mapped_column(String(256), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -198,6 +198,11 @@ async def derive_planned_reservations_with_diagnostics(
         ).all():
             sku_by_pid[int(sku.product_id)] = sku
 
+    # Lineup rows carry no tenant id; the lineup reads the default tenant profile.
+    margins = tenant_profile.profit_reservation_margins("default")
+    diagnostics["profit_reservation_margins_not_configured"] = margins is None
+    diagnostics["skipped_margins_not_configured"] = 0
+
     planned: list[dict[str, Any]] = []
     for product_id, customer_id, qty, plabel, source_id, srp in raw_lines:
         if product_id is None or qty <= 0:
@@ -210,6 +215,9 @@ async def derive_planned_reservations_with_diagnostics(
         if srp is None or srp <= 0:
             diagnostics["skipped_missing_srp"] += 1
             continue
+        if margins is None:
+            diagnostics["skipped_margins_not_configured"] += 1
+            continue
         economics = compute_profit_with_reservation(
             net_requirement_units=qty,
             target_srp_local=float(srp),
@@ -217,6 +225,9 @@ async def derive_planned_reservations_with_diagnostics(
             controlled_cost_amount=float(sku.controlled_cost_amount),
             reserve_total_pct=float(sku.reserve_total_pct),
             promo_reserve_split_pct=float(sku.promo_reserve_split_pct),
+            customer_margin_pct=margins["customer_margin_pct"],
+            customer_rebate_pct=margins["customer_rebate_pct"],
+            distributor_margin_pct=margins["distributor_margin_pct"],
             vat_rate_pct=float(sku.vat_rate_pct),
             fx_plan_currency_per_cost_currency=float(sku.fx_plan_currency_per_cost_currency),
         )
@@ -318,6 +329,8 @@ async def build_budget_position(
         money_status = "ok"
     elif sku_n == 0:
         money_status = "missing_sku_economics"
+    elif int(derive_diag.get("skipped_margins_not_configured") or 0) > 0 and not planned:
+        money_status = "profit_reservation_margins_not_configured"
     elif int(derive_diag.get("skipped_missing_srp") or 0) > 0 and not planned:
         money_status = "missing_srp"
     else:

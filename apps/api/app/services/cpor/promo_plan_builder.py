@@ -34,7 +34,11 @@ from app.services.commercial_planner.lineup_period_canonical import (
 )
 from app.services.cpor import planner_sellthrough
 from app.services.cpor.intake_weighted_mac import suggest_sellthrough_mac
-from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET, DEFAULT_CUSTOMER_PROMOTION_TYPE
+from app.services.cpor.promotion_type_vocab import (
+    DEFAULT_CUSTOMER_PROMOTION_TYPE,
+    require_channel,
+    require_promotion_type,
+)
 from app.services.lineup.cover_policy import resolve_target_cover_weeks_sync
 from app.services.store_dc.rules import (
     DEFAULT_SLOW_COVER_MULTIPLE,
@@ -1146,13 +1150,12 @@ def create_case_from_promo_draft(
             )
         seen_grains.add(grain)
 
-    from app.services.cpor.promotion_type_vocab import CPOR_CHANNEL_SET
-
     if seed is not None:
-        channel = (seed.channel or "reseller").strip().lower()
-        promo = seed.promotion_type
+        # A seed case already stores its type and channel. Copy them. Fill only a blank from tenant config.
+        tenant = seed.tenant_id or tenant_id or "default"
+        channel = (seed.channel or "").strip() or require_channel(tenant, None)
+        promo = (seed.promotion_type or "").strip() or require_promotion_type(tenant, None)
         win_start, win_end = seed.window_start, seed.window_end
-        tenant = seed.tenant_id
         cid = int(seed.customer_id)
         origin = "proposed_by_cip"
         case_name = f"B4 draft from {seed.case_code}"
@@ -1163,14 +1166,12 @@ def create_case_from_promo_draft(
             f"seed_channel={seed.channel}; line_count={len(write_specs)}"
         )
         roe = seed.roe_snapshot
-        currency = seed.currency_code or "ZAR"
+        currency = seed.currency_code or tenant_profile.require_tenant_currency_code(tenant)
     else:
-        channel = "reseller"
-        promo = (promotion_type or DEFAULT_PROPOSAL_PROMOTION_TYPE).strip()
-        if promo not in CPOR_PROMOTION_TYPE_SET:
-            raise ValueError(f"unknown_promotion_type={promo}")
-        win_start, win_end = window_from_period_label(period_label)
         tenant = tenant_id or "default"
+        channel = require_channel(tenant, None)
+        promo = require_promotion_type(tenant, promotion_type)
+        win_start, win_end = window_from_period_label(period_label)
         cid = int(customer_id)  # type: ignore[arg-type]
         origin = "proposed_by_cip"
         case_name = f"Proposed {period_label}"
@@ -1181,10 +1182,7 @@ def create_case_from_promo_draft(
             f"line_count={len(write_specs)}"
         )
         roe = None
-        currency = "ZAR"
-
-    if channel not in CPOR_CHANNEL_SET:
-        channel = "reseller"
+        currency = tenant_profile.require_tenant_currency_code(tenant)
     if case_origin:
         origin = case_origin
     if case_name_override:
@@ -1228,8 +1226,11 @@ def create_case_from_promo_draft(
 
     margin, margin_source = resolve_default_margin(session, case.customer_id)
     if margin is None:
-        margin = 0.12
-        margin_source = "b4_default"
+        tenant_margins = tenant_profile.profit_reservation_margins(tenant)
+        if tenant_margins is None:
+            raise ValueError("profit_reservation_margins_not_configured")
+        margin = tenant_margins["customer_margin_pct"]
+        margin_source = "tenant_profile"
 
     created_lines: list[CporCaseLine] = []
     line_reports: list[dict[str, Any]] = []

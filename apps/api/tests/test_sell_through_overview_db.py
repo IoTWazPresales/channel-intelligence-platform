@@ -325,7 +325,7 @@ def test_product_detail_across_customers(session: Session):
 def _case(db, cid, pid, start, end, planned, code):
     from app.models.cpor import CporCase, CporCaseLine
 
-    case = CporCase(case_code=code, customer_id=cid, promotion_type="Price promo", window_start=start, window_end=end, status="approved", tenant_id=TENANT)
+    case = CporCase(currency_code="ZAR", case_code=code, customer_id=cid, promotion_type="Price promo", window_start=start, window_end=end, status="approved", tenant_id=TENANT)
     db.add(case)
     db.flush()
     db.add(CporCaseLine(case_id=case.id, product_id=pid, window_start=start, window_end=end, srp=999, vat_rate=0.15, dealer_margin_pct=0.1, estimate_qty=planned))

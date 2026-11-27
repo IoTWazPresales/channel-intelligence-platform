@@ -39,11 +39,51 @@ def test_planned_reserve_with_sku():
         promo_reserve_split_pct=1.0,
     )
     out = _planned_campaign_reserve_for_line(
-        line, sku=sku, cust_term=None, dist_term=None
+        line,
+        sku=sku,
+        cust_term=None,
+        dist_term=None,
+        margins={"customer_margin_pct": 0.12, "customer_rebate_pct": 0.03, "distributor_margin_pct": 0.08},
     )
     assert out["included"] is True
     assert out["planned_usd"] is not None
     assert out["planned_usd"] > 0
+
+
+def test_planned_reserve_without_terms_or_tenant_margins_is_not_configured():
+    """Warren 2026-11-27: profit-reservation margins live on the tenant profile; unset means not configured."""
+    line = SimpleNamespace(estimate_qty=10.0, srp=1000.0, vat_rate=0.15, dealer_margin_pct=0.08, distributor_id=1)
+    sku = SimpleNamespace(
+        controlled_cost_amount=100.0,
+        fx_plan_currency_per_cost_currency=1.0,
+        vat_rate_pct=0.15,
+        reserve_total_pct=0.10,
+        promo_reserve_split_pct=1.0,
+    )
+    out = _planned_campaign_reserve_for_line(line, sku=sku, cust_term=None, dist_term=None)
+    assert out["included"] is False
+    assert out["flags"] == ["profit_reservation_margins_not_configured"]
+    assert out["planned_usd"] is None
+
+
+def test_planned_reserve_without_any_vat_rate_is_not_configured():
+    line = SimpleNamespace(estimate_qty=10.0, srp=1000.0, vat_rate=None, dealer_margin_pct=0.08, distributor_id=1)
+    sku = SimpleNamespace(
+        controlled_cost_amount=100.0,
+        fx_plan_currency_per_cost_currency=1.0,
+        vat_rate_pct=None,
+        reserve_total_pct=0.10,
+        promo_reserve_split_pct=1.0,
+    )
+    out = _planned_campaign_reserve_for_line(
+        line,
+        sku=sku,
+        cust_term=None,
+        dist_term=None,
+        margins={"customer_margin_pct": 0.12, "customer_rebate_pct": 0.03, "distributor_margin_pct": 0.08},
+    )
+    assert out["included"] is False
+    assert out["flags"] == ["vat_rate_not_configured"]
 
 
 def test_actual_only_counts_when_planned_is_included():

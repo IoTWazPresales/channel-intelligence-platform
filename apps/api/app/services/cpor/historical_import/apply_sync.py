@@ -22,8 +22,13 @@ from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine
 from app.models.cpor_historical import ImportCporHistoricalStagingLine
 from app.models.ingestion import ImportJob
+from app.services.commercial_tenant_profile import (
+    configured_vat_rate_pct,
+    require_tenant_currency_code,
+)
 from app.services.cpor.historical_import.resolve import case_apply_blockers
 from app.services.cpor.lifecycle import workflow_status_for
+from app.services.cpor.promotion_type_vocab import require_channel
 from app.services.cpor.line_window import follow_case_window
 from app.services.imports.import_job_background_metadata import persist_clear_background_task_metadata
 from app.utils.json_safe import to_jsonable
@@ -170,12 +175,17 @@ def _apply_one_case(
 
     status = (head.lifecycle_status or "settled").strip() or "settled"
     promo = (head.promotion_type or head.promotion_type_raw or "historical").strip() or "historical"
-    channel = (head.channel or "reseller").strip() or "reseller"
+    requested_channel = (head.channel or "").strip() or None
     roe = head.roe_snapshot
 
     existing = db.scalar(select(CporCase).where(CporCase.case_code == case_code))
     if existing is not None and (existing.origin or "native") != "historical_import":
         raise RuntimeError("native_collision")
+
+    # A new historical case takes the model's default tenant (the apply sets no tenant id).
+    tenant = (existing.tenant_id if existing is not None else None) or "default"
+    channel = require_channel(tenant, requested_channel)
+    tenant_vat = configured_vat_rate_pct(tenant)
 
     if existing is None:
         case = CporCase(
@@ -187,7 +197,7 @@ def _apply_one_case(
             window_end=window_end,
             status=status[:32],
             roe_snapshot=roe,
-            currency_code="ZAR",
+            currency_code=require_tenant_currency_code(tenant),
             channel=channel[:32],
             origin="historical_import",
             notes=f"Imported via historical job {job_id}",
@@ -234,7 +244,14 @@ def _apply_one_case(
         grain_rows[grain] = r
 
     for grain, r in grain_rows.items():
-        _upsert_line(db, case_id=case_id, row=r, window_start=window_start, window_end=window_end)
+        _upsert_line(
+            db,
+            case_id=case_id,
+            row=r,
+            window_start=window_start,
+            window_end=window_end,
+            tenant_vat_rate=tenant_vat,
+        )
 
     db.add(
         CporCaseEvent(
@@ -261,10 +278,14 @@ def _upsert_line(
     row: ImportCporHistoricalStagingLine,
     window_start: date,
     window_end: date,
+    tenant_vat_rate: float | None,
 ) -> None:
     product_id = int(row.resolved_product_id)  # type: ignore[arg-type]
     distributor_id = int(row.resolved_distributor_id) if row.resolved_distributor_id is not None else None
     pod = row.pod_quarter
+    vat_rate = float(row.vat_rate) if row.vat_rate is not None else tenant_vat_rate
+    if vat_rate is None:
+        raise ValueError("vat_rate_not_configured")
     values = {
         "case_id": case_id,
         "product_id": product_id,
@@ -273,7 +294,7 @@ def _upsert_line(
         "window_start": window_start,
         "window_end": window_end,
         "srp": _num(row.srp, 0.0),
-        "vat_rate": _num(row.vat_rate, 0.15),
+        "vat_rate": vat_rate,
         "dealer_margin_pct": _num(row.dealer_margin_pct, 0.0),
         "margin_source": "historical_import",
         "cost_basis": row.cost_basis,

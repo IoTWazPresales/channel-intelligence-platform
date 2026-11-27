@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase
 from app.models.dimensions import DimCustomer
+from app.services.commercial_tenant_profile import tenant_currency_code
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.evidence_basis import (
     CLAIM_EVIDENCED,
@@ -61,8 +62,13 @@ def shape_segment_pcts(
     }
 
 
-def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
-    """Aggregate book-level owed / paid / outstanding / blocked for Settlement grammar-1."""
+def build_settlement_book_read_model(session: Session, *, tenant_id: str = "default") -> dict[str, Any]:
+    """Aggregate book-level owed / paid / outstanding / blocked for Settlement grammar-1.
+
+    The book currency is the tenant's ``currency_code``; unset is reported as
+    ``currency_not_configured`` with ``currency_code`` None.
+    """
+    currency_code = tenant_currency_code(tenant_id)
     cases = list(
         session.scalars(
             select(CporCase)
@@ -77,7 +83,8 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
         return {
             "data_unavailable": False,
             "open_case_count": 0,
-            "currency_code": "ZAR",
+            "currency_code": currency_code,
+            "currency_not_configured": currency_code is None,
             "book_total": 0.0,
             "settled_amount": 0.0,
             "outstanding_amount": 0.0,
@@ -204,17 +211,19 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
     outstanding_pct = segs["outstanding_pct"]
     blocked_pct = segs["blocked_pct"]
 
+    ccy_prefix = f"{currency_code} " if currency_code else ""
     read_line = (
-        f"{open_case_count} open cases · R {outstanding_amount:,.0f} outstanding"
-        f" · R {settled_amount:,.0f} paid"
+        f"{open_case_count} open cases · {ccy_prefix}{outstanding_amount:,.0f} outstanding"
+        f" · {ccy_prefix}{settled_amount:,.0f} paid"
     )
     if blocked_amount > 0:
-        read_line += f" · R {blocked_amount:,.0f} blocked on FX"
+        read_line += f" · {ccy_prefix}{blocked_amount:,.0f} blocked on FX"
 
     return {
         "data_unavailable": False,
         "open_case_count": open_case_count,
-        "currency_code": "ZAR",
+        "currency_code": currency_code,
+        "currency_not_configured": currency_code is None,
         "book_total": round(book_total, 2),
         "settled_amount": round(settled_amount, 2),
         "outstanding_amount": round(outstanding_amount, 2),

@@ -35,7 +35,7 @@ def _f(v: Any) -> float | None:
 
 
 def _line_ttl_in_case_currency(line: Any, case_ccy: str) -> float | None:
-    """Stored ttl_support (ZAR) or ttl_support_usd — never qty × support_unit."""
+    """Stored ttl_support (case currency) or ttl_support_usd — never qty × support_unit."""
     if case_ccy == "USD":
         return _f(getattr(line, "ttl_support_usd", None))
     return _f(getattr(line, "ttl_support", None))
@@ -70,7 +70,9 @@ def compute_case_payment_recon(
 ) -> dict[str, Any]:
     """Pure recon math. ``case`` / ``lines`` / ``evidence`` are duck-typed."""
     flags: list[str] = []
-    case_ccy = str(getattr(case, "currency_code", None) or "ZAR").upper()
+    case_ccy = str(getattr(case, "currency_code", None) or "").upper()
+    if not case_ccy:
+        flags.append("currency_not_configured")
 
     owed: float | None = None
     if _case_ineligible_for_owed(case):
@@ -109,7 +111,8 @@ def compute_case_payment_recon(
         ev_id = int(getattr(ev, "id", 0) or 0)
         st = str(getattr(ev, "payment_status", None) or "").lower() or None
         amt = _f(getattr(ev, "amount", None))
-        ccy = str(getattr(ev, "currency_code", None) or "ZAR").upper()
+        # Evidence without a currency is never counted as case currency.
+        ccy = str(getattr(ev, "currency_code", None) or "").upper()
         pd = getattr(ev, "payment_date", None)
         pd_key = pd.isoformat() if hasattr(pd, "isoformat") else str(pd or "")
         sort_key = (pd_key, ev_id)
@@ -129,7 +132,7 @@ def compute_case_payment_recon(
             if pd is not None:
                 if last_paid is None or pd > last_paid:
                     last_paid = pd
-            if ccy == case_ccy:
+            if ccy and ccy == case_ccy:
                 paid_same += amt
             else:
                 paid_other += amt

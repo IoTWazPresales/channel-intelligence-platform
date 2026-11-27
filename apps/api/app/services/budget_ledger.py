@@ -772,6 +772,7 @@ def _reserve_parts(session: Session, item: Any) -> tuple[float | None, float | N
     """Campaign and non-campaign reserve from the same lineup economics."""
     from app.models.commercial_lineup import CommercialLineupLine
     from app.models.commercial_planner import CommercialSkuAssumption
+    from app.services.commercial_tenant_profile import profit_reservation_margins
     from app.services.lineup.profit_reservation import compute_profit_with_reservation
 
     sku = session.scalar(
@@ -795,6 +796,10 @@ def _reserve_parts(session: Session, item: Any) -> tuple[float | None, float | N
     qty = float(item.planned_volume_units or 0)
     if qty <= 0:
         return None, None
+    # Lineup plan items carry no tenant id; the lineup reads the default tenant profile.
+    margins = profit_reservation_margins("default")
+    if margins is None:
+        return None, None
     economics = compute_profit_with_reservation(
         net_requirement_units=qty,
         target_srp_local=srp,
@@ -802,6 +807,9 @@ def _reserve_parts(session: Session, item: Any) -> tuple[float | None, float | N
         controlled_cost_amount=float(sku.controlled_cost_amount),
         reserve_total_pct=float(sku.reserve_total_pct),
         promo_reserve_split_pct=float(sku.promo_reserve_split_pct),
+        customer_margin_pct=margins["customer_margin_pct"],
+        customer_rebate_pct=margins["customer_rebate_pct"],
+        distributor_margin_pct=margins["distributor_margin_pct"],
         vat_rate_pct=float(sku.vat_rate_pct),
         fx_plan_currency_per_cost_currency=float(sku.fx_plan_currency_per_cost_currency),
     )

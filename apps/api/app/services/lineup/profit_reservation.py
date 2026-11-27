@@ -49,18 +49,20 @@ def compute_profit_with_reservation(
     promo_srp_local: float | None,
     controlled_cost_amount: float,
     reserve_total_pct: float,
-    promo_reserve_split_pct: float = 0.5,
-    customer_margin_pct: float = 0.12,
-    customer_rebate_pct: float = 0.03,
-    distributor_margin_pct: float = 0.08,
-    vat_rate_pct: float = 0.15,
-    fx_plan_currency_per_cost_currency: float = 1.0,
+    promo_reserve_split_pct: float,
+    customer_margin_pct: float,
+    customer_rebate_pct: float,
+    distributor_margin_pct: float,
+    vat_rate_pct: float,
+    fx_plan_currency_per_cost_currency: float,
     normal_price_share: float = DEFAULT_NORMAL_PRICE_SHARE,
 ) -> dict[str, Any]:
     """Profit + embedded reservation for a suggested lineup quantity.
 
     Uses the existing commercial planner economics calculator so B2 stays aligned
-    with CP line math. Reservation source from tenant profile (Q-002).
+    with CP line math. Reservation source from tenant profile (Q-002). The margins and
+    rebate come from the tenant's ``profit_reservation_margins``; callers that find them
+    unset report ``profit_reservation_margins_not_configured`` instead of calling this.
     """
     from app.services import commercial_tenant_profile as tenant_profile
 

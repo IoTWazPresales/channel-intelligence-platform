@@ -15,9 +15,16 @@ from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.dialects import postgresql
 
 from app.services import supply_overview as mod
+
+
+@pytest.fixture(autouse=True)
+def _tenant_reporting_timezone(monkeypatch):
+    # Warren 2026-11-27 decisions: the reporting timezone comes from the tenant profile.
+    monkeypatch.setattr(mod, "reporting_timezone", lambda _tenant: "Europe/London")
 
 
 def _sql(stmt) -> str:
@@ -153,3 +160,19 @@ def test_a_failed_po_total_is_flagged_not_fatal() -> None:
     out = asyncio.run(mod.supply_overview(Db(), {"tenant_id": "default"}))
     assert out["po_observed"] == 0 and out["po_linked"] == 0
     assert out["po_data_unavailable"] is True and out["po_coverage_ratio"] is None
+
+
+def test_the_week_and_today_use_the_tenant_reporting_timezone() -> None:
+    db = _Db()
+    out = asyncio.run(mod.supply_overview(db, {"tenant_id": "default"}))
+    headline_sql = next(s for s in db.sql if "WITH twin_rem" in s)
+    assert ":reporting_tz" in headline_sql and "Africa/Johannesburg" not in headline_sql
+    assert "Europe/London time" in out["captions"]["landed_pod_iso_week"]
+
+
+def test_an_unset_reporting_timezone_is_not_configured(monkeypatch) -> None:
+    monkeypatch.setattr(mod, "reporting_timezone", lambda _tenant: None)
+    db = _Db()
+    out = asyncio.run(mod.supply_overview(db, {"tenant_id": "default"}))
+    assert out["data_unavailable"] is True and out["reporting_timezone_not_configured"] is True
+    assert not any("WITH twin_rem" in s for s in db.sql)

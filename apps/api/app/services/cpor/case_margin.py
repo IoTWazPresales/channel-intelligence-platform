@@ -63,7 +63,7 @@ def _line_margin(
         pricing = compute_lineup_pricing(
             LineupPricingInputs(
                 srp_inc_vat_local=_f(line.srp) or 0.0,
-                vat_rate_pct=_f(line.vat_rate) or 0.0,
+                vat_rate_pct=_f(line.vat_rate),
                 dealer_margin_pct=_f(line.dealer_margin_pct) or 0.0,
                 rebate_pct=rebate_pct or 0.0,
                 distributor_margin_pct=distributor_margin_pct or 0.0,
@@ -74,6 +74,8 @@ def _line_margin(
             )
         )
         dap = pricing.calc_dap_cost_currency or None
+        if "vat_rate_not_configured" in pricing.flags:
+            flags.append("vat_rate_not_configured")
 
     pm_cost: float | None = None
     landed: float | None = None

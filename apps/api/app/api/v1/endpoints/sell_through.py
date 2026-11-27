@@ -59,11 +59,18 @@ def _strs(raw: str | None) -> list[str]:
     return [p.strip() for p in (raw or "").split("|") if p.strip()]
 
 
+def _reporting_today(tenant_id: str) -> date:
+    today = commercial_tenant_profile.reporting_today(tenant_id)
+    if today is None:
+        raise HTTPException(status_code=400, detail="reporting_timezone_not_configured")
+    return today
+
+
 @router.get("/filters")
 def get_filters(user: dict = Depends(get_current_user)):
     tenant_id = tenant_id_from_user(user)
     cal = tenant_calendar(tenant_id)
-    today = commercial_tenant_profile.reporting_today(tenant_id)
+    today = _reporting_today(tenant_id)
     with SessionLocal() as session:
         opts = filter_options(session, tenant_id)
         dims = available_dimensions(session, tenant_id)
@@ -75,7 +82,8 @@ def get_filters(user: dict = Depends(get_current_user)):
         "today": today.isoformat(),
         "calendar": {"type": cal.type, "year": cal.year(today).as_dict()},
         "vat": commercial_tenant_profile.sales_value_vat_basis(tenant_id),
-        "vat_rate_pct": commercial_tenant_profile.vat_rate_pct(tenant_id),
+        "vat_rate_pct": commercial_tenant_profile.configured_vat_rate_pct(tenant_id),
+        "vat_rate_not_configured": commercial_tenant_profile.configured_vat_rate_pct(tenant_id) is None,
     }
 
 
@@ -187,8 +195,8 @@ def get_overview(
             session,
             f,
             tenant_calendar(tenant_id),
-            today=commercial_tenant_profile.reporting_today(tenant_id),
-            vat_rate=commercial_tenant_profile.vat_rate_pct(tenant_id),
+            today=_reporting_today(tenant_id),
+            vat_rate=commercial_tenant_profile.configured_vat_rate_pct(tenant_id),
         )
 
 
@@ -212,9 +220,9 @@ def get_product_detail(
             session,
             tenant_id=tenant_id,
             product_id=product_id,
-            as_of=as_of or commercial_tenant_profile.reporting_today(tenant_id),
+            as_of=as_of or _reporting_today(tenant_id),
             vat=vat_basis,
-            vat_rate=commercial_tenant_profile.vat_rate_pct(tenant_id),
+            vat_rate=commercial_tenant_profile.configured_vat_rate_pct(tenant_id),
             customer_ids=_ints(customer_ids) or None,
         )
     if out is None:

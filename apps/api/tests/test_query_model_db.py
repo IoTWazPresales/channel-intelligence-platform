@@ -671,7 +671,7 @@ async def test_cpor_measures_follow_the_portfolio_service():
 
         def case(code, **kw):
             c = CporCase(
-                case_code=_key(code)[-60:], tenant_id=TA, customer_id=s.cA1.id, promotion_type="Price drop",
+                case_code=_key(code)[-60:], tenant_id=TA, customer_id=s.cA1.id, promotion_type="Price drop", currency_code="ZAR",
                 window_start=date(2026, 3, 2), window_end=date(2026, 3, 29), **kw,
             )
             db.add(c)

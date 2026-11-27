@@ -32,6 +32,27 @@ UPLOAD_DAY = date(2026, 10, 22)
 LABEL = "Dated after the upload date (check the year)"
 
 
+@pytest.fixture(autouse=True)
+def _tenant_reporting_timezone(monkeypatch, tmp_path):
+    # Warren 2026-11-27 decisions: the reporting timezone is set on the tenant profile, not built in.
+    import json
+
+    from app.services import commercial_tenant_profile
+
+    monkeypatch.setattr(commercial_tenant_profile, "_tenant_profiles_dir", lambda: tmp_path)
+    (tmp_path / "default.json").write_text(json.dumps({"reporting_timezone": "Africa/Johannesburg"}))
+
+
+def test_an_unset_reporting_timezone_holds_back_nothing(tmp_path) -> None:
+    (tmp_path / "default.json").write_text("{}")
+
+    class Job:
+        created_at = datetime(2026, 10, 21, 22, 30, tzinfo=timezone.utc)
+
+    assert upload_day(Job()) is None
+    assert not dated_after(date(2030, 1, 1), upload_day(Job()))
+
+
 def test_upload_day_is_the_reporting_timezone_date() -> None:
     class Job:
         created_at = datetime(2026, 10, 21, 22, 30, tzinfo=timezone.utc)  # 00:30 on the 22nd in Johannesburg

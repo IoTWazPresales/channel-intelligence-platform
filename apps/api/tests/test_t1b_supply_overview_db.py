@@ -61,7 +61,9 @@ async def _totals(db):
 
 
 @pytest.mark.anyio
-async def test_po_totals_match_coverage_and_the_fixture_delta(session):
+async def test_po_totals_match_coverage_and_the_fixture_delta(session, monkeypatch):
+    # Warren 2026-11-27 decisions: the reporting timezone comes from the tenant profile.
+    monkeypatch.setattr("app.services.supply_overview.reporting_timezone", lambda _tenant: "Africa/Johannesburg")
     tag = session.info["tag"]
     cov = await coverage(session)
     before = await _totals(session)

@@ -27,6 +27,26 @@ def _tenant_vat_rate(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _tenant_cpor_vocab(monkeypatch, tmp_path):
+    """Requirement change: promotion types are tenant config, not a code list.
+
+    These tests still assert the type name they save here.
+    """
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    saved = {
+        "cpor_promotion_types": ["Stock PP (In-Direct)", "Sell out PP"],
+        "cpor_channels": ["reseller"],
+        "cpor_stock_promote_type": "Stock PP (In-Direct)",
+        # Warren 2026-11-27 decisions: the case currency comes from the tenant profile.
+        "currency_code": "ZAR",
+    }
+    profile.save_tenant_profile_overrides("tenant-a", saved)
+    profile.save_tenant_profile_overrides("default", saved)
+
+
+@pytest.fixture(autouse=True)
 def _no_budget_ledger(monkeypatch):
     monkeypatch.setattr("app.services.budget_ledger.used_usd", lambda *_a, **_k: None)
 

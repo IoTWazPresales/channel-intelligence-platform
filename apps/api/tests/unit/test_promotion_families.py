@@ -18,7 +18,6 @@ from app.models.cpor import CporCase
 from app.models.dimensions import DimCustomer
 from app.services.cpor import promo_plan_builder
 from app.services.cpor.promotion_type_vocab import (
-    CPOR_PROMOTION_TYPES,
     CUSTOMER_SELL_THROUGH,
     DEFAULT_CUSTOMER_PROMOTION_TYPE,
     DISTRIBUTOR_SELL_OUT,
@@ -31,10 +30,14 @@ from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
 
-def test_every_family_type_is_a_stored_cpor_type():
+def test_families_classify_stored_names_and_do_not_ship_a_builtin_list():
+    """Warren, 27 Nov: type names are tenant config. Families still classify the stored names."""
+    from app.services.cpor import promotion_type_vocab as vocab
+
+    assert not hasattr(vocab, "CPOR_PROMOTION_TYPES")
     for types in PROMOTION_FAMILIES.values():
-        for t in types:
-            assert t in CPOR_PROMOTION_TYPES
+        assert types
+        assert all(isinstance(t, str) and t.strip() for t in types)
 
 
 def test_the_two_families_do_not_share_a_type():
@@ -80,9 +83,11 @@ def test_meta_promotion_types_by_family():
     assert body["family"] == CUSTOMER_SELL_THROUGH
 
 
-def test_meta_promotion_types_without_family_is_unchanged():
-    assert ep.promotion_types()["promotion_types"] == sorted(CPOR_PROMOTION_TYPES)
-    assert ep.promotion_types(family=None)["promotion_types"] == sorted(CPOR_PROMOTION_TYPES)
+def test_meta_promotion_types_without_family_is_the_tenant_list(monkeypatch):
+    """Warren, 27 Nov: the unfiltered list is the tenant's saved types. There is no built-in list."""
+    monkeypatch.setattr(ep, "tenant_promotion_types", lambda tenant_id="default": ("Sell-Through PP",))
+    assert ep.promotion_types()["promotion_types"] == ["Sell-Through PP"]
+    assert ep.promotion_types(family=None)["promotion_types"] == ["Sell-Through PP"]
 
 
 def test_meta_promotion_types_unknown_family_is_400():

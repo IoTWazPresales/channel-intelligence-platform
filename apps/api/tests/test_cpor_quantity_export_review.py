@@ -105,7 +105,7 @@ def test_explicit_profile_order_still_takes_priority_and_empty_maps_fail():
 def test_sku_suggestion_targets_one_live_layer_in_preview_and_apply(
     monkeypatch, other_distributor, other_quarter
 ):
-    case = CporCase(id=1, customer_id=1)
+    case = CporCase(currency_code="ZAR", id=1, customer_id=1)
 
     def line(ident, product=1, qty=0, remark=None, distributor=1, quarter="26Q1"):
         return CporCaseLine(

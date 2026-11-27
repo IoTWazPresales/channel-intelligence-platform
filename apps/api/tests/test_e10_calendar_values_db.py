@@ -322,6 +322,7 @@ async def test_ratio_follows_each_calendar_bucket():
             await db.flush()
             bucket = next(b for b in cal.buckets(date(2026, 1, 1), date(2026, 12, 31), "month"))
             case = CporCase(
+                currency_code="ZAR",
                 case_code=_key("case")[-60:], tenant_id=TENANT, customer_id=customer.id, promotion_type="Price drop",
                 window_start=bucket.start, window_end=bucket.end, status="approved", intelligence_exclude=False,
             )

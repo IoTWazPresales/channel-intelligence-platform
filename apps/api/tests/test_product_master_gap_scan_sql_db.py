@@ -390,6 +390,7 @@ def _seed(db) -> dict[str, Any]:
     db.add(customer)
     db.flush()
     claim_case = CporCase(
+        currency_code="ZAR",
         tenant_id="default",
         case_code=f"GS-{tag}",
         customer_id=int(customer.id),

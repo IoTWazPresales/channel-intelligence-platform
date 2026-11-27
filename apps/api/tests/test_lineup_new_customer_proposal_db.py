@@ -64,7 +64,7 @@ async def _product(
     db.add(p)
     await db.flush()
     if cost is not None:
-        db.add(CommercialSkuAssumption(product_id=p.id, controlled_cost_amount=cost))
+        db.add(CommercialSkuAssumption(vat_rate_pct=0.15, product_id=p.id, controlled_cost_amount=cost))
         await db.flush()
     return p
 

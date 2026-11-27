@@ -1,6 +1,7 @@
 """Daily FX quotes stored for case suggestion and historical backfill.
 
-Quote pair USDZAR means ZAR per 1 USD — same orientation as cpor_case.roe_snapshot.
+Quote pair ``USD<ccy>`` means <ccy> per 1 USD — same orientation as cpor_case.roe_snapshot.
+The quote currency is the case's (or tenant profile's) ``currency_code``; there is no default pair.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ class FxDailyRate(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rate_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    quote_pair: Mapped[str] = mapped_column(String(16), nullable=False, default="USDZAR")
+    quote_pair: Mapped[str] = mapped_column(String(16), nullable=False)
     rate: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False)
     source: Mapped[str] = mapped_column(String(64), nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

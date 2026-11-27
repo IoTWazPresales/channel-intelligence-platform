@@ -24,6 +24,7 @@ from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.commercial_tenant_profile import (
     SUPPORT_NORMS_TRAILING_QUARTERS as TENANT_NORMS_DEFAULT,
     support_norms_trailing_quarters,
+    tenant_currency_code,
 )
 from app.services.cpor.evidence_basis import (
     SOURCE_ATTESTED,
@@ -218,7 +219,7 @@ def build_support_norms(
             "anchor_quarter": None,
             "by_customer": [],
             "currency_compute": "USD",
-            "currency_display_secondary": "ZAR",
+            "currency_display_secondary": tenant_currency_code(),
             "evidence_basis_mix": evidence_basis_counts(load_evidence_basis_by_case(session, cases)),
             "attested_unmatched_file": _attested_unmatched_payload(session),
             "evidence_basis_note": (
@@ -304,7 +305,7 @@ def build_support_norms(
         "anchor_quarter": latest,
         "by_customer": by_customer_out,
         "currency_compute": "USD",
-        "currency_display_secondary": "ZAR",
+        "currency_display_secondary": tenant_currency_code(),
         "pct_definition": (
             "mean(support_unit / srp) over non-voided lines with srp > 0 "
             "(§4.3 case-value % = unit support vs SRP)"

@@ -32,10 +32,27 @@ def test_workbook_dealer_still_10347_via_u2():
     assert quantize_money(compute_dealer_price("13999", "0.15", "0.15")) == Decimal("10347.09")
 
 
-def test_meta_promotion_types():
+def test_meta_promotion_types_are_the_saved_tenant_list(tmp_path, monkeypatch):
+    """Requirement change: the meta list is this tenant's saved config, not a built-in list."""
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    profile.save_tenant_profile_overrides(
+        "default",
+        {"cpor_promotion_types": ["Sell out PP", "Sell-Through PP"]},
+    )
     r = client.get("/api/v1/cpor/meta/promotion-types")
     assert r.status_code == 200
-    assert "Sell out PP" in r.json()["promotion_types"]
+    assert r.json()["promotion_types"] == ["Sell out PP", "Sell-Through PP"]
+
+
+def test_meta_promotion_types_empty_when_unset(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    r = client.get("/api/v1/cpor/meta/promotion-types")
+    assert r.status_code == 200
+    assert r.json()["promotion_types"] == []
 
 
 def test_meta_lifecycle():
@@ -45,7 +62,19 @@ def test_meta_lifecycle():
     assert r.json()["actions"]["propose"] == "proposed"
 
 
-def test_create_case_mocked():
+def test_create_case_mocked(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    profile.save_tenant_profile_overrides(
+        "default",
+        {
+            "cpor_promotion_types": ["Sell out PP"],
+            "cpor_channels": ["reseller"],
+            # Warren 2026-11-27 decisions: the case currency comes from the tenant profile.
+            "currency_code": "ZAR",
+        },
+    )
     cust = SimpleNamespace(id=1, code="C1", name="Cust")
 
     case = SimpleNamespace(
@@ -104,6 +133,29 @@ def test_create_case_mocked():
     assert body["case_code"] == "C26C00001"
     assert body["status"] == "draft"
     assert body["allowed_next"] == ["cancelled", "proposed"]
+
+
+def test_create_case_without_any_currency_is_not_configured(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    profile.save_tenant_profile_overrides(
+        "default", {"cpor_promotion_types": ["Sell out PP"], "cpor_channels": ["reseller"]}
+    )
+    with patch("app.api.v1.endpoints.cpor_cases.SessionLocal") as SL:
+        r = client.post(
+            "/api/v1/cpor/cases",
+            json={
+                "customer_id": 1,
+                "promotion_type": "Sell out PP",
+                "window_start": "2026-01-01",
+                "window_end": "2026-01-31",
+            },
+            headers={"X-User-Id": "warren"},
+        )
+    assert r.status_code == 400
+    assert r.json()["detail"] == "currency_not_configured"
+    SL.assert_not_called()
 
 
 def test_transition_illegal_returns_409():

@@ -1,7 +1,7 @@
 """Read-only ThinLens grains for Stock Sell-through and Forecasts.
 
 Callers must print current_database() first. ISO weeks are Monday-keyed in
-Africa/Johannesburg, same as Movement. Do not copy lab fixture W36 / TechMart.
+the tenant reporting timezone, same as Movement. Do not copy lab fixture W36 / TechMart.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant_scope import tenant_id_from_user
+from app.services.commercial_tenant_profile import reporting_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,10 @@ TRAILING_WEEKS = 8
 _BOUNDS_SQL = """
 WITH bounds AS (
   SELECT
-    (now() AT TIME ZONE 'Africa/Johannesburg')::date AS today_sast,
+    (now() AT TIME ZONE CAST(:reporting_tz AS text))::date AS today_sast,
     (
-      (now() AT TIME ZONE 'Africa/Johannesburg')::date
-      - (EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Africa/Johannesburg')::date)::int - 1)
+      (now() AT TIME ZONE CAST(:reporting_tz AS text))::date
+      - (EXTRACT(ISODOW FROM (now() AT TIME ZONE CAST(:reporting_tz AS text))::date)::int - 1)
     )::date AS week_monday
 )
 SELECT
@@ -132,8 +133,14 @@ def _empty(dbname: str | None, tenant: str) -> dict[str, Any]:
 async def stock_leaves_honesty(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     dbname = await db.scalar(text("SELECT current_database()"))
     tenant = tenant_id_from_user(user)
+    zone = reporting_timezone(tenant)
+    if zone is None:
+        return {
+            **_empty(str(dbname) if dbname is not None else None, tenant),
+            "reporting_timezone_not_configured": True,
+        }
     try:
-        row = (await db.execute(text(_BOUNDS_SQL), {"tenant": tenant})).mappings().one()
+        row = (await db.execute(text(_BOUNDS_SQL), {"tenant": tenant, "reporting_tz": zone})).mappings().one()
         customers = [
             dict(r)
             for r in (await db.execute(text(_CUSTOMERS_SQL), {"tenant": tenant})).mappings().all()
@@ -157,7 +164,7 @@ async def stock_leaves_honesty(db: AsyncSession, user: dict | None) -> dict[str,
     customer_names = [str(c["name"]) for c in customers if c.get("name")]
 
     cst_body_parts = [
-        "Sell-through comes from retailer files, by week (Africa/Johannesburg).",
+        f"Sell-through comes from retailer files, by week ({zone}).",
         f"Current week {current_short} has {cst_now} rows.",
     ]
     if cst_max_period is not None:

@@ -234,6 +234,8 @@ async def on_the_water(
     as_of = reporting_today(tenant_id)
     if (raw := params.get("as_of")) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
         as_of = date.fromisoformat(raw)  # lets a test or a what-if fix the day
+    if as_of is None:
+        raise HTTPException(status_code=400, detail="reporting_timezone_not_configured")
     w0, w1 = _iso_week_bounds(as_of)
     cohort_clause = _cohort_clause(filt, today=as_of, week_start=w0, week_end=w1)
 

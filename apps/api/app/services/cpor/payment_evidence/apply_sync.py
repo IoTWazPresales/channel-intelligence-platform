@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 
 from app.models.cpor import CporCase, CporCaseEvent
 from app.models.cpor_payment import CporPaymentEvidence, ImportCporPaymentStagingLine
+from app.services.commercial_tenant_profile import tenant_currency_code
 from app.services.cpor.lifecycle import workflow_status_for
+from app.services.cpor.promotion_type_vocab import require_channel
 
 
 def _default_promo(raw: str | None) -> str:
@@ -32,6 +34,7 @@ def _ensure_shell_case(
     *,
     line: ImportCporPaymentStagingLine,
     tenant_id: str,
+    currency_code: str,
     actor: str | None,
 ) -> int | None:
     if line.linked_case_id is not None:
@@ -56,8 +59,8 @@ def _ensure_shell_case(
         window_start=ws,
         window_end=we,
         status="draft",
-        currency_code=(line.currency_code or "ZAR")[:8],
-        channel="reseller",
+        currency_code=currency_code,
+        channel=require_channel(tenant_id, None),
         origin="payment_evidence",
         notes=(
             "Shell case created from payment/CN evidence import. "
@@ -99,10 +102,23 @@ def run_cpor_payment_apply_sync(
             )
         ).all()
     )
+    tenant_ccy = tenant_currency_code(tenant_id)
+
+    def _line_currency(ln: ImportCporPaymentStagingLine) -> str:
+        ccy = (ln.currency_code or "").strip().upper() or tenant_ccy
+        if not ccy:
+            raise ValueError("currency_not_configured")
+        return ccy[:8]
+
+    for ln in lines:
+        _line_currency(ln)
+
     shells = 0
     for ln in lines:
         before = ln.linked_case_id
-        cid = _ensure_shell_case(db, line=ln, tenant_id=tenant_id, actor=actor)
+        cid = _ensure_shell_case(
+            db, line=ln, tenant_id=tenant_id, currency_code=_line_currency(ln), actor=actor
+        )
         if cid is not None and before is None:
             shells += 1
 
@@ -125,7 +141,7 @@ def run_cpor_payment_apply_sync(
                 "payment_status": ln.payment_status,
                 "payment_date": ln.payment_date,
                 "amount": ln.amount,
-                "currency_code": (ln.currency_code or "ZAR")[:8],
+                "currency_code": _line_currency(ln),
                 "customer_token": ln.customer_token,
                 "distributor_token": ln.distributor_token,
                 "description": ln.description,

@@ -88,6 +88,20 @@ def test_missing_pm_bottom_flag_without_blocking():
     assert res.pricing_chain["outputs"]["calc_profit_total"] is None
 
 
+def test_no_vat_rate_anywhere_is_not_configured_not_zero():
+    """Warren 2026-11-27: no implied VAT rate. A line with no file, SKU or tenant rate is not priced."""
+    res = resolve_lineup_pricing(
+        srp_inc_vat_local=1150.0,
+        quantity_units=1,
+        file_roe=1.0,
+        defaults=LineupTradeTermDefaults(controlled_cost_amount=10.0),
+    )
+    assert "vat_rate_not_configured" in res.flags
+    assert res.pricing_chain["sources"]["vat_rate_pct"] == "not_configured"
+    assert res.pricing_chain["inputs"]["vat_rate_pct"] is None
+    assert res.pricing_chain["outputs"]["calc_profit_total"] is None
+
+
 def test_evidence_columns_preserved_in_chain():
     res = resolve_lineup_pricing(
         srp_inc_vat_local=1000.0,

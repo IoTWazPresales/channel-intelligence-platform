@@ -18,6 +18,7 @@ from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine, CporClaimEvidenceLine
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.commercial_tenant_profile import tenant_currency_code
 from app.services.customer_reporting import reporting_customer_clauses
 from app.services.cpor.case_supersession import (
     preview_case_supersession,
@@ -65,9 +66,11 @@ from app.services.cpor.promo_load_recon import build_promo_load_recon
 from app.services.cpor.promotion_type_vocab import (
     CPOR_CASE_STATUS_SET,
     CPOR_OPEN_CASE_STATUSES,
-    CPOR_PROMOTION_TYPE_SET,
     PROMOTION_FAMILIES,
     promotion_family_types,
+    promotion_types as tenant_promotion_types,
+    require_channel,
+    require_promotion_type,
 )
 from app.services.cpor.recompute import recompute_case, recompute_case_line
 from app.services.cpor.evidence_basis import (
@@ -531,8 +534,8 @@ class CaseCreate(BaseModel):
     roe_snapshot: float | None = None
     fx_proposed_rate: float | None = None
     fx_mode: str | None = None
-    currency_code: str = "ZAR"
-    channel: str = "reseller"
+    currency_code: str | None = None
+    channel: str | None = None
     notes: str | None = None
 
 
@@ -554,7 +557,7 @@ class LineCreate(BaseModel):
     distributor_id: int | None = None
     pod_quarter: str | None = None
     srp: float
-    vat_rate: float = 0.15
+    vat_rate: float | None = None
     dealer_margin_pct: float | None = None
     cost_basis: float | None = None
     cost_source: str | None = None
@@ -638,6 +641,7 @@ def _apply_case_filters(
     evidence_basis: str | None,
     reporting_only: bool = False,
     official_promotion_types: bool = False,
+    tenant_id: str = "default",
     promotion_family: str | None = None,
     open_only: bool = False,
     today: date | None = None,
@@ -712,7 +716,11 @@ def _apply_case_filters(
             *reporting_customer_clauses()
         )
     if _plain_param(official_promotion_types, False) is True:
-        stmt = stmt.where(CporCase.promotion_type.in_(tuple(CPOR_PROMOTION_TYPE_SET)))
+        names = tenant_promotion_types(tenant_id)
+        if names:
+            stmt = stmt.where(CporCase.promotion_type.in_(tuple(names)))
+        else:
+            stmt = stmt.where(CporCase.id == -1)
     promotion_family = _plain_param(promotion_family, None)
     if promotion_family is not None:
         stmt = stmt.where(CporCase.promotion_type.in_(_family_types_or_400(promotion_family)))
@@ -769,7 +777,7 @@ def list_cases(
     ),
     official_promotion_types: bool = Query(
         default=False,
-        description="When true, only CPOR promotion types (Sell out PP, Sell-Through PP, Stock PP (In-Direct)).",
+        description="When true, only this tenant's saved promotion types.",
     ),
     promotion_family: str | None = Query(
         default=None,
@@ -809,6 +817,7 @@ def list_cases(
             evidence_basis=evidence_basis,
             reporting_only=reporting_only,
             official_promotion_types=official_promotion_types,
+            tenant_id=tenant_id_from_user(user),
             promotion_family=promotion_family,
             open_only=open_only,
         )
@@ -936,6 +945,7 @@ def count_cases(
             q=q,
             evidence_basis=evidence_basis,
             reporting_only=reporting_only,
+            tenant_id=tenant_id_from_user(user),
             promotion_family=promotion_family,
             open_only=open_only,
         )
@@ -951,16 +961,20 @@ def create_case(
     user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
-    if body.promotion_type not in CPOR_PROMOTION_TYPE_SET:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown promotion_type; allowed={sorted(CPOR_PROMOTION_TYPE_SET)}",
-        )
+    tenant_id = tenant_id_from_user(user)
+    try:
+        promotion_type = require_promotion_type(tenant_id, body.promotion_type)
+        channel = require_channel(tenant_id, body.channel)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if body.window_end < body.window_start:
         raise HTTPException(status_code=400, detail="window_end must be >= window_start")
     fx_mode = (body.fx_mode or "booked").strip().lower() or "booked"
     if fx_mode not in FX_MODES:
         raise HTTPException(status_code=400, detail=f"fx_mode must be one of: {sorted(FX_MODES)}")
+    currency_code = (body.currency_code or "").strip().upper() or tenant_currency_code(tenant_id)
+    if not currency_code:
+        raise HTTPException(status_code=400, detail="currency_not_configured")
     with SessionLocal() as session:
         cust = session.get(DimCustomer, body.customer_id)
         if not cust:
@@ -971,16 +985,16 @@ def create_case(
         case = CporCase(
             case_code=code,
             case_name=(body.case_name or "").strip() or None,
-            tenant_id=tenant_id_from_user(user),
+            tenant_id=tenant_id,
             customer_id=body.customer_id,
-            promotion_type=body.promotion_type,
+            promotion_type=promotion_type,
             window_start=body.window_start,
             window_end=body.window_end,
             status="draft",
             roe_snapshot=body.roe_snapshot,
             fx_mode=fx_mode,
-            currency_code=body.currency_code or "ZAR",
-            channel=body.channel or "reseller",
+            currency_code=currency_code,
+            channel=channel,
             notes=body.notes,
             created_by=actor,
             export_version=1,
@@ -1058,8 +1072,13 @@ def patch_case(
         data = body.model_dump(exclude_unset=True)
         if not data:
             raise HTTPException(status_code=400, detail="No fields to update")
-        if "promotion_type" in data and data["promotion_type"] not in CPOR_PROMOTION_TYPE_SET:
-            raise HTTPException(status_code=400, detail="Unknown promotion_type")
+        if "promotion_type" in data:
+            try:
+                data["promotion_type"] = require_promotion_type(
+                    case.tenant_id or tenant_id_from_user(user), data["promotion_type"]
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         if "fx_mode" in data:
             mode = (data["fx_mode"] or "").strip().lower() if data["fx_mode"] is not None else None
             if mode is not None and mode not in FX_MODES:
@@ -1281,6 +1300,13 @@ def create_line(
     user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
+    from app.services.commercial_tenant_profile import configured_vat_rate_pct
+
+    vat_rate = body.vat_rate
+    if vat_rate is None:
+        vat_rate = configured_vat_rate_pct(tenant_id_from_user(user))
+    if vat_rate is None:
+        raise HTTPException(status_code=400, detail="vat_rate_not_configured")
     with SessionLocal() as session:
         case = _load_case(session, case_id)
         if case.status not in EDITABLE_STATUSES and case.status not in {"proposed", "approved", "active"}:
@@ -1342,7 +1368,7 @@ def create_line(
             distributor_id=body.distributor_id,
             pod_quarter=body.pod_quarter,
             srp=body.srp,
-            vat_rate=body.vat_rate,
+            vat_rate=vat_rate,
             dealer_margin_pct=margin,
             margin_source=margin_source,
             cost_basis=cost_basis,
@@ -1891,9 +1917,8 @@ def tenant_profile_hard_enforce() -> bool:
 @router.get("/settlement/book")
 def cpor_settlement_book(user: dict = Depends(get_current_user)) -> dict[str, Any]:
     """NS-4 book read model: regime totals, shape segments, concentration."""
-    _ = user
     with SessionLocal() as session:
-        return build_settlement_book_read_model(session)
+        return build_settlement_book_read_model(session, tenant_id=tenant_id_from_user(user))
 
 
 @router.get("/intelligence/portfolio")
@@ -2251,10 +2276,13 @@ def promotion_types(
         description="customer_sell_through | distributor_sell_out: only that family's types, in vocabulary "
         "order (the first is the default for a new case).",
     ),
+    user: dict = Depends(get_current_user),
 ):
+    """Unfiltered list is the tenant's saved types (Warren, 27 Nov). A family returns that family's stored names."""
     family = _plain_param(family, None)
     if family is None:
-        return {"promotion_types": sorted(CPOR_PROMOTION_TYPE_SET)}
+        tenant_id = tenant_id_from_user(user) if isinstance(user, dict) else "default"
+        return {"promotion_types": list(tenant_promotion_types(tenant_id))}
     return {"promotion_types": list(_family_types_or_400(family)), "family": family.strip()}
 
 

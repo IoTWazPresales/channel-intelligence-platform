@@ -130,10 +130,12 @@ def resolve_lineup_pricing(
     sources["controlled_cost_amount"] = (
         "sku_assumption" if defaults.controlled_cost_amount is not None else "missing"
     )
+    if vat is None:
+        sources["vat_rate_pct"] = "not_configured"
 
     inputs = LineupPricingInputs(
         srp_inc_vat_local=srp_inc_vat_local or 0.0,
-        vat_rate_pct=vat or 0.0,
+        vat_rate_pct=vat,
         dealer_margin_pct=dealer_m or 0.0,
         rebate_pct=rebate or 0.0,
         distributor_margin_pct=disti_m or 0.0,

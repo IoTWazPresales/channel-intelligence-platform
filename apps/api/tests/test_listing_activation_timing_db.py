@@ -40,6 +40,7 @@ def _setup(session: Session, promotion_type: str) -> CustomerListing:
         source="manual",
     )
     case = CporCase(
+        currency_code="ZAR",
         tenant_id=tenant,
         customer_id=customer.id,
         case_code=f"ACT-{tag}",

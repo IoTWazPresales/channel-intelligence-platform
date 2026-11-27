@@ -43,6 +43,7 @@ def _case(tag: str, n: int, customer_id: int, **kw) -> CporCase:
         tenant_id=f"t-{tag}",
         customer_id=customer_id,
         promotion_type="price_promo",
+        currency_code="ZAR",
         window_start=date(2098, 1, 1),
         window_end=date(2098, 2, 1),
         **kw,

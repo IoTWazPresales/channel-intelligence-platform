@@ -194,7 +194,7 @@ def forward_cover(
 # --------------------------------------------------------------------------- causes
 
 
-def _latest_prices(session: Session, tenant_id: str, products: Iterable[int], since: date, vat: str, vat_rate: float) -> dict[tuple[int, int], list[tuple[date, float]]]:
+def _latest_prices(session: Session, tenant_id: str, products: Iterable[int], since: date, vat: str, vat_rate: float | None) -> dict[tuple[int, int], list[tuple[date, float]]]:
     """Reported sell price per (customer, product) and period, in the requested VAT basis."""
     s = FactCustomerSellthrough
     out: dict[tuple[int, int], list[tuple[date, float]]] = defaultdict(list)
@@ -203,21 +203,25 @@ def _latest_prices(session: Session, tenant_id: str, products: Iterable[int], si
         .where(s.tenant_id == tenant_id, s.product_id.in_(list(products)), s.period_start_date >= since, s.unit_sell_price.is_not(None))
         .group_by(s.customer_id, s.product_id, s.period_start_date, s.vat_basis)
     )
+    from app.services.channel_intelligence.sell_through_overview import convert_reported_money
+
     want_inc = vat == "inc_vat"
     for r in rows:
-        p = float(r.p)
-        inc = str(r.vat_basis or "").lower().startswith("inc")
-        if inc and not want_inc:
-            p /= 1 + vat_rate
-        elif want_inc and not inc:
-            p *= 1 + vat_rate
-        out[(int(r.customer_id), int(r.product_id))].append((r.period_start_date, p))
+        converted = convert_reported_money(
+            float(r.p),
+            row_includes_vat=str(r.vat_basis or "").lower().startswith("inc"),
+            want_includes_vat=want_inc,
+            vat_rate=vat_rate,
+        )
+        if converted is None:
+            continue
+        out[(int(r.customer_id), int(r.product_id))].append((r.period_start_date, converted))
     for v in out.values():
         v.sort()
     return out
 
 
-def _listings(session: Session, products: Iterable[int], vat: str, vat_rate: float) -> tuple[dict[tuple[int, int], dict[str, Any]], bool]:
+def _listings(session: Session, products: Iterable[int], vat: str, vat_rate: float | None) -> tuple[dict[tuple[int, int], dict[str, Any]], bool]:
     """Latest captured listing per (customer, product); listing prices are shelf prices (incl. VAT)."""
     try:
         from app.models.listing_capture import CustomerListing, ListingObservation
@@ -244,8 +248,15 @@ def _listings(session: Session, products: Iterable[int], vat: str, vat_rate: flo
     out: dict[tuple[int, int], dict[str, Any]] = {}
     for r in session.execute(select(ranked).where(ranked.c.rn == 1)):
         price = float(r.extracted_price) if r.extracted_price is not None else None
-        if price is not None and vat != "inc_vat":
-            price /= 1 + vat_rate
+        if price is not None:
+            from app.services.channel_intelligence.sell_through_overview import convert_reported_money
+
+            price = convert_reported_money(
+                price,
+                row_includes_vat=True,
+                want_includes_vat=vat == "inc_vat",
+                vat_rate=vat_rate,
+            )
         out[(int(r.customer_id), int(r.product_id))] = {
             "url": r.url,
             "fetched_at": r.fetched_at.date().isoformat() if r.fetched_at else None,
@@ -402,7 +413,7 @@ def attach_causes(
     outlook: dict[tuple[int, int], Outlook],
     last_year_weeks: dict[tuple[int, int], list[float]],
     vat: str,
-    vat_rate: float,
+    vat_rate: float | None,
 ) -> None:
     """Add ``causes`` (what was found, with evidence) and ``not_checked`` (no data) to each row."""
     if not rows:

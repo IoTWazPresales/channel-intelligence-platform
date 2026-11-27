@@ -35,7 +35,8 @@ from app.services.imports.shipment_open_book import (
     reclassify_unconfirmed_shipped,
     write_open_book_audit,
 )
-from app.services.supply_overview import _ISO_WEEK_START_SAST, _TODAY_SAST, _headline_sql
+from app.services.commercial_tenant_profile import require_reporting_timezone
+from app.services.supply_overview import _ISO_WEEK_START_SQL, _TODAY_SQL, _headline_sql
 
 _BOOK_SQL = """
 SELECT
@@ -78,8 +79,8 @@ def _measure(db: Session) -> dict[str, Any]:
     headline = {
         key: _jsonable(value)
         for key, value in db.execute(
-            text(_headline_sql(_TODAY_SAST, _ISO_WEEK_START_SAST)),
-            {"tenant": "default"},
+            text(_headline_sql(_TODAY_SQL, _ISO_WEEK_START_SQL)),
+            {"tenant": "default", "reporting_tz": require_reporting_timezone("default")},
         ).mappings().one().items()
     }
     return {"book": book, "supply_headline": headline}

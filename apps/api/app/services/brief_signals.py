@@ -284,9 +284,12 @@ async def _sell_through_attention(user: dict | None) -> dict[str, Any] | None:
     raw_ids = request_my_account_ids.get()
     key = (tid, tuple(sorted(raw_ids)) if raw_ids else ())
 
-    def _work() -> dict[str, Any]:
+    def _work() -> dict[str, Any] | None:
+        today = reporting_today(tid)
+        if today is None:
+            return None
         with SessionLocal() as session:
-            return sell_through_attention(session, tid, reporting_today(tid))
+            return sell_through_attention(session, tid, today)
 
     async def _load() -> dict[str, Any] | None:
         try:
@@ -424,12 +427,15 @@ async def _needs_look_summary(db: AsyncSession, user: dict | None) -> dict[str, 
 
     tenant = tenant_id_from_user(user)
     days = config_from_overrides(on_the_water_overrides(tenant)).needs_look_days
+    today = reporting_today(tenant)
+    if today is None:
+        return {"lines": 0, "units": 0.0, "days": days, "skipped": "reporting_timezone_not_configured"}
     row = (
         await db.execute(
             apply_account_predicate(
                 select(func.count(), func.coalesce(func.sum(F.quantity), 0)).where(
                     F.tenant_id == tenant,
-                    predicate_needs_look(reporting_today(tenant), days),
+                    predicate_needs_look(today, days),
                     exclude_closed_inbound(F),
                 ),
                 F.resolved_customer_id,

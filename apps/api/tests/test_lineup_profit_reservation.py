@@ -22,7 +22,13 @@ def test_profit_reservation_derived_q002():
         controlled_cost_amount=400,
         reserve_total_pct=0.10,
         promo_reserve_split_pct=0.5,
+        # Warren 2026-11-27 decisions: margins come from the tenant profile, never a code default.
+        customer_margin_pct=0.12,
+        customer_rebate_pct=0.03,
+        distributor_margin_pct=0.08,
         fx_plan_currency_per_cost_currency=1.0,
+        # Explicit calculation input. The product no longer implies a VAT rate (R-05).
+        vat_rate_pct=0.2,
     )
     assert out["reservation"]["source"] == "derived_from_profit"
     assert out["reservation"]["hard_enforce"] is True

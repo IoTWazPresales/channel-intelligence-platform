@@ -51,6 +51,8 @@ def _case(status: str, workflow_status: str) -> SimpleNamespace:
         workflow_status=workflow_status,
         customer_id=1,
         case_code="X",
+        # Warren 27 Nov: end reads the stored promotion type before it changes status.
+        promotion_type="Sell out PP",
         export_version=1,
         needs_reapproval=False,
         roe_snapshot=None,
@@ -91,9 +93,14 @@ def test_settle_and_cancel_from_ended_are_covered():
     assert ("draft", "cancel") in _LEGAL
 
 
-def test_payment_evidence_shell_case_writes_the_projection():
+def test_payment_evidence_shell_case_writes_the_projection(monkeypatch):
+    # Warren 27 Nov: the channel is a tenant setting. The shell case writes the saved one.
     from app.services.cpor.payment_evidence.apply_sync import _ensure_shell_case
 
+    monkeypatch.setattr(
+        "app.services.cpor.promotion_type_vocab.channels",
+        lambda tenant_id="default": ("counter",),
+    )
     line = SimpleNamespace(
         linked_case_id=None,
         create_shell_case=True,
@@ -112,8 +119,9 @@ def test_payment_evidence_shell_case_writes_the_projection():
     db.scalar = MagicMock(return_value=None)
     added: list = []
     db.add = MagicMock(side_effect=added.append)
-    _ensure_shell_case(db, line=line, tenant_id="default", actor="t")
+    _ensure_shell_case(db, line=line, tenant_id="default", actor="t", currency_code=line.currency_code)
     case = added[0]
+    assert case.channel == "counter"
     assert case.status == "draft"
     assert case.workflow_status == workflow_status_for(case.status) == "draft"
 

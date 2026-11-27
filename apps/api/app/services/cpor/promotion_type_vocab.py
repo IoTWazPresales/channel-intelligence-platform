@@ -1,26 +1,23 @@
-"""Config vocabulary for CPOR promotion_type (spec §2.4).
+"""CPOR vocabulary.
 
-Steward-extendable later; seeded values match the Consumer CPOR workbook.
-Not a DB enum — stored as varchar on cpor_case.promotion_type.
+Case statuses, margin sources and cost sources stay in code. They name the
+workflow engine's own states and where a number came from. They are not a
+tenant's commercial names.
+
+Promotion types, channels and the stock-promote type are tenant profile keys
+(``cpor_promotion_types``, ``cpor_channels``, ``cpor_stock_promote_type``).
+Unset means not configured. There is no built-in list and no code fallback.
 """
 
 from __future__ import annotations
 
-CPOR_PROMOTION_TYPES: tuple[str, ...] = (
-    "Sell out PP",
-    "Sell-Through PP",
-    "Stock PP (In-Direct)",
-)
-
-CPOR_PROMOTION_TYPE_SET: frozenset[str] = frozenset(CPOR_PROMOTION_TYPES)
-
-# --- promotion families (where a type fits) -----------------------------------------------------
+# Families classify stored promotion-type names (Warren, 24 Nov). They are not the tenant's
+# selectable list. That list is the profile key, and unset means not configured.
 # Warren (standing rule, 24 Nov 2026): "Promotions are sell-throughs. Sell-out is distributor (disti) to
 # customer. They must not be mixed. The promotion planner shows customer promotions, never sell-out."
 # Warren (t454u): "Correct, Sell through, sell out is disti to reseller and is still valuable but not here."
-# This is the one place that says which stored type belongs to which family. A type that is in no family
-# (for example "Stock PP (In-Direct)", SPIV) is shown by neither family filter; adding it to a family is a
-# one-line change here. Storage is untouched: no type is renamed or deleted.
+# A type that is in no family (for example "Stock PP (In-Direct)") is shown by neither family filter.
+# Storage is untouched: no type is renamed or deleted.
 CUSTOMER_SELL_THROUGH = "customer_sell_through"
 DISTRIBUTOR_SELL_OUT = "distributor_sell_out"
 
@@ -55,6 +52,7 @@ def promotion_family_types(family: str) -> tuple[str, ...]:
     """The stored types of one family. Raises KeyError for an unknown family."""
     return PROMOTION_FAMILIES[family]
 
+
 CPOR_CASE_STATUSES: tuple[str, ...] = (
     "draft",
     "proposed",
@@ -69,11 +67,65 @@ CPOR_CASE_STATUSES: tuple[str, ...] = (
 CPOR_CASE_STATUS_SET: frozenset[str] = frozenset(CPOR_CASE_STATUSES)
 
 # Open (not closed) for the planner's default view: still being planned, approved or running.
-# Rejected, ended, settled and cancelled are history.
+# Rejected, ended, settled and cancelled are history. These are workflow states, not tenant names.
 CPOR_OPEN_CASE_STATUSES: tuple[str, ...] = ("draft", "proposed", "approved", "active")
 
-CPOR_CHANNELS: tuple[str, ...] = ("reseller",)
-CPOR_CHANNEL_SET: frozenset[str] = frozenset(CPOR_CHANNELS)
-
+# Provenance of a margin or a cost on a case line: the system's own source, not a tenant name.
 CPOR_MARGIN_SOURCES: tuple[str, ...] = ("customer_default", "manual_override")
 CPOR_COST_SOURCES: tuple[str, ...] = ("sellout_evidence", "manual", "cst_reported")
+
+
+def promotion_types(tenant_id: str = "default") -> tuple[str, ...]:
+    from app.services.commercial_tenant_profile import cpor_promotion_types
+
+    return cpor_promotion_types(tenant_id)
+
+
+def promotion_type_set(tenant_id: str = "default") -> frozenset[str]:
+    return frozenset(promotion_types(tenant_id))
+
+
+def channels(tenant_id: str = "default") -> tuple[str, ...]:
+    from app.services.commercial_tenant_profile import cpor_channels
+
+    return cpor_channels(tenant_id)
+
+
+def channel_set(tenant_id: str = "default") -> frozenset[str]:
+    return frozenset(channels(tenant_id))
+
+
+def stock_promote_type(tenant_id: str = "default") -> str | None:
+    from app.services.commercial_tenant_profile import cpor_stock_promote_type
+
+    return cpor_stock_promote_type(tenant_id)
+
+
+def require_promotion_type(tenant_id: str, requested: str | None) -> str:
+    """The type to write. A single saved type fills an omitted request. Otherwise the caller must name one."""
+    allowed = promotion_types(tenant_id)
+    if not allowed:
+        raise ValueError("promotion_type_not_configured")
+    raw = (requested or "").strip()
+    if not raw:
+        if len(allowed) == 1:
+            return allowed[0]
+        raise ValueError("promotion_type_required")
+    if raw not in allowed:
+        raise ValueError(f"unknown_promotion_type={raw}")
+    return raw
+
+
+def require_channel(tenant_id: str, requested: str | None) -> str:
+    """The channel to write. A single saved channel fills an omitted request. Otherwise the caller must name one."""
+    allowed = channels(tenant_id)
+    if not allowed:
+        raise ValueError("channel_not_configured")
+    raw = (requested or "").strip()
+    if not raw:
+        if len(allowed) == 1:
+            return allowed[0]
+        raise ValueError("channel_required")
+    if raw not in allowed:
+        raise ValueError(f"unknown_channel={raw}")
+    return raw
