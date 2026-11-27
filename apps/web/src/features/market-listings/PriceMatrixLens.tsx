@@ -279,9 +279,13 @@ export function PriceMatrixLens() {
         headerName: 'SRP',
         headerTooltip: 'Suggested Retail Price',
         minWidth: 150,
-        filter: 'agTextColumnFilter',
+        filter: 'agNumberColumnFilter',
         floatingFilter: true,
-        valueGetter: (p) => (p.data ? srpText(p.data.product) : ''),
+        // Sort and the number filter use the amount. The cell and quick search keep the words.
+        valueGetter: (p) => {
+          const srp = p.data?.product.srp;
+          return srp == null || Number.isNaN(srp) ? null : srp;
+        },
         getQuickFilterText: (p) => (p.data ? srpText(p.data.product) : ''),
         cellRenderer: (p: ICellRendererParams<MatrixRow>) =>
           p.data ? (

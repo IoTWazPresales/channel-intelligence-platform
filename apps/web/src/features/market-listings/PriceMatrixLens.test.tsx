@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -228,6 +228,28 @@ describe('PriceMatrixLens', () => {
     await waitFor(() => expect(screen.getByText('Customer C')).toBeInTheDocument());
     const headers = Array.from(document.querySelectorAll('.ag-header-cell-text')).map((e) => e.textContent);
     expect(headers).toEqual(['Product', 'Sales model', 'SRP', 'Customer A', 'Customer B', 'Customer C']);
+  });
+
+  it('sorts SRP by the amount, so 900 comes before 1,200', async () => {
+    const base = matrixPayload();
+    payload.value = {
+      ...base,
+      products: [
+        { ...base.products[0], id: 2, sales_model_name: 'HIGH', srp: 1200, srp_reason: null },
+        { ...base.products[0], id: 1, sales_model_name: 'LOW', srp: 900, srp_reason: null },
+      ],
+      cells: [],
+      summary: { product_count: 2, below_srp_count: null },
+    };
+    mount();
+    await screen.findByTestId('price-matrix-srp-2');
+    fireEvent.click(screen.getByText('SRP'));
+    await waitFor(() => {
+      const ids = Array.from(document.querySelectorAll('[data-testid^="price-matrix-srp-"]')).map(
+        (el) => el.getAttribute('data-testid'),
+      );
+      expect(ids).toEqual(['price-matrix-srp-1', 'price-matrix-srp-2']);
+    });
   });
 
   it('adds a sales model column and a column for each spec present on the products', async () => {

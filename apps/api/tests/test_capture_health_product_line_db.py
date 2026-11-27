@@ -2,10 +2,11 @@
 
 GET /listing-capture/capture-health opens SessionLocal, the same factory as the other
 listing reads. The router binds cip.product_lines for a numeric app_user, and the
-session listener applies it. customer_listing is under product-line row security, so
-listings_due and the newest price for a site count only the caller's lines.
+session listener applies it. The site counts also state cip_product_line_visible, so a
+role that bypasses row security still counts only the caller's lines.
 
-NOT RUN (cloud): this file needs cip_test. Do not point it at cip.
+Fails (does not skip) unless current_database() is cip_test. A missing product-line
+scope fails the listings_due assertions. Do not point it at cip.
 """
 
 from __future__ import annotations
@@ -37,9 +38,13 @@ def test_capture_health_counts_honour_the_callers_product_line() -> None:
     try:
         db_name = _database_name()
     except Exception as exc:  # pragma: no cover - environment
-        pytest.skip(f"no database: {type(exc).__name__}")
+        pytest.fail(f"no database: {type(exc).__name__}", pytrace=False)
+    print("current_database()", db_name)
     if db_name != "cip_test":
-        pytest.skip(f"capture-health product-line test runs on cip_test only (current_database()={db_name})")
+        pytest.fail(
+            f"capture-health product-line test runs on cip_test only (current_database()={db_name})",
+            pytrace=False,
+        )
 
     tag = uuid.uuid4().hex[:10]
     tenant_id = f"health-{tag}"
