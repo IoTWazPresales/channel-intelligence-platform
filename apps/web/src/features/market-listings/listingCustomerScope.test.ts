@@ -5,6 +5,7 @@ import { apiGet } from '@/lib/api';
 import {
   customersAddedOutsideReporting,
   customersListUrl,
+  matrixCustomersSaveOnHydrate,
   fetchEntityCustomerOptions,
   searchCustomers,
 } from './listingCustomerScope';
@@ -17,6 +18,12 @@ vi.mock('@/lib/api', () => ({
 describe('listingCustomerScope', () => {
   beforeEach(() => {
     vi.mocked(apiGet).mockClear();
+  });
+
+  it('does not write matrix extras when the page only hydrates', () => {
+    // Warren 27 Nov: matrix extras stay this browser's last steward save.
+    expect(matrixCustomersSaveOnHydrate(false)).toBe(false);
+    expect(matrixCustomersSaveOnHydrate(true)).toBe(true);
   });
 
   it('keeps only customers added outside the reporting set', () => {

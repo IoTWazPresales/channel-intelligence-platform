@@ -111,8 +111,8 @@ def _log_worker_code_pin(**_kwargs) -> None:
 @worker_ready.connect
 def _discover_when_worker_is_up(**_kwargs) -> None:
     # Step 3 (Warren, 25 Nov): discovery runs when the services are up, not only at the next 05:20 UTC
-    # slot. Same gates as the beat entry (dev_beat_disabled, the tenant's discovery.schedule_enabled)
-    # plus a restart debounce; see app/services/listing_capture/autoconfig_schedule.py.
+    # slot. Beat being off does not skip it. The tenant schedule, both timings and the debounce
+    # still do. See app/services/listing_capture/autoconfig_schedule.py.
     from app.services.listing_capture.autoconfig_schedule import run_startup_autoconfigure
 
     run_startup_autoconfigure()

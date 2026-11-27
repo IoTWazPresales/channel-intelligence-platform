@@ -864,12 +864,14 @@ def listing_capture_autoconfigure_sites_task(
     tenant_id: str | None = None,
     on_demand: bool = False,
     tenant_ids: list[str] | None = None,
+    startup: bool = False,
 ) -> dict:
     """Beat task: fill empty listing-site rows for reporting customers. Idempotent.
 
     Scheduled daily at 05:20 UTC. The listing-capture poll runs every 30 minutes.
     ``on_demand=True`` runs even when dev beat is disabled (the steward endpoint
-    calls the service directly).
+    calls the service directly). ``startup=True`` is the worker-up catch-up: it
+    uses the scheduled tenant gates and is not skipped because beat is off.
     """
     import logging
 
@@ -879,7 +881,7 @@ def listing_capture_autoconfigure_sites_task(
     from app.worker.celery_queues import dev_beat_disabled
 
     log = logging.getLogger(__name__)
-    if dev_beat_disabled() and not on_demand:
+    if dev_beat_disabled() and not on_demand and not startup:
         return {"skipped": True, "reason": "dev_beat_disabled"}
 
     live = _listing_live_fetch_enabled()

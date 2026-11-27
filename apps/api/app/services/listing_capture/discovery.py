@@ -183,6 +183,9 @@ def _discover_tenant(
         for config, customer in _reporting_customers(session, tid)
         if str(customer.tenant_id) == tid
     ]
+    pairs.extend(
+        _matrix_extra_pairs(session, tid, {int(customer.id) for _config, customer in pairs})
+    )
     rotate = apply and policy is not None
     rotation_key = f"discovery:{tid}:rotation"
     plans: list[dict[str, Any]] = []
@@ -974,6 +977,53 @@ def _safe_update(session: Session, row: ListingSite, fields: dict[str, Any]) -> 
                 update_site(session, row, fields={key: value}, actor=ACTOR)
             except ValueError:
                 continue
+
+
+class _EmptySeedConfig:
+    feed_profile_json: dict[str, Any] = {}
+
+
+def _matrix_extra_pairs(
+    session: Session, tenant_id: str, already: set[int]
+) -> list[tuple[Any, DimCustomer]]:
+    """Customers a steward added on the price matrix, included in this discovery read.
+
+    A saved id that is already a reporting customer is not added twice. An id with no
+    feed profile still participates, with an empty seed, so a confirmed web site is read.
+    """
+    from app.services.tenant_settings import KEY_DISCOVERY_MATRIX_CUSTOMERS, get_setting
+
+    raw = get_setting(session, tenant_id, KEY_DISCOVERY_MATRIX_CUSTOMERS) or []
+    wanted: list[int] = []
+    for item in raw:
+        try:
+            customer_id = int(item)
+        except (TypeError, ValueError):
+            continue
+        if customer_id > 0 and customer_id not in already and customer_id not in wanted:
+            wanted.append(customer_id)
+    if not wanted:
+        return []
+    rows = session.execute(
+        select(CustomerReportConfig, DimCustomer)
+        .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
+        .where(DimCustomer.tenant_id == tenant_id, DimCustomer.id.in_(wanted))
+    ).all()
+    found: dict[int, tuple[Any, DimCustomer]] = {
+        int(customer.id): (config, customer)
+        for config, customer in rows
+        if isinstance(customer, DimCustomer)
+    }
+    missing = [customer_id for customer_id in wanted if customer_id not in found]
+    if missing:
+        for customer in session.scalars(
+            select(DimCustomer).where(
+                DimCustomer.tenant_id == tenant_id, DimCustomer.id.in_(missing)
+            )
+        ).all():
+            if isinstance(customer, DimCustomer):
+                found[int(customer.id)] = (_EmptySeedConfig(), customer)
+    return [found[customer_id] for customer_id in wanted if customer_id in found]
 
 
 def _reporting_customers(

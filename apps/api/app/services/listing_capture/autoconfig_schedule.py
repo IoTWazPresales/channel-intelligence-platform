@@ -3,9 +3,9 @@
 Two triggers, both thin and both honouring the gates that already exist:
 
 * **Worker start** (``run_startup_autoconfigure``). When the worker comes up it asks for one
-  scheduled-mode run, so discovery does not wait for the next 05:20 UTC beat slot. Same gates as
-  the beat: ``dev_beat_disabled()`` and the tenant setting ``discovery.schedule_enabled`` (read
-  here only to say why nothing was queued; the task re-checks it). A record in the run-state
+  scheduled-mode run, so discovery does not wait for the next 05:20 UTC beat slot. Beat being
+  off does not skip this. The tenant setting ``discovery.schedule_enabled`` and both saved
+  timings still do. A record in the run-state
   store, also written by every scheduled run, keeps a restart inside that tenant's saved
   debounce from running discovery again. A tenant with the schedule on but either timing unset
   is skipped. Nothing is filled in.
@@ -172,11 +172,7 @@ def _startup(
     now: datetime,
     beat_disabled: bool | None,
 ) -> dict[str, Any]:
-    from app.worker.celery_queues import dev_beat_disabled
-
-    if dev_beat_disabled() if beat_disabled is None else beat_disabled:
-        logger.info("listing capture startup discovery: skipped (dev_beat_disabled)")
-        return {"skipped": True, "reason": "dev_beat_disabled"}
+    _ = beat_disabled
     from app.db.session_sync import SessionLocal
 
     try:
@@ -192,7 +188,7 @@ def _startup(
         return {"skipped": True, "reason": "no_tenant_due", "tenants": skipped}
     for tenant_id in due:
         note_scheduled_run(tenant_id=tenant_id, store=store, now=now)
-    enqueue(kwargs={"tenant_ids": due})
+    enqueue(kwargs={"tenant_ids": due, "startup": True})
     logger.info(
         "listing capture startup discovery: queued one scheduled run for %s tenant(s)", len(due)
     )

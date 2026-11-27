@@ -57,6 +57,11 @@ export async function saveMatrixCustomers(ids: number[]): Promise<void> {
   await apiPut('/api/v1/tenant-settings/discovery.matrix_customer_ids', { value: ids });
 }
 
+/** Hydration must not PUT. Another browser's last steward save stays until this browser changes the list. */
+export function matrixCustomersSaveOnHydrate(userTouched: boolean): boolean {
+  return userTouched;
+}
+
 export function useListingCustomerScope(storageKey = STORAGE_KEY) {
   const reporting = useQuery({
     queryKey: ['customers', 'listing-scope', 'reporting'],
@@ -65,12 +70,10 @@ export function useListingCustomerScope(storageKey = STORAGE_KEY) {
   });
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [hydrated, setHydrated] = useState(false);
-  const storedOnLoad = useRef<number[] | null>(null);
   const userTouched = useRef(false);
 
   useEffect(() => {
     const stored = readStoredIds();
-    storedOnLoad.current = stored;
     if (stored && stored.length) {
       setSelectedIds(stored);
     }
@@ -87,8 +90,7 @@ export function useListingCustomerScope(storageKey = STORAGE_KEY) {
     if (!hydrated) return;
     writeStoredIds(selectedIds);
     const reportingIds = (reporting.data?.items ?? []).map((customer) => customer.id);
-    const hadStoredSelection = storedOnLoad.current != null && storedOnLoad.current.length > 0;
-    if (!reporting.data || (!userTouched.current && !hadStoredSelection)) return;
+    if (!reporting.data || !matrixCustomersSaveOnHydrate(userTouched.current)) return;
     const extras = customersAddedOutsideReporting(selectedIds, reportingIds);
     void saveMatrixCustomers(extras).catch(() => undefined);
   }, [hydrated, selectedIds, reporting.data, storageKey]);
