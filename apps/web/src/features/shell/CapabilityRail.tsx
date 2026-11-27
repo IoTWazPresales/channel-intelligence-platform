@@ -300,8 +300,8 @@ export function CapabilityRail({
                       fontWeight: 500,
                       // Beat the theme chip label padding (9px) so a three-digit count keeps its measured width.
                       '&& .MuiChip-label': {
-                        paddingLeft: RAIL_COUNT.chipPadXPx,
-                        paddingRight: RAIL_COUNT.chipPadXPx,
+                        paddingLeft: `${RAIL_COUNT.chipPadXPx}px`,
+                        paddingRight: `${RAIL_COUNT.chipPadXPx}px`,
                       },
                     }}
                   />
