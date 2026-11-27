@@ -1,10 +1,10 @@
 # Step 2
 
-- **Status:** Cloud code run 27 Nov (U2) finished the web layout the mock-up answers. Not merged, not visually checked, cip_test not run. Questions the mock-up does not answer are still for Warren.
+- **Status:** Cloud code run 27 Nov (U2) finished the web layout the mock-up answers, then Warren's 27 Nov decisions (at-risk = open and behind plan, detail buttons). Not merged, not visually checked, cip_test not run. API-side items need U4's files (see "Warren's decisions, 27 Nov").
 - **Branch:** `fix/planner-sellthrough-calendar-20261125` (cut from integrate tip `6d2adc16`)
 - **Worktree:** `C:\Users\warren_eliason\channel-intelligence-platform\.worktrees\impl-step2`
 - **EIF node:** N-0122, run `IMPL_step2_20261125`
-- **PR:** none (the coordinator merges)
+- **PR:** #132 to `feat/integrate-20261103` (not merged; the coordinator merges)
 - **Commits:** `c63ce68c` (API), `6bb09a95` (web scope, History, empty state, create dialog, mock-up timeline), `cba724cc` (fixed customer column, bar text, legend names), plus the tracker/polish commit that carries this file.
 
 ## Checklist
@@ -227,8 +227,60 @@ No test deleted, skipped or weakened. Sell-through and `open_only` assertions ar
 
 - The navigator pages three calendar months, not one fiscal quarter of a 4-4-5 calendar. A non-gregorian business calendar leaves the quarter name off.
 - List shows the same cases as the timeline's request (open customer sell-through, or History). It is not cut to the three-month block.
-- Detail actions stay "Open plan", "Case book" and "Clear". The image's "Adjust promotion / Create claim / More" were not an open question.
-- At-risk still counts ended cases missing evidence (question 1, option b). Closed-stage chips stay on the default view (question 2, option b).
+- Detail actions stay "Open plan", "Case book" and "Clear". The image's "Adjust promotion / Create claim / More" were not an open question. (Superseded by Warren's 27 Nov decisions below.)
+- At-risk still counts ended cases missing evidence (question 1, option b). Closed-stage chips stay on the default view (question 2, option b). (At-risk superseded by Warren's 27 Nov decisions below.)
+
+## Warren's decisions, 27 Nov (U2 round 2)
+
+Warren (via coordinator, verbatim): "1. An open promotion closes and reconciles itself from the sales pulled over that period, as already specified. Ended, settled, and cancelled cases are not "at risk". At risk means an open promotion whose sell-through is behind the plan for the time already elapsed. 2. Keep the three-calendar-month navigator. Quarter name comes from the tenant calendar. Do not lock in 4-4-5. 3. Add the detail buttons Adjust promotion, Create claim, and More. They can be checked later in the visual test. 4. Promotion type labels are a tenant list, assignable, not fixed names. [...] Do not hardcode those names into product code. If the list itself lives in U4's files, do not edit those files."
+
+| Decision | What this run did (web only) |
+|---|---|
+| 1. At risk | New `plannerLayout/sellThroughPace.ts`. A case is judged only when it is open (draft, proposed, approved, active), not replaced, and its window has started. Planned units = case lines' `estimate_qty`; sold = the customer's own sell-through inside the window. Both come from the existing `GET /cpor/cases/{id}/promo-load-recon` (customer sell-through only, never sell-out). Behind = sold < planned × share of window elapsed (whole days, today included). The planner reads open cases started by today (`open_only=true&window_to=<today>`, separate from the main list so stage chips and History never change it), then one recon per case. The At-risk KPI counts behind-plan cases; each is queued as "sell-through behind plan". Ended, settled, cancelled and rejected cases are never judged and their recon is not read for the count. A case with no sell-through loaded or no planned units is not called at risk; the caption says how many started cases had nothing to judge. A failed read shows the card as failed, not zero. Evidence outstanding stays its own queue card. |
+| 1. Reconcile | The docked detail has a Sell-through section: units sold in the window against planned units, for any selected case. For an open, started case it adds the pace ("Behind plan" / "On plan", expected so far, share elapsed) and the latest sales period loaded. The automatic close itself is API work (see below). |
+| 2. Navigator | Unchanged: three calendar months. The quarter name comes only from the tenant's business calendar (gregorian + fiscal start month). Retail 4-4-5 / 4-5-4 / 5-4-4 / custom show no quarter name; nothing assumes 4-4-5. |
+| 3. Buttons | "Adjust promotion" (opens the plan workspace, `planner-side-open`), "Create claim" (the case's settlement desk `/commercial-planner/cpor-cases/{id}`, where the claim file is imported, `planner-side-claim`), "More" (menu: "Open in case book", "Clear selection"; `planner-side-more`). |
+| 4. Type labels | No promotion type name is hardcoded in planner product code. The detail subtitle now shows the case's stored `promotion_type` label. The planner asks the API for the family `customer_sell_through` only; which types belong to the family is decided in `promotion_type_vocab.py` (U4). The literals in `apps/web/src/design-lab/**` are mock fixtures, not product code, and were not touched. |
+
+### Constants added
+
+None. "Behind" uses no tolerance: there is no tenant setting for one, and inventing a threshold would be a hardcoded rate.
+
+### Not done here (needs U4's files)
+
+- The automatic close and reconcile of an open promotion from sales pulled over its period is a lifecycle transition on the API (`cpor_cases.py` transitions / settlement). Not edited. Also FACT: `docs/CPOR_SETTLEMENT_SPEC.md` L41 says "Ken still takes the settle/close action. The system records it; it does not auto-close." That contradicts decision 1 and needs Warren's ruling on which wins before U4 builds it.
+- A tenant-assignable promotion-type list (with "Stock PP" = upfront funding marking the price down at the customer, "SPIV" = store incentive as tenant data, not code) lives in `promotion_type_vocab.py` and the tenant profile (`commercial_tenant_profile.py`). Not edited.
+- A quarter name for a retail (4-4-5 / 4-5-4 / 5-4-4) or custom calendar needs period boundaries from the tenant profile (`commercial_tenant_profile.py`). Not edited; those calendars show no quarter name.
+- One recon request per started open case. Fine at today's volumes; a batch recon endpoint (in `cpor_cases.py`) is the scale fix.
+
+### Tests (cloud Linux, no database)
+
+| Gate | Result |
+|---|---|
+| eslint on the touched planner files | exit 0, no warnings; `pnpm --filter @cip/web lint` 0 errors |
+| `tsc --noEmit -p apps/web` | exit 0 |
+| vitest `src/features/promotions-funding` | 33 files, 238 passed, 1 failed: `FundingChrome.test.ts` "rail width matches LabShell RAIL_WIDTH" expects 172, gets 244. Not this change: `RAIL_WIDTH` moved in trunk nav commits `f62a2aae` / `2ecec103` (26 Nov, merged in). U5 owns the nav/theme. |
+
+Assertions changed, requirement = Warren 27 Nov decisions 1 and 3:
+
+1. `PromotionPlannerSurface.test.tsx` "shows In planning, Live promotions and At-risk actions cards": was At-risk 1 from the overdue approval; now 0 while the case sells on plan, and the overdue approval is still in the queue.
+2. Same file, "At-risk actions as failed": was a failed ended list; now a failed sell-through read. A new test checks a failed ended list does not fail the at-risk count.
+3. Same file, the Clear path in "clears the docked detail": Clear is under More.
+4. Same file, the family check and History's `mainListCalls` skip the per-case recon read and the at-risk read (`window_to=`), which are not the main list.
+5. `actionQueue.test.ts` `queueSummary` gained `behindPlan`.
+
+New tests: `sellThroughPace.test.ts` (elapsed share, open-only, ended never judged, no data no risk), behind-plan queue items, the at-risk KPI (behind, no data, ended not read), the three detail buttons and the Sell-through section.
+
+### ASSUMPTIONS (round 2)
+
+- "Time already elapsed" is measured to today, as Warren said. If customer sales arrive a week late, a case can read behind until the next file lands. The detail shows the latest sales period loaded so the lag is visible. QUESTION FOR WARREN below.
+- Every open stage counts once its window has started, including a draft or proposed case whose window is already running.
+- A case still `active` after its window ended is not on `open_only` (the API's definition of open excludes ended windows), so it is not judged here; the API close (above) is what moves it on.
+
+### QUESTION FOR WARREN (round 2)
+
+1. Should elapsed time stop at the latest sales period loaded for that customer (fewer false alarms when files arrive late), or at today as stated?
+2. `CPOR_SETTLEMENT_SPEC.md` says the system "does not auto-close"; decision 1 says an open promotion closes itself. Which one is current?
 
 ## Resume notes
 

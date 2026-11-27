@@ -1,3 +1,5 @@
+import { fmtInt } from '@/features/promotions-funding/format';
+
 export type QueueCase = {
   id: number;
   case_code: string;
@@ -12,7 +14,10 @@ export type QueueCase = {
   settle_readiness?: { claim_evidence_count?: number | null } | null;
 };
 
-export type ActionKind = 'reapproval' | 'awaiting_approval' | 'claim_evidence_pending';
+export type ActionKind = 'reapproval' | 'awaiting_approval' | 'claim_evidence_pending' | 'sell_through_behind';
+
+/** An open case whose sell-through is behind plan (see `sellThroughPace`). */
+export type BehindPlanCase = QueueCase & { planned: number; sold: number; expectedByNow: number; elapsed: number };
 
 export type ActionItem = {
   key: string;
@@ -28,18 +33,20 @@ export type ActionItem = {
 
 /**
  * One queue of cases that wait on a person. Same conditions the planner already used in "Needs a decision":
- * money-ceiling reapproval, proposed (awaiting approval), and ended with no claim file applied.
- * Each case appears at most once per condition; reapproval and proposed are not merged.
+ * money-ceiling reapproval, proposed (awaiting approval), ended with no claim file applied, and open promotions whose
+ * sell-through is behind plan. Each case appears at most once per condition; reapproval and proposed are not merged.
  */
 export function buildActionQueue({
   cases,
   proposed,
   ended,
+  behindPlan = [],
   today,
 }: {
   cases: readonly QueueCase[];
   proposed: readonly QueueCase[];
   ended: readonly QueueCase[];
+  behindPlan?: readonly BehindPlanCase[];
   /** Local calendar day (YYYY-MM-DD). Without it no approval is called overdue. */
   today?: string;
 }): ActionItem[] {
@@ -98,6 +105,22 @@ export function buildActionQueue({
       overdue: false,
     });
   }
+  const seenBehind = new Set<number>();
+  for (const p of behindPlan) {
+    if (p.superseded_by_case_id != null || seenBehind.has(p.id)) continue;
+    seenBehind.add(p.id);
+    const pct = Math.round(p.elapsed * 100);
+    items.push({
+      key: `behind-${p.id}`,
+      kind: 'sell_through_behind',
+      caseId: p.id,
+      caseCode: p.case_code,
+      label: `${p.case_code} · sell-through behind plan`,
+      hint: `Sold ${fmtInt(p.sold)} of ${fmtInt(p.planned)} planned units; about ${fmtInt(p.expectedByNow)} expected with ${pct}% of the window gone.`,
+      tone: 'warning',
+      overdue: false,
+    });
+  }
   return items;
 }
 
@@ -108,6 +131,8 @@ export type QueueSummary = {
   /** Subset of `awaitingApproval` whose window has already started. */
   overdueApprovals: number;
   evidenceOutstanding: number;
+  /** Open promotions behind plan for the time elapsed: the planner's "at risk" (Warren, 27 Nov). */
+  behindPlan: number;
 };
 
 /** Counts of the queue by kind, for the queue cards. */
@@ -118,5 +143,6 @@ export function queueSummary(items: readonly ActionItem[]): QueueSummary {
     awaitingApproval: items.filter((i) => i.kind === 'awaiting_approval').length,
     overdueApprovals: items.filter((i) => i.overdue).length,
     evidenceOutstanding: items.filter((i) => i.kind === 'claim_evidence_pending').length,
+    behindPlan: items.filter((i) => i.kind === 'sell_through_behind').length,
   };
 }

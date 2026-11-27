@@ -26,7 +26,7 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -72,7 +72,19 @@ import {
   type CalendarClashSummary,
   type CaseCounts,
 } from '@/features/promotions-funding/plannerCards';
-import { buildActionQueue, queueSummary } from '@/features/promotions-funding/plannerLayout/actionQueue';
+import {
+  buildActionQueue,
+  queueSummary,
+  type BehindPlanCase,
+} from '@/features/promotions-funding/plannerLayout/actionQueue';
+import {
+  paceApplies,
+  promoLoadReconKey,
+  promoLoadReconUrl,
+  sellThroughPace,
+  type PromoLoadReconLike,
+  type SellThroughPace,
+} from '@/features/promotions-funding/plannerLayout/sellThroughPace';
 import { CustomerRowsTimeline } from '@/features/promotions-funding/planner/CustomerRowsTimeline';
 import {
   PLANNER_PROMOTION_FAMILY,
@@ -365,15 +377,73 @@ function PlannerList({
     if (endedError) void refetchEnded();
   };
   const agedUnplanned = unplannedAgedStock(aged.data);
+
+  // At risk (Warren, 27 Nov): an open promotion whose sell-through is behind plan for the time elapsed. Read from the
+  // open book on its own (window started by today: `window_to` filters on window start), so stage chips and History
+  // never change which cases are judged.
+  const openPace = useQuery({
+    queryKey: ['cpor', 'cases', 'planner', 'open-pace', today],
+    queryFn: ({ signal }) => {
+      const sp = withPlannerCalendarScope(new URLSearchParams({ page: '1', page_size: '500', window_to: today }));
+      return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
+    },
+  });
+  const startedOpen = useMemo(
+    () => (openPace.data?.items ?? []).filter((r) => paceApplies(r, today)),
+    [openPace.data?.items, today],
+  );
+  const recons = useQueries({
+    queries: startedOpen.map((r) => ({
+      queryKey: [...promoLoadReconKey(r.id)],
+      queryFn: ({ signal }: { signal: AbortSignal }) => apiGet<PromoLoadReconLike>(promoLoadReconUrl(r.id), { signal }),
+      staleTime: 60_000,
+    })),
+  });
+  const paceById = useMemo(() => {
+    const out = new Map<number, SellThroughPace>();
+    startedOpen.forEach((r, i) => {
+      const recon = recons[i]?.data;
+      if (recon) out.set(r.id, sellThroughPace(r, recon, today));
+    });
+    return out;
+  }, [startedOpen, recons, today]);
+  const behindPlan: BehindPlanCase[] = useMemo(
+    () =>
+      startedOpen.flatMap((r) => {
+        const pace = paceById.get(r.id);
+        return pace?.state === 'behind'
+          ? [{ ...r, planned: pace.planned, sold: pace.sold, expectedByNow: pace.expectedByNow, elapsed: pace.elapsed }]
+          : [];
+      }),
+    [startedOpen, paceById],
+  );
+  const paceLoading = openPace.isLoading || recons.some((q) => q.isLoading);
+  const paceFailed = openPace.isError || recons.some((q) => q.isError);
+  const paceState: 'loading' | 'empty' | 'ready' = paceLoading ? 'loading' : paceFailed ? 'empty' : 'ready';
+  const paceNoData = [...paceById.values()].filter((p) => p.state === 'no_data').length;
+  const retryPace = () => {
+    if (openPace.isError) void openPace.refetch();
+    recons.forEach((q) => {
+      if (q.isError) void q.refetch();
+    });
+  };
+  const paceCaption =
+    paceState === 'empty'
+      ? 'Could not be loaded. Click to retry.'
+      : `Open promotions selling behind plan for the time elapsed${
+          paceNoData > 0 ? `; ${paceNoData} started without sell-through to judge` : ''
+        }${openPace.data != null && !pageIsComplete(openPace.data) ? ' (first 500 open cases)' : ''}`;
+
   const queue = useMemo(
     () =>
       buildActionQueue({
         cases: data?.items ?? [],
         proposed: proposedPage?.items ?? [],
         ended: endedPage?.items ?? [],
+        behindPlan,
         today,
       }),
-    [data?.items, proposedPage?.items, endedPage?.items, today],
+    [data?.items, proposedPage?.items, endedPage?.items, behindPlan, today],
   );
   const queueTotals = queueSummary(queue);
   const queueLoading = isLoading || proposedLoading || endedLoading;
@@ -447,13 +517,20 @@ function PlannerList({
   ];
   const selectedRow: CporCaseListRow | null = useMemo(() => {
     if (selectedId == null) return null;
-    const pools = [data?.items, proposedPage?.items, endedPage?.items];
+    const pools = [data?.items, proposedPage?.items, endedPage?.items, openPace.data?.items];
     for (const pool of pools) {
       const hit = pool?.find((r) => r.id === selectedId);
       if (hit) return hit;
     }
     return null;
-  }, [selectedId, data?.items, proposedPage?.items, endedPage?.items]);
+  }, [selectedId, data?.items, proposedPage?.items, endedPage?.items, openPace.data?.items]);
+  // Sales pulled over the selected case's window, for the detail (same key as the pace reads, so one request).
+  const selectedRecon = useQuery({
+    queryKey: [...promoLoadReconKey(selectedRow?.id ?? 0)],
+    queryFn: ({ signal }) => apiGet<PromoLoadReconLike>(promoLoadReconUrl(selectedRow!.id), { signal }),
+    enabled: selectedRow != null,
+    staleTime: 60_000,
+  });
 
   const inPlanningSupport = rowsAll
     .filter((r) => ['draft', 'proposed', 'approved', 'rejected'].includes(r.status))
@@ -548,14 +625,14 @@ function PlannerList({
             <PlannerKpiCard
               testId="planner-kpi-at-risk"
               label="At-risk actions"
-              value={queueFigureState === 'ready' ? queueTotals.total : '—'}
-              unit="waiting"
-              state={queueFigureState}
-              severity={queueFigureState === 'ready' && queueTotals.total > 0 ? 'warn' : 'neutral'}
-              caption={`Reapproval, awaiting approval and evidence outstanding${queueCaptionNote}`}
+              value={paceState === 'ready' ? queueTotals.behindPlan : '—'}
+              unit="behind plan"
+              state={paceState}
+              severity={paceState === 'ready' && queueTotals.behindPlan > 0 ? 'warn' : 'neutral'}
+              caption={paceCaption}
               onClick={
-                queueFigureState === 'empty'
-                  ? retryQueue
+                paceState === 'empty'
+                  ? retryPace
                   : () => document.getElementById('planner-action-queue')?.scrollIntoView?.({ behavior: 'smooth' })
               }
             />
@@ -859,6 +936,19 @@ function PlannerList({
                   selectedRow && queueFigureState === 'ready' && !queueIncomplete
                     ? queue.filter((a) => a.caseId === selectedRow.id)
                     : undefined
+                }
+                sellThrough={
+                  selectedRow == null
+                    ? undefined
+                    : selectedRecon.isError
+                      ? { state: 'failed', retry: () => void selectedRecon.refetch() }
+                      : selectedRecon.data == null
+                        ? { state: 'loading' }
+                        : {
+                            state: 'ready',
+                            recon: selectedRecon.data,
+                            pace: sellThroughPace(selectedRow, selectedRecon.data, today),
+                          }
                 }
                 onOpen={onOpen}
                 onClear={closeDetail}

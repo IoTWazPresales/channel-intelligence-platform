@@ -72,6 +72,17 @@ let casesOverride: ((url: string) => unknown) | null = null;
 /** Per-test override of a /cpor/cases/counts response (exact counts); return undefined for the default. */
 let countsOverride: ((url: string) => unknown) | null = null;
 let clashOverride: (() => unknown) | null = null;
+/** Per-test override of `GET /cpor/cases/{id}/promo-load-recon`; return undefined for the default (on plan). */
+let reconOverride: ((url: string) => unknown) | null = null;
+
+/** Case 41 (window 2026-11-09..20, today 2026-11-19): 11 of 12 days gone, so ~1 668 of 1 820 units expected. */
+const defaultRecon = {
+  case_id: 41,
+  data_unavailable: false,
+  reason: null,
+  lines: [{ product_id: 1, estimate_qty: 1820, cst_units: 1700 }],
+  cst_vintage: { max_period_start_date: '2026-11-16' },
+};
 
 const defaultCounts = (url: string) => {
   if (url.includes('window_from=')) return { total_current: 2, status_counts_current: { active: 2 } };
@@ -89,6 +100,11 @@ const apiGetMock = vi.fn(async (url: string) => {
     const o = clashOverride?.();
     if (o instanceof Error) throw o;
     return o ?? { clash_count: 4, promotion_count: 3, customer_count: 2, from: '2026-11-19', to: null };
+  }
+  if (url.includes('/promo-load-recon')) {
+    const o = reconOverride?.(url);
+    if (o instanceof Error) throw o;
+    return o ?? defaultRecon;
   }
   if (url.includes('/cpor/cases')) {
     const o = casesOverride?.(url);
@@ -144,6 +160,7 @@ describe('PromotionPlannerSurface', () => {
     casesOverride = null;
     countsOverride = null;
     clashOverride = null;
+    reconOverride = null;
     search.value = '';
   });
 
@@ -214,9 +231,10 @@ describe('PromotionPlannerSurface', () => {
     ).toBe(true);
     // Every planner case and count request carries the family: none reads sell-out. The one exception is the shared
     // Promotions & Funding header (FundingChrome, `page_size=1`), which also serves the case book and settlement desk.
+    // Per-case reads (`/cpor/cases/{id}/promo-load-recon`, Warren 27 Nov at-risk rule) name one case of this family.
     const caseCalls = apiGetMock.mock.calls
       .map(([u]) => String(u))
-      .filter((u) => u.includes('/cpor/cases') && u !== DOMAIN_CHROME_URL);
+      .filter((u) => u.includes('/cpor/cases') && u !== DOMAIN_CHROME_URL && !/\/cpor\/cases\/\d+\//.test(u));
     expect(caseCalls.length).toBeGreaterThan(0);
     for (const u of caseCalls) expect(u).toContain('promotion_family=customer_sell_through');
     expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/cpor/cases/counts?reporting_only=true'))).toBe(true);
@@ -307,13 +325,34 @@ describe('PromotionPlannerSurface', () => {
     fireEvent.click(screen.getByTestId('planner-detail-close'));
     expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
 
+    // Warren (27 Nov) asked for the buttons Adjust promotion, Create claim and More: Clear moved under More.
     fireEvent.click(screen.getByTestId('planner-timeline-bar-41'));
-    fireEvent.click(screen.getByTestId('planner-side-clear'));
+    fireEvent.click(screen.getByTestId('planner-side-more'));
+    fireEvent.click(await screen.findByTestId('planner-side-clear'));
     expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('planner-timeline-bar-41'));
     await user.keyboard('{Escape}');
     expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
+  });
+
+  it('the detail has Adjust promotion, Create claim and More, and the sell-through over the window (Warren, 27 Nov)', async () => {
+    reconOverride = () => ({ ...defaultRecon, lines: [{ product_id: 1, estimate_qty: 1820, cst_units: 400 }] });
+    renderPlanner();
+    fireEvent.click(await screen.findByTestId('planner-timeline-bar-41'));
+    expect(screen.getByTestId('planner-side-open')).toHaveTextContent('Adjust promotion');
+    expect(screen.getByTestId('planner-side-claim')).toHaveTextContent('Create claim');
+    expect(screen.getByTestId('planner-side-claim')).toHaveAttribute('href', '/commercial-planner/cpor-cases/41');
+    expect(screen.getByTestId('planner-side-more')).toHaveTextContent('More');
+    await waitFor(() =>
+      expect(screen.getByTestId('planner-detail-sell-through')).toHaveTextContent('400 of 1 820 planned units sold in the window'),
+    );
+    expect(screen.getByTestId('planner-detail-pace')).toHaveTextContent(/Behind plan: about 1 668 expected with 92% of the window gone/);
+    fireEvent.click(screen.getByTestId('planner-side-more'));
+    expect(await screen.findByRole('menuitem', { name: 'Open in case book' })).toHaveAttribute(
+      'href',
+      '/commercial-planner/cpor-cases?status=proposed',
+    );
   });
 
   it('puts a proposed case in the action queue', async () => {
@@ -479,10 +518,14 @@ describe('PromotionPlannerSurface', () => {
   });
 
   describe('step 2: open customer sell-through by default, History on request', () => {
+    // The at-risk read (Warren, 27 Nov) is always open cases started by today (`window_to=`); it is not the main list.
     const mainListCalls = () =>
       apiGetMock.mock.calls
         .map(([u]) => String(u))
-        .filter((u) => u.includes('/cpor/cases?') && !u.includes('status=') && u !== DOMAIN_CHROME_URL);
+        .filter(
+          (u) =>
+            u.includes('/cpor/cases?') && !u.includes('status=') && !u.includes('window_to=') && u !== DOMAIN_CHROME_URL,
+        );
 
     it('the Open | History toggle defaults to Open and History sets view=history in the URL', async () => {
       renderPlanner();
@@ -557,8 +600,52 @@ describe('PromotionPlannerSurface', () => {
       renderPlanner();
       await waitFor(() => expect(screen.getByTestId('planner-kpi-planning')).toHaveTextContent(/In planning7/));
       expect(screen.getByTestId('planner-kpi-live')).toHaveTextContent(/Live promotions5/);
-      // The one proposed case (window 2026-09-07) is awaiting approval and its window has started.
+      // Requirement changed (Warren, 27 Nov): "At risk means an open promotion whose sell-through is behind the plan
+      // for the time already elapsed." This test counted the overdue approval as at risk. The one open case is
+      // selling on plan, so nothing is at risk although it still waits for approval.
+      await waitFor(() => expect(screen.getByTestId('planner-kpi-at-risk')).toHaveAttribute('data-state', 'ready'));
+      expect(screen.getByTestId('planner-kpi-at-risk')).toHaveTextContent(/At-risk actions0/);
+      expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-26-1204 · awaiting approval · overdue');
+    });
+
+    it('counts an open promotion selling behind plan for the time elapsed as at risk and queues it', async () => {
+      casesOverride = quietLists;
+      reconOverride = () => ({ ...defaultRecon, lines: [{ product_id: 1, estimate_qty: 1820, cst_units: 400 }] });
+      renderPlanner();
       await waitFor(() => expect(screen.getByTestId('planner-kpi-at-risk')).toHaveTextContent(/At-risk actions1/));
+      expect(screen.getByTestId('planner-action-queue')).toHaveTextContent('CPR-26-1204 · sell-through behind plan');
+      expect(apiGetMock.mock.calls.some(([u]) => String(u) === '/api/v1/cpor/cases/41/promo-load-recon')).toBe(true);
+      expect(
+        apiGetMock.mock.calls.some(
+          ([u]) => String(u).includes('window_to=2026-11-19') && String(u).includes('open_only=true'),
+        ),
+      ).toBe(true);
+    });
+
+    it('claims no risk for an open promotion with no sell-through loaded, and says so', async () => {
+      casesOverride = quietLists;
+      reconOverride = () => ({ case_id: 41, data_unavailable: true, reason: 'no_cst', lines: [] });
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-kpi-at-risk')).toHaveTextContent(/At-risk actions0/));
+      expect(screen.getByTestId('planner-kpi-at-risk')).toHaveTextContent('1 started without sell-through to judge');
+    });
+
+    it('never judges an ended case, and does not read its sell-through for the at-risk count', async () => {
+      casesOverride = (url) =>
+        url.includes('status=ended')
+          ? {
+              ...listPayload,
+              items: [{ ...listPayload.items[0], id: 52, case_code: 'CPR-ENDED', status: 'ended', window_start: '2026-11-01', window_end: '2026-11-10' }],
+              total: 1,
+            }
+          : undefined;
+      reconOverride = () => ({ ...defaultRecon, lines: [{ product_id: 1, estimate_qty: 1820, cst_units: 0 }] });
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-queue-card-evidence')).toHaveTextContent(/Evidence outstanding1/));
+      // Case 41 (open) sells nothing, so it is at risk; the ended case is not, and its recon is never asked for.
+      await waitFor(() => expect(screen.getByTestId('planner-kpi-at-risk')).toHaveTextContent(/At-risk actions1/));
+      expect(screen.getByTestId('planner-action-queue')).not.toHaveTextContent('CPR-ENDED · sell-through behind plan');
+      expect(apiGetMock.mock.calls.some(([u]) => String(u).includes('/cpor/cases/52/promo-load-recon'))).toBe(false);
     });
 
     it('shows In planning / Live promotions as failed, not zero, when the count request fails', async () => {
@@ -570,11 +657,19 @@ describe('PromotionPlannerSurface', () => {
       expect(screen.getByTestId('planner-kpi-planning')).not.toHaveTextContent(/In planning0/);
     });
 
-    it('shows At-risk actions as failed, not zero, when a queue source failed', async () => {
-      casesOverride = (url) => (url.includes('status=ended') ? new Error('boom') : undefined);
+    // Requirement changed (Warren, 27 Nov): the at-risk count reads open promotions' sell-through, not the ended list.
+    it('shows At-risk actions as failed, not zero, when a sell-through read failed', async () => {
+      reconOverride = () => new Error('boom');
       renderPlanner();
       await waitFor(() => expect(screen.getByTestId('planner-kpi-at-risk')).toHaveAttribute('data-state', 'empty'));
       expect(screen.getByTestId('planner-kpi-at-risk')).not.toHaveTextContent(/At-risk actions0/);
+    });
+
+    it('a failed ended-case list does not fail the at-risk count', async () => {
+      casesOverride = (url) => (url.includes('status=ended') ? new Error('boom') : undefined);
+      renderPlanner();
+      await waitFor(() => expect(screen.getByTestId('planner-queue-card-evidence')).toHaveAttribute('data-state', 'empty'));
+      await waitFor(() => expect(screen.getByTestId('planner-kpi-at-risk')).toHaveAttribute('data-state', 'ready'));
     });
 
     it('shows Overdue approvals and Evidence outstanding queue cards from the queue', async () => {
