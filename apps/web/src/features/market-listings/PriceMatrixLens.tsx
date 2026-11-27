@@ -11,6 +11,8 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { attentionAge } from '@/features/overview/homeDashboard';
 import { paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { OPS_LIST_GRID_PAGINATION, OPS_LIST_PAGE_SIZE } from '@/features/shell/opsListGridPagination';
+import { SALES_MODEL_HEADER } from '@/features/tenant/lineIdentifier';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { Panel } from '@/features/workbench-ui/Panel';
 import { StatusChip } from '@/features/workbench-ui/controls';
 import { apiGet } from '@/lib/api';
@@ -33,6 +35,8 @@ type MatrixProduct = SrpFields & {
   sales_model_name?: string | null;
   sku?: string | null;
   name?: string | null;
+  /** Non-empty string values from dim_product.specs_json. A missing key means no column. */
+  specs?: Record<string, string>;
 };
 type MatrixCell = SrpFields & {
   product_id: number;
@@ -196,6 +200,7 @@ function matrixQueryKey(customerIds: number[]) {
 
 export function PriceMatrixLens() {
   const theme = useTheme();
+  const chrome = useFactGridChrome('price-matrix');
   const scope = useListingCustomerScope();
   const enabled = scope.hydrated && scope.selectedIds.length > 0;
   const matrix = useQuery({
@@ -227,6 +232,17 @@ export function PriceMatrixLens() {
     return (matrix.data?.products ?? []).map((product) => ({ product, cells: byProduct.get(product.id) ?? {} }));
   }, [matrix.data]);
 
+  /** A column exists only for a spec key that has a value on at least one product in this result. */
+  const specKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const product of matrix.data?.products ?? []) {
+      for (const [key, value] of Object.entries(product.specs ?? {})) {
+        if (value) keys.add(key);
+      }
+    }
+    return [...keys].sort((a, b) => a.localeCompare(b));
+  }, [matrix.data]);
+
   const columnDefs = useMemo<ColDef<MatrixRow>[]>(
     () => [
       {
@@ -235,19 +251,38 @@ export function PriceMatrixLens() {
         pinned: 'left',
         minWidth: 220,
         flex: 1.2,
+        filter: 'agTextColumnFilter',
+        floatingFilter: true,
         valueGetter: (p) => (p.data ? productLabel(p.data.product) : ''),
+        getQuickFilterText: (p) => (p.data ? productLabel(p.data.product) : ''),
         tooltipValueGetter: (p) =>
           p.data ? [productLabel(p.data.product), p.data.product.sku, p.data.product.name].filter(Boolean).join(' · ') : undefined,
         cellRenderer: (p: ICellRendererParams<MatrixRow>) => (p.data ? <ProductCell product={p.data.product} /> : null),
+      },
+      {
+        colId: 'sales_model_name',
+        headerName: SALES_MODEL_HEADER,
+        minWidth: 160,
+        filter: 'agTextColumnFilter',
+        floatingFilter: true,
+        valueGetter: (p) => p.data?.product.sales_model_name?.trim() || '',
+        getQuickFilterText: (p) => p.data?.product.sales_model_name?.trim() || '',
+        cellRenderer: (p: ICellRendererParams<MatrixRow>) =>
+          p.data ? (
+            <Typography variant="body2" noWrap data-testid={`price-matrix-sales-model-${p.data.product.id}`}>
+              {p.data.product.sales_model_name?.trim() || '—'}
+            </Typography>
+          ) : null,
       },
       {
         colId: 'srp',
         headerName: 'SRP',
         headerTooltip: 'Suggested Retail Price',
         minWidth: 150,
-        type: 'rightAligned',
-        valueGetter: (p) => p.data?.product.srp ?? null,
-        tooltipValueGetter: (p) => (p.data ? srpText(p.data.product) : undefined),
+        filter: 'agTextColumnFilter',
+        floatingFilter: true,
+        valueGetter: (p) => (p.data ? srpText(p.data.product) : ''),
+        getQuickFilterText: (p) => (p.data ? srpText(p.data.product) : ''),
         cellRenderer: (p: ICellRendererParams<MatrixRow>) =>
           p.data ? (
             <Typography
@@ -260,23 +295,44 @@ export function PriceMatrixLens() {
             </Typography>
           ) : null,
       },
+      ...specKeys.map<ColDef<MatrixRow>>((key) => ({
+        colId: `spec:${key}`,
+        headerName: key,
+        minWidth: 120,
+        filter: 'agTextColumnFilter',
+        floatingFilter: true,
+        valueGetter: (p) => p.data?.product.specs?.[key] ?? '',
+        getQuickFilterText: (p) => p.data?.product.specs?.[key] ?? '',
+        cellRenderer: (p: ICellRendererParams<MatrixRow>) => (
+          <Typography variant="body2" noWrap data-testid={`price-matrix-spec-${key}-${p.data?.product.id ?? ''}`}>
+            {p.data?.product.specs?.[key] || '—'}
+          </Typography>
+        ),
+      })),
       ...customers.map<ColDef<MatrixRow>>((c) => ({
         colId: `customer-${c.id}`,
         headerName: c.name,
         minWidth: 240,
         flex: 1,
+        filter: 'agNumberColumnFilter',
+        floatingFilter: true,
         valueGetter: (p) => p.data?.cells[c.id]?.price ?? null,
+        getQuickFilterText: (p) => {
+          const cell = p.data?.cells[c.id];
+          if (!cell || cell.listing_id == null) return '';
+          return [fmtPrice(cell.price), cellSrpText(cell)].filter(Boolean).join(' ');
+        },
         tooltipValueGetter: (p) => {
           const cell = p.data?.cells[c.id];
           if (!cell?.observed_at) return undefined;
           const read = `Read ${new Date(cell.observed_at).toLocaleString()}`;
-          const srpText = cellSrpText(cell);
-          return srpText ? `${read} · ${srpText}` : read;
+          const caption = cellSrpText(cell);
+          return caption ? `${read} · ${caption}` : read;
         },
         cellRenderer: (p: ICellRendererParams<MatrixRow>) => <PriceCell cell={p.data?.cells[c.id]} />,
       })),
     ],
-    [customers],
+    [customers, specKeys],
   );
 
   const metrics = gridRowMetrics(theme.density);
@@ -287,9 +343,11 @@ export function PriceMatrixLens() {
     () => ({
       ...OPS_LIST_GRID_PAGINATION,
       rowHeight,
+      // The floating-filter row is a second header; AG Grid sizes it to the header height.
+      floatingFiltersHeight: headerHeight,
       getRowId: (p) => String(p.data.product.id),
     }),
-    [rowHeight],
+    [headerHeight, rowHeight],
   );
 
   const unavailable = matrix.isError || Boolean(matrix.data?.data_unavailable);
@@ -306,9 +364,11 @@ export function PriceMatrixLens() {
         }
         flush
       >
-        <Box sx={{ px: 2, pb: 1.5 }}>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center" sx={{ px: 2, pb: 1.5 }}>
           <ListingCustomerScopePicker testIdPrefix="price-matrix-customers" />
-        </Box>
+          {chrome.filters}
+          {chrome.trailing}
+        </Stack>
         <ModuleDataSection
           isLoading={enabled && matrix.isLoading}
           isError={unavailable}
@@ -324,9 +384,14 @@ export function PriceMatrixLens() {
         >
           <Box data-testid="price-matrix-table">
             <EnterpriseDataGrid<MatrixRow>
+              ref={chrome.gridRef}
+              quickFilterText={chrome.query}
               rowData={rows}
               columnDefs={columnDefs}
-              height={paginatedGridHeight(Math.max(1, Math.min(rows.length, OPS_LIST_PAGE_SIZE)), { rowHeight, headerHeight })}
+              height={paginatedGridHeight(Math.max(1, Math.min(rows.length, OPS_LIST_PAGE_SIZE)), {
+                rowHeight,
+                headerHeight: headerHeight * 2,
+              })}
               gridOptions={gridOptions}
             />
           </Box>

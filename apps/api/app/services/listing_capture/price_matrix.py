@@ -523,6 +523,8 @@ def _customer_labels(session: Session, customer_ids: list[int]) -> list[dict[str
 
 
 def _product_labels(session: Session, tenant_id: str, product_ids: list[int]) -> list[dict[str, Any]]:
+    from app.services.commercial_planner.read_model import specs_json_flat_string_map
+
     rows = session.execute(
         select(DimProduct).where(DimProduct.tenant_id == tenant_id, DimProduct.id.in_(product_ids))
     ).scalars().all()
@@ -533,6 +535,11 @@ def _product_labels(session: Session, tenant_id: str, product_ids: list[int]) ->
             "sales_model_name": by_id[pid].sales_model_name if pid in by_id else None,
             "sku": by_id[pid].sku if pid in by_id else None,
             "name": by_id[pid].name if pid in by_id else None,
+            # Keys that exist on this product's specs_json. The grid adds a column only for a
+            # key present on at least one row; an empty map adds none.
+            "specs": specs_json_flat_string_map(
+                by_id[pid].specs_json if pid in by_id and isinstance(by_id[pid].specs_json, dict) else None
+            ),
         }
         for pid in product_ids
     ]

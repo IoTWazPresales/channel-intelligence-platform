@@ -227,7 +227,23 @@ describe('PriceMatrixLens', () => {
     mount();
     await waitFor(() => expect(screen.getByText('Customer C')).toBeInTheDocument());
     const headers = Array.from(document.querySelectorAll('.ag-header-cell-text')).map((e) => e.textContent);
-    expect(headers).toEqual(['Product', 'SRP', 'Customer A', 'Customer B', 'Customer C']);
+    expect(headers).toEqual(['Product', 'Sales model', 'SRP', 'Customer A', 'Customer B', 'Customer C']);
+  });
+
+  it('adds a sales model column and a column for each spec present on the products', async () => {
+    const base = matrixPayload();
+    payload.value = {
+      ...base,
+      products: [{ ...base.products[0], sales_model_name: 'MODEL-X1', specs: { ram: '16 GB', cpu: 'i7' } }],
+    };
+    mount();
+    await waitFor(() => expect(screen.getByTestId('price-matrix-sales-model-10')).toHaveTextContent('MODEL-X1'));
+    expect(screen.getByTestId('price-matrix-spec-cpu-10')).toHaveTextContent('i7');
+    expect(screen.getByTestId('price-matrix-spec-ram-10')).toHaveTextContent('16 GB');
+    const headers = Array.from(document.querySelectorAll('.ag-header-cell-text')).map((e) => e.textContent);
+    expect(headers).toEqual(['Product', 'Sales model', 'SRP', 'cpu', 'ram', 'Customer A', 'Customer B']);
+    expect(document.querySelector('.ag-floating-filter')).not.toBeNull();
+    expect(screen.getByTestId('grid-find-price-matrix')).toBeInTheDocument();
   });
 
   it('labels a product by sales model name first', () => {
@@ -240,5 +256,8 @@ describe('PriceMatrixLens', () => {
     const source = readFileSync(join(__dirname, 'PriceMatrixLens.tsx'), 'utf8');
     expect(source).not.toMatch(/rgba?\(/);
     expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    expect(source).not.toMatch(/Cheapest at/i);
+    expect(source).not.toMatch(/Products monitored/);
+    expect(source).not.toMatch(/Prices below SRP/);
   });
 });
