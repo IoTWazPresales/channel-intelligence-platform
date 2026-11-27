@@ -1098,8 +1098,6 @@ def cpor_fetch_daily_fx_rate_task() -> dict:
 @celery_app.task(name="cpor.close_ended_windows_for_review")
 def cpor_close_ended_windows_for_review_task() -> dict:
     """Beat task (daily): reconcile active sell-through promotions whose window ended; end them."""
-    from datetime import date
-
     from app.db.session_sync import SessionLocal
     from app.services.cpor.close_for_review import close_due_cases
     from app.worker.celery_queues import dev_beat_disabled
@@ -1107,7 +1105,7 @@ def cpor_close_ended_windows_for_review_task() -> dict:
     if dev_beat_disabled():
         return {"skipped": True, "reason": "dev_beat_disabled"}
     with SessionLocal() as session:
-        return {"skipped": False, **close_due_cases(session, today=date.today())}
+        return {"skipped": False, **close_due_cases(session)}
 
 
 @celery_app.task(name="imports.flush_deferred_dsi_post_validate_auto_apply")

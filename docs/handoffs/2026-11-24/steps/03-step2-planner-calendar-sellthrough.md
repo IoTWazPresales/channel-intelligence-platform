@@ -365,11 +365,26 @@ FINDINGS:
 - Only "Sell-Through PP" is in the customer sell-through family today. "Stock PP (In-Direct)" and SPIV are in no family, so they do not close automatically until U4 assigns them one (`promotion_type_vocab.py`).
 - An approved promotion that was never activated cannot reach `ended` (`approved → active | cancelled`). Its window can pass and it stays open.
 
-QUESTION FOR WARREN (round 4):
+QUESTION FOR WARREN (round 4) — answered in round 5, below. Do not ask again.
 
-1. Should window sell-through set `result_qty` when no claim file exists, or stay on the event beside the claim figure? Today it stays on the event.
-2. Should an approved-but-never-activated promotion whose window ended be closed for review too? That needs a lifecycle change.
-3. Should the close wait until sales are loaded through the window end, or close on the day after as now (with the flag)?
+## Close for review — Warren's rulings applied (27 Nov, round 5)
+
+Warren (via coordinator, verbatim): "1. result_qty stays settlement-written from the claim file. Do not set it from sell-through. The saved comparison beside the close is the recon. Spec quotes you cited stay in force. Document that in CPOR_SETTLEMENT_SPEC.md. 2. Do not close a case when its sales are not loaded through the window end. Leave it open and flagged. Close to the existing ended status only when that customer's uploaded sales cover the window. 3. Approved cases that were never activated stay as they are. They never ran, so they do not auto-close. 4. Daily run is fine. Keep it. Today follows the tenant reporting timezone when that setting exists; otherwise do not invent Africa/Johannesburg. 5. Keep counting a row when period_start_date is inside the window, whole row, chain and store summed. Month-to-date rows count and stay flagged. Document these three as the sale-date rule."
+
+Changed (FACT, on the branch):
+
+- `close_for_review.py`: a due case closes to `ended` only when the customer's sales cover the window end. Coverage is the latest period end loaded for that tenant and customer, using the existing `cst_read_model._period_end` (weekly = start + 6 days, monthly = month end, daily = that day). If sales don't cover the window, the case stays `active` and a `close_for_review_held` event records the reason, the coverage and the comparison. That event is written again only when the coverage moves. The batch returns `closed`, `held` and `failed`.
+- "Today" per case is `commercial_tenant_profile.reporting_today(tenant_id)`, the existing tenant reporting date setting (U4's file, imported, not edited). The beat task no longer passes the server date.
+- Approved cases that were never activated: unchanged, still not due (ruling 3).
+- `result_qty`: unchanged, never written (ruling 1).
+- `docs/CPOR_SETTLEMENT_SPEC.md` §1: the five rulings, the sale-date rule as three points, and what the build does. Tree-vs-spec row updated.
+- Tests: `test_cpor_close_for_review.py` 24 passed. The changed assertions follow rulings 2 and 4: a short-coverage case is held, not closed, and today comes from the tenant reporting date. New tests cover coverage per period type, held-then-closed, no repeated held events, chain plus store summed, and whole rows.
+
+FACT: the tenant reporting timezone setting exists (`REPORTING_TIMEZONE`, exposed as `reporting_timezone` in the tenant profile). Its value is set in U4's file. `reporting_today` takes `tenant_id`, but the file still reserves a per-tenant key for later. This code adds no timezone of its own.
+
+Manual end: ending by hand stays a human action and is not held. Its event carries the same comparison and flags (ASSUMPTION: ruling 2 is about the automatic close).
+
+NOT RUN: database tests, and one real execution of the two sell-through queries (window rows; coverage by `period_type`) on a disposable database.
 
 ## Resume notes
 
