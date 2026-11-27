@@ -176,6 +176,27 @@ describe('SettlementDesk', () => {
     expect(screen.queryByTestId('settlement-desk-action-cancel')).toBeNull();
   });
 
+  it('shows the sales-window gap settlement read from the end event', () => {
+    renderDesk(
+      <SettlementDesk
+        view={view({
+          status: 'ended',
+          salesWindowGap: {
+            flag: 'sales_not_loaded_through_window_end',
+            label: 'sales do not cover the window end',
+            reason: 'Customer pulled the week',
+            actor: 'warren',
+          },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('settlement-desk-sales-gap')).toHaveTextContent(
+      'sales do not cover the window end',
+    );
+    expect(screen.getByTestId('settlement-desk-sales-gap')).toHaveTextContent('Ended by warren');
+    expect(screen.getByTestId('settlement-desk-sales-gap')).toHaveTextContent('Customer pulled the week');
+  });
+
   it('shows the reapproval warning and links pre-approval work to the planner', () => {
     renderDesk(
       <SettlementDesk

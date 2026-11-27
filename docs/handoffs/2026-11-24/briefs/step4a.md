@@ -1,0 +1,8 @@
+# Step 4a brief: theme quick fixes (builder: Sonnet)
+
+- Step prompt: `C:\Users\warren_eliason\terminals\impl-prompts-20261124\05-step4a-theme-fixes.md` (read it all; its E1-E4, Tasks and Acceptance are your spec).
+- Branch `fix/theme-titles-background-20261125`, your worktree `...\.worktrees\impl-step4a` at `bc396c88`. Tracker `docs/handoffs/2026-11-24/steps/05-step4a-theme-fixes.md`. EIF node id **N-0124**, run `IMPL_step4a_20261125`.
+- Warren's words (verbatim): "4. Fine, BE SURE CURRENT COMPONENTS ARE SHARED WERE NECESSARY SO THE CHANGES ARE SMALL GOING FORWARD IF NEEDED". Earlier: "NOTHING LOOKS LIKE THE SCREEN SHOTS I SHARED??????" and "What is every fucking page hardcoded?"
+- Fix titles and page background through the theme and the two shared header components only (`PageHeader.tsx`, `DomainHeader.tsx`, `cipTheme.ts`, `AppShell.tsx`, plus the specific components that need clipping once Paper's global `overflow: hidden` is removed). No page files. Report the `h5` usage count and your E1 choice with the reason.
+- The visual gate is the heart of this step: render at least `/dashboard`, `/promotions`, `/listing-capture`, `/stock` and two more `DomainHeader` pages in dark and light and compare with the dashboard mock-up and the reference PNGs (`docs/handoffs/2026-11-23/assets/dashboard-design-reference-{dark,light}.png`). Check a select menu, a tooltip and a sticky table header render without clipping. List the visible differences that remain versus the references; they are the input for Step 4b.
+- Do not edit `PriceMatrixLens`, `MarketSurface`, discovery or planner files (other steps are working there).

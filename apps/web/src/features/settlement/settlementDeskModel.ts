@@ -121,6 +121,8 @@ export type SettlementDeskView = {
   outOfWindowClaimRows?: number;
   unresolvedProducts?: { token: string; units: number }[];
   cstReconciliation?: { available: boolean; reason?: string; divergence_count?: number } | null;
+  /** Set when a person ended the case before sales covered the window. Read from the end event. */
+  salesWindowGap?: { flag: string; label: string; reason: string | null; actor: string | null } | null;
   /** Append-only ledger for this case, in USD. Absent on older payloads. */
   ledgerAvailable?: boolean;
   ledgerCommittedUsd?: number | null;

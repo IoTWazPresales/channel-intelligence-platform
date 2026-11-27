@@ -26,12 +26,15 @@ export function Panel({
   sx?: object;
 }) {
   return (
-    <Paper elevation={0} sx={{ boxShadow: 'none', display: 'flex', flexDirection: 'column', minHeight, height: '100%', ...sx }}>
+    <Paper
+      elevation={0}
+      sx={{ boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column', minHeight, height: '100%', ...sx }}
+    >
       {title || actions ? (
         <Stack direction="row" alignItems="flex-start" justifyContent="space-between" sx={{ px: 2, pt: 1.5, pb: 1, gap: 1 }}>
           <Box sx={{ minWidth: 0 }}>
             {title ? (
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+              <Typography variant="panelTitle" component="h2">
                 {title}
               </Typography>
             ) : null}

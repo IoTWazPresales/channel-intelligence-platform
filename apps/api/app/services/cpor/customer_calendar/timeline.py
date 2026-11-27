@@ -22,6 +22,7 @@ from app.services.cpor.customer_calendar.clashes import compute_clashes
 from app.services.cpor.customer_calendar.scope import bind_calendar_tenant
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.pivot import is_voided_line
+from app.services.cpor.promotion_type_vocab import promotion_family as family_of_type
 from app.services.customer_reporting import WHERE_THE_FLAG_IS_SET, reporting_customer_ids_select
 from app.services.imports.cst_layouts import is_reporting_customer
 
@@ -204,12 +205,15 @@ def build_clash_summary(
     *,
     date_from: date | None = None,
     date_to: date | None = None,
+    promotion_family: str | None = None,
 ) -> dict[str, Any]:
     """Exact tenant-wide clash counts for the planner card (same windows, events, maths as above).
 
     Customers outside the caller's account scope never count, as in the per-customer timeline.
     ``clash_count`` is promotion/event pairs; ``promotion_count`` and ``customer_count`` are the
-    distinct promotions and customers involved.
+    distinct promotions and customers involved. With ``promotion_family`` only promotions of that
+    family count (``promotion_type_vocab.promotion_family``, exact after case/space normalisation);
+    the caller checks the family name.
     """
     bind_calendar_tenant(db, tenant_id)
     from app.core.my_accounts import apply_account_predicate
@@ -233,6 +237,7 @@ def build_clash_summary(
             db, tenant_id, customer_id=None, date_from=date_from, date_to=date_to
         )
         if int(p["customer_id"]) in allowed
+        and (promotion_family is None or family_of_type(p["promotion_type"]) == promotion_family)
     ]
     events = [
         e

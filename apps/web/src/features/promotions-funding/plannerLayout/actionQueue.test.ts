@@ -85,15 +85,58 @@ describe('queueSummary', () => {
       ended: [{ id: 4, case_code: 'D', status: 'ended', customer_name: 'N', window_start: '2026-10-01', window_end: '2026-10-10' }],
       today: '2026-11-19',
     });
+    // Warren (27 Nov) added `behindPlan` to the summary; the other counts are unchanged.
     expect(queueSummary(q)).toEqual({
       total: 4,
       reapproval: 1,
       awaitingApproval: 2,
       overdueApprovals: 1,
       evidenceOutstanding: 1,
+      behindPlan: 0,
     });
   });
   it('is all zero for an empty queue', () => {
-    expect(queueSummary([])).toEqual({ total: 0, reapproval: 0, awaitingApproval: 0, overdueApprovals: 0, evidenceOutstanding: 0 });
+    expect(queueSummary([])).toEqual({
+      total: 0,
+      reapproval: 0,
+      awaitingApproval: 0,
+      overdueApprovals: 0,
+      evidenceOutstanding: 0,
+      behindPlan: 0,
+    });
+  });
+});
+
+describe('sell-through behind plan (Warren, 27 Nov)', () => {
+  const behind = (id: number, extra: Record<string, unknown> = {}) => ({
+    id,
+    case_code: `B${id}`,
+    status: 'active',
+    window_start: '2026-11-01',
+    window_end: '2026-11-30',
+    planned: 300,
+    sold: 40,
+    expectedByNow: 190,
+    elapsed: 19 / 30,
+    ...extra,
+  });
+  it('queues each behind-plan case once and counts it as behindPlan', () => {
+    const q = buildActionQueue({ cases: [], proposed: [], ended: [], behindPlan: [behind(7), behind(7)] });
+    expect(q).toHaveLength(1);
+    expect(q[0]).toMatchObject({ kind: 'sell_through_behind', caseId: 7, label: 'B7 · sell-through behind plan' });
+    expect(q[0].hint).toBe('Sold 40 of 300 planned units; about 190 expected with 63% of the window gone.');
+    expect(queueSummary(q).behindPlan).toBe(1);
+  });
+  it('skips a replaced case', () => {
+    const q = buildActionQueue({ cases: [], proposed: [], ended: [], behindPlan: [behind(8, { superseded_by_case_id: 9 })] });
+    expect(q).toEqual([]);
+  });
+  it('an ended case without a claim file is evidence outstanding, never behind plan', () => {
+    const q = buildActionQueue({
+      cases: [],
+      proposed: [],
+      ended: [{ id: 4, case_code: 'D', status: 'ended', window_start: '2026-10-01', window_end: '2026-10-10' }],
+    });
+    expect(queueSummary(q)).toMatchObject({ evidenceOutstanding: 1, behindPlan: 0 });
   });
 });

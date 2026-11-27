@@ -358,6 +358,7 @@ def build_settlement_consolidation(session: Session, case_id: int) -> dict[str, 
             {"token": k, "units": v} for k, v in sorted(unresolved_tokens.items())
         ],
         "cst_reconciliation": cst_flags,
+        "sales_window_gap": _sales_window_gap(session, case_id),
         "settle_readiness": build_settle_readiness(
             case,
             claim_row_count=len(claims),
@@ -380,6 +381,28 @@ def build_settlement_consolidation(session: Session, case_id: int) -> dict[str, 
         },
         "ledger": _case_ledger(session, case_id),
     }
+
+
+def _sales_window_gap(session: Session, case_id: int) -> dict[str, Any] | None:
+    """Read the manual-end gap off the latest ``transition_end`` event. No new column."""
+    try:
+        from app.models.cpor import CporCaseEvent
+        from app.services.cpor.close_for_review import gap_record_from_event
+
+        row = session.execute(
+            select(CporCaseEvent.actor, CporCaseEvent.payload_json)
+            .where(
+                CporCaseEvent.case_id == case_id,
+                CporCaseEvent.event_type == "transition_end",
+            )
+            .order_by(CporCaseEvent.id.desc())
+            .limit(1)
+        ).first()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    return gap_record_from_event(row[0], row[1])
 
 
 def _case_ledger(session: Session, case_id: int) -> dict[str, Any] | None:

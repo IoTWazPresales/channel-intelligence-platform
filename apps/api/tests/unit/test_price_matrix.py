@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.services.listing_capture.price_matrix import build_price_matrix
+from app.services.listing_capture.price_matrix import _product_labels, build_price_matrix
 
 
 def test_price_matrix_empty_customers() -> None:
@@ -30,7 +30,7 @@ def test_price_matrix_with_listings_reaches_product_set_comprehension() -> None:
     patches = (
         patch("app.services.listing_capture.price_matrix.product_tiers", return_value=None),
         patch("app.services.listing_capture.price_matrix._latest_observations", return_value={}),
-        patch("app.services.listing_capture.price_matrix._tenant_srp_by_product", return_value={}),
+        patch("app.services.listing_capture.price_matrix._srp_by_cell", return_value={}),
         patch("app.services.listing_capture.price_matrix._active_promos", return_value={}),
         patch(
             "app.services.listing_capture.price_matrix._customer_labels",
@@ -51,3 +51,25 @@ def test_price_matrix_with_listings_reaches_product_set_comprehension() -> None:
 
     assert out["summary"]["product_count"] == 1
     assert len(out["cells"]) == 1
+
+
+def test_product_labels_keep_specs_that_are_present() -> None:
+    """Spec columns come from specs_json values that exist. Empty and blank values do not."""
+    product = MagicMock()
+    product.id = 7
+    product.sales_model_name = "MODEL-1"
+    product.sku = "SKU-1"
+    product.name = "Name"
+    product.specs_json = {"cpu": "i7", "blank": "  ", "import_staging": {"ram": "16 GB", "cpu": "other"}}
+    session = MagicMock()
+    session.execute.return_value.scalars.return_value.all.return_value = [product]
+    rows = _product_labels(session, "t-a", [7])
+    assert rows == [
+        {
+            "id": 7,
+            "sales_model_name": "MODEL-1",
+            "sku": "SKU-1",
+            "name": "Name",
+            "specs": {"cpu": "i7", "ram": "16 GB"},
+        }
+    ]

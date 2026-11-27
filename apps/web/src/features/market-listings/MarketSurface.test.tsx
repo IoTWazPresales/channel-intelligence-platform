@@ -96,6 +96,10 @@ vi.mock('@/lib/api', () => ({
       };
     }
     if (url.includes('/customers')) return { items: [] };
+    if (url.includes('/site-candidates')) return { items: [] };
+    if (url.includes('/discovery/capabilities')) {
+      return { live_fetch: false, browser_available: false, providers: [], settings: { missing: [] } };
+    }
     if (url.includes('/competition/mappings')) return [];
     if (url.includes('/competition/prices')) return [];
     return {};
@@ -132,10 +136,41 @@ describe('MarketSurface', () => {
     );
     await waitFor(() => expect(screen.getByTestId('market-surface')).toBeInTheDocument());
     expect(screen.getByRole('heading', { name: /Market & Listings/i })).toBeInTheDocument();
-    expect(screen.getByTestId('price-matrix-lens')).toBeInTheDocument();
+    expect(screen.getByTestId('market-listings-lens')).toBeInTheDocument();
+    expect(screen.getByTestId('listing-last-check')).toHaveTextContent(
+      'Checks run every 30 minutes while this computer is running',
+    );
+    // Not "not yet" until the read has answered: first loading, then the real answer.
+    await waitFor(() =>
+      expect(screen.getByTestId('listing-last-check')).toHaveTextContent('Last check: not yet'),
+    );
     expect(screen.getByTestId('market-add-listing')).toBeInTheDocument();
     expect(screen.queryByText(/static JSON stub/i)).toBeNull();
+    // U1 (27 Nov): capture health is not on Monitored listings.
     expect(screen.queryByTestId('listing-capture-health')).toBeNull();
+  });
+
+  it('puts the price matrix on Monitored listings between the old tiles and the listings table (step 1)', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    const matrix = await screen.findByTestId('price-matrix-lens');
+    const lens = screen.getByTestId('market-listings-lens');
+    const caption = screen.getByTestId('listing-last-check');
+    const tiles = screen.getByText('Active listings');
+    const follows = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(lens).toContainElement(matrix);
+    // U1 (27 Nov): capture health left Monitored listings. The matrix stays under the tiles.
+    expect(screen.queryByTestId('listing-capture-health')).toBeNull();
+    expect(follows(caption, matrix)).toBe(true);
+    expect(follows(tiles, matrix)).toBe(true);
+    // The matrix has no flex order, so it renders before the order-1 listings table and order-2 charts.
+    expect(matrix.parentElement).toBe(lens);
+    expect(matrix.style.order).toBe('');
   });
 
   it('shows price history lens with last-check caption, not capture health', async () => {
@@ -163,6 +198,34 @@ describe('MarketSurface', () => {
     );
     await waitFor(() => expect(screen.getByTestId('market-surface')).toBeInTheDocument());
     expect(screen.queryByTestId('listing-capture-health')).toBeNull();
+  });
+
+  it('shows capture health on Feed proposals and Discover sites only', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    nav.search = 'tab=proposals';
+    const proposals = renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    const proposalsHealth = await screen.findByTestId('listing-capture-health');
+    expect(screen.getByTestId('market-proposals-lens')).toContainElement(proposalsHealth);
+    await waitFor(() => expect(screen.getByTestId('listing-capture-health-due')).toHaveTextContent('3'));
+    expect(screen.getByText('No sites in capture health.')).toBeInTheDocument();
+    expect(screen.getByText('No link-pattern status yet.')).toBeInTheDocument();
+    expect(screen.queryByTestId('market-listings-lens')).toBeNull();
+    proposals.unmount();
+
+    nav.search = 'tab=discovery';
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <MarketSurface />
+      </QueryClientProvider>,
+    );
+    const discoveryHealth = await screen.findByTestId('listing-capture-health');
+    expect(screen.getByTestId('discovery-lens')).toBeInTheDocument();
+    expect(discoveryHealth).toBeInTheDocument();
+    expect(screen.queryByTestId('market-listings-lens')).toBeNull();
   });
 
   it('opens the coverage tab with reported, watched, awaiting steward, failing, not found and not searched', async () => {
@@ -261,10 +324,15 @@ describe('MarketSurface', () => {
     expect(screen.getByTestId('entity-context-panel')).toHaveTextContent(/listing 1/i);
   });
 
-describe('MarketSurface real counts and the intelligence read (BACKLOG-226)', () => {
+// Step 1: the same tests run on Monitored listings as at 9abc4716 (default tab) and on Price history,
+// where 0bd7ed1b moved them. Test bodies and assertions are unchanged.
+describe.each([
+  { tab: 'Monitored listings (9abc4716)', search: '' },
+  { tab: 'Price history (0bd7ed1b)', search: 'tab=observations' },
+])('MarketSurface real counts and the intelligence read (BACKLOG-226) on $tab', ({ search }) => {
   beforeEach(() => {
     resetState();
-    nav.search = 'tab=observations';
+    nav.search = search;
   });
   const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const meta = () => screen.getByText(/monitored listings/);

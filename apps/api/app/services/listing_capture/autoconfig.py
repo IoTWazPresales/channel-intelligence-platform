@@ -953,6 +953,20 @@ def _display_name(seed: dict[str, Any], site_key: str) -> str:
     return site_key
 
 
+# Same rule as the product-keyed row policy (20261007_0025). Stated in the SQL because a
+# superuser or BYPASSRLS role never consults that policy, and these counts must still follow
+# cip.product_lines. Unset, '' and '*' stay open; '!' is no lines.
+_LISTING_LINE_VISIBLE_SQL = """
+  AND (
+    l.product_id IS NULL
+    OR coalesce(current_setting('cip.product_lines', true), '') IN ('', '*')
+    OR l.product_id IN (
+      SELECT p.id FROM dim_product p WHERE cip_product_line_visible(p.product_line)
+    )
+  )
+"""
+
+
 def _site_health(session: Session, tenant_id: str) -> list[dict[str, Any]]:
     site_rows = list(
         session.scalars(
@@ -975,6 +989,9 @@ def _site_health(session: Session, tenant_id: str) -> list[dict[str, Any]]:
                 FROM customer_listing l
                 JOIN dim_customer c ON c.id = l.customer_id
                 WHERE c.tenant_id = :tenant_id
+                """
+                + _LISTING_LINE_VISIBLE_SQL
+                + """
                 GROUP BY 1
                 """
             ),
@@ -995,6 +1012,9 @@ def _site_health(session: Session, tenant_id: str) -> list[dict[str, Any]]:
             JOIN customer_listing l ON l.id = o.listing_id
             JOIN dim_customer c ON c.id = l.customer_id
             WHERE c.tenant_id = :tenant_id
+            """
+            + _LISTING_LINE_VISIBLE_SQL
+            + """
             ORDER BY lower(trim(l.marketplace)), o.fetched_at DESC
             """
         ),

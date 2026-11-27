@@ -34,6 +34,7 @@ import { ActivationTimingAlerts } from '@/features/market-listings/ActivationTim
 import { COMPETITION_CAPABILITIES, LISTING_CAPABILITIES } from '@/features/market-listings/capabilities';
 import { DiscoveryLens } from '@/features/market-listings/DiscoveryLens';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
+import { ListingCaptureHealth } from '@/features/market-listings/ListingCaptureHealth';
 import { PriceMatrixLens } from '@/features/market-listings/PriceMatrixLens';
 import { customersListUrl } from '@/features/market-listings/listingCustomerScope';
 import { type IntelligenceRow, useListingIntelligence } from '@/features/market-listings/listingIntelligence';
@@ -915,8 +916,7 @@ export function MarketSurface() {
           </>
         }
       >
-        {lens === 'listings' ? <PriceMatrixLens /> : null}
-        {lens === 'history' ? (
+        {lens === 'listings' || lens === 'history' ? (
           <Stack spacing={2} sx={{ mt: 2 }} data-testid="market-listings-lens">
             <Typography variant="body2" color="text.secondary" data-testid="listing-last-check">
               Checks run every 30 minutes while this computer is running. Last check:{' '}
@@ -985,6 +985,9 @@ export function MarketSurface() {
                 caption="No product — resolve token"
               />
             </HeadlineStrip>
+            {/* Monitored listings: the price matrix sits under the tiles and above the listings table
+                (order 1) and the chart row (order 2). Price history keeps the page without it. */}
+            {lens === 'listings' ? <PriceMatrixLens /> : null}
 
             <Box
               sx={{
@@ -1369,6 +1372,7 @@ export function MarketSurface() {
 
         {lens === 'proposals' ? (
           <Stack spacing={2} sx={{ mt: 2 }} data-testid="market-proposals-lens">
+            <ListingCaptureHealth />
             <Alert severity="info" variant="outlined">
               Retailer sell-through feeds carry listing ids. CIP proposes them for the registry; a steward confirms.
               Same governance boundary as every other master-data proposal — nothing is auto-created.
@@ -1653,7 +1657,12 @@ export function MarketSurface() {
         ) : null}
 
         {lens === 'quality' ? <ListingQualityLens /> : null}
-        {lens === 'discovery' ? <DiscoveryLens /> : null}
+        {lens === 'discovery' ? (
+          <Stack spacing={2}>
+            <ListingCaptureHealth />
+            <DiscoveryLens />
+          </Stack>
+        ) : null}
         {lens === 'sites' ? <ListingSitesLens /> : null}
         {lens === 'links' ? <ListingLinksLens /> : null}
         {lens === 'coverage' ? <ListingCoverageLens /> : null}

@@ -9,11 +9,13 @@ vi.mock('@mui/material/styles', async () => {
     ...actual,
     useTheme: () => ({
       palette: {
+        mode: 'light',
         success: { main: '#0a0' },
+        secondary: { main: '#0cc' },
         primary: { main: '#00f' },
         warning: { main: '#f90' },
         error: { main: '#f00' },
-        text: { secondary: '#666', disabled: '#999' },
+        text: { secondary: '#666', disabled: '#999', primary: '#111' },
         divider: '#ddd',
       },
     }),
@@ -34,8 +36,8 @@ describe('CustomerRowsTimeline', () => {
             case_name: 'Promo',
             customer_name: 'Acme',
             status: 'active',
-            window_start: '2026-05-01',
-            window_end: '2026-05-31',
+            window_start: '2026-06-01',
+            window_end: '2026-06-20',
           },
         ]}
       />,

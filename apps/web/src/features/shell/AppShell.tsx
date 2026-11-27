@@ -126,7 +126,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   );
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }} data-testid="app-shell">
+    // Transparent: the page colour and gradient come from the theme's body (MuiCssBaseline).
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }} data-testid="app-shell">
       <Box
         component="nav"
         aria-label="Primary"

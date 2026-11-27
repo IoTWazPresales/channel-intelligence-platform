@@ -34,7 +34,7 @@ from app.services.commercial_planner.lineup_period_canonical import (
 )
 from app.services.cpor import planner_sellthrough
 from app.services.cpor.intake_weighted_mac import suggest_sellthrough_mac
-from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET
+from app.services.cpor.promotion_type_vocab import CPOR_PROMOTION_TYPE_SET, DEFAULT_CUSTOMER_PROMOTION_TYPE
 from app.services.lineup.cover_policy import resolve_target_cover_weeks_sync
 from app.services.store_dc.rules import (
     DEFAULT_SLOW_COVER_MULTIPLE,
@@ -59,7 +59,9 @@ COST_SOURCE_SELLTHROUGH = "cst_reported"
 PRODUCT_SET_SELLTHROUGH = "customer_sellthrough"
 PRODUCT_SET_SEED = "seed_case_lines"
 PRODUCT_SET_EXPLICIT = "line_specs"
-DEFAULT_PROPOSAL_PROMOTION_TYPE = "Sell out PP"
+# A proposed plan is a customer promotion: the first customer sell-through type from the vocabulary
+# (Warren: "Correct, Sell through, sell out is disti to reseller and is still valuable but not here.").
+DEFAULT_PROPOSAL_PROMOTION_TYPE = DEFAULT_CUSTOMER_PROMOTION_TYPE
 # The planned reservation needs a line-up's planned units and the SKU's reserve percentages.
 # Customer sell-through carries neither, so there is no sell-through-only reservation.
 RESERVATION_NOT_AVAILABLE = "reservation_needs_lineup_and_sku_assumptions_not_in_sellthrough"

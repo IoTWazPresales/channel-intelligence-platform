@@ -38,9 +38,66 @@ Manual 11-hop chain after a case ends:
 
 - **3, 4** — KAM still asks the customer and the customer still returns a file.
 - **7, 8, 9** — Ken still sends the amount via the KAM; the customer still confirms or disputes.
-- **11** — Ken still takes the settle/close action. The system records it; it does not auto-close.
+- **11** — Ken still takes the settle action. The system records it.
 
-Hop **1** can be detected (window end) but does not auto-settle.
+**Close for review (Warren, 2026-11-27; replaces "it does not auto-close").** Warren's ruling: reconcile open
+promotions from the sales over the period, then close them for review. Do not send to the customer yet.
+
+Warren's clarification (2026-11-27), in plain language:
+
+- **Window.** The sales that count are the uploaded sales for that customer whose sale dates fall inside the
+  promotion window. Nothing before the window counts: there is no 31-day lookback here.
+- **Target.** The forecast units on the case are the reservation target for that same window.
+- **Reconcile.** The close compares the actual units in the window with that target.
+- **Status.** A closed promotion shows as `ended`, the status that already means closed for review. There is no new
+  status.
+- **No notification in this pass.** Nobody is notified, nothing goes to an inbox or an email, and there is no new
+  person-in-charge field. Sending to the customer automatically is also a later step.
+- Closing for review is not settling. Settle stays a human action (hop 11).
+
+Hop **1** is detected at window end and starts the close-for-review above. It does not auto-settle.
+
+Warren's rulings on the close (2026-11-27, settled; do not reopen):
+
+- **`result_qty` stays settlement-written from the claim file.** It is never set from sell-through. The comparison
+  saved beside the close is the reconciliation. These spec lines stay in force:
+  - §6 below: "**Expected** = sum over lines of (units in **that line’s window** × **that line’s rate**).
+    Compatible with D-027: rate is approved `support_unit`; `ttl_result = support_unit × result_qty`. Do not invent
+    a second owed field."
+  - `docs/SPEC_CPOR_V1_AND_LISTING_CAPTURE_V0.md`, `cpor_case_line` fields: "result_qty (settlement-written)".
+  - Same spec, §6 Settlement, whose input is the customer's CPOR sales submission: "Attribution: `sale_date` within
+    case window → counts toward `result_qty`; out-of-window rows retained + flagged `out_of_window`".
+- **Close only when the sales cover the window.** If that customer's uploaded sales do not reach the window end, the
+  case stays open and is flagged. It closes to `ended` only once the uploaded sales cover the window.
+- **Approved but never activated stays as it is.** Those promotions never ran, so they do not close automatically.
+- **Daily run.** "Today" is the tenant's reporting date (the tenant reporting timezone setting). No timezone is
+  assumed beyond that setting.
+- **Sale-date rule.** These three together:
+  1. A row counts when its `period_start_date` is inside the window. The table has no other sale date.
+  2. The whole row counts. A row is never split at the window edge.
+  3. Chain-level and store-level rows for the customer are added together.
+
+  Month-to-date rows count, and the comparison flags them.
+
+**What the build does (2026-11-27).**
+
+- Once a day, each active customer sell-through promotion whose window ended before its tenant's reporting date is
+  reconciled: actual units in each line's window (the case window when the line has none) against the forecast
+  units on those lines.
+- **Sales cover the window** when the last day of the latest sales period loaded for that customer is on or after
+  the window end. A weekly row covers its start date plus six days, a monthly row runs to the month end, and a daily
+  row covers its own day.
+- **Covered:** the case moves to `ended` and the comparison is saved on its `transition_end` event. The comparison
+  holds target units, actual units, delivery %, one row per product and window, and flags.
+- **Not covered:** the case stays `active`. A `close_for_review_held` event records the reason (`no_sales_loaded`
+  or `sales_not_loaded_through_window_end`), how far the sales reach, and the comparison so far. The event is
+  written again only when the sales coverage moves, so a daily run does not add one every day.
+- Running the close twice changes nothing. A case that is already `ended` is left alone.
+- Ending a promotion by hand stays a human decision and is not held. The same comparison, with its flags, is saved
+  on that event.
+- Not closed automatically: stock actions (moves and returns can only be cancelled), superseded cases, promotions
+  outside the customer sell-through family, and approved promotions that were never activated.
+- No line quantity is written. Nobody is notified.
 
 ---
 
@@ -164,3 +221,4 @@ Backlog: **135–140** (this file’s §9). Do not mint codes or run a migration
 | Over-cap (units) flags and continues | `cap_qty` nullable; money ceiling (095) can **block** export |
 | Terms never mutate; supersede in-case | No line window; unique grain blocks two living lines per SKU |
 | CIP-minted customer codes | `TMP-CUST-*` on named accounts; promote map exists, mint does not |
+| Window end: reconcile sales dated inside the window against the forecast, close for review as `ended` once the customer's sales cover the window (2026-11-27) | The daily close moves covered cases to `ended` with the comparison on the `transition_end` event. Uncovered cases stay `active` with a `close_for_review_held` event. `result_qty` stays claim-file only (ruled). Approved cases that were never activated stay as they are (ruled). Only the customer sell-through family closes automatically. No notification (ruled out of this pass). |

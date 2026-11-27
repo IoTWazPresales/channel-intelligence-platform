@@ -47,6 +47,7 @@ BATCH_TASK_NAMES: frozenset[str] = frozenset(
         "imports.flush_deferred_dsi_post_validate_auto_apply",
         "commercial_planner.parse_lineup_case",
         "cpor.fetch_daily_fx_rate",
+        "cpor.close_ended_windows_for_review",
     }
 )
 

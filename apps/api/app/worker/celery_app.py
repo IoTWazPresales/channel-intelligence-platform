@@ -75,6 +75,12 @@ def build_beat_schedule() -> dict:
             "task": "cpor.fetch_daily_fx_rate",
             "schedule": crontab(hour=6, minute=30),
         },
+        # CPOR close for review (Warren 2026-11-27): active sell-through promotions whose window
+        # ended are reconciled and moved to `ended`. Idempotent: only `active` cases close.
+        "cpor-close-ended-windows-for-review": {
+            "task": "cpor.close_ended_windows_for_review",
+            "schedule": crontab(hour=6, minute=45),
+        },
     }
 
 
