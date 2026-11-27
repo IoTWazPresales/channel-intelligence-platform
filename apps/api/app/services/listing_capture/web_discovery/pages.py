@@ -61,6 +61,7 @@ OUTCOME_NEEDS_BROWSER = "needs_browser"
 # it shares with a real result page are not results. One extra request per pattern.
 BASELINE_QUERY = "zqxjv0wq"
 
+_LOC = re.compile(r"<loc>\s*([^<]+)\s*</loc>", re.IGNORECASE)
 _LINK_TAG = re.compile(r"<link\b[^>]*>", re.IGNORECASE)
 _ATTR = re.compile(r"""([a-zA-Z:-]+)\s*=\s*["']([^"']*)["']""")
 _URL_TAG = re.compile(r"<Url\b[^>]*>", re.IGNORECASE)
@@ -164,7 +165,7 @@ def _has_identity(facts: dict[str, Any]) -> bool:
 
 def sitemap_locs(body: str) -> tuple[list[str], bool]:
     """``<loc>`` values and whether the document is a sitemap index."""
-    locs = [item.strip() for item in discovery._LOC.findall(body or "")]  # noqa: SLF001
+    locs = [item.strip() for item in _LOC.findall(body or "")]
     index = bool(re.search(r"<sitemapindex\b", body or "", flags=re.IGNORECASE))
     return locs[:MAX_SITEMAP_LOCS], index
 

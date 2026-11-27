@@ -25,6 +25,8 @@ from price_parser import Price
 
 _GTIN_KEYS = ("gtin", "gtin8", "gtin12", "gtin13", "gtin14")
 _IDENTITY_KEYS = (*_GTIN_KEYS, "sku", "mpn", "model")
+# schema.org price: digits with "." as the decimal point and no grouping, in any locale.
+_MACHINE_DECIMAL = re.compile(r"\d+(?:\.\d+)?")
 
 
 @dataclass(frozen=True)
@@ -175,8 +177,11 @@ def _offer(product: dict[str, Any]) -> dict[str, Any]:
 def _price(offer: dict[str, Any], locale: str | None = None) -> tuple[Decimal | None, str | None]:
     raw = _first(offer, "price")
     currency = _first(offer, "priceCurrency")
+    text = str(raw).strip() if raw is not None else ""
+    if locale and _MACHINE_DECIMAL.fullmatch(text):
+        return Decimal(text), currency.upper() if isinstance(currency, str) and currency else None
     if locale:
-        # The tenant saved this tag. A parse failure is no price, not a second guess.
+        # The tenant saved this tag for written prices. A parse failure is no price.
         from babel.core import UnknownLocaleError
         from babel.numbers import NumberFormatError, parse_decimal
 

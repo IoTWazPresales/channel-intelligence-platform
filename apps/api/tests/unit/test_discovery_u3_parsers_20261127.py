@@ -100,6 +100,21 @@ def test_babel_locale_replaces_the_price_and_a_bad_tag_is_no_price() -> None:
     assert page_facts_from_html(page, locale="not_a_locale").price_amount is None
 
 
+# Requirement (local review of 66966bca, 27 Nov 2026): a schema.org machine price is not
+# scaled by the tenant locale.
+def test_locale_does_not_scale_a_machine_decimal_price() -> None:
+    from decimal import Decimal
+
+    for price in ('"199.00"', "199"):
+        page = (
+            '<script type="application/ld+json">'
+            '{"@type":"Product","offers":{"price":' + price + ',"priceCurrency":"EUR"}}'
+            "</script>"
+        )
+        for locale in ("de_DE", "pt_BR", "en_US"):
+            assert page_facts_from_html(page, locale=locale).price_amount == Decimal("199")
+
+
 def test_unset_locale_still_uses_price_parser() -> None:
     page = (
         '<script type="application/ld+json">'
