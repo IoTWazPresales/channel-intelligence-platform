@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createCipTheme } from '@/theme/cipTheme';
+import { createCipTheme, panelShadowFor } from '@/theme/cipTheme';
 import { lightTokens, tokensFor } from '@/theme/cipTokens';
 
 describe('createCipTheme color modes', () => {
@@ -79,8 +79,24 @@ describe('createCipTheme color modes', () => {
       const table = (theme.components?.MuiTableContainer?.styleOverrides as { root?: Record<string, unknown> }).root;
       expect(paper).not.toHaveProperty('overflow');
       expect(table).not.toHaveProperty('overflow');
-      // Toned cards keep clipping so the accent rail follows the rounded corners.
-      expect(paper?.['&[data-cip-tone]']).toEqual({ overflow: 'hidden' });
+      expect(Object.keys(paper ?? {}).some((key) => key.includes('data-cip-tone'))).toBe(false);
     }
+  });
+
+  it('panel title weight and card shadow match dashboard-v2, in both modes', () => {
+    for (const mode of ['dark', 'light'] as const) {
+      const theme = createCipTheme('comfortable', mode);
+      expect(theme.typography.panelTitle?.fontWeight).toBe(650);
+      expect(theme.typography.panelTitle?.fontSize).toBe('0.875rem');
+      expect(theme.typography.panelTitle?.lineHeight).toBe(1.3);
+      const body = (theme.components?.MuiCssBaseline?.styleOverrides as {
+        body?: { '--shadow'?: string };
+      }).body;
+      expect(body?.['--shadow']).toBe(panelShadowFor(mode));
+      const paper = (theme.components?.MuiPaper?.styleOverrides as { root?: { boxShadow?: string } }).root;
+      expect(paper?.boxShadow).toBe('var(--shadow)');
+    }
+    expect(panelShadowFor('dark')).toBe('0 8px 28px rgba(0,0,0,.25)');
+    expect(panelShadowFor('light')).toBe('0 4px 20px rgba(20,35,50,.08)');
   });
 });

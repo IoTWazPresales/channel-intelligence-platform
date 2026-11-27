@@ -3,6 +3,7 @@
 import { Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
 import NextLink from 'next/link';
 
+import { PageHeader } from '@/components/PageHeader';
 import { CapabilityStatus } from '@/features/shell/CapabilityStatus';
 import { leafStatus, leafStatusLabel, shellNavGroups, type LeafStatus } from '@/features/shell/navConfig';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
@@ -27,9 +28,7 @@ export function CapabilityDirectory() {
 
   return (
     <Box data-testid="capability-directory" sx={{ p: { xs: 1.5, md: 2.5 } }}>
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
-        What CIP does
-      </Typography>
+      <PageHeader crumbs={[]} title="What CIP does" />
       <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 880 }}>
         Channel Intelligence tracks stock and money from OEM through distributors and retailers to the consumer. Files come
         in through Data &amp; Stewardship; every other area is derived from those files. If a figure is shown, it was
