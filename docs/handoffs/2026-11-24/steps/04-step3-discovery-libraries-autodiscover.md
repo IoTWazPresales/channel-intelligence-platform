@@ -3,8 +3,8 @@
 - **Status:** Code written (cloud). Not merged. Not visually checked. cip_test not run.
 - **Branch:** `cursor/u3-step3-discovery-10a0`
 - **Worktree:** cloud agent
-- **PR:** opened against `feat/discovery-autodiscover-20261125` (this unit only; do not merge)
-- **Commits:** see the PR
+- **PR:** https://github.com/IoTWazPresales/channel-intelligence-platform/pull/134 against `feat/integrate-20261103` (do not merge)
+- **Commits:** `40950fca` on `cursor/u3-step3-discovery-10a0`
 
 ## Checklist
 
