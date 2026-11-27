@@ -45,6 +45,14 @@ FLAG_SALES_NOT_THROUGH_WINDOW_END = "sales_not_loaded_through_window_end"
 FLAG_MTD_ESTIMATE = "includes_mtd_estimate"
 FLAG_WINDOW_WEEK_STRADDLE = "window_week_straddle"
 
+# Warren, 27 Nov: a person may end a promotion before sales cover the window.
+# The gap stays on the existing transition event so settlement can still see it.
+SALES_WINDOW_GAP_FLAGS = (FLAG_NO_SALES_LOADED, FLAG_SALES_NOT_THROUGH_WINDOW_END)
+SALES_WINDOW_GAP_LABEL = {
+    FLAG_NO_SALES_LOADED: "no sales loaded",
+    FLAG_SALES_NOT_THROUGH_WINDOW_END: "sales do not cover the window end",
+}
+
 OUTCOME_CLOSED = "closed"
 OUTCOME_HELD = "held"
 
@@ -79,6 +87,37 @@ def sales_cover_window(case: CporCase, covered_through: date | None) -> bool:
 
 def held_reason(covered_through: date | None) -> str:
     return FLAG_NO_SALES_LOADED if covered_through is None else FLAG_SALES_NOT_THROUGH_WINDOW_END
+
+
+def sales_window_gap(reconciliation: dict | None) -> str | None:
+    """The coverage-gap flag on a reconciliation, when sales do not cover the window."""
+    flags = (reconciliation or {}).get("flags") or []
+    for flag in SALES_WINDOW_GAP_FLAGS:
+        if flag in flags:
+            return flag
+    return None
+
+
+def gap_record_from_event(actor: str | None, payload: dict | None) -> dict | None:
+    """What settlement reads from the existing ``transition_end`` event. No new column."""
+    if not isinstance(payload, dict):
+        return None
+    explicit = payload.get("sales_window_gap")
+    flag = explicit if isinstance(explicit, str) and explicit else sales_window_gap(payload.get("reconciliation"))
+    if not flag:
+        return None
+    raw_reason = payload.get("reason") if isinstance(payload.get("reason"), str) else payload.get("comment")
+    reason = raw_reason.strip() if isinstance(raw_reason, str) and raw_reason.strip() else None
+    stamped = actor.strip() if isinstance(actor, str) and actor.strip() else None
+    payload_actor = payload.get("actor")
+    if stamped is None and isinstance(payload_actor, str) and payload_actor.strip():
+        stamped = payload_actor.strip()
+    return {
+        "flag": flag,
+        "label": SALES_WINDOW_GAP_LABEL.get(flag, flag),
+        "reason": reason,
+        "actor": stamped,
+    }
 
 
 def reconcile_window(

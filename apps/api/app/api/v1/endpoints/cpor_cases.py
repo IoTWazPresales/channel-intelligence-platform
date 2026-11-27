@@ -1723,6 +1723,8 @@ def transition_case(
 
         drifts: list[dict] = []
         end_reconciliation: dict | None = None
+        end_gap: str | None = None
+        end_reason: str | None = None
         now = datetime.now(timezone.utc)
         from_status = case.status
         new_status = target_status(action)
@@ -1785,12 +1787,30 @@ def transition_case(
             case.status = "active"
             drifts = _run_drift_check(session, case, actor, user)
         elif action == "end":
-            case.status = "ended"
             from app.services.cpor import promotion_type_vocab as vocab
-            from app.services.cpor.close_for_review import reconcile_case_window
+            from app.services.cpor.close_for_review import reconcile_case_window, sales_window_gap
 
+            reason = (body.comment or "").strip()
             if vocab.promotion_family(case.promotion_type) == vocab.CUSTOMER_SELL_THROUGH:
                 end_reconciliation = reconcile_case_window(session, case)
+                gap = sales_window_gap(end_reconciliation)
+                # Warren, 27 Nov: ending before sales cover the window is allowed.
+                # The reason is required, the actor is the event actor, and the gap
+                # flag stays on this event for settlement.
+                if gap and not reason:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "code": "end_reason_required",
+                            "message": "Ending this promotion before sales cover the window requires a reason.",
+                            "flag": gap,
+                        },
+                    )
+                if gap:
+                    case.last_comment = reason
+                    end_gap = gap
+                    end_reason = reason
+            case.status = "ended"
         elif action == "settle":
             if settle_fx_blocked(case):
                 raise HTTPException(
@@ -1839,6 +1859,11 @@ def transition_case(
                 **(
                     {"trigger": "manual", "reconciliation": end_reconciliation}
                     if end_reconciliation
+                    else {}
+                ),
+                **(
+                    {"sales_window_gap": end_gap, "reason": end_reason, "actor": actor}
+                    if end_gap
                     else {}
                 ),
             },

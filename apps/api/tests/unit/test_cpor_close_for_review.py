@@ -347,6 +347,37 @@ def test_today_follows_each_tenant_reporting_date(coverage, monkeypatch):
     assert b.status == "active"  # its reporting date is still the window end
 
 
+def test_manual_end_gap_stays_on_the_event_for_settlement():
+    """Warren, 27 Nov: a manual end before sales cover the window is allowed.
+
+    The reason and the actor stay on the existing event. Settlement reads that
+    event. The automatic close still holds the case until sales cover the window.
+    """
+    reconciliation = {
+        "flags": [FLAG_SALES_NOT_THROUGH_WINDOW_END],
+        "sales_covered_through": "2026-11-10",
+    }
+    assert cfr.sales_window_gap(reconciliation) == FLAG_SALES_NOT_THROUGH_WINDOW_END
+    assert cfr.sales_window_gap({"flags": []}) is None
+
+    record = cfr.gap_record_from_event(
+        "planner:ada",
+        {
+            "sales_window_gap": FLAG_SALES_NOT_THROUGH_WINDOW_END,
+            "reason": "Customer pulled the week",
+            "actor": "planner:ada",
+            "reconciliation": reconciliation,
+        },
+    )
+    assert record == {
+        "flag": FLAG_SALES_NOT_THROUGH_WINDOW_END,
+        "label": "sales do not cover the window end",
+        "reason": "Customer pulled the week",
+        "actor": "planner:ada",
+    }
+    assert cfr.gap_record_from_event("system:close_for_review", {"reconciliation": {"flags": []}}) is None
+
+
 def test_daily_beat_entry_and_batch_routing():
     from app.worker.celery_app import build_beat_schedule, celery_app
     from app.worker.celery_queues import BATCH_TASK_NAMES

@@ -64,6 +64,7 @@ export type SettlementDeskApi = {
   out_of_window_claim_rows?: number;
   unresolved_products?: { token: string; units: number }[];
   cst_reconciliation?: { available: boolean; reason?: string; divergence_count?: number };
+  sales_window_gap?: { flag: string; label: string; reason: string | null; actor: string | null } | null;
   lines: SettlementDeskApiLine[];
   can_settle: boolean;
   settle_readiness?: SettleReadiness;
@@ -197,6 +198,7 @@ export function mapSettlementDeskView(
     outOfWindowClaimRows: settlement.out_of_window_claim_rows ?? 0,
     unresolvedProducts: settlement.unresolved_products ?? [],
     cstReconciliation: settlement.cst_reconciliation ?? null,
+    salesWindowGap: settlement.sales_window_gap ?? null,
     ledgerAvailable: settlement.ledger != null,
     ledgerCommittedUsd: settlement.ledger?.committed_usd ?? null,
     ledgerConsumedUsd: settlement.ledger?.consumed_usd ?? null,
