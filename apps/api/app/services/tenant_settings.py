@@ -269,7 +269,9 @@ def _as_listing_scope(value: Any) -> dict[str, Any]:
     clean = {
         "enabled": _as_bool(value["enabled"]),
         "recent_window_days": _scope_days(value["recent_window_days"], "recent_window_days", 1),
-        "recent_interval_days": _scope_days(value["recent_interval_days"], "recent_interval_days", 1),
+        "recent_interval_days": _scope_days(
+            value["recent_interval_days"], "recent_interval_days", 1
+        ),
         "absent_days": _scope_days(value["absent_days"], "absent_days", 0),
     }
     if clean["absent_days"] >= clean["recent_window_days"]:
@@ -296,9 +298,7 @@ def _as_coalesce_seconds(value: Any) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("confirm wait must be a whole number of seconds")
     if float(value) != int(value) or not 1 <= int(value) <= MAX_COALESCE_SECONDS:
-        raise ValueError(
-            f"confirm wait must be a whole number from 1 to {MAX_COALESCE_SECONDS}"
-        )
+        raise ValueError(f"confirm wait must be a whole number from 1 to {MAX_COALESCE_SECONDS}")
     return int(value)
 
 
@@ -330,7 +330,10 @@ def _as_locale(value: Any) -> str:
 
 
 def _as_dashboard_job_defaults(value: Any) -> dict[str, str]:
-    """Job -> starter template key (Dashboard V2 "reset to my job default"). Only what the tenant chose."""
+    """Job -> starter template key (Dashboard V2 "reset to my job default").
+
+    Only what the tenant chose.
+    """
     from app.core.user_job import JOBS
     from app.services.dashboard_templates import TEMPLATE_BY_KEY
 
@@ -414,7 +417,9 @@ def list_settings(session: Session, tenant_id: str) -> dict[str, Any]:
     return {str(r[0]): r[1] for r in rows}
 
 
-def set_setting(session: Session, tenant_id: str, key: str, value: Any, *, actor: str | None) -> Any:
+def set_setting(
+    session: Session, tenant_id: str, key: str, value: Any, *, actor: str | None
+) -> Any:
     validator = SETTING_VALIDATORS.get(key)
     if validator is None:
         raise ValueError(f"unknown setting: {key}")

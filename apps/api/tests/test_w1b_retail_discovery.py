@@ -6,9 +6,6 @@ import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine, func, select, text
-from sqlalchemy.orm import Session
-
 from app.models.cst_listing_seed import CstListingSeed
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.customer_web_site import CustomerWebSite
@@ -18,12 +15,14 @@ from app.models.listing_capture import CustomerListing
 from app.models.listing_link import LINK_CONFIRMED, ListingLink
 from app.models.listing_site import ListingSite
 from app.services.listing_capture.discovery import discover_reporting_customers
+from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.orm import Session
 
 _EAN = "9990001112228"
 _HOST = "https://catalogue.example.test"
 _SITE = "catalogue-example"
 _PAGE = (
-    "<html><script type=\"application/ld+json\">"
+    '<html><script type="application/ld+json">'
     '{"@type":"Product","gtin13":"9990001112228","offers":['
     '{"@type":"Offer","priceCurrency":"ZAR","price":199.00,'
     '"availability":"https://schema.org/InStock","seller":{"name":"North Counter"}},'
@@ -34,9 +33,8 @@ _PAGE = (
 
 
 def _sync_url() -> str:
-    from sqlalchemy.engine import make_url
-
     from app.core.config import get_settings
+    from sqlalchemy.engine import make_url
 
     get_settings.cache_clear()
     url = get_settings().database_url_sync
@@ -124,7 +122,9 @@ def _confirm_site(
     return site
 
 
-def test_discovery_proposes_a_listing_and_records_a_customer_with_no_site(db_session: Session) -> None:
+def test_discovery_proposes_a_listing_and_records_a_customer_with_no_site(
+    db_session: Session,
+) -> None:
     db = db_session.execute(text("select current_database()")).scalar_one()
     print("current_database()", db)
     assert db == "cip_test"
@@ -148,7 +148,9 @@ def test_discovery_proposes_a_listing_and_records_a_customer_with_no_site(db_ses
                 reports_expected=True,
                 feed_profile_json={},
             ),
-            CustomerReportConfig(customer_id=int(missing.id), reports_expected=True, feed_profile_json={}),
+            CustomerReportConfig(
+                customer_id=int(missing.id), reports_expected=True, feed_profile_json={}
+            ),
             FactCustomerSellthrough(
                 source_key=f"w1b-{uuid.uuid4().hex}",
                 tenant_id=tenant,
@@ -205,7 +207,11 @@ def test_discovery_proposes_a_listing_and_records_a_customer_with_no_site(db_ses
     assert payload["price"] == 199.0
     assert payload["availability"] == "in_stock"
     assert payload["seller"] == "North Counter"
-    assert payload["buy_box"] == {"price": 199.0, "availability": "in_stock", "seller": "North Counter"}
+    assert payload["buy_box"] == {
+        "price": 199.0,
+        "availability": "in_stock",
+        "seller": "North Counter",
+    }
     assert payload["marketplace_sellers"] == ["North Counter", "West Counter"]
     assert payload["corroboration"] == "barcode"
 
@@ -296,7 +302,9 @@ def _stock(
 def _seed_count(session: Session, customer_id: int) -> int:
     return int(
         session.scalar(
-            select(func.count()).select_from(CstListingSeed).where(CstListingSeed.customer_id == int(customer_id))
+            select(func.count())
+            .select_from(CstListingSeed)
+            .where(CstListingSeed.customer_id == int(customer_id))
         )
         or 0
     )
@@ -318,8 +326,12 @@ def test_latest_period_of_zero_stock_does_not_reuse_an_older_period(db_session: 
         search_url_pattern=f"{_HOST}/search?q={{query}}",
         product_url_pattern=f"{_HOST}/p/{{page_id}}",
     )
-    _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 10, 5), soh=8)
-    _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 9), soh=0)
+    _stock(
+        db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 10, 5), soh=8
+    )
+    _stock(
+        db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 9), soh=0
+    )
     db_session.flush()
 
     def http_get(url: str):
@@ -342,10 +354,28 @@ def test_confirmed_link_must_still_corroborate_and_be_complete(db_session: Sessi
     partial_product = _product(db_session, tenant, ean="6660001112225")
     _expect(db_session, stale, None)
     _expect(db_session, incomplete, None)
-    _stock(db_session, tenant=tenant, customer=stale, product=stale_product, when=date(2026, 11, 2), soh=2)
-    _stock(db_session, tenant=tenant, customer=incomplete, product=partial_product, when=date(2026, 11, 2), soh=2)
-    stale_site = ListingSite(tenant_id=tenant, site_key="stale-example", display_name="Stale Example")
-    partial_site = ListingSite(tenant_id=tenant, site_key="partial-example", display_name="Partial Example")
+    _stock(
+        db_session,
+        tenant=tenant,
+        customer=stale,
+        product=stale_product,
+        when=date(2026, 11, 2),
+        soh=2,
+    )
+    _stock(
+        db_session,
+        tenant=tenant,
+        customer=incomplete,
+        product=partial_product,
+        when=date(2026, 11, 2),
+        soh=2,
+    )
+    stale_site = ListingSite(
+        tenant_id=tenant, site_key="stale-example", display_name="Stale Example"
+    )
+    partial_site = ListingSite(
+        tenant_id=tenant, site_key="partial-example", display_name="Partial Example"
+    )
     db_session.add_all([stale_site, partial_site])
     db_session.flush()
     db_session.add_all(
@@ -426,7 +456,9 @@ def test_search_form_uses_its_own_input_name_and_action(db_session: Session) -> 
         domain="forms.example.test",
         product_url_pattern=f"{host}/p/{{page_id}}",
     )
-    _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 2), soh=2)
+    _stock(
+        db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 2), soh=2
+    )
     db_session.flush()
     seen: list[str] = []
 
@@ -447,7 +479,9 @@ def test_search_form_uses_its_own_input_name_and_action(db_session: Session) -> 
     row = {int(item["customer_id"]): item for item in report["customers"]}[int(customer.id)]
     assert row["proposed_created"] == 1
     assert not any("/decoy" in url for url in seen)
-    assert any("/find?" in url and "search=" in url and "q=" not in url.split("?", 1)[-1] for url in seen)
+    assert any(
+        "/find?" in url and "search=" in url and "q=" not in url.split("?", 1)[-1] for url in seen
+    )
     site = db_session.scalar(select(ListingSite).where(ListingSite.tenant_id == tenant))
     assert site is not None
     assert site.search_url_pattern == f"{host}/find?search={{query}}"
@@ -469,7 +503,9 @@ def test_sitemap_fallback_tries_the_model_as_well_as_the_barcode(db_session: Ses
         domain="maps.example.test",
         product_url_pattern=f"{host}/p/{{page_id}}",
     )
-    _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 2), soh=2)
+    _stock(
+        db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 2), soh=2
+    )
     db_session.flush()
     page = (
         '<html><script type="application/ld+json">'
@@ -496,7 +532,9 @@ def test_sitemap_fallback_tries_the_model_as_well_as_the_barcode(db_session: Ses
     row = {int(item["customer_id"]): item for item in report["customers"]}[int(customer.id)]
     assert row["reason"] is None
     assert row["proposed_created"] == 1
-    seed = db_session.scalar(select(CstListingSeed).where(CstListingSeed.customer_id == int(customer.id)))
+    seed = db_session.scalar(
+        select(CstListingSeed).where(CstListingSeed.customer_id == int(customer.id))
+    )
     assert seed is not None
     assert (seed.raw_json or {})["corroboration"] == "model"
     assert (seed.raw_json or {})["price"] == 188.0

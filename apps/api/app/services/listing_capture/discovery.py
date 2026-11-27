@@ -39,9 +39,10 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from contextvars import ContextVar
 from hashlib import sha256
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import quote, urljoin, urlsplit
 
 from sqlalchemy import func, select
@@ -52,7 +53,13 @@ from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing
-from app.models.listing_link import LINK_CONFIRMED, LINK_REJECTED, QUEUE_OPEN, ListingLink, ListingLinkQueue
+from app.models.listing_link import (
+    LINK_CONFIRMED,
+    LINK_REJECTED,
+    QUEUE_OPEN,
+    ListingLink,
+    ListingLinkQueue,
+)
 from app.models.listing_site import ListingSite
 from app.services.customer_reporting import reporting_customer_clauses
 from app.services.listing_capture.adapters import configured_adapter
@@ -76,7 +83,12 @@ from app.services.listing_capture.site_fetch import (
     site_spacing_seconds,
 )
 from app.services.listing_capture.site_pause import load_run_state, save_run_state
-from app.services.listing_capture.sites import SITE_KEY_RE, create_site, site_config_from_row, update_site
+from app.services.listing_capture.sites import (
+    SITE_KEY_RE,
+    create_site,
+    site_config_from_row,
+    update_site,
+)
 
 ACTOR = "listing-discovery"
 REASON_NO_SITE_KEY = "no_site_key"
@@ -129,7 +141,16 @@ def discover_reporting_customers(
         locale_token = _PRICE_LOCALE.set(_configured_locale(session, tid))
         robots_token = _ROBOTS.set({})
         try:
-            _discover_tenant(session, tid, entries, http_get=http_get, apply=apply, product_limit=product_limit, run_store=run_store, policy=policy)
+            _discover_tenant(
+                session,
+                tid,
+                entries,
+                http_get=http_get,
+                apply=apply,
+                product_limit=product_limit,
+                run_store=run_store,
+                policy=policy,
+            )
         finally:
             _PRICE_LOCALE.reset(locale_token)
             _ROBOTS.reset(robots_token)
@@ -158,9 +179,17 @@ def _discover_tenant(
     units: list[tuple[int, str]] = []
     for config, customer in pairs:
         seed = _seed(config)
-        plan: dict[str, Any] = {"customer": customer, "seed": seed, "keys": [], "sites": {}, "entry": None}
+        plan: dict[str, Any] = {
+            "customer": customer,
+            "seed": seed,
+            "keys": [],
+            "sites": {},
+            "entry": None,
+        }
         try:
-            plan["keys"] = _site_keys(session, tenant_id=tid, customer_id=int(customer.id), seed=seed)
+            plan["keys"] = _site_keys(
+                session, tenant_id=tid, customer_id=int(customer.id), seed=seed
+            )
         except Exception as exc:
             plan["entry"] = _failed_entry(customer, tid, exc)
         if plan["entry"] is None and not plan["keys"]:
@@ -170,7 +199,9 @@ def _discover_tenant(
                 site_key=None,
                 reason=REASON_NO_SITE_KEY,
             )
-        plan["own_site"] = bool(_seed_origin(seed)) and not bool(str(seed.get("marketplace") or "").strip())
+        plan["own_site"] = bool(_seed_origin(seed)) and not bool(
+            str(seed.get("marketplace") or "").strip()
+        )
         plans.append(plan)
         units.extend((len(plans) - 1, key) for key in plan["keys"])
     if rotate:
@@ -202,10 +233,14 @@ def _discover_tenant(
         if cut_short is None and _site_time_limited(site_row):
             cut_short = {"customer_id": int(customer.id), "site_key": key}
     if rotate:
-        save_run_state(rotation_key, cut_short or {"customer_id": 0, "site_key": ""}, store=run_store)
+        save_run_state(
+            rotation_key, cut_short or {"customer_id": 0, "site_key": ""}, store=run_store
+        )
     for plan in plans:
         if plan["entry"] is None:
-            plan["entry"] = _customer_entry(plan["customer"], [plan["sites"][k] for k in plan["keys"]])
+            plan["entry"] = _customer_entry(
+                plan["customer"], [plan["sites"][k] for k in plan["keys"]]
+            )
         entries.append(plan["entry"])
 
 
@@ -250,7 +285,11 @@ def _time_limited(entry: dict[str, Any]) -> bool:
 
 def _customer_entry(customer: DimCustomer, site_rows: list[dict[str, Any]]) -> dict[str, Any]:
     tenant_id = str(customer.tenant_id)
-    ready = [row for row in site_rows if row["reader_ready"] and row["proposed_listings"] + row["watched_listings"] > 0]
+    ready = [
+        row
+        for row in site_rows
+        if row["reader_ready"] and row["proposed_listings"] + row["watched_listings"] > 0
+    ]
     reason = None if ready else _first_reason(site_rows)
     return _entry(
         customer_id=int(customer.id),
@@ -297,14 +336,23 @@ def _discover_site(
             actor=ACTOR,
         )
     if row is not None and apply:
-        if own_site and _blank(row.first_party_seller) and not _seller_present(row, int(customer.id)):
+        if (
+            own_site
+            and _blank(row.first_party_seller)
+            and not _seller_present(row, int(customer.id))
+        ):
             _safe_update(session, row, {"first_party_seller": str(customer.name or "").strip()})
         row = _load_site(session, tenant_id, site_key) or row
     if row is None:
         return _site_entry(site_key, reason=REASON_NO_SITE_KEY)
     product_ids = _catalogue_product_ids(session, tenant_id=tenant_id, customer_id=int(customer.id))
     if not product_ids:
-        return _site_entry(site_key, reason=REASON_NO_CATALOGUE, reader=_reader_name(row), reader_ready=_reader_ready(row))
+        return _site_entry(
+            site_key,
+            reason=REASON_NO_CATALOGUE,
+            reader=_reader_name(row),
+            reader_ready=_reader_ready(row),
+        )
     if http_get is None:
         return _site_entry(
             site_key,
@@ -345,13 +393,17 @@ def _discover_site(
             break
         previous_product_id = last_product_id
         last_product_id = product_id
-        if _has_listing(session, customer_id=int(customer.id), site_key=site_key, product_id=product_id):
+        if _has_listing(
+            session, customer_id=int(customer.id), site_key=site_key, product_id=product_id
+        ):
             watched += 1
             continue
         if _queue_exists(session, site_id=int(row.id), product_id=product_id):
             reasons.append(REASON_AMBIGUOUS)
             continue
-        proposal = _proposed_seed(session, customer_id=int(customer.id), site_key=site_key, product_id=product_id)
+        proposal = _proposed_seed(
+            session, customer_id=int(customer.id), site_key=site_key, product_id=product_id
+        )
         if proposal is not None and str((proposal.raw_json or {}).get("url") or "").strip():
             proposed += 1
             continue
@@ -462,7 +514,9 @@ def _find_and_propose(
         )
         return {"created": created, "proposed": True, "reason": None}
 
-    search_pattern = (row.search_url_pattern or "").strip() or _discover_search_pattern(config, seed, http_get)
+    search_pattern = (row.search_url_pattern or "").strip() or _discover_search_pattern(
+        config, seed, http_get
+    )
     if search_pattern and apply and _blank(row.search_url_pattern):
         _safe_update(session, row, {"search_url_pattern": search_pattern})
         row = _load_site(session, str(row.tenant_id), str(row.site_key)) or row
@@ -519,7 +573,9 @@ def _find_and_propose(
         fields.update(_patterns_for(found["url"], str(found.get("token") or "")))
         _safe_update(session, row, fields)
         row = _load_site(session, str(row.tenant_id), str(row.site_key)) or row
-    created = _store_proposal(session, customer=customer, product=product, row=row, captured=found, apply=apply)
+    created = _store_proposal(
+        session, customer=customer, product=product, row=row, captured=found, apply=apply
+    )
     return {"created": created, "proposed": True, "reason": None}
 
 
@@ -536,7 +592,9 @@ def _store_proposal(
         return False
     # Search tokens (especially digit-stripped models) are not page identities.
     # Hash the full URL, not a truncated prefix; keep different catalogue products distinct.
-    external_id = f"discovery:{int(product.id)}:{sha256(str(captured['url']).encode('utf-8')).hexdigest()}"
+    external_id = (
+        f"discovery:{int(product.id)}:{sha256(str(captured['url']).encode('utf-8')).hexdigest()}"
+    )
     existing = session.scalar(
         select(CstListingSeed.id).where(
             CstListingSeed.customer_id == int(customer.id),
@@ -557,7 +615,10 @@ def _store_proposal(
     if existing is not None:
         return False
     proposal = _proposed_seed(
-        session, customer_id=int(customer.id), site_key=str(row.site_key), product_id=int(product.id)
+        session,
+        customer_id=int(customer.id),
+        site_key=str(row.site_key),
+        product_id=int(product.id),
     )
     created = proposal is None
     evidence = {
@@ -612,7 +673,9 @@ def _search_candidates(
             if any(item.get("corroboration") for item in found):
                 return found
     if not any(item.get("corroboration") for item in found):
-        origin = _origin_text(_seed_origin(seed) or search_pattern or config.product_url_pattern or "")
+        origin = _origin_text(
+            _seed_origin(seed) or search_pattern or config.product_url_pattern or ""
+        )
         tokens = [query for _kind, query in queries if query]
         for url in _sitemap_urls(origin, tokens, http_get) if origin and tokens else []:
             if url in seen:
@@ -645,7 +708,9 @@ def _capture_url(
     if how is None:
         return {"url": url, "corroboration": None, "token": token}
     parsed = parse_html(body, site=config, parser_version="discovery")
-    availability = parsed.availability if parsed.availability in {"in_stock", "out_of_stock"} else None
+    availability = (
+        parsed.availability if parsed.availability in {"in_stock", "out_of_stock"} else None
+    )
     locale = _PRICE_LOCALE.get()
     if locale:
         from app.services.listing_capture.web_discovery.page_facts import (
@@ -687,7 +752,10 @@ def _urls_from_document(config: Any, body: str, base: str, token: str) -> list[s
                 urls.append(built)
         if urls:
             return urls[:3]
-    from app.services.listing_capture.web_discovery.document_parse import absolute_url, document_links
+    from app.services.listing_capture.web_discovery.document_parse import (
+        absolute_url,
+        document_links,
+    )
 
     host = urlsplit(base).netloc.lower()
     ranked: list[tuple[int, str]] = []
@@ -703,9 +771,18 @@ def _urls_from_document(config: Any, body: str, base: str, token: str) -> list[s
             except re.error:
                 pass
         navigation = navigation or path.rstrip("/").lower() in {
-            "", "/login", "/cart", "/account", "/contact", "/about", "/wishlist", "/checkout",
+            "",
+            "/login",
+            "/cart",
+            "/account",
+            "/contact",
+            "/about",
+            "/wishlist",
+            "/checkout",
         }
-        rank = (0 if product_link else 4 if navigation else 2) + (0 if token and token in absolute else 1)
+        rank = (0 if product_link else 4 if navigation else 2) + (
+            0 if token and token in absolute else 1
+        )
         ranked.append((rank, absolute.split("#")[0]))
     ranked.sort(key=lambda item: item[0])
     return list(dict.fromkeys(url for _rank, url in ranked))[:3]
@@ -834,7 +911,12 @@ def _complete_capture(captured: dict[str, Any]) -> bool:
     availability = captured.get("availability")
     seller = captured.get("seller")
     buy_box = captured.get("buy_box")
-    if captured.get("price") is None or not availability or not seller or not isinstance(buy_box, dict):
+    if (
+        captured.get("price") is None
+        or not availability
+        or not seller
+        or not isinstance(buy_box, dict)
+    ):
         return False
     return (
         buy_box.get("price") is not None
@@ -867,7 +949,11 @@ def _catalogue_product_ids(session: Session, *, tenant_id: str, customer_id: int
 
 
 def _safe_update(session: Session, row: ListingSite, fields: dict[str, Any]) -> None:
-    cleaned = {key: value for key, value in fields.items() if value is not None and str(value).strip() != ""}
+    cleaned = {
+        key: value
+        for key, value in fields.items()
+        if value is not None and str(value).strip() != ""
+    }
     if not cleaned:
         return
     try:
@@ -880,7 +966,9 @@ def _safe_update(session: Session, row: ListingSite, fields: dict[str, Any]) -> 
                 continue
 
 
-def _reporting_customers(session: Session, tenant_id: str) -> list[tuple[CustomerReportConfig, DimCustomer]]:
+def _reporting_customers(
+    session: Session, tenant_id: str
+) -> list[tuple[CustomerReportConfig, DimCustomer]]:
     rows = session.execute(
         select(CustomerReportConfig, DimCustomer)
         .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
@@ -902,7 +990,9 @@ def _tenant_ids(session: Session, tenant_id: str | None) -> list[str]:
     return sorted({str(row) for row in rows if row})
 
 
-def _site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]) -> list[str]:
+def _site_keys(
+    session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]
+) -> list[str]:
     """Confirmed web sites plus marketplaces already on this customer's listings.
 
     ``listing_seed`` is not a source of a site. ``seed`` stays on the signature for callers.
@@ -932,9 +1022,7 @@ def _confirmed_web_site_keys(session: Session, *, tenant_id: str, customer_id: i
             ).all()
     except Exception:  # noqa: BLE001
         return []
-    return sorted(
-        {str(key) for key in found if isinstance(key, str) and SITE_KEY_RE.match(key)}
-    )
+    return sorted({str(key) for key in found if isinstance(key, str) and SITE_KEY_RE.match(key)})
 
 
 def _listing_marketplace_keys(session: Session, *, tenant_id: str, customer_id: int) -> list[str]:
@@ -944,7 +1032,9 @@ def _listing_marketplace_keys(session: Session, *, tenant_id: str, customer_id: 
         .where(DimCustomer.tenant_id == tenant_id, CustomerListing.customer_id == int(customer_id))
         .distinct()
     ).all()
-    return sorted({str(value) for value in found if isinstance(value, str) and SITE_KEY_RE.match(value)})
+    return sorted(
+        {str(value) for value in found if isinstance(value, str) and SITE_KEY_RE.match(value)}
+    )
 
 
 def _load_site(session: Session, tenant_id: str, site_key: str) -> ListingSite | None:
@@ -982,7 +1072,9 @@ def _queue_exists(session: Session, *, site_id: int, product_id: int) -> bool:
     return found is not None
 
 
-def _proposed_seed(session: Session, *, customer_id: int, site_key: str, product_id: int) -> CstListingSeed | None:
+def _proposed_seed(
+    session: Session, *, customer_id: int, site_key: str, product_id: int
+) -> CstListingSeed | None:
     row = session.scalar(
         select(CstListingSeed).where(
             CstListingSeed.customer_id == int(customer_id),
@@ -1012,7 +1104,10 @@ def _seed(config: CustomerReportConfig) -> dict[str, Any]:
 
 
 def _seed_origin(seed: dict[str, Any], fallback_domain: str | None = None) -> str | None:
-    """The origin the seed names. With none, ``https://<fallback_domain>`` (a confirmed web site)."""
+    """The origin the seed names.
+
+    With none, ``https://<fallback_domain>`` (a confirmed web site).
+    """
     site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
     for source in (site, seed):
         if not isinstance(source, dict):
@@ -1115,7 +1210,9 @@ class _BoundGetter:
     def get(self, url: str, *, gate_key: str | None = None, spacing: float | None = None) -> Any:
         del gate_key, spacing
         status, body = _call_http(self._http_get, url)
-        return type("Fetched", (), {"status": status, "body": body, "final_url": url, "refused": None})()
+        return type(
+            "Fetched", (), {"status": status, "body": body, "final_url": url, "refused": None}
+        )()
 
 
 def _call_http(http_get: _HttpGet, url: str) -> tuple[int, str]:

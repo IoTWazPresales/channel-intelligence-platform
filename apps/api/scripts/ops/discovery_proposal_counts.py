@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import sys
 
-from sqlalchemy import text
-
 from app.db.session_sync import SessionLocal
+from sqlalchemy import text
 
 
 def main() -> int:
@@ -25,7 +24,10 @@ def main() -> int:
         listings = session.execute(
             text("SELECT count(*) FROM cst_listing_seed WHERE status = 'proposed'")
         ).scalar_one()
-    print(f"database={database} proposed_customer_web_site={sites} proposed_cst_listing_seed={listings}")
+    print(
+        f"database={database} proposed_customer_web_site={sites} "
+        f"proposed_cst_listing_seed={listings}"
+    )
     return 0
 
 

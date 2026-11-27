@@ -40,6 +40,7 @@ CONFIRM_REQUEST_KEY_PREFIX = "autoconfigure:after_confirm:"
 def scheduled_run_key(tenant_id: str) -> str:
     return f"{SCHEDULED_RUN_KEY}:{tenant_id}"
 
+
 Enqueue = Callable[..., Any]
 
 
@@ -69,7 +70,10 @@ def _send_task(*, kwargs: dict[str, Any], countdown: int | None = None) -> None:
 def note_scheduled_run(
     *, tenant_id: str, store: SitePauseStore | None = None, now: datetime | None = None
 ) -> None:
-    """Record that a scheduled run is starting for one tenant (beat or worker start). Never raises."""
+    """Record that a scheduled run is starting for one tenant.
+
+    Beat or worker start. Never raises.
+    """
     save_run_state(scheduled_run_key(tenant_id), {"at": (now or _now()).isoformat()}, store=store)
 
 
@@ -85,7 +89,11 @@ def _timing(session: Any, tenant_id: str) -> tuple[timedelta, int] | None:
     seconds = get_setting(session, tenant_id, KEY_DISCOVERY_CONFIRM_COALESCE_SECONDS)
     if isinstance(hours, bool) or not isinstance(hours, (int, float)) or hours <= 0:
         return None
-    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or int(seconds) != float(seconds):
+    if (
+        isinstance(seconds, bool)
+        or not isinstance(seconds, (int, float))
+        or int(seconds) != float(seconds)
+    ):
         return None
     if int(seconds) <= 0:
         return None
@@ -151,7 +159,9 @@ def run_startup_autoconfigure(
             beat_disabled=beat_disabled,
         )
     except Exception:  # noqa: BLE001 - a worker must start even if this hook cannot
-        logger.exception("listing capture startup discovery: hook failed; the daily beat still applies")
+        logger.exception(
+            "listing capture startup discovery: hook failed; the daily beat still applies"
+        )
         return {"skipped": True, "reason": "hook_failed"}
 
 
@@ -164,7 +174,7 @@ def _startup(
 ) -> dict[str, Any]:
     from app.worker.celery_queues import dev_beat_disabled
 
-    if (dev_beat_disabled() if beat_disabled is None else beat_disabled):
+    if dev_beat_disabled() if beat_disabled is None else beat_disabled:
         logger.info("listing capture startup discovery: skipped (dev_beat_disabled)")
         return {"skipped": True, "reason": "dev_beat_disabled"}
     from app.db.session_sync import SessionLocal
@@ -183,7 +193,9 @@ def _startup(
     for tenant_id in due:
         note_scheduled_run(tenant_id=tenant_id, store=store, now=now)
     enqueue(kwargs={"tenant_ids": due})
-    logger.info("listing capture startup discovery: queued one scheduled run for %s tenant(s)", len(due))
+    logger.info(
+        "listing capture startup discovery: queued one scheduled run for %s tenant(s)", len(due)
+    )
     return {"skipped": False, "queued": True, "tenants": len(due)}
 
 
@@ -195,11 +207,16 @@ def request_autoconfigure_after_confirm(
     now: datetime | None = None,
     coalesce_seconds: int | None = None,
 ) -> dict[str, Any]:
-    """Queue an on-demand autoconfigure run for ``tenant_id`` after a site was confirmed. Never raises."""
+    """Queue an on-demand autoconfigure run for ``tenant_id`` after a site was confirmed.
+
+    Never raises.
+    """
     moment = now or _now()
     key = f"{CONFIRM_REQUEST_KEY_PREFIX}{tenant_id}"
     try:
-        seconds = coalesce_seconds if coalesce_seconds is not None else coalesce_seconds_for(tenant_id)
+        seconds = (
+            coalesce_seconds if coalesce_seconds is not None else coalesce_seconds_for(tenant_id)
+        )
         if seconds is None:
             return {"queued": False, "reason": "confirm_coalesce_not_configured"}
         due = _parse((load_run_state(key, store=store) or {}).get("run_at"))

@@ -432,8 +432,7 @@ def _candidate_entry(
         "outcome": outcome,
         "drop_reason": item.drop_reason if outcome == OUTCOME_DROPPED else None,
         "proposed_site_key": (
-            site_key
-            or discovery._site_key_from_origin(f"https://{item.host}")  # noqa: SLF001
+            site_key or discovery._site_key_from_origin(f"https://{item.host}")  # noqa: SLF001
         ),
         "evidence": evidence,
     }
@@ -552,18 +551,13 @@ def preview_customer(
 def _totals(customers: list[dict[str, Any]], listings: list[dict[str, Any]]) -> dict[str, int]:
     candidates = [candidate for block in customers for candidate in block["candidates"]]
     pages = [
-        page
-        for block in customers
-        for site in block["sites"]
-        for page in site.get("pages") or []
+        page for block in customers for site in block["sites"] for page in site.get("pages") or []
     ]
     return {
         "sites_auto": sum(
             1 for candidate in candidates if candidate["outcome"] in (OUTCOME_AUTO, OUTCOME_USER)
         ),
-        "sites_review": sum(
-            1 for candidate in candidates if candidate["outcome"] == OUTCOME_QUEUE
-        ),
+        "sites_review": sum(1 for candidate in candidates if candidate["outcome"] == OUTCOME_QUEUE),
         "pages_auto": sum(1 for page in pages if page.get("outcome") == "auto_link"),
         "pages_review": sum(1 for page in pages if page.get("outcome") == "steward_queue"),
         "listings_auto": sum(1 for row in listings if row.get("outcome") == "auto_link"),
@@ -571,9 +565,7 @@ def _totals(customers: list[dict[str, Any]], listings: list[dict[str, Any]]) -> 
     }
 
 
-def _load_customers(
-    session: Session, tenant_id: str, request: dict[str, Any]
-) -> list[DimCustomer]:
+def _load_customers(session: Session, tenant_id: str, request: dict[str, Any]) -> list[DimCustomer]:
     scope = request["scope"]
     if scope == SCOPE_REPORTING:
         customers = [
@@ -649,9 +641,7 @@ def run_preview(
     plan_store.save(tenant_id, preview_id, plan)
 
     search_fn = (
-        search
-        if search is not None
-        else (search_factory(settings) if search_factory else None)
+        search if search is not None else (search_factory(settings) if search_factory else None)
     )
     hosts = engine_hosts if engine_hosts is not None else engine_hosts_for(settings)
     tracker = SearchTracker(search_fn, settings.search_providers)

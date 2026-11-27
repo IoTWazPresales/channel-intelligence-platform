@@ -84,7 +84,9 @@ def sitemap_locs(xml_text: str) -> tuple[str, list[str]]:
     except ET.ParseError:
         return "unknown", []
     kind_tag = root.tag.rsplit("}", 1)[-1].lower()
-    kind = "index" if kind_tag == "sitemapindex" else "urlset" if kind_tag == "urlset" else "unknown"
+    kind = (
+        "index" if kind_tag == "sitemapindex" else "urlset" if kind_tag == "urlset" else "unknown"
+    )
     locs: list[str] = []
     for element in root.iter():
         if element.tag.rsplit("}", 1)[-1].lower() != "loc":

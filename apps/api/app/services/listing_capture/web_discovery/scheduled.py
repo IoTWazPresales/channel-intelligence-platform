@@ -21,7 +21,10 @@ from app.services.listing_capture.web_discovery import preview as web_preview
 from app.services.listing_capture.web_discovery.cache import HttpCache, RobotsCache, SearchCache
 from app.services.listing_capture.web_discovery.pages import make_page_finder
 from app.services.listing_capture.web_discovery.polite import PoliteGetter, dns_resolve
-from app.services.listing_capture.web_discovery.settings import SCOPE_REPORTING, load_discovery_settings
+from app.services.listing_capture.web_discovery.settings import (
+    SCOPE_REPORTING,
+    load_discovery_settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +36,10 @@ def run_scheduled_reporting_discovery(
     plan_store: web_preview.PlanStore | None = None,
     getter: Any | None = None,
 ) -> dict[str, Any]:
-    """Preview all reporting customers, then queue site candidates (no confirm, no page-reader writes)."""
+    """Preview all reporting customers, then queue site candidates.
+
+    No confirm, and no page-reader writes.
+    """
     if not listing_live_fetch_enabled():
         return {"skipped": True, "reason": "live_fetch_off"}
 
@@ -69,7 +75,9 @@ def run_scheduled_reporting_discovery(
             getter=polite,
             resolve=dns_resolve,
             plan_store=store,
-            search_factory=lambda loaded: web_preview.default_search_fn(loaded, polite, search_cache),
+            search_factory=lambda loaded: web_preview.default_search_fn(
+                loaded, polite, search_cache
+            ),
             find_pages=make_page_finder(),
         )
     finally:

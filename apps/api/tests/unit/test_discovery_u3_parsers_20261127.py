@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.services import tenant_settings
 from app.services.listing_capture import discovery
 from app.services.listing_capture.web_discovery.document_parse import (
@@ -23,7 +22,10 @@ def test_form_links_sitemap_and_url_case() -> None:
     assert search_form(html) == ("/find", "search")
     assert ("/login", True) in document_links(html)
     assert ("/p/GLIDE14", False) in document_links(html)
-    assert absolute_url("https://maps.example.test/x", "/p/GLIDE14") == "https://maps.example.test/p/GLIDE14"
+    assert (
+        absolute_url("https://maps.example.test/x", "/p/GLIDE14")
+        == "https://maps.example.test/p/GLIDE14"
+    )
     kind, locs = sitemap_locs(
         "<urlset><url><loc>https://maps.example.test/p/GLIDE14</loc></url></urlset>"
     )

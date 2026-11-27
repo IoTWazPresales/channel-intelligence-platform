@@ -243,8 +243,15 @@ _EMBEDDED_SCRIPT = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _EMBEDDED_KEYS = {
-    "gtin": "gtin", "gtin8": "gtin", "gtin12": "gtin", "gtin13": "gtin", "gtin14": "gtin",
-    "ean": "gtin", "mpn": "mpn", "manufacturerpartnumber": "mpn", "model": "model",
+    "gtin": "gtin",
+    "gtin8": "gtin",
+    "gtin12": "gtin",
+    "gtin13": "gtin",
+    "gtin14": "gtin",
+    "ean": "gtin",
+    "mpn": "mpn",
+    "manufacturerpartnumber": "mpn",
+    "model": "model",
 }
 MAX_EMBEDDED_BYTES = 2 * 1024 * 1024
 

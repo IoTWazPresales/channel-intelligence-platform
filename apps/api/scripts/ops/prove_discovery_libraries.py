@@ -4,8 +4,8 @@ Run it with the interpreter that runs the worker, from ``apps/api``::
 
     .venv\\Scripts\\python.exe scripts\\ops\\prove_discovery_libraries.py
 
-It prints one row per library: group, library, version, evidence, works yes/no. Exit code 0 only when
-every row works.
+It prints one row per library: group, library, version, evidence, works yes/no.
+Exit code 0 only when every row works.
 
 What it does and does not do:
 
@@ -27,10 +27,10 @@ from __future__ import annotations
 import argparse
 import importlib.metadata as metadata
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Callable
 
 _API_ROOT = Path(__file__).resolve().parents[2]
 if str(_API_ROOT) not in sys.path:
@@ -62,7 +62,10 @@ class Check:
 
 
 class _MemoryGetter:
-    """Stands in for ``PoliteGetter``: same ``get`` signature, answers from memory, never the network."""
+    """Stands in for ``PoliteGetter``.
+
+    Same ``get`` signature, answers from memory, never the network.
+    """
 
     def __init__(self, pages: dict[str, str]) -> None:
         self._pages = pages
@@ -91,7 +94,12 @@ def _crawlee_http() -> tuple[bool, str]:
     out = crawl.fetch_pages([_PRODUCT_URL], getter, gate_key_for=lambda _u: _HOST)
     page = out.get(_PRODUCT_URL)
     ok = page is not None and page.status == 200 and "Widget One" in page.body and not page.rendered
-    return ok, "HttpCrawler fetched one synthetic page through the gated client" if ok else "no page returned"
+    return (
+        ok,
+        "HttpCrawler fetched one synthetic page through the gated client"
+        if ok
+        else "no page returned",
+    )
 
 
 def _playwright_chromium() -> tuple[bool, str]:
@@ -99,7 +107,10 @@ def _playwright_chromium() -> tuple[bool, str]:
 
     path = crawl._chromium_executable_path()  # noqa: SLF001 - the helper the capability banner uses
     present = bool(path) and Path(str(path)).is_file()
-    return present, "chromium executable file exists" if present else "chromium executable not found"
+    return (
+        present,
+        "chromium executable file exists" if present else "chromium executable not found",
+    )
 
 
 def _crawlee_render() -> tuple[bool, str]:
@@ -137,7 +148,10 @@ def _ddgs_live(query: str) -> tuple[bool, str]:
     from app.services.listing_capture.web_discovery import search
 
     status, page = search._ddgs_page(query, {"max_results": 3, "timeout_seconds": 15})  # noqa: SLF001
-    return status == 200 and page.status == search.PARSED_OK, f"live search status {status}, {len(page.hits)} hits"
+    return (
+        status == 200 and page.status == search.PARSED_OK,
+        f"live search status {status}, {len(page.hits)} hits",
+    )
 
 
 def _extruct() -> tuple[bool, str]:
@@ -153,7 +167,10 @@ def _price_parser() -> tuple[bool, str]:
 
     facts = page_facts_from_html(_JSON_LD_PAGE, _PRODUCT_URL)
     ok = facts.price_amount == Decimal("1299.50") and facts.price_currency == "USD"
-    return ok, "offer price parsed to Decimal 1299.50 with its currency" if ok else "price not parsed"
+    return (
+        ok,
+        "offer price parsed to Decimal 1299.50 with its currency" if ok else "price not parsed",
+    )
 
 
 def _tldextract() -> tuple[bool, str]:
@@ -162,7 +179,12 @@ def _tldextract() -> tuple[bool, str]:
     host = scoring.host_from_url(f"https://www.{_HOST}/x")
     key = scoring.domain_key(host, [".test"])
     ok = host == _HOST and key == "acme"
-    return ok, "offline suffix list: host kept with subdomain, registrable name 'acme'" if ok else f"{host!r} {key!r}"
+    return (
+        ok,
+        "offline suffix list: host kept with subdomain, registrable name 'acme'"
+        if ok
+        else f"{host!r} {key!r}",
+    )
 
 
 def _protego() -> tuple[bool, str]:
@@ -175,11 +197,19 @@ def _protego() -> tuple[bool, str]:
         and rules.spacing_floor() == 2.0
         and rules.sitemaps == [f"https://{_HOST}/sitemap.xml"]
     )
-    return ok, "robots.txt parsed: allow, disallow, crawl-delay and sitemap" if ok else "robots rules wrong"
+    return (
+        ok,
+        "robots.txt parsed: allow, disallow, crawl-delay and sitemap"
+        if ok
+        else "robots rules wrong",
+    )
 
 
 def _selectolax() -> tuple[bool, str]:
-    from app.services.listing_capture.web_discovery.document_parse import document_links, search_form
+    from app.services.listing_capture.web_discovery.document_parse import (
+        document_links,
+        search_form,
+    )
 
     html = (
         '<nav><a href="/login">in</a></nav><a href="/p/item-1">p</a>'
@@ -218,7 +248,12 @@ def _run(group: str, library: str, distribution: str, fn: Callable[[], tuple[boo
 
 
 def run_checks(*, include_browser: bool = True, live_search: str | None = None) -> list[Check]:
-    g1, g2, g3, g4 = "1 Crawlee + Playwright", "2 ddgs", "3 extruct + price-parser", "4 tldextract + protego"
+    g1, g2, g3, g4 = (
+        "1 Crawlee + Playwright",
+        "2 ddgs",
+        "3 extruct + price-parser",
+        "4 tldextract + protego",
+    )
     checks = [
         _run(g1, "crawlee (HttpCrawler)", "crawlee", _crawlee_http),
         _run(g1, "browserforge", "browserforge", _browserforge),
@@ -244,7 +279,9 @@ def run_checks(*, include_browser: bool = True, live_search: str | None = None) 
 
 def render_table(checks: list[Check]) -> str:
     rows = [("group", "library", "version", "works", "evidence")]
-    rows += [(c.group, c.library, c.version, "yes" if c.works else "NO", c.evidence) for c in checks]
+    rows += [
+        (c.group, c.library, c.version, "yes" if c.works else "NO", c.evidence) for c in checks
+    ]
     widths = [max(len(row[i]) for row in rows) for i in range(4)]
     lines = []
     for row in rows:
@@ -255,7 +292,9 @@ def render_table(checks: list[Check]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--no-browser", action="store_true", help="skip the chromium checks")
-    parser.add_argument("--live-search", metavar="QUERY", help="send ONE real search (outbound network)")
+    parser.add_argument(
+        "--live-search", metavar="QUERY", help="send ONE real search (outbound network)"
+    )
     args = parser.parse_args(argv)
     checks = run_checks(include_browser=not args.no_browser, live_search=args.live_search)
     print(render_table(checks))
