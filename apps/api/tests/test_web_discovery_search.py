@@ -700,8 +700,10 @@ def test_preview_finishes_and_other_candidate_sources_survive_search_failure(
     domains = {
         item["domain"] for item in plan["result"]["customers"][0]["candidates"]
     }
-    assert {ALPHA, "contact-shop.example.test"} <= domains
-    assert any(domain.endswith(".zz") for domain in domains)
+    # Requirement: listing_seed and DNS guesses are not sources. A contact domain still is.
+    assert "contact-shop.example.test" in domains
+    assert ALPHA not in domains
+    assert not any(domain.endswith(".zz") for domain in domains)
     assert "private upstream failure" not in str(plan)
     assert len(ddgs_stub.calls) == (1 if configured else 0)
 

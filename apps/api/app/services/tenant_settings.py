@@ -34,6 +34,14 @@ KEY_DISCOVERY_SEARCH_OPTIONS = "discovery.search_options"
 KEY_DISCOVERY_SEARXNG_URL = "discovery.searxng_url"
 KEY_DISCOVERY_EXCLUDED_DOMAINS = "discovery.excluded_domains"
 KEY_DISCOVERY_BROWSER_FALLBACK = "discovery.browser_fallback_enabled"
+# How long after a scheduled run before another one may start. Required when the schedule is on.
+KEY_DISCOVERY_RUN_DEBOUNCE_HOURS = "discovery.scheduled_run_debounce_hours"
+# How long confirmations wait so one run covers a burst. Required when the schedule is on.
+KEY_DISCOVERY_CONFIRM_COALESCE_SECONDS = "discovery.confirm_coalesce_seconds"
+# Customers a steward added on the price matrix who are not reporting customers.
+KEY_DISCOVERY_MATRIX_CUSTOMERS = "discovery.matrix_customer_ids"
+# Optional language tag for Babel price parsing. Unset means price-parser, not a guessed locale.
+KEY_TENANT_LOCALE = "tenant.locale"
 KEY_LISTING_SCOPE = "listing_scope.settings"
 KEY_DASHBOARD_JOB_DEFAULTS = "dashboard.job_defaults"
 
@@ -43,6 +51,10 @@ SEARCH_PROVIDER_IDS: tuple[str, ...] = ("ddg_html", "ddg_lite", "searxng", "ddgs
 MAX_SEARCH_RESULTS = 10
 MAX_DOMAIN_ENDINGS = 20
 MAX_EXCLUDED_DOMAINS = 200
+# Caps against a typo, not the value used when the tenant has not saved one.
+MAX_DEBOUNCE_HOURS = 24 * 366
+MAX_COALESCE_SECONDS = 24 * 60 * 60
+MAX_MATRIX_CUSTOMERS = 200
 
 _COUNTRY_CODE = re.compile(r"^[A-Z]{2}$")
 _DOMAIN_ENDING = re.compile(r"^\.[a-z0-9-]+(\.[a-z0-9-]+)*$")
@@ -265,6 +277,58 @@ def _as_listing_scope(value: Any) -> dict[str, Any]:
     return clean
 
 
+def _as_debounce_hours(value: Any) -> float:
+    """Hours between scheduled discovery runs. No default: unset stays unset."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or not 0 < float(value) <= MAX_DEBOUNCE_HOURS
+    ):
+        raise ValueError(
+            f"hours between runs must be a number above 0 and at most {MAX_DEBOUNCE_HOURS}"
+        )
+    return float(value)
+
+
+def _as_coalesce_seconds(value: Any) -> int:
+    """Whole seconds to wait after a site confirm. No default: unset stays unset."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("confirm wait must be a whole number of seconds")
+    if float(value) != int(value) or not 1 <= int(value) <= MAX_COALESCE_SECONDS:
+        raise ValueError(
+            f"confirm wait must be a whole number from 1 to {MAX_COALESCE_SECONDS}"
+        )
+    return int(value)
+
+
+def _as_matrix_customer_ids(value: Any) -> list[int]:
+    if not isinstance(value, list) or len(value) > MAX_MATRIX_CUSTOMERS:
+        raise ValueError(f"give at most {MAX_MATRIX_CUSTOMERS} customer ids")
+    out: list[int] = []
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, int) or item <= 0:
+            raise ValueError("each customer id must be a positive integer")
+        if item not in out:
+            out.append(item)
+    return out
+
+
+def _as_locale(value: Any) -> str:
+    """A Babel language tag the tenant saved. Nothing is assumed when this is unset."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("locale must be a known language tag")
+    tag = value.strip().replace("-", "_")
+    from babel import Locale
+    from babel.core import UnknownLocaleError
+
+    try:
+        parsed = Locale.parse(tag)
+    except (UnknownLocaleError, ValueError) as exc:
+        raise ValueError("locale must be a known language tag") from exc
+    return str(parsed)
+
+
 def _as_dashboard_job_defaults(value: Any) -> dict[str, str]:
     """Job -> starter template key (Dashboard V2 "reset to my job default"). Only what the tenant chose."""
     from app.core.user_job import JOBS
@@ -296,6 +360,10 @@ SETTING_VALIDATORS: dict[str, Callable[[Any], Any]] = {
     KEY_DISCOVERY_SEARXNG_URL: _as_https_base_url,
     KEY_DISCOVERY_EXCLUDED_DOMAINS: _as_excluded_domains,
     KEY_DISCOVERY_BROWSER_FALLBACK: _as_bool,
+    KEY_DISCOVERY_RUN_DEBOUNCE_HOURS: _as_debounce_hours,
+    KEY_DISCOVERY_CONFIRM_COALESCE_SECONDS: _as_coalesce_seconds,
+    KEY_DISCOVERY_MATRIX_CUSTOMERS: _as_matrix_customer_ids,
+    KEY_TENANT_LOCALE: _as_locale,
     KEY_LISTING_SCOPE: _as_listing_scope,
     KEY_DASHBOARD_JOB_DEFAULTS: _as_dashboard_job_defaults,
 }
@@ -306,9 +374,23 @@ def _check_searxng_url_present(session: Session, tenant_id: str, clean: Any) -> 
         raise ValueError(f"set {KEY_DISCOVERY_SEARXNG_URL} before adding searxng to the providers")
 
 
+def _check_schedule_timings(session: Session, tenant_id: str, clean: Any) -> None:
+    """Scheduled discovery cannot turn on until both timings are saved. No code fallback."""
+    if clean is not True:
+        return
+    missing = [
+        key
+        for key in (KEY_DISCOVERY_RUN_DEBOUNCE_HOURS, KEY_DISCOVERY_CONFIRM_COALESCE_SECONDS)
+        if get_setting(session, tenant_id, key) is None
+    ]
+    if missing:
+        raise ValueError("set " + " and ".join(missing) + " before turning scheduled discovery on")
+
+
 # key -> check that needs the tenant's other settings. Runs after the value validates.
 CROSS_CHECKS: dict[str, Callable[[Session, str, Any], None]] = {
     KEY_DISCOVERY_SEARCH_PROVIDERS: _check_searxng_url_present,
+    KEY_DISCOVERY_SCHEDULE: _check_schedule_timings,
 }
 
 

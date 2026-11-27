@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cst_listing_seed import CstListingSeed
 from app.models.customer_report_config import CustomerReportConfig
+from app.models.customer_web_site import CustomerWebSite
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing
@@ -87,6 +88,42 @@ def _customer(session: Session, tenant: str, label: str) -> DimCustomer:
     return row
 
 
+def _confirm_site(
+    session: Session,
+    *,
+    tenant: str,
+    customer: DimCustomer,
+    site_key: str,
+    domain: str,
+    search_url_pattern: str | None = None,
+    product_url_pattern: str | None = None,
+) -> ListingSite:
+    """A confirmed web site. listing_seed is not how discovery learns a site."""
+    site = ListingSite(
+        tenant_id=tenant,
+        site_key=site_key,
+        display_name=site_key,
+        adapter_key="html_page",
+        search_url_pattern=search_url_pattern,
+        product_url_pattern=product_url_pattern,
+    )
+    session.add(site)
+    session.flush()
+    session.add(
+        CustomerWebSite(
+            tenant_id=tenant,
+            customer_id=int(customer.id),
+            domain=domain,
+            site_id=int(site.id),
+            status="confirmed",
+            source="steward",
+            evidence={},
+        )
+    )
+    session.flush()
+    return site
+
+
 def test_discovery_proposes_a_listing_and_records_a_customer_with_no_site(db_session: Session) -> None:
     db = db_session.execute(text("select current_database()")).scalar_one()
     print("current_database()", db)
@@ -109,12 +146,7 @@ def test_discovery_proposes_a_listing_and_records_a_customer_with_no_site(db_ses
             CustomerReportConfig(
                 customer_id=int(found.id),
                 reports_expected=True,
-                feed_profile_json={
-                    "listing_seed": {
-                        "marketplace": _SITE,
-                        "site": {"search_url_pattern": f"{_HOST}/search?q={{query}}", "display_name": "Catalogue Example"},
-                    }
-                },
+                feed_profile_json={},
             ),
             CustomerReportConfig(customer_id=int(missing.id), reports_expected=True, feed_profile_json={}),
             FactCustomerSellthrough(
@@ -130,6 +162,16 @@ def test_discovery_proposes_a_listing_and_records_a_customer_with_no_site(db_ses
         ]
     )
     db_session.flush()
+    # Requirement: a site comes from a confirmed web site, not listing_seed.
+    _confirm_site(
+        db_session,
+        tenant=tenant,
+        customer=found,
+        site_key=_SITE,
+        domain="catalogue.example.test",
+        search_url_pattern=f"{_HOST}/search?q={{query}}",
+        product_url_pattern=f"{_HOST}/p/{{page_id}}",
+    )
 
     def http_get(url: str):
         if "/search" in url:
@@ -266,10 +308,15 @@ def test_latest_period_of_zero_stock_does_not_reuse_an_older_period(db_session: 
     tenant = f"t-w1b-{uuid.uuid4().hex[:8]}"
     customer = _customer(db_session, tenant, "zero")
     product = _product(db_session, tenant, ean="7770001112226")
-    _expect(
+    _expect(db_session, customer, None)
+    _confirm_site(
         db_session,
-        customer,
-        {"marketplace": "period-example", "site": {"search_url_pattern": f"{_HOST}/search?q={{query}}"}},
+        tenant=tenant,
+        customer=customer,
+        site_key="period-example",
+        domain="period.example.test",
+        search_url_pattern=f"{_HOST}/search?q={{query}}",
+        product_url_pattern=f"{_HOST}/p/{{page_id}}",
     )
     _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 10, 5), soh=8)
     _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 9), soh=0)
@@ -293,13 +340,36 @@ def test_confirmed_link_must_still_corroborate_and_be_complete(db_session: Sessi
     incomplete = _customer(db_session, tenant, "partial")
     stale_product = _product(db_session, tenant, ean=_EAN)
     partial_product = _product(db_session, tenant, ean="6660001112225")
-    _expect(db_session, stale, {"marketplace": "stale-example"})
-    _expect(db_session, incomplete, {"marketplace": "partial-example"})
+    _expect(db_session, stale, None)
+    _expect(db_session, incomplete, None)
     _stock(db_session, tenant=tenant, customer=stale, product=stale_product, when=date(2026, 11, 2), soh=2)
     _stock(db_session, tenant=tenant, customer=incomplete, product=partial_product, when=date(2026, 11, 2), soh=2)
     stale_site = ListingSite(tenant_id=tenant, site_key="stale-example", display_name="Stale Example")
     partial_site = ListingSite(tenant_id=tenant, site_key="partial-example", display_name="Partial Example")
     db_session.add_all([stale_site, partial_site])
+    db_session.flush()
+    db_session.add_all(
+        [
+            CustomerWebSite(
+                tenant_id=tenant,
+                customer_id=int(stale.id),
+                domain="stale.example.test",
+                site_id=int(stale_site.id),
+                status="confirmed",
+                source="steward",
+                evidence={},
+            ),
+            CustomerWebSite(
+                tenant_id=tenant,
+                customer_id=int(incomplete.id),
+                domain="partial.example.test",
+                site_id=int(partial_site.id),
+                status="confirmed",
+                source="steward",
+                evidence={},
+            ),
+        ]
+    )
     db_session.flush()
     db_session.add_all(
         [
@@ -347,7 +417,15 @@ def test_search_form_uses_its_own_input_name_and_action(db_session: Session) -> 
     host = "https://forms.example.test"
     customer = _customer(db_session, tenant, "forms")
     product = _product(db_session, tenant, ean=_EAN)
-    _expect(db_session, customer, {"domain": host})
+    _expect(db_session, customer, None)
+    _confirm_site(
+        db_session,
+        tenant=tenant,
+        customer=customer,
+        site_key="forms-example",
+        domain="forms.example.test",
+        product_url_pattern=f"{host}/p/{{page_id}}",
+    )
     _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 2), soh=2)
     db_session.flush()
     seen: list[str] = []
@@ -382,7 +460,15 @@ def test_sitemap_fallback_tries_the_model_as_well_as_the_barcode(db_session: Ses
     host = "https://maps.example.test"
     customer = _customer(db_session, tenant, "maps")
     product = _product(db_session, tenant, ean="8880001112227", model="GLIDE14")
-    _expect(db_session, customer, {"domain": host})
+    _expect(db_session, customer, None)
+    _confirm_site(
+        db_session,
+        tenant=tenant,
+        customer=customer,
+        site_key="maps-example",
+        domain="maps.example.test",
+        product_url_pattern=f"{host}/p/{{page_id}}",
+    )
     _stock(db_session, tenant=tenant, customer=customer, product=product, when=date(2026, 11, 2), soh=2)
     db_session.flush()
     page = (

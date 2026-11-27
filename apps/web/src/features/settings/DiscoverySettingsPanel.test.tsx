@@ -72,7 +72,12 @@ describe('DiscoverySettingsPanel', () => {
   });
 
   it('loads tenant-provided values and saves only the requested key', async () => {
-    state.stored = { 'tenant.country': { code: 'QX', name: 'Fixture region' }, 'tenant.domain_endings': ['.test'] };
+    state.stored = {
+      'tenant.country': { code: 'QX', name: 'Fixture region' },
+      'tenant.domain_endings': ['.test'],
+      'discovery.scheduled_run_debounce_hours': 24,
+      'discovery.confirm_coalesce_seconds': 120,
+    };
     mount();
     expect(await screen.findByLabelText('Country name')).toHaveValue('Fixture region');
     expect(screen.getByLabelText('Domain endings')).toHaveValue('.test');
@@ -103,6 +108,13 @@ describe('DiscoverySettingsPanel', () => {
     await waitFor(() => expect(apiPut).toHaveBeenCalledWith(
       '/api/v1/tenant-settings/discovery.searxng_url', { value: 'https://search.fixture.test' },
     ));
+  });
+
+  it('does not turn scheduled discovery on until both timings are saved', async () => {
+    mount();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Scheduled discovery (off by default)' }));
+    expect(screen.getByRole('button', { name: 'Save scheduled discovery' })).toBeDisabled();
+    expect(apiPut).not.toHaveBeenCalled();
   });
 
   it('is hidden from users who cannot edit discovery settings', () => {

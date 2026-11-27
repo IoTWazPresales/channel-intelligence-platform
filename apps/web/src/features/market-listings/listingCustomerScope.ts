@@ -1,9 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPut } from '@/lib/api';
 
 export type ListingCustomerPick = {
   id: number;
@@ -45,6 +45,18 @@ export function customersListUrl(reportingOnly: boolean, extra?: { q?: string; c
   return `/api/v1/customers?${params.toString()}`;
 }
 
+/** Customers selected on the matrix who are not reporting customers. */
+export function customersAddedOutsideReporting(selectedIds: number[], reportingIds: number[]): number[] {
+  const reporting = new Set(reportingIds);
+  return [...new Set(selectedIds.filter((id) => Number.isInteger(id) && id > 0 && !reporting.has(id)))].sort(
+    (a, b) => a - b,
+  );
+}
+
+export async function saveMatrixCustomers(ids: number[]): Promise<void> {
+  await apiPut('/api/v1/tenant-settings/discovery.matrix_customer_ids', { value: ids });
+}
+
 export function useListingCustomerScope(storageKey = STORAGE_KEY) {
   const reporting = useQuery({
     queryKey: ['customers', 'listing-scope', 'reporting'],
@@ -53,9 +65,12 @@ export function useListingCustomerScope(storageKey = STORAGE_KEY) {
   });
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const storedOnLoad = useRef<number[] | null>(null);
+  const userTouched = useRef(false);
 
   useEffect(() => {
     const stored = readStoredIds();
+    storedOnLoad.current = stored;
     if (stored && stored.length) {
       setSelectedIds(stored);
     }
@@ -71,7 +86,12 @@ export function useListingCustomerScope(storageKey = STORAGE_KEY) {
   useEffect(() => {
     if (!hydrated) return;
     writeStoredIds(selectedIds);
-  }, [hydrated, selectedIds, storageKey]);
+    const reportingIds = (reporting.data?.items ?? []).map((customer) => customer.id);
+    const hadStoredSelection = storedOnLoad.current != null && storedOnLoad.current.length > 0;
+    if (!reporting.data || (!userTouched.current && !hadStoredSelection)) return;
+    const extras = customersAddedOutsideReporting(selectedIds, reportingIds);
+    void saveMatrixCustomers(extras).catch(() => undefined);
+  }, [hydrated, selectedIds, reporting.data, storageKey]);
 
   const labels = useMemo(() => {
     const m = new Map<number, string>();
@@ -82,6 +102,7 @@ export function useListingCustomerScope(storageKey = STORAGE_KEY) {
   }, [reporting.data]);
 
   const toggleCustomer = useCallback((id: number, on: boolean) => {
+    userTouched.current = true;
     setSelectedIds((prev) => {
       if (on) return prev.includes(id) ? prev : [...prev, id].sort((a, b) => a - b);
       return prev.filter((x) => x !== id);
@@ -89,10 +110,12 @@ export function useListingCustomerScope(storageKey = STORAGE_KEY) {
   }, []);
 
   const setCustomers = useCallback((ids: number[]) => {
+    userTouched.current = true;
     setSelectedIds([...new Set(ids)].sort((a, b) => a - b));
   }, []);
 
   const resetToReporting = useCallback(() => {
+    userTouched.current = true;
     const defaults = (reporting.data?.items ?? []).map((c) => c.id);
     setSelectedIds(defaults);
   }, [reporting.data]);

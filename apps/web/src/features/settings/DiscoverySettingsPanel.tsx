@@ -55,6 +55,12 @@ function DiscoverySettingsForm({
   const [maxResults, setMaxResults] = useState(savedOptions ? String(savedOptions.max_results) : '');
   const [timeout, setTimeoutValue] = useState(savedOptions ? String(savedOptions.timeout_seconds) : '');
   const [region, setRegion] = useState(savedOptions?.region ?? '');
+  const savedDebounce = initial['discovery.scheduled_run_debounce_hours'];
+  const savedCoalesce = initial['discovery.confirm_coalesce_seconds'];
+  const [debounceHours, setDebounceHours] = useState(savedDebounce != null ? String(savedDebounce) : '');
+  const [coalesceSeconds, setCoalesceSeconds] = useState(savedCoalesce != null ? String(savedCoalesce) : '');
+  const [debounceOnFile, setDebounceOnFile] = useState(savedDebounce != null);
+  const [coalesceOnFile, setCoalesceOnFile] = useState(savedCoalesce != null);
   const [excluded, setExcluded] = useState((initial['discovery.excluded_domains'] ?? []).join('\n'));
   const [browser, setBrowser] = useState(initial['discovery.browser_fallback_enabled'] === true);
   const [scheduled, setScheduled] = useState(initial['discovery.schedule_enabled'] === true);
@@ -77,7 +83,11 @@ function DiscoverySettingsForm({
     setSaved(false);
     setErrors((old) => ({ ...old, [body.key]: undefined }));
     save.mutate(body, {
-      onSuccess: () => setSaved(true),
+      onSuccess: () => {
+        setSaved(true);
+        if (body.key === 'discovery.scheduled_run_debounce_hours') setDebounceOnFile(true);
+        if (body.key === 'discovery.confirm_coalesce_seconds') setCoalesceOnFile(true);
+      },
       onError: (error) => setErrors((old) => ({ ...old, [body.key]: discoveryError(error) })),
     });
   }
@@ -168,6 +178,19 @@ function DiscoverySettingsForm({
           min_interval_seconds: Number(gap), max_results: Number(maxResults), timeout_seconds: Number(timeout),
           ...(region.trim() ? { region: region.trim() } : {}),
         } }, !gap.trim() || !maxResults.trim() || !timeout.trim())}
+        <Typography variant="caption" color="text.secondary">
+          Scheduled discovery needs both timings below. Nothing is filled in for you.
+        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <TextField size="small" type="number" label="Hours between scheduled runs" value={debounceHours} disabled={save.isPending}
+            onChange={(event) => setDebounceHours(event.target.value)} error={Boolean(errors['discovery.scheduled_run_debounce_hours'])}
+            helperText={helper('discovery.scheduled_run_debounce_hours', savedDebounce != null)} />
+          <TextField size="small" type="number" label="Seconds to wait after a site confirm" value={coalesceSeconds} disabled={save.isPending}
+            onChange={(event) => setCoalesceSeconds(event.target.value)} error={Boolean(errors['discovery.confirm_coalesce_seconds'])}
+            helperText={helper('discovery.confirm_coalesce_seconds', savedCoalesce != null)} />
+        </Stack>
+        {saveButton('Save hours between runs', { key: 'discovery.scheduled_run_debounce_hours', value: Number(debounceHours) }, !debounceHours.trim())}
+        {saveButton('Save confirm wait', { key: 'discovery.confirm_coalesce_seconds', value: Number(coalesceSeconds) }, !coalesceSeconds.trim())}
       </Stack>
       <Stack spacing={1}>
         <TextField size="small" label="Excluded domains" value={excluded} multiline minRows={2} disabled={save.isPending}
@@ -213,7 +236,11 @@ function DiscoverySettingsForm({
         } />
         <Typography variant="caption" color="text.secondary">Continue product-page checks on saved sites automatically. New sites still require Apply or a review decision.</Typography>
         {errors['discovery.schedule_enabled'] ? <Alert severity="error">{errors['discovery.schedule_enabled']}</Alert> : null}
-        {saveButton('Save scheduled discovery', { key: 'discovery.schedule_enabled', value: scheduled })}
+        {saveButton(
+          'Save scheduled discovery',
+          { key: 'discovery.schedule_enabled', value: scheduled },
+          scheduled && (!debounceOnFile || !coalesceOnFile),
+        )}
       </Stack>
     </Stack>
   );

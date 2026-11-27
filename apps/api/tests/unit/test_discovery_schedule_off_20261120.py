@@ -64,12 +64,34 @@ def test_scheduled_run_does_nothing_when_no_tenant_switched_it_on(monkeypatch) -
     assert calls == []
 
 
+def _saved_timings(_session, _tenant_id, key):
+    if key == tenant_settings.KEY_DISCOVERY_RUN_DEBOUNCE_HOURS:
+        return 24.0
+    if key == tenant_settings.KEY_DISCOVERY_CONFIRM_COALESCE_SECONDS:
+        return 120
+    return None
+
+
 def test_scheduled_run_covers_only_enabled_tenants(monkeypatch) -> None:
     calls = _patch(monkeypatch, ["a", "b"])
+    # Requirement: a scheduled run uses the tenant's saved timings. There is no 24h code fallback.
+    monkeypatch.setattr(tenant_settings, "get_setting", _saved_timings)
+    monkeypatch.setattr(
+        "app.services.listing_capture.autoconfig_schedule.load_run_state", lambda *_a, **_k: None
+    )
     result = tasks.listing_capture_autoconfigure_sites_task()
     assert result["skipped"] is False
     # One shared call (one fetch policy, tenant rotation), narrowed to the enabled tenants.
     assert calls == [(None, ["a", "b"])]
+
+
+def test_enabled_tenants_without_timings_are_skipped(monkeypatch) -> None:
+    calls = _patch(monkeypatch, ["a", "b"])
+    monkeypatch.setattr(tenant_settings, "get_setting", lambda *_a, **_k: None)
+    result = tasks.listing_capture_autoconfigure_sites_task()
+    assert result["skipped"] is True
+    assert result["reason"] == "discovery_timing_not_configured"
+    assert calls == []
 
 
 def test_scheduled_run_for_a_tenant_that_is_off_is_skipped(monkeypatch) -> None:

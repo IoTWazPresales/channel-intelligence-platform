@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiGet } from '@/lib/api';
 
 import {
+  customersAddedOutsideReporting,
   customersListUrl,
   fetchEntityCustomerOptions,
   searchCustomers,
@@ -10,11 +11,17 @@ import {
 
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async () => ({ items: [] })),
+  apiPut: vi.fn(async () => ({})),
 }));
 
 describe('listingCustomerScope', () => {
   beforeEach(() => {
     vi.mocked(apiGet).mockClear();
+  });
+
+  it('keeps only customers added outside the reporting set', () => {
+    expect(customersAddedOutsideReporting([1, 2, 9, 2], [1, 2])).toEqual([9]);
+    expect(customersAddedOutsideReporting([1], [1, 2])).toEqual([]);
   });
 
   it('builds reporting-only customer list URLs', () => {

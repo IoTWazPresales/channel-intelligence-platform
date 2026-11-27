@@ -49,6 +49,8 @@ def build_beat_schedule() -> dict:
         # (minute */30, all day), not only at 05:30. Also callable on demand (on_demand=True).
         "listing-capture-autoconfigure": {
             "task": "listing_capture.autoconfigure_sites",
+            # 05:20 UTC wakes the process. The gap between a tenant's runs is
+            # discovery.scheduled_run_debounce_hours, not this clock.
             "schedule": crontab(hour=5, minute=20),
         },
         # Listing Capture poller (LC-U1): gated no-op unless schedule enabled + listings exist.

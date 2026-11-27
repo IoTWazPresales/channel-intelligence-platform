@@ -1,9 +1,9 @@
-"""Find catalogue product pages for reporting customers and propose listings.
+"""Find catalogue product pages for customers and propose listings.
 
 A reporting customer is ``customer_report_config.reports_expected`` and not merged away
-(``app.services.customer_reporting``). The site comes from
-that customer's ``feed_profile_json.listing_seed`` (a marketplace key, site patterns, or
-a domain / origin URL). Nothing here names a retailer.
+(``app.services.customer_reporting``). A site is a confirmed web site or a marketplace
+already on the customer's listings. ``listing_seed`` is not a source of a site or of
+URL patterns. Nothing here names a retailer.
 
 For each product with ``reported_soh`` > 0 in the customer's latest reported period
 (the newest period that has a stock figure, including zero),
@@ -39,8 +39,8 @@ from __future__ import annotations
 
 import json
 import re
+from contextvars import ContextVar
 from hashlib import sha256
-from html.parser import HTMLParser
 from typing import Any, Callable
 from urllib.parse import quote, urljoin, urlsplit
 
@@ -95,25 +95,13 @@ _SELLER_NAME = re.compile(
     r'"seller"\s*:\s*\{[^{}]*?"(?:name|display_name)"\s*:\s*"((?:\\.|[^"\\])*)"',
     re.IGNORECASE,
 )
-_LOC = re.compile(r"<loc>\s*([^<]+)\s*</loc>", re.IGNORECASE)
-_FORM_OPEN = re.compile(r"<form\b([^>]*)>", re.IGNORECASE)
-_FORM_CLOSE = re.compile(r"</form\s*>", re.IGNORECASE)
-_FORM_ACTION = re.compile(r"""\baction\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
-_SEARCH_INPUT = re.compile(
-    r"<input\b[^>]*\bname\s*=\s*[\"'](q|query|search)[\"'][^>]*>",
-    re.IGNORECASE,
-)
 _SEED_URL_KEYS = ("origin", "domain", "website", "homepage")
-_COPY_FIELDS = (
-    "display_name",
-    "adapter_key",
-    "product_url_pattern",
-    "page_id_pattern",
-    "search_url_pattern",
-    "details_url_pattern",
-    "first_party_seller",
-    "rate_limit_seconds",
-)
+# Tenant locale for Babel prices, and robots rules for the run. Unset locale keeps price-parser.
+_PRICE_LOCALE: ContextVar[str | None] = ContextVar("cip_discovery_price_locale", default=None)
+_ROBOTS: ContextVar[dict[str, Any] | None] = ContextVar("cip_discovery_robots", default=None)
+# Robots Sitemap: lines considered, plus /sitemap.xml when it is not already one of them.
+_SITEMAP_SEEDS = 2
+_SITEMAP_INDEX_CHILDREN = 2
 
 
 def discover_reporting_customers(
@@ -138,67 +126,87 @@ def discover_reporting_customers(
         policy = fetch_policy if fetch_policy is not None else default_fetch_policy()
     entries: list[dict[str, Any]] = []
     for tid in _tenant_ids(session, tenant_id):
-        pairs = [
-            (config, customer)
-            for config, customer in _reporting_customers(session, tid)
-            if str(customer.tenant_id) == tid
-        ]
-        rotate = apply and policy is not None
-        rotation_key = f"discovery:{tid}:rotation"
-        plans: list[dict[str, Any]] = []
-        units: list[tuple[int, str]] = []
-        for config, customer in pairs:
-            seed = _seed(config)
-            plan: dict[str, Any] = {"customer": customer, "seed": seed, "keys": [], "sites": {}, "entry": None}
-            try:
-                plan["keys"] = _site_keys(session, tenant_id=tid, customer_id=int(customer.id), seed=seed)
-            except Exception as exc:
-                plan["entry"] = _failed_entry(customer, tid, exc)
-            if plan["entry"] is None and not plan["keys"]:
-                plan["entry"] = _entry(
-                    customer_id=int(customer.id),
-                    tenant_id=tid,
-                    site_key=None,
-                    reason=REASON_NO_SITE_KEY,
-                )
-            plan["own_site"] = bool(_seed_origin(seed)) and not bool(str(seed.get("marketplace") or "").strip())
-            plans.append(plan)
-            units.extend((len(plans) - 1, key) for key in plan["keys"])
-        if rotate:
-            units = _rotated_units(units, plans, load_run_state(rotation_key, store=run_store) or {})
-        cut_short: dict[str, Any] | None = None
-        for index, key in units:
-            plan = plans[index]
-            if plan["entry"] is not None:
-                continue
-            customer = plan["customer"]
-            try:
-                with session.begin_nested():
-                    site_row = _discover_site(
-                        session,
-                        customer=customer,
-                        site_key=key,
-                        seed=plan["seed"],
-                        own_site=plan["own_site"],
-                        http_get=http_get,
-                        apply=apply,
-                        product_limit=product_limit,
-                        run_store=run_store,
-                        policy=policy,
-                    )
-            except Exception as exc:
-                plan["entry"] = _failed_entry(customer, tid, exc)
-                continue
-            plan["sites"][key] = site_row
-            if cut_short is None and _site_time_limited(site_row):
-                cut_short = {"customer_id": int(customer.id), "site_key": key}
-        if rotate:
-            save_run_state(rotation_key, cut_short or {"customer_id": 0, "site_key": ""}, store=run_store)
-        for plan in plans:
-            if plan["entry"] is None:
-                plan["entry"] = _customer_entry(plan["customer"], [plan["sites"][k] for k in plan["keys"]])
-            entries.append(plan["entry"])
+        locale_token = _PRICE_LOCALE.set(_configured_locale(session, tid))
+        robots_token = _ROBOTS.set({})
+        try:
+            _discover_tenant(session, tid, entries, http_get=http_get, apply=apply, product_limit=product_limit, run_store=run_store, policy=policy)
+        finally:
+            _PRICE_LOCALE.reset(locale_token)
+            _ROBOTS.reset(robots_token)
     return {"customers": entries}
+
+
+def _discover_tenant(
+    session: Session,
+    tid: str,
+    entries: list[dict[str, Any]],
+    *,
+    http_get: _HttpGet | None,
+    apply: bool,
+    product_limit: int,
+    run_store: Any,
+    policy: FetchPolicy | None,
+) -> None:
+    pairs = [
+        (config, customer)
+        for config, customer in _reporting_customers(session, tid)
+        if str(customer.tenant_id) == tid
+    ]
+    rotate = apply and policy is not None
+    rotation_key = f"discovery:{tid}:rotation"
+    plans: list[dict[str, Any]] = []
+    units: list[tuple[int, str]] = []
+    for config, customer in pairs:
+        seed = _seed(config)
+        plan: dict[str, Any] = {"customer": customer, "seed": seed, "keys": [], "sites": {}, "entry": None}
+        try:
+            plan["keys"] = _site_keys(session, tenant_id=tid, customer_id=int(customer.id), seed=seed)
+        except Exception as exc:
+            plan["entry"] = _failed_entry(customer, tid, exc)
+        if plan["entry"] is None and not plan["keys"]:
+            plan["entry"] = _entry(
+                customer_id=int(customer.id),
+                tenant_id=tid,
+                site_key=None,
+                reason=REASON_NO_SITE_KEY,
+            )
+        plan["own_site"] = bool(_seed_origin(seed)) and not bool(str(seed.get("marketplace") or "").strip())
+        plans.append(plan)
+        units.extend((len(plans) - 1, key) for key in plan["keys"])
+    if rotate:
+        units = _rotated_units(units, plans, load_run_state(rotation_key, store=run_store) or {})
+    cut_short: dict[str, Any] | None = None
+    for index, key in units:
+        plan = plans[index]
+        if plan["entry"] is not None:
+            continue
+        customer = plan["customer"]
+        try:
+            with session.begin_nested():
+                site_row = _discover_site(
+                    session,
+                    customer=customer,
+                    site_key=key,
+                    seed=plan["seed"],
+                    own_site=plan["own_site"],
+                    http_get=http_get,
+                    apply=apply,
+                    product_limit=product_limit,
+                    run_store=run_store,
+                    policy=policy,
+                )
+        except Exception as exc:
+            plan["entry"] = _failed_entry(customer, tid, exc)
+            continue
+        plan["sites"][key] = site_row
+        if cut_short is None and _site_time_limited(site_row):
+            cut_short = {"customer_id": int(customer.id), "site_key": key}
+    if rotate:
+        save_run_state(rotation_key, cut_short or {"customer_id": 0, "site_key": ""}, store=run_store)
+    for plan in plans:
+        if plan["entry"] is None:
+            plan["entry"] = _customer_entry(plan["customer"], [plan["sites"][k] for k in plan["keys"]])
+        entries.append(plan["entry"])
 
 
 def _failed_entry(customer: DimCustomer, tenant_id: str, exc: Exception) -> dict[str, Any]:
@@ -289,7 +297,6 @@ def _discover_site(
             actor=ACTOR,
         )
     if row is not None and apply:
-        _copy_seed_fields(session, row, seed)
         if own_site and _blank(row.first_party_seller) and not _seller_present(row, int(customer.id)):
             _safe_update(session, row, {"first_party_seller": str(customer.name or "").strip()})
         row = _load_site(session, tenant_id, site_key) or row
@@ -639,7 +646,16 @@ def _capture_url(
         return {"url": url, "corroboration": None, "token": token}
     parsed = parse_html(body, site=config, parser_version="discovery")
     availability = parsed.availability if parsed.availability in {"in_stock", "out_of_stock"} else None
-    price = parsed.price if parsed.parse_status == "ok" else None
+    locale = _PRICE_LOCALE.get()
+    if locale:
+        from app.services.listing_capture.web_discovery.page_facts import (
+            page_facts_from_html as locale_page_facts,
+        )
+
+        amount = locale_page_facts(body, url, locale=locale).price_amount
+        price = float(amount) if amount is not None else None
+    else:
+        price = parsed.price if parsed.parse_status == "ok" else None
     # The seller of the offer that supplied the price (BACKLOG-226 item 4), not the first one.
     # An ambiguous page gives no seller rather than the own seller (Codex review of PR #104, B1).
     seller = seller_or_first_party(body, price, config.first_party_seller)
@@ -659,27 +675,6 @@ def _capture_url(
     }
 
 
-class _DocumentLinks(HTMLParser):
-    """Keep navigation context so header/footer links do not consume the page budget."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.links: list[tuple[str, bool]] = []
-        self._navigation_depth = 0
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in {"nav", "header", "footer"}:
-            self._navigation_depth += 1
-        if tag == "a":
-            href = dict(attrs).get("href")
-            if href and not href.startswith("#"):
-                self.links.append((href, self._navigation_depth > 0))
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in {"nav", "header", "footer"}:
-            self._navigation_depth = max(0, self._navigation_depth - 1)
-
-
 def _urls_from_document(config: Any, body: str, base: str, token: str) -> list[str]:
     data = _json_object(body)
     urls: list[str] = []
@@ -692,13 +687,13 @@ def _urls_from_document(config: Any, body: str, base: str, token: str) -> list[s
                 urls.append(built)
         if urls:
             return urls[:3]
+    from app.services.listing_capture.web_discovery.document_parse import absolute_url, document_links
+
     host = urlsplit(base).netloc.lower()
     ranked: list[tuple[int, str]] = []
-    document = _DocumentLinks()
-    document.feed(body)
-    for href, navigation in document.links:
-        absolute = urljoin(base, href.strip())
-        if urlsplit(absolute).netloc.lower() != host:
+    for href, navigation in document_links(body):
+        absolute = absolute_url(base, href)
+        if absolute is None or urlsplit(absolute).netloc.lower() != host:
             continue
         path = urlsplit(absolute).path
         product_link = bool(re.search(r"/(?:p|products?|dp|items?)/", path, re.IGNORECASE))
@@ -747,40 +742,35 @@ def _discover_search_pattern(config: Any, seed: dict[str, Any], http_get: _HttpG
 
 def _search_form(body: str) -> tuple[str, str] | None:
     """The action and input name of the form that contains ``q``, ``query``, or ``search``."""
-    match = _SEARCH_INPUT.search(body or "")
-    if not match:
-        return None
-    name = match.group(1).lower()
-    before = body[: match.start()]
-    events: list[tuple[int, str, re.Match[str] | None]] = [
-        (form.start(), "open", form) for form in _FORM_OPEN.finditer(before)
-    ]
-    events.extend((form.start(), "close", None) for form in _FORM_CLOSE.finditer(before))
-    events.sort(key=lambda item: item[0])
-    stack: list[re.Match[str]] = []
-    for _pos, kind, form in events:
-        if kind == "open" and form is not None:
-            stack.append(form)
-        elif stack:
-            stack.pop()
-    if not stack:
-        return None
-    action = _FORM_ACTION.search(stack[-1].group(1) or "")
-    return (action.group(1).strip() if action else ""), name
+    from app.services.listing_capture.web_discovery.document_parse import search_form
+
+    return search_form(body)
 
 
 def _sitemap_urls(origin: str, tokens: list[str], http_get: _HttpGet) -> list[str]:
-    status, body = _http(http_get, origin.rstrip("/") + "/sitemap.xml")
-    if status != 200 or not body:
-        return []
-    locs = [item.strip() for item in _LOC.findall(body)]
-    if re.search(r"<sitemapindex\b", body, flags=re.IGNORECASE):
-        children: list[str] = []
-        for loc in locs[:2]:
-            child_status, child = _http(http_get, loc)
-            if child_status == 200 and child:
-                children.extend(item.strip() for item in _LOC.findall(child))
-        locs = children
+    from app.services.listing_capture.web_discovery.document_parse import sitemap_locs
+
+    host = urlsplit(origin).netloc.lower()
+    scheme = urlsplit(origin).scheme or "https"
+    rules = _robots_for(http_get, f"{scheme}://{host}/")
+    seeds = [item for item in (rules.sitemaps or []) if item][:_SITEMAP_SEEDS]
+    default = origin.rstrip("/") + "/sitemap.xml"
+    if default not in seeds:
+        seeds.append(default)
+    locs: list[str] = []
+    for seed_url in seeds:
+        status, body = _http(http_get, seed_url)
+        if status != 200 or not body:
+            continue
+        kind, found = sitemap_locs(body)
+        if kind == "index":
+            for child in found[:_SITEMAP_INDEX_CHILDREN]:
+                child_status, child_body = _http(http_get, child)
+                if child_status == 200 and child_body:
+                    _kind, child_locs = sitemap_locs(child_body)
+                    locs.extend(child_locs)
+        else:
+            locs.extend(found)
     host = urlsplit(origin).netloc.lower()
     wanted = [token for token in tokens if token]
     matched: list[str] = []
@@ -876,17 +866,6 @@ def _catalogue_product_ids(session: Session, *, tenant_id: str, customer_id: int
     return [int(row) for row in rows if row is not None]
 
 
-def _copy_seed_fields(session: Session, row: ListingSite, seed: dict[str, Any]) -> None:
-    site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
-    fields: dict[str, Any] = {}
-    for name in _COPY_FIELDS:
-        if name not in site or not _blank(getattr(row, name, None)):
-            continue
-        fields[name] = site.get(name)
-    if fields:
-        _safe_update(session, row, fields)
-
-
 def _safe_update(session: Session, row: ListingSite, fields: dict[str, Any]) -> None:
     cleaned = {key: value for key, value in fields.items() if value is not None and str(value).strip() != ""}
     if not cleaned:
@@ -924,14 +903,14 @@ def _tenant_ids(session: Session, tenant_id: str | None) -> list[str]:
 
 
 def _site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]) -> list[str]:
-    named = seed.get("marketplace")
-    if isinstance(named, str) and named.strip():
-        key = named.strip().lower()
-        return [key] if SITE_KEY_RE.match(key) else []
-    base = _seed_site_keys(session, tenant_id=tenant_id, customer_id=customer_id, seed=seed)
-    # Web discovery (Discovery V2): the sites a steward or an Apply confirmed for this customer.
+    """Confirmed web sites plus marketplaces already on this customer's listings.
+
+    ``listing_seed`` is not a source of a site. ``seed`` stays on the signature for callers.
+    """
+    del seed
     confirmed = _confirmed_web_site_keys(session, tenant_id=tenant_id, customer_id=customer_id)
-    return sorted(set(base) | set(confirmed)) if confirmed else base
+    listed = _listing_marketplace_keys(session, tenant_id=tenant_id, customer_id=customer_id)
+    return sorted(set(confirmed) | set(listed))
 
 
 def _confirmed_web_site_keys(session: Session, *, tenant_id: str, customer_id: int) -> list[str]:
@@ -958,30 +937,7 @@ def _confirmed_web_site_keys(session: Session, *, tenant_id: str, customer_id: i
     )
 
 
-def _seed_site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]) -> list[str]:
-    origin = _origin_text(_seed_origin(seed))
-    if origin:
-        # A domain seed describes only that domain, even if this customer already
-        # has listings on other marketplaces. Reuse a matching site's existing key.
-        host = _domain(origin)
-        listings = session.execute(
-            select(CustomerListing.marketplace, CustomerListing.url)
-            .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
-            .where(DimCustomer.tenant_id == tenant_id, CustomerListing.customer_id == int(customer_id))
-        ).all()
-        matches = {
-            str(key).strip().lower() for key, url in listings
-            if _domain(url) == host and SITE_KEY_RE.match(str(key).strip().lower())
-        }
-        sites = session.scalars(select(ListingSite).where(ListingSite.tenant_id == tenant_id)).all()
-        matches.update(
-            str(site.site_key) for site in sites
-            if any(_domain(getattr(site, field)) == host for field in (
-                "product_url_pattern", "search_url_pattern", "details_url_pattern"
-            ))
-        )
-        key = _site_key_from_origin(origin)
-        return sorted(matches) if matches else ([key] if key else [])
+def _listing_marketplace_keys(session: Session, *, tenant_id: str, customer_id: int) -> list[str]:
     found = session.scalars(
         select(func.lower(func.trim(CustomerListing.marketplace)))
         .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
@@ -1150,7 +1106,19 @@ def _seller_names(body: str) -> list[str]:
     return names
 
 
-def _http(http_get: _HttpGet, url: str) -> tuple[int, str]:
+class _BoundGetter:
+    """The shape Crawlee's gated client calls. Pacing stays inside the bound ``http_get``."""
+
+    def __init__(self, http_get: _HttpGet) -> None:
+        self._http_get = http_get
+
+    def get(self, url: str, *, gate_key: str | None = None, spacing: float | None = None) -> Any:
+        del gate_key, spacing
+        status, body = _call_http(self._http_get, url)
+        return type("Fetched", (), {"status": status, "body": body, "final_url": url, "refused": None})()
+
+
+def _call_http(http_get: _HttpGet, url: str) -> tuple[int, str]:
     try:
         result = http_get(url)
     except (OSError, ValueError, RuntimeError, TypeError):
@@ -1165,6 +1133,55 @@ def _http(http_get: _HttpGet, url: str) -> tuple[int, str]:
     except (TypeError, ValueError):
         code = 0
     return code, body if isinstance(body, str) else ""
+
+
+def _robots_for(http_get: _HttpGet, url: str) -> Any:
+    from urllib.parse import urlsplit
+
+    from app.services.listing_capture.web_discovery.robots import RobotsRules, rules_from_response
+
+    parts = urlsplit(url)
+    host = (parts.netloc or "").lower()
+    cache = _ROBOTS.get()
+    if not isinstance(cache, dict) or not host:
+        return RobotsRules(mode="allow_all")
+    cached = cache.get(host)
+    if cached is not None:
+        return cached
+    status, body = _call_http(http_get, f"{parts.scheme}://{host}/robots.txt")
+    rules = rules_from_response(status, body)
+    cache[host] = rules
+    return rules
+
+
+def _configured_locale(session: Session, tenant_id: str) -> str | None:
+    from app.services.tenant_settings import KEY_TENANT_LOCALE, get_setting
+
+    try:
+        value = get_setting(session, tenant_id, KEY_TENANT_LOCALE)
+    except Exception:  # noqa: BLE001 - a missing setting reads as unset
+        return None
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _http(http_get: _HttpGet, url: str) -> tuple[int, str]:
+    from urllib.parse import urlsplit
+
+    from app.services.listing_capture.web_discovery.crawl import fetch_pages
+
+    path = (urlsplit(url).path or "").lower()
+    if not path.endswith("/robots.txt") and not _robots_for(http_get, url).allowed(url):
+        return 0, ""
+    pages = fetch_pages(
+        [url],
+        _BoundGetter(http_get),
+        gate_key_for=lambda item: (urlsplit(item).netloc or "").lower(),
+    )
+    page = pages.get(url)
+    if page is None:
+        return 0, ""
+    body = page.body if isinstance(page.body, str) else ""
+    return int(page.status or 0), body
 
 
 def _first_reason(rows: list[dict[str, Any]]) -> str:

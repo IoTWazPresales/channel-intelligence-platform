@@ -187,6 +187,10 @@ export type DiscoverySettingValues = {
   'discovery.excluded_domains': string[];
   'discovery.browser_fallback_enabled': boolean;
   'discovery.schedule_enabled': boolean;
+  'discovery.scheduled_run_debounce_hours': number;
+  'discovery.confirm_coalesce_seconds': number;
+  'discovery.matrix_customer_ids': number[];
+  'tenant.locale': string;
 };
 export type DiscoverySettingKey = keyof DiscoverySettingValues;
 export type SettingWrite = {

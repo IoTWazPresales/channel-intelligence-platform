@@ -576,12 +576,25 @@ def _load_customers(
 ) -> list[DimCustomer]:
     scope = request["scope"]
     if scope == SCOPE_REPORTING:
-        return [
+        customers = [
             customer
             for _config, customer in discovery._reporting_customers(  # noqa: SLF001
                 session, tenant_id
             )
         ]
+        seen = {int(customer.id) for customer in customers}
+        for raw in request.get("also_customer_ids") or []:
+            try:
+                customer_id = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if customer_id in seen:
+                continue
+            row = session.get(DimCustomer, customer_id)
+            if isinstance(row, DimCustomer) and str(row.tenant_id) == tenant_id:
+                customers.append(row)
+                seen.add(customer_id)
+        return customers
     if scope in (SCOPE_CUSTOMER, SCOPE_DOMAIN):
         customer = session.get(DimCustomer, int(request["customer_id"]))
         if not isinstance(customer, DimCustomer) or str(customer.tenant_id) != tenant_id:

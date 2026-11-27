@@ -69,11 +69,15 @@ def test_a_later_source_is_used_when_the_first_has_few_products() -> None:
     assert [p.id for p in chosen] == [2, 7, 9]
 
 
-def test_product_query_prefers_sales_model_then_part_number_then_name() -> None:
-    assert cand.product_query(_product(1, sales="Model A", part="PN-1"), "Testland") == '"Model A" Testland'
-    assert cand.product_query(_product(1, part="PN-1"), "Testland") == '"PN-1" Testland'
+def test_product_queries_search_model_part_and_description() -> None:
+    # Requirement: free search uses the sales model, the part code and the description, each on its own.
+    assert cand.product_queries(_product(1, sales="Model A", part="PN-1", name="A long description"), "Testland") == [
+        '"Model A" Testland',
+        '"PN-1" Testland',
+        "A long description Testland",
+    ]
     long_name = "n" * 120
-    assert cand.product_query(_product(1, name=long_name), "Testland") == f"{'n' * 80} Testland"
+    assert cand.product_queries(_product(1, name=long_name), "Testland") == [f"{'n' * 80} Testland"]
     assert cand.name_query("  Alpha Gadgets ", "Testland") == '"Alpha Gadgets" Testland'
 
 
@@ -104,14 +108,13 @@ def test_on_file_sources_and_already_monitored_sites() -> None:
         other_site_hosts={"other-customer.example.test": "other-key"},
     )
     hosts = _by_host(cand.assemble_candidates(ctx, make_settings(), search=None, resolve=_no_dns))
-    assert hosts["seeded.example.test"].sources == {SOURCE_ON_FILE}
-    assert hosts["seeded.example.test"].outcome_hint is None
+    # Requirement: listing_seed is not a source, so a seed host is not a candidate.
+    assert "seeded.example.test" not in hosts
     assert hosts["confirmed.example.test"].outcome_hint == OUTCOME_MONITORED
     assert hosts["listed.example.test"].outcome_hint == OUTCOME_MONITORED
     assert hosts["listed.example.test"].gate_key == "listed-key"  # the existing site's gate, so spacing is shared
     assert hosts["other-customer.example.test"].outcome_hint == OUTCOME_DROPPED
     assert hosts["other-customer.example.test"].drop_reason == cand.DROP_OTHER_CUSTOMER_SITE
-    assert hosts["seeded.example.test"].gate_key == "host:seeded.example.test"
 
 
 def test_a_user_entered_domain_on_another_customers_site_is_not_dropped() -> None:
@@ -132,7 +135,7 @@ def test_product_and_name_search_use_the_country_name_and_keep_three_hosts_per_q
     )
     ctx = _ctx(products=[_product(10, sales="Model A")])
     hosts = _by_host(cand.assemble_candidates(ctx, make_settings(), search=search, resolve=_no_dns))
-    assert search.queries == ['"Model A" Testland', f'"{NAME}" Testland']
+    assert search.queries == ['"Model A" Testland', "Plain name Testland", f'"{NAME}" Testland']
     assert "four.example.test" not in hosts
     assert hosts["one.example.test"].sources == {SOURCE_PRODUCT_SEARCH}
     assert hosts["one.example.test"].product_hits == [
@@ -147,7 +150,8 @@ def test_at_most_three_products_are_searched_and_every_hit_names_its_product() -
     search = FakeSearch({"Model": ["shop.example.test"]})
     ctx = _ctx(products=[_product(i, sales=f"Model {i}") for i in range(1, 6)])
     hosts = _by_host(cand.assemble_candidates(ctx, make_settings(), search=search, resolve=_no_dns))
-    assert len(search.queries) == 4  # 3 product queries + 1 name query
+    # Requirement: model and description are separate searches. 3 products x 2, plus the customer name.
+    assert len(search.queries) == 7
     assert sorted(hit["product_id"] for hit in hosts["shop.example.test"].product_hits) == [1, 2, 3]
 
 
@@ -190,41 +194,22 @@ def test_excluded_domains_also_remove_on_file_and_email_sources() -> None:
 
 def test_www_is_stripped_and_hosts_are_deduplicated_across_sources() -> None:
     search = FakeSearch({"Alpha": ["www.shop.example.test"]})
-    ctx = _ctx(seed_host="shop.example.test")
+    ctx = _ctx(contact_domains=["shop.example.test"])
     found = cand.assemble_candidates(ctx, make_settings(), search=search, resolve=_no_dns)
-    assert [(c.host, c.sources) for c in found] == [("shop.example.test", {SOURCE_ON_FILE, SOURCE_NAME_SEARCH})]
+    assert [(c.host, c.sources) for c in found] == [("shop.example.test", {SOURCE_EMAIL, SOURCE_NAME_SEARCH})]
 
 
-# --------------------------------------------------------------------------- guesses
-
-
-def test_guesses_are_the_name_keys_times_the_endings_kept_only_when_they_resolve() -> None:
+def test_resolve_is_never_called() -> None:
+    # Requirement: free search only. DNS guesses from the customer name are not a source.
     asked: list[str] = []
 
     def resolve(host: str) -> list[str]:
         asked.append(host)
-        return ["8.8.8.8"] if host == "www.alphagadgets.zz" else []
+        return ["8.8.8.8"]
 
     found = cand.assemble_candidates(_ctx(), make_settings(), search=None, resolve=resolve)
-    assert [(c.host, c.sources) for c in found] == [("alphagadgets.zz", {SOURCE_GUESS})]
-    # Endings are tried in the tenant's order, the bare name first and then with www.
-    assert asked == ["alphagadgets.example.test", "www.alphagadgets.example.test", "alphagadgets.zz", "www.alphagadgets.zz"]
-
-
-def test_guess_keys_shorter_than_three_characters_are_skipped_and_endings_are_capped() -> None:
-    asked: list[str] = []
-
-    def resolve(host: str) -> list[str]:
-        asked.append(host)
-        return []
-
-    endings = [f".e{i}" for i in range(10)]
-    settings = make_settings(**{ts.KEY_TENANT_DOMAIN_ENDINGS: endings})
-    cand.assemble_candidates(_ctx(name="Al"), settings, search=None, resolve=resolve)
     assert asked == []
-    cand.assemble_candidates(_ctx(), settings, search=None, resolve=resolve)
-    assert len(asked) == cand.MAX_GUESS_ENDINGS * 2
-    assert asked[0] == "alphagadgets.e0"
+    assert found == []
 
 
 def test_the_user_domain_scope_skips_every_other_source() -> None:

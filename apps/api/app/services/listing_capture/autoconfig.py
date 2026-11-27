@@ -175,12 +175,12 @@ def autoconfigure_sites(
     cut_short: list[str] = []
     scheduled_discovery = tenant_ids is not None
     if scheduled_discovery:
-        # A worker restart inside the daily cadence must not start discovery again
-        # (autoconfig_schedule.run_startup_autoconfigure reads this record).
+        # Each tenant's saved debounce is measured from this moment
+        # (autoconfig_schedule.run_startup_autoconfigure reads the same record).
         from app.services.listing_capture.autoconfig_schedule import note_scheduled_run
-
-        note_scheduled_run(store=run_store)
     for tid in order:
+        if scheduled_discovery:
+            note_scheduled_run(tenant_id=tid, store=run_store)
         if scheduled_discovery and live:
             # The scheduled step rolls back its read-only preview and commits its own Apply. Save
             # what the previous tenant in this run already wrote first (a rollback would discard

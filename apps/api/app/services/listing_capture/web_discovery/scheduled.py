@@ -49,7 +49,10 @@ def run_scheduled_reporting_discovery(
         return {"skipped": True, "reason": "store_unavailable"}
 
     preview_id = web_preview.new_preview_id()
-    request = {"scope": SCOPE_REPORTING}
+    from app.services.tenant_settings import KEY_DISCOVERY_MATRIX_CUSTOMERS, get_setting
+
+    extras = get_setting(session, tenant_id, KEY_DISCOVERY_MATRIX_CUSTOMERS) or []
+    request = {"scope": SCOPE_REPORTING, "also_customer_ids": list(extras)}
     polite = getter or PoliteGetter(
         FetchPolicy(time_limit_seconds=POLL_RUN_TIME_LIMIT_SECONDS),
         HttpCache(),

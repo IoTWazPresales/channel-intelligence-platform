@@ -17,7 +17,9 @@ What it does and does not do:
   outbound call and runs only when ``--live-search "<query>"`` is given.
 
 Grouping (ASSUMPTION C1 in the step 3 tracker): (1) Crawlee + Playwright (+ browserforge),
-(2) ddgs, (3) extruct + price-parser, (4) tldextract + protego.
+(2) ddgs, (3) extruct + price-parser, (4) tldextract + protego,
+(5) selectolax + courlan + w3lib + Babel. ultimate-sitemap-parser is not included:
+every PyPI release is GPL-3.0-or-later.
 """
 
 from __future__ import annotations
@@ -176,6 +178,34 @@ def _protego() -> tuple[bool, str]:
     return ok, "robots.txt parsed: allow, disallow, crawl-delay and sitemap" if ok else "robots rules wrong"
 
 
+def _selectolax() -> tuple[bool, str]:
+    from app.services.listing_capture.web_discovery.document_parse import document_links, search_form
+
+    html = (
+        '<nav><a href="/login">in</a></nav><a href="/p/item-1">p</a>'
+        '<form action="/find"><input name="search"></form>'
+    )
+    ok = search_form(html) == ("/find", "search") and ("/login", True) in document_links(html)
+    return ok, "lexbor form and navigation link" if ok else "form or link parse failed"
+
+
+def _urls() -> tuple[bool, str]:
+    from app.services.listing_capture.web_discovery.document_parse import absolute_url
+
+    url = absolute_url(f"https://{_HOST}/", "/p/GLIDE14")
+    ok = url == f"https://{_HOST}/p/GLIDE14"
+    return ok, "path case kept" if ok else f"{url!r}"
+
+
+def _babel() -> tuple[bool, str]:
+    from app.services.listing_capture.web_discovery.page_facts import page_facts_from_html
+
+    page = _JSON_LD_PAGE.replace('"1299.50"', '"1.299,50"')
+    facts = page_facts_from_html(page, _PRODUCT_URL, locale="de_DE")
+    ok = facts.price_amount == Decimal("1299.50")
+    return ok, "de_DE 1.299,50 parsed to 1299.50" if ok else f"{facts.price_amount!r}"
+
+
 def _run(group: str, library: str, distribution: str, fn: Callable[[], tuple[bool, str]]) -> Check:
     version = _version(distribution)
     if version == "MISSING":
@@ -204,6 +234,10 @@ def run_checks(*, include_browser: bool = True, live_search: str | None = None) 
         _run(g3, "price-parser", "price-parser", _price_parser),
         _run(g4, "tldextract", "tldextract", _tldextract),
         _run(g4, "protego", "protego", _protego),
+        _run("5 parsers", "selectolax", "selectolax", _selectolax),
+        _run("5 parsers", "courlan", "courlan", _urls),
+        _run("5 parsers", "w3lib", "w3lib", _urls),
+        _run("5 parsers", "Babel", "Babel", _babel),
     ]
     return checks
 

@@ -172,9 +172,21 @@ def _offer(product: dict[str, Any]) -> dict[str, Any]:
     return product
 
 
-def _price(offer: dict[str, Any]) -> tuple[Decimal | None, str | None]:
+def _price(offer: dict[str, Any], locale: str | None = None) -> tuple[Decimal | None, str | None]:
     raw = _first(offer, "price")
     currency = _first(offer, "priceCurrency")
+    if locale:
+        # The tenant saved this tag. A parse failure is no price, not a second guess.
+        from babel.core import UnknownLocaleError
+        from babel.numbers import NumberFormatError, parse_decimal
+
+        try:
+            amount = parse_decimal(str(raw or ""), locale=locale)
+        except (NumberFormatError, UnknownLocaleError, ValueError):
+            amount = None
+        if amount is not None and (not amount.is_finite() or amount < 0):
+            amount = None
+        return amount, currency.upper() if isinstance(currency, str) and currency else None
     parsed = Price.fromstring(raw or "")
     amount = parsed.amount
     if amount is not None and (not amount.is_finite() or amount < 0):
@@ -191,7 +203,7 @@ def _url(value: str | None, fallback: str) -> str:
         return fallback
 
 
-def page_facts_from_html(html: str, url: str = "") -> PageFacts:
+def page_facts_from_html(html: str, url: str = "", *, locale: str | None = None) -> PageFacts:
     """Return structured evidence from HTML and its fetched URL; no I/O or writes.
 
     Identity claims from multiple Product nodes are retained as evidence, never
@@ -211,7 +223,7 @@ def page_facts_from_html(html: str, url: str = "") -> PageFacts:
         products = [_opengraph(extracted.get("opengraph", []))]
     product = products[0]
     offer = _offer(product)
-    amount, currency = _price(offer)
+    amount, currency = _price(offer, locale)
     return PageFacts(
         gtin=_values(products, *_GTIN_KEYS),
         sku=_values(products, "sku"),

@@ -2,14 +2,14 @@
 
 Sources, all keyed by host (lower-cased, ``www.`` stripped):
 
-- ``on_file``: the customer's seed domain, its confirmed ``customer_web_site`` rows, the hosts of
-  its ``customer_listing.url``
+- ``on_file``: confirmed ``customer_web_site`` rows and the hosts of ``customer_listing.url``.
+  ``listing_seed`` is not a source.
 - ``email``: the domain part of its active contact addresses. A domain that appears on contacts of
   two or more different customers in the tenant is not proposed (this removes shared webmail
   without a hard-coded list). Only the domain is kept, never an address.
-- ``product_search``: up to 3 of its products, searched by name or model plus the tenant country
+- ``product_search``: up to 3 of its products. Each product is searched separately by sales model,
+  part code and description, plus the tenant country. The first 3 hosts of each result are kept.
 - ``name_search``: its name plus the tenant country
-- ``guess``: its name keys × the tenant's domain endings, kept only when the name resolves
 - ``user``: a domain a steward typed. This scope starts from that domain only.
 
 The database reads are in ``read_context``; ``assemble_candidates`` is pure (an injected ``search``
@@ -43,22 +43,18 @@ from app.services.listing_capture.web_discovery.scoring import (
     OUTCOME_DROPPED,
     OUTCOME_MONITORED,
     SOURCE_EMAIL,
-    SOURCE_GUESS,
     SOURCE_NAME_SEARCH,
     SOURCE_ON_FILE,
     SOURCE_PRODUCT_SEARCH,
     SOURCE_USER,
-    customer_keys,
     host_from_url,
     normalize_host,
 )
 from app.services.listing_capture.web_discovery.settings import DiscoverySettings
 
 MAX_PRODUCTS_SEARCHED = 3
+# Warren's "top 2–3" result cap. A system bound on a search result, not a tenant rate.
 HOSTS_PER_QUERY = 3
-MAX_GUESS_KEYS = 3
-MAX_GUESS_ENDINGS = 6
-MIN_GUESS_KEY_LENGTH = 3
 MAX_HOMEPAGES_PER_CUSTOMER = 25
 _PRODUCT_SOURCE_LIMIT = 500
 
@@ -112,6 +108,7 @@ class CustomerContext:
 
     customer_id: int
     name: str
+    # Ignored. listing_seed is not a source. The field remains so older callers can still pass it.
     seed_host: str | None = None
     confirmed_hosts: list[str] = field(default_factory=list)
     rejected_hosts: set[str] = field(default_factory=set)
@@ -241,7 +238,6 @@ def read_context(session: Session, customer: DimCustomer) -> CustomerContext:
         select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id)
     )
     seed = discovery._seed(config) if isinstance(config, CustomerReportConfig) else {}  # noqa: SLF001
-    ctx.seed_host = _host_of(discovery._seed_origin(seed)) or None  # noqa: SLF001
 
     web_rows = session.execute(
         select(CustomerWebSite.domain, CustomerWebSite.status).where(
@@ -342,12 +338,16 @@ def choose_products(products: list[ProductInfo]) -> list[ProductInfo]:
     return unique[:MAX_PRODUCTS_SEARCHED]
 
 
-def product_query(product: ProductInfo, country_name: str) -> str:
+def product_queries(product: ProductInfo, country_name: str) -> list[str]:
+    """Separate searches for the sales model, the part code and the description."""
+    queries: list[str] = []
     if product.sales_model_name:
-        return f'"{product.sales_model_name}" {country_name}'
+        queries.append(f'"{product.sales_model_name}" {country_name}')
     if product.part_number:
-        return f'"{product.part_number}" {country_name}'
-    return f"{product.name[:80]} {country_name}"
+        queries.append(f'"{product.part_number}" {country_name}')
+    if product.name.strip():
+        queries.append(f"{product.name[:80]} {country_name}")
+    return queries
 
 
 def name_query(name: str, country_name: str) -> str:
@@ -446,9 +446,7 @@ def assemble_candidates(
         pool.add(user_domain, SOURCE_USER)
         return pool.finish()
 
-    # 1. on file
-    if ctx.seed_host:
-        pool.add(ctx.seed_host, SOURCE_ON_FILE, extra={"on_file_via": "seed"})
+    # 1. on file. listing_seed is not a source.
     for host in ctx.confirmed_hosts:
         pool.add(host, SOURCE_ON_FILE, extra={"on_file_via": "confirmed"})
     for host in ctx.listing_hosts:
@@ -468,29 +466,24 @@ def assemble_candidates(
     # 3. product search, then 4. name search
     if search is not None and country_name:
         for product in chosen:
-            query = product_query(product, country_name)
-            for host, rank in _result_hosts(search(query)):
-                pool.add(
-                    host,
-                    SOURCE_PRODUCT_SEARCH,
-                    hit={
-                        "product_id": product.id,
-                        "product_label": product.label,
-                        "query": query,
-                        "rank": rank,
-                    },
-                )
+            for query in product_queries(product, country_name):
+                for host, rank in _result_hosts(search(query)):
+                    pool.add(
+                        host,
+                        SOURCE_PRODUCT_SEARCH,
+                        hit={
+                            "product_id": product.id,
+                            "product_label": product.label,
+                            "query": query,
+                            "rank": rank,
+                        },
+                    )
         if ctx.name.strip():
             for host, rank in _result_hosts(search(name_query(ctx.name, country_name))):
                 pool.add(host, SOURCE_NAME_SEARCH, extra={"name_search_rank": rank})
 
-    # 5. guesses: name keys x the tenant's domain endings, kept only when the name resolves
-    keys = [k for k in customer_keys(ctx.name) if len(k) >= MIN_GUESS_KEY_LENGTH][:MAX_GUESS_KEYS]
-    for key in keys:
-        for ending in settings.domain_endings[:MAX_GUESS_ENDINGS]:
-            bare = f"{key}{ending}"
-            if resolve(bare) or resolve(f"www.{bare}"):
-                pool.add(bare, SOURCE_GUESS, extra={"guessed_host": bare})
+    # DNS guesses are not a source. ``resolve`` stays on the signature for callers.
+    del resolve
     return pool.finish()
 
 

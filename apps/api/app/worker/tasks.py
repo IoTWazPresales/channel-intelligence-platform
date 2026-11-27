@@ -863,6 +863,7 @@ def _listing_live_fetch_enabled() -> bool:
 def listing_capture_autoconfigure_sites_task(
     tenant_id: str | None = None,
     on_demand: bool = False,
+    tenant_ids: list[str] | None = None,
 ) -> dict:
     """Beat task: fill empty listing-site rows for reporting customers. Idempotent.
 
@@ -884,17 +885,34 @@ def listing_capture_autoconfigure_sites_task(
     live = _listing_live_fetch_enabled()
     if not on_demand:
         # Scheduled run: discovery runs only for tenants whose user switched
-        # ``discovery.schedule_enabled`` on in the app. Off by default; unreadable reads as off.
-        from app.services.tenant_settings import KEY_DISCOVERY_SCHEDULE, tenants_with_true
+        # ``discovery.schedule_enabled`` on, and only when that tenant saved both
+        # timings. Off by default; a missing timing is not filled in.
+        if tenant_ids:
+            scheduled_tenants = [str(item) for item in tenant_ids]
+        else:
+            from app.services.listing_capture.autoconfig_schedule import due_scheduled_tenants
+            from app.services.tenant_settings import KEY_DISCOVERY_SCHEDULE, tenants_with_true
 
-        with SessionLocal() as gate_session:
-            enabled = tenants_with_true(gate_session, KEY_DISCOVERY_SCHEDULE)
-        if tenant_id is not None:
-            enabled = [t for t in enabled if t == tenant_id]
-        if not enabled:
-            log.info("listing capture autoconfigure skipped: discovery_schedule_off")
-            return {"skipped": True, "reason": "discovery_schedule_off"}
-        scheduled_tenants = enabled
+            with SessionLocal() as gate_session:
+                enabled = tenants_with_true(gate_session, KEY_DISCOVERY_SCHEDULE)
+                if tenant_id is not None:
+                    enabled = [item for item in enabled if item == tenant_id]
+                if not enabled:
+                    log.info("listing capture autoconfigure skipped: discovery_schedule_off")
+                    return {"skipped": True, "reason": "discovery_schedule_off"}
+                due, skipped_tenants = due_scheduled_tenants(gate_session)
+            if tenant_id is not None:
+                due = [item for item in due if item == tenant_id]
+                skipped_tenants = [row for row in skipped_tenants if row.get("tenant_id") == tenant_id]
+            if not due:
+                log.info("listing capture autoconfigure skipped: %s", skipped_tenants)
+                reason = (
+                    skipped_tenants[0]["reason"]
+                    if len(skipped_tenants) == 1
+                    else "discovery_timing_not_configured"
+                )
+                return {"skipped": True, "reason": reason, "tenants": skipped_tenants}
+            scheduled_tenants = due
     else:
         scheduled_tenants = None
     with SessionLocal() as session:
