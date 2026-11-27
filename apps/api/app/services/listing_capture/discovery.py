@@ -1,9 +1,9 @@
 """Find catalogue product pages for customers and propose listings.
 
 A reporting customer is ``customer_report_config.reports_expected`` and not merged away
-(``app.services.customer_reporting``). A site is a confirmed web site or a marketplace
-already on the customer's listings. ``listing_seed`` is not a source of a site or of
-URL patterns. Nothing here names a retailer.
+(``app.services.customer_reporting``). The site comes from that customer's
+``feed_profile_json.listing_seed`` (a marketplace key, site patterns, or a domain / origin
+URL), plus the web sites confirmed for the customer. Nothing here names a retailer.
 
 For each product with ``reported_soh`` > 0 in the customer's latest reported period
 (the newest period that has a stock figure, including zero),
@@ -108,6 +108,16 @@ _SELLER_NAME = re.compile(
     re.IGNORECASE,
 )
 _SEED_URL_KEYS = ("origin", "domain", "website", "homepage")
+_COPY_FIELDS = (
+    "display_name",
+    "adapter_key",
+    "product_url_pattern",
+    "page_id_pattern",
+    "search_url_pattern",
+    "details_url_pattern",
+    "first_party_seller",
+    "rate_limit_seconds",
+)
 # Tenant locale for Babel prices, and robots rules for the run. Unset locale keeps price-parser.
 _PRICE_LOCALE: ContextVar[str | None] = ContextVar("cip_discovery_price_locale", default=None)
 _ROBOTS: ContextVar[dict[str, Any] | None] = ContextVar("cip_discovery_robots", default=None)
@@ -336,6 +346,7 @@ def _discover_site(
             actor=ACTOR,
         )
     if row is not None and apply:
+        _copy_seed_fields(session, row, seed)
         if (
             own_site
             and _blank(row.first_party_seller)
@@ -825,7 +836,7 @@ def _search_form(body: str) -> tuple[str, str] | None:
 
 
 def _sitemap_urls(origin: str, tokens: list[str], http_get: _HttpGet) -> list[str]:
-    from app.services.listing_capture.web_discovery.document_parse import sitemap_locs
+    from app.services.listing_capture.web_discovery.sitemaps import sitemap_page_urls
 
     host = urlsplit(origin).netloc.lower()
     scheme = urlsplit(origin).scheme or "https"
@@ -834,21 +845,9 @@ def _sitemap_urls(origin: str, tokens: list[str], http_get: _HttpGet) -> list[st
     default = origin.rstrip("/") + "/sitemap.xml"
     if default not in seeds:
         seeds.append(default)
-    locs: list[str] = []
-    for seed_url in seeds:
-        status, body = _http(http_get, seed_url)
-        if status != 200 or not body:
-            continue
-        kind, found = sitemap_locs(body)
-        if kind == "index":
-            for child in found[:_SITEMAP_INDEX_CHILDREN]:
-                child_status, child_body = _http(http_get, child)
-                if child_status == 200 and child_body:
-                    _kind, child_locs = sitemap_locs(child_body)
-                    locs.extend(child_locs)
-        else:
-            locs.extend(found)
-    host = urlsplit(origin).netloc.lower()
+    locs = sitemap_page_urls(
+        seeds, lambda url: _http(http_get, url), max_children=_SITEMAP_INDEX_CHILDREN
+    )
     wanted = [token for token in tokens if token]
     matched: list[str] = []
     for token in wanted:
@@ -948,6 +947,17 @@ def _catalogue_product_ids(session: Session, *, tenant_id: str, customer_id: int
     return [int(row) for row in rows if row is not None]
 
 
+def _copy_seed_fields(session: Session, row: ListingSite, seed: dict[str, Any]) -> None:
+    site = seed.get("site") if isinstance(seed.get("site"), dict) else {}
+    fields: dict[str, Any] = {}
+    for name in _COPY_FIELDS:
+        if name not in site or not _blank(getattr(row, name, None)):
+            continue
+        fields[name] = site.get(name)
+    if fields:
+        _safe_update(session, row, fields)
+
+
 def _safe_update(session: Session, row: ListingSite, fields: dict[str, Any]) -> None:
     cleaned = {
         key: value
@@ -993,14 +1003,14 @@ def _tenant_ids(session: Session, tenant_id: str | None) -> list[str]:
 def _site_keys(
     session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]
 ) -> list[str]:
-    """Confirmed web sites plus marketplaces already on this customer's listings.
-
-    ``listing_seed`` is not a source of a site. ``seed`` stays on the signature for callers.
-    """
-    del seed
+    named = seed.get("marketplace")
+    if isinstance(named, str) and named.strip():
+        key = named.strip().lower()
+        return [key] if SITE_KEY_RE.match(key) else []
+    base = _seed_site_keys(session, tenant_id=tenant_id, customer_id=customer_id, seed=seed)
+    # Web discovery (Discovery V2): the sites a steward or an Apply confirmed for this customer.
     confirmed = _confirmed_web_site_keys(session, tenant_id=tenant_id, customer_id=customer_id)
-    listed = _listing_marketplace_keys(session, tenant_id=tenant_id, customer_id=customer_id)
-    return sorted(set(confirmed) | set(listed))
+    return sorted(set(base) | set(confirmed)) if confirmed else base
 
 
 def _confirmed_web_site_keys(session: Session, *, tenant_id: str, customer_id: int) -> list[str]:
@@ -1025,7 +1035,38 @@ def _confirmed_web_site_keys(session: Session, *, tenant_id: str, customer_id: i
     return sorted({str(key) for key in found if isinstance(key, str) and SITE_KEY_RE.match(key)})
 
 
-def _listing_marketplace_keys(session: Session, *, tenant_id: str, customer_id: int) -> list[str]:
+def _seed_site_keys(
+    session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]
+) -> list[str]:
+    origin = _origin_text(_seed_origin(seed))
+    if origin:
+        # A domain seed describes only that domain, even if this customer already
+        # has listings on other marketplaces. Reuse a matching site's existing key.
+        host = _domain(origin)
+        listings = session.execute(
+            select(CustomerListing.marketplace, CustomerListing.url)
+            .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
+            .where(
+                DimCustomer.tenant_id == tenant_id,
+                CustomerListing.customer_id == int(customer_id),
+            )
+        ).all()
+        matches = {
+            str(key).strip().lower()
+            for key, url in listings
+            if _domain(url) == host and SITE_KEY_RE.match(str(key).strip().lower())
+        }
+        sites = session.scalars(select(ListingSite).where(ListingSite.tenant_id == tenant_id)).all()
+        matches.update(
+            str(site.site_key)
+            for site in sites
+            if any(
+                _domain(getattr(site, field)) == host
+                for field in ("product_url_pattern", "search_url_pattern", "details_url_pattern")
+            )
+        )
+        key = _site_key_from_origin(origin)
+        return sorted(matches) if matches else ([key] if key else [])
     found = session.scalars(
         select(func.lower(func.trim(CustomerListing.marketplace)))
         .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)

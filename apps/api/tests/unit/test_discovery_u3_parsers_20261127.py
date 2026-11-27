@@ -9,12 +9,12 @@ from app.services.listing_capture.web_discovery.document_parse import (
     absolute_url,
     document_links,
     search_form,
-    sitemap_locs,
 )
 from app.services.listing_capture.web_discovery.page_facts import page_facts_from_html
+from app.services.listing_capture.web_discovery.sitemaps import sitemap_page_urls
 
 
-def test_form_links_sitemap_and_url_case() -> None:
+def test_form_links_and_url_case() -> None:
     html = (
         '<nav><a href="/login">in</a></nav><a href="/p/GLIDE14">item</a>'
         '<form action="/find"><input name="search"></form>'
@@ -26,10 +26,65 @@ def test_form_links_sitemap_and_url_case() -> None:
         absolute_url("https://maps.example.test/x", "/p/GLIDE14")
         == "https://maps.example.test/p/GLIDE14"
     )
-    kind, locs = sitemap_locs(
-        "<urlset><url><loc>https://maps.example.test/p/GLIDE14</loc></url></urlset>"
+
+
+# Requirement (Warren, 27 Nov 2026): sitemaps are read with ultimate-sitemap-parser,
+# and every sitemap request still goes through the caller's paced fetch.
+def test_sitemap_pages_come_only_through_the_given_fetch() -> None:
+    seen: list[str] = []
+    bodies = {
+        "https://maps.example.test/sitemap.xml": (
+            "<urlset><url><loc>https://maps.example.test/p/GLIDE14</loc></url></urlset>"
+        ),
+    }
+
+    def fetch(url: str) -> tuple[int, str]:
+        seen.append(url)
+        return (200, bodies[url]) if url in bodies else (404, "")
+
+    pages = sitemap_page_urls(
+        ["https://maps.example.test/sitemap.xml", "https://maps.example.test/missing.xml"],
+        fetch,
+        max_children=2,
     )
-    assert kind == "urlset" and locs == ["https://maps.example.test/p/GLIDE14"]
+    assert pages == ["https://maps.example.test/p/GLIDE14"]
+    assert seen == [
+        "https://maps.example.test/sitemap.xml",
+        "https://maps.example.test/missing.xml",
+    ]
+
+
+def test_sitemap_index_follows_at_most_two_children_one_level_down() -> None:
+    root = "https://maps.example.test/sitemap.xml"
+    index = (
+        "<sitemapindex>"
+        + "".join(
+            f"<sitemap><loc>https://maps.example.test/s{i}.xml</loc></sitemap>" for i in range(1, 4)
+        )
+        + "</sitemapindex>"
+    )
+    nested = (
+        "<sitemapindex><sitemap><loc>https://maps.example.test/deep.xml</loc></sitemap>"
+        "</sitemapindex>"
+    )
+    bodies = {
+        root: index,
+        "https://maps.example.test/s1.xml": (
+            "<urlset><url><loc>https://maps.example.test/p/A1</loc></url></urlset>"
+        ),
+        "https://maps.example.test/s2.xml": nested,
+        "https://maps.example.test/s3.xml": (
+            "<urlset><url><loc>https://maps.example.test/p/A3</loc></url></urlset>"
+        ),
+    }
+    seen: list[str] = []
+
+    def fetch(url: str) -> tuple[int, str]:
+        seen.append(url)
+        return (200, bodies[url]) if url in bodies else (404, "")
+
+    assert sitemap_page_urls([root], fetch, max_children=2) == ["https://maps.example.test/p/A1"]
+    assert seen == [root, "https://maps.example.test/s1.xml", "https://maps.example.test/s2.xml"]
 
 
 def test_babel_locale_replaces_the_price_and_a_bad_tag_is_no_price() -> None:

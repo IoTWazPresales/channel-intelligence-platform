@@ -31,7 +31,8 @@ crawlee[playwright]==0.6.12
 playwright==1.65.2
 browserforge==1.2.3
 # Product-page discovery parsers. Licences checked on PyPI 2026-11-27.
-# ultimate-sitemap-parser is GPL-3.0-or-later on every release, so it is not pinned.
+# ultimate-sitemap-parser is GPL-3.0-or-later; added on Warren's decision (2026-11-27).
+ultimate-sitemap-parser==1.8.2
 selectolax==1.0.2
 courlan==1.5.0
 w3lib==2.6.0

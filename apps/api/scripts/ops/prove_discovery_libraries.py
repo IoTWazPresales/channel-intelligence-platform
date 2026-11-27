@@ -18,8 +18,7 @@ What it does and does not do:
 
 Grouping (ASSUMPTION C1 in the step 3 tracker): (1) Crawlee + Playwright (+ browserforge),
 (2) ddgs, (3) extruct + price-parser, (4) tldextract + protego,
-(5) selectolax + courlan + w3lib + Babel. ultimate-sitemap-parser is not included:
-every PyPI release is GPL-3.0-or-later.
+(5) selectolax + courlan + w3lib + Babel + ultimate-sitemap-parser (GPL-3.0-or-later).
 """
 
 from __future__ import annotations
@@ -236,6 +235,22 @@ def _babel() -> tuple[bool, str]:
     return ok, "de_DE 1.299,50 parsed to 1299.50" if ok else f"{facts.price_amount!r}"
 
 
+def _sitemaps() -> tuple[bool, str]:
+    from app.services.listing_capture.web_discovery.sitemaps import sitemap_page_urls
+
+    root = f"https://{_HOST}/sitemap.xml"
+    body = f"<urlset><url><loc>{_PRODUCT_URL}</loc></url></urlset>"
+    seen: list[str] = []
+
+    def fetch(url: str) -> tuple[int, str]:
+        seen.append(url)
+        return (200, body) if url == root else (404, "")
+
+    pages = sitemap_page_urls([root], fetch, max_children=2)
+    ok = pages == [_PRODUCT_URL] and seen == [root]
+    return ok, "urlset read through the given fetch only" if ok else f"{pages!r} {seen!r}"
+
+
 def _run(group: str, library: str, distribution: str, fn: Callable[[], tuple[bool, str]]) -> Check:
     version = _version(distribution)
     if version == "MISSING":
@@ -273,6 +288,7 @@ def run_checks(*, include_browser: bool = True, live_search: str | None = None) 
         _run("5 parsers", "courlan", "courlan", _urls),
         _run("5 parsers", "w3lib", "w3lib", _urls),
         _run("5 parsers", "Babel", "Babel", _babel),
+        _run("5 parsers", "ultimate-sitemap-parser", "ultimate-sitemap-parser", _sitemaps),
     ]
     return checks
 

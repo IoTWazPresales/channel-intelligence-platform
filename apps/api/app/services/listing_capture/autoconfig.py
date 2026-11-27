@@ -47,9 +47,8 @@ not site columns. A pattern is copied into an empty column; a filled column is l
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, selectinload
@@ -147,9 +146,9 @@ def autoconfigure_sites(
     short one). Work cut short resumes on the next run.
     """
     from app.services.listing_capture import discovery as discovery_module
+
     from app.services.listing_capture.discovery import discover_reporting_customers
     from app.services.listing_capture.observation import listing_live_fetch_enabled
-
     live = listing_live_fetch_enabled()
     fetch_get = http_get if live else None
     policy = discovery_module.default_fetch_policy() if fetch_get is not None else None
@@ -401,9 +400,7 @@ def _configure_tenant(
                     policy=policy,
                 )
         except SellerSeedError as exc:
-            logger.info(
-                "listing autoconfigure: customer %s rejected seller seed: %s", customer.id, exc
-            )
+            logger.info("listing autoconfigure: customer %s rejected seller seed: %s", customer.id, exc)
             entries.append(
                 _entry(
                     customer_id=int(customer.id),
@@ -432,9 +429,7 @@ def _configure_tenant(
     return entries
 
 
-def _reporting_customers(
-    session: Session, tenant_id: str
-) -> list[tuple[CustomerReportConfig, DimCustomer]]:
+def _reporting_customers(session: Session, tenant_id: str) -> list[tuple[CustomerReportConfig, DimCustomer]]:
     rows = session.execute(
         select(CustomerReportConfig, DimCustomer)
         .join(DimCustomer, DimCustomer.id == CustomerReportConfig.customer_id)
@@ -497,9 +492,7 @@ def _configure_site(
     apply: bool,
     policy: Any = None,
 ) -> dict[str, Any]:
-    listings = _listings(
-        session, tenant_id=tenant_id, customer_id=int(customer.id), site_key=site_key
-    )
+    listings = _listings(session, tenant_id=tenant_id, customer_id=int(customer.id), site_key=site_key)
     urls = [str(row.url).strip() for row in listings if str(row.url or "").strip()]
     derived = derive_listing_url_pattern(urls) if urls else None
     if derived is not None:
@@ -543,11 +536,7 @@ def _configure_site(
             session.refresh(row)
 
     seller_known = _seller_known(row, customer, seed)
-    configured = bool(
-        row is not None
-        and row.is_active
-        and configured_adapter(site_config_from_row(row)) is not None
-    )
+    configured = bool(row is not None and row.is_active and configured_adapter(site_config_from_row(row)) is not None)
     reasons: list[str] = []
     if not configured:
         reasons.append(REASON_NEEDS_PATTERN)
@@ -575,17 +564,13 @@ def _configure_site(
     )
 
 
-def _site_keys(
-    session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]
-) -> list[str]:
+def _site_keys(session: Session, *, tenant_id: str, customer_id: int, seed: dict[str, Any]) -> list[str]:
     from app.services.listing_capture.discovery import _site_keys as discovery_site_keys
 
     return discovery_site_keys(session, tenant_id=tenant_id, customer_id=customer_id, seed=seed)
 
 
-def _listings(
-    session: Session, *, tenant_id: str, customer_id: int, site_key: str
-) -> list[CustomerListing]:
+def _listings(session: Session, *, tenant_id: str, customer_id: int, site_key: str) -> list[CustomerListing]:
     rows = session.scalars(
         select(CustomerListing)
         .join(DimCustomer, DimCustomer.id == CustomerListing.customer_id)
@@ -817,15 +802,9 @@ def _apply_fill(session: Session, row: ListingSite, fill: dict[str, Any]) -> Non
             update_site(session, row, fields={name: value}, actor=AUTOCONFIG_ACTOR)
         except ValueError:
             continue
-    if (
-        "adapter_key" in fill
-        and _is_blank(row.adapter_key)
-        and _configured_after(row, {"adapter_key": fill["adapter_key"]})
-    ):
+    if "adapter_key" in fill and _is_blank(row.adapter_key) and _configured_after(row, {"adapter_key": fill["adapter_key"]}):
         try:
-            update_site(
-                session, row, fields={"adapter_key": fill["adapter_key"]}, actor=AUTOCONFIG_ACTOR
-            )
+            update_site(session, row, fields={"adapter_key": fill["adapter_key"]}, actor=AUTOCONFIG_ACTOR)
         except ValueError:
             return
 
@@ -855,9 +834,7 @@ def _seller_names_for_customer(
     if names or ids:
         return names, ids, False
     if _is_customer_own_site(row, seed):
-        existing = (
-            str(getattr(row, "first_party_seller", "") or "").strip() if row is not None else ""
-        )
+        existing = str(getattr(row, "first_party_seller", "") or "").strip() if row is not None else ""
         if existing and not _other_seller_present(row, int(customer.id)):
             return [existing], [], False
         name = str(getattr(customer, "name", "") or "").strip()
@@ -866,9 +843,7 @@ def _seller_names_for_customer(
     return [], [], False
 
 
-def _ensure_seller(
-    session: Session, row: ListingSite, *, customer: DimCustomer, seed: dict[str, Any]
-) -> None:
+def _ensure_seller(session: Session, row: ListingSite, *, customer: DimCustomer, seed: dict[str, Any]) -> None:
     """A stored seller identity for this customer is kept: the seed is not read and nothing
     is inferred or written. The customer name fills a blank first-party name only when no
     other customer has a seller identity on the site."""
@@ -888,13 +863,9 @@ def _ensure_seller(
     shared = _other_seller_present(row, int(customer.id))
     if from_customer and _is_blank(row.first_party_seller) and not shared:
         try:
-            update_site(
-                session, row, fields={"first_party_seller": names[0]}, actor=AUTOCONFIG_ACTOR
-            )
+            update_site(session, row, fields={"first_party_seller": names[0]}, actor=AUTOCONFIG_ACTOR)
         except ValueError:
-            logger.info(
-                "listing autoconfigure: site %s rejected the discovered seller", row.site_key
-            )
+            logger.info("listing autoconfigure: site %s rejected the discovered seller", row.site_key)
 
 
 def _seller_known(row: ListingSite | None, customer: DimCustomer, seed: dict[str, Any]) -> bool:
@@ -902,9 +873,7 @@ def _seller_known(row: ListingSite | None, customer: DimCustomer, seed: dict[str
     if _seller_present(row, int(customer.id)):
         return True
     names, ids, _from_customer = _seller_names_for_customer(customer, row, seed)
-    return any(str(value or "").strip() for value in names) or any(
-        str(value or "").strip() for value in ids
-    )
+    return any(str(value or "").strip() for value in names) or any(str(value or "").strip() for value in ids)
 
 
 def _seller_present(row: ListingSite | None, customer_id: int) -> bool:
@@ -913,12 +882,8 @@ def _seller_present(row: ListingSite | None, customer_id: int) -> bool:
     for seller in row.sellers or []:
         if int(seller.customer_id) != int(customer_id):
             continue
-        names = [
-            str(value).strip() for value in (seller.seller_names or []) if str(value or "").strip()
-        ]
-        ids = [
-            str(value).strip() for value in (seller.seller_ids or []) if str(value or "").strip()
-        ]
+        names = [str(value).strip() for value in (seller.seller_names or []) if str(value or "").strip()]
+        ids = [str(value).strip() for value in (seller.seller_ids or []) if str(value or "").strip()]
         if names or ids:
             return True
     return False
@@ -998,9 +963,7 @@ def _site_health(session: Session, tenant_id: str) -> list[dict[str, Any]]:
         ).all()
     )
     site_rows = [row for row in site_rows if isinstance(row, ListingSite)]
-    status_params = {
-        f"status_{index}": status for index, status in enumerate(POLLED_LISTING_STATUSES)
-    }
+    status_params = {f"status_{index}": status for index, status in enumerate(POLLED_LISTING_STATUSES)}
     status_sql = ", ".join(f":status_{index}" for index in range(len(POLLED_LISTING_STATUSES)))
     due_by_key = {
         str(key): int(count or 0)
@@ -1095,10 +1058,7 @@ def _entry(
 
 
 def _bucket(entries: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    ordered = sorted(
-        entries,
-        key=lambda entry: (entry["tenant_id"], entry["customer_id"], entry["site_key"] or ""),
-    )
+    ordered = sorted(entries, key=lambda entry: (entry["tenant_id"], entry["customer_id"], entry["site_key"] or ""))
     configured: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
     needs_pattern: list[dict[str, Any]] = []

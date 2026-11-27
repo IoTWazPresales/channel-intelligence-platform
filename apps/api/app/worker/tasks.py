@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
@@ -14,7 +14,7 @@ def _celery_progress_meta(**fields: Any) -> dict[str, Any]:
     """PROGRESS meta with ``progress_at`` heartbeat for reaper / UI liveness."""
     return {
         **fields,
-        "progress_at": datetime.now(UTC).isoformat(),
+        "progress_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -26,7 +26,7 @@ def _write_task_level_failure(job_id: int) -> None:
     handler already covers exceptions inside the pipeline try block, so this is a safety net for
     the edges that sit outside it.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     from app.db.session_sync import SessionLocal
     from app.ingestion.pipeline import STAGE_FAILED
@@ -39,7 +39,7 @@ def _write_task_level_failure(job_id: int) -> None:
                 job.status = "failed"
                 job.stage = STAGE_FAILED
                 job.error_summary = "Task-level failure; see worker log for exception detail."
-                job.completed_at = datetime.now(UTC)
+                job.completed_at = datetime.now(timezone.utc)
                 db.commit()
     except Exception:
         logger.exception("STAGE_FAILED writeback also failed job_id=%s", job_id)
@@ -101,11 +101,13 @@ def process_import_job_task(self, job_id: int) -> int:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase=phase,
                     phase_label=phase_label,
                     current_row=current_row,
                     total_rows=total_rows,
                     pct=round(current_row / total_rows * 100) if total_rows else 0,
+                
                 ),
             )
         except Exception:
@@ -123,10 +125,7 @@ def process_import_job_task(self, job_id: int) -> int:
 
 @celery_app.task(name="imports.shipment_apply", bind=True, ack_late=True)
 def shipment_apply_task(self, job_id: int) -> dict:
-    """Background apply for an ``inbound_shipments`` job.
-
-    Auto-map, then a batched fact upsert, then loaded.
-    """
+    """Background apply for an ``inbound_shipments`` job (auto-map → batched fact upsert → loaded)."""
     from app.db.session_sync import SessionLocal
     from app.services.imports.shipment_apply_sync import run_shipment_apply_sync
 
@@ -135,11 +134,13 @@ def shipment_apply_task(self, job_id: int) -> dict:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase=phase,
                     phase_label=phase_label,
                     current_row=current_row,
                     total_rows=total_rows,
                     pct=round(current_row / total_rows * 100) if total_rows else 0,
+                
                 ),
             )
         except Exception:
@@ -167,10 +168,7 @@ def shipment_apply_task(self, job_id: int) -> dict:
 
 @celery_app.task(name="imports.cst_apply", bind=True, ack_late=True)
 def cst_apply_task(self, job_id: int) -> dict:
-    """Background apply for a ``customer_sell_through`` job.
-
-    N-0111; mirrors ``imports.shipment_apply``.
-    """
+    """Background apply for a ``customer_sell_through`` job (N-0111; mirrors ``imports.shipment_apply``)."""
     from app.db.session_sync import SessionLocal
     from app.services.imports.cst_apply_sync import record_cst_apply_failure, run_cst_apply_sync
 
@@ -203,11 +201,13 @@ def _shipment_bulk_progress(self, phase: str, phase_label: str):
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase=phase,
                     phase_label=phase_label,
                     current_row=current,
                     total_rows=total,
                     pct=round(current / total * 100) if total else 0,
+                
                 ),
             )
         except Exception:
@@ -218,21 +218,12 @@ def _shipment_bulk_progress(self, phase: str, phase_label: str):
 
 @celery_app.task(name="imports.shipment_bulk_map_customer", bind=True, ack_late=True)
 def shipment_bulk_map_customer_task(self, job_id: int, payload: dict) -> dict:
-    """Background bulk-map of shipment customer candidates to one customer.
-
-    Progress is reported per candidate.
-    """
-    from app.services.imports.shipment_bulk_steward_enqueue import (
-        run_shipment_bulk_map_customer_sync,
-    )
+    """Background bulk-map of shipment customer candidates to one customer (progress per candidate)."""
+    from app.services.imports.shipment_bulk_steward_enqueue import run_shipment_bulk_map_customer_sync
 
     try:
         return run_shipment_bulk_map_customer_sync(
-            job_id,
-            payload,
-            on_progress=_shipment_bulk_progress(
-                self, "mapping_customers", "Mapping channel partners"
-            ),
+            job_id, payload, on_progress=_shipment_bulk_progress(self, "mapping_customers", "Mapping channel partners")
         )
     except Exception:
         logger.exception("shipment_bulk_map_customer failed job_id=%s", job_id)
@@ -242,15 +233,11 @@ def shipment_bulk_map_customer_task(self, job_id: int, payload: dict) -> dict:
 @celery_app.task(name="imports.shipment_bulk_apply_plans", bind=True, ack_late=True)
 def shipment_bulk_apply_plans_task(self, job_id: int, payload: dict) -> dict:
     """Background apply of persisted shipment candidate plans (progress per candidate)."""
-    from app.services.imports.shipment_bulk_steward_enqueue import (
-        run_shipment_bulk_apply_plans_sync,
-    )
+    from app.services.imports.shipment_bulk_steward_enqueue import run_shipment_bulk_apply_plans_sync
 
     try:
         return run_shipment_bulk_apply_plans_sync(
-            job_id,
-            payload,
-            on_progress=_shipment_bulk_progress(self, "applying_plans", "Applying confirmed plans"),
+            job_id, payload, on_progress=_shipment_bulk_progress(self, "applying_plans", "Applying confirmed plans")
         )
     except Exception:
         logger.exception("shipment_bulk_apply_plans failed job_id=%s", job_id)
@@ -268,9 +255,7 @@ def shipment_bulk_provisional_customers_task(self, job_id: int, payload: dict) -
         return run_shipment_bulk_provisional_customers_sync(
             job_id,
             payload,
-            on_progress=_shipment_bulk_progress(
-                self, "creating_provisional_customers", "Creating provisional customers"
-            ),
+            on_progress=_shipment_bulk_progress(self, "creating_provisional_customers", "Creating provisional customers"),
         )
     except Exception:
         logger.exception("shipment_bulk_provisional_customers failed job_id=%s", job_id)
@@ -282,16 +267,20 @@ def shipment_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
     """Batch reject shipment mapping candidates (steward_rejected per candidate commit)."""
     from app.services.imports.shipment_bulk_steward_enqueue import run_shipment_bulk_ignore_sync
 
+    candidate_ids = payload.get("candidate_ids") or []
+
     def _on_progress(current: int, total: int) -> None:
         try:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase="rejecting_candidates",
                     phase_label="Rejecting steward candidates",
                     current_row=current,
                     total_rows=total,
                     pct=round(current / total * 100) if total else 0,
+                
                 ),
             )
         except Exception:
@@ -310,17 +299,13 @@ def shipment_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
 
 @celery_app.task(name="imports.shipment_resolution_plan_compute", bind=True, ack_late=True)
 def shipment_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
-    from app.services.imports.shipment_resolution_plan_compute_sync import (
-        run_shipment_resolution_plan_compute_sync,
-    )
+    from app.services.imports.shipment_resolution_plan_compute_sync import run_shipment_resolution_plan_compute_sync
 
     try:
         return run_shipment_resolution_plan_compute_sync(
             job_id,
             payload,
-            on_progress=_shipment_bulk_progress(
-                self, "computing_plan", "Computing resolution plan"
-            ),
+            on_progress=_shipment_bulk_progress(self, "computing_plan", "Computing resolution plan"),
         )
     except Exception:
         logger.exception("shipment_resolution_plan_compute failed job_id=%s", job_id)
@@ -329,9 +314,7 @@ def shipment_resolution_plan_compute_task(self, job_id: int, payload: dict) -> d
 
 @celery_app.task(name="imports.shipment_resolution_plan_apply", bind=True, ack_late=True)
 def shipment_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
-    from app.services.imports.shipment_resolution_plan_apply_sync import (
-        run_shipment_resolution_plan_apply_sync,
-    )
+    from app.services.imports.shipment_resolution_plan_apply_sync import run_shipment_resolution_plan_apply_sync
 
     try:
         return run_shipment_resolution_plan_apply_sync(
@@ -355,9 +338,7 @@ def cpor_historical_resolution_plan_compute_task(self, job_id: int, payload: dic
         return run_cpor_historical_resolution_plan_compute_sync(
             job_id,
             payload,
-            on_progress=_shipment_bulk_progress(
-                self, "computing_plan", "Computing CPOR resolution plan"
-            ),
+            on_progress=_shipment_bulk_progress(self, "computing_plan", "Computing CPOR resolution plan"),
         )
     except Exception:
         logger.exception("cpor_historical_resolution_plan_compute failed job_id=%s", job_id)
@@ -375,9 +356,7 @@ def cpor_historical_resolution_plan_apply_task(self, job_id: int, payload: dict)
         return run_cpor_historical_resolution_plan_apply_sync(
             job_id,
             payload,
-            on_progress=_shipment_bulk_progress(
-                self, "applying_plan", "Applying CPOR resolution plan"
-            ),
+            on_progress=_shipment_bulk_progress(self, "applying_plan", "Applying CPOR resolution plan"),
         )
     except Exception:
         logger.exception("cpor_historical_resolution_plan_apply failed job_id=%s", job_id)
@@ -387,17 +366,13 @@ def cpor_historical_resolution_plan_apply_task(self, job_id: int, payload: dict)
 @celery_app.task(name="imports.cst_resolution_plan_compute", bind=True, ack_late=True)
 def cst_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
     """Build the CST steward resolution plan off the HTTP request path (Unit E2)."""
-    from app.services.imports.cst_resolution_plan_enqueue import (
-        run_cst_resolution_plan_compute_sync,
-    )
+    from app.services.imports.cst_resolution_plan_enqueue import run_cst_resolution_plan_compute_sync
 
     try:
         return run_cst_resolution_plan_compute_sync(
             job_id,
             payload,
-            on_progress=_shipment_bulk_progress(
-                self, "computing_plan", "Computing CST resolution plan"
-            ),
+            on_progress=_shipment_bulk_progress(self, "computing_plan", "Computing CST resolution plan"),
         )
     except Exception:
         logger.exception("cst_resolution_plan_compute failed job_id=%s", job_id)
@@ -413,9 +388,7 @@ def cst_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
         return run_cst_resolution_plan_apply_sync(
             job_id,
             payload,
-            on_progress=_shipment_bulk_progress(
-                self, "applying_plan", "Applying CST resolution plan"
-            ),
+            on_progress=_shipment_bulk_progress(self, "applying_plan", "Applying CST resolution plan"),
         )
     except Exception:
         logger.exception("cst_resolution_plan_apply failed job_id=%s", job_id)
@@ -444,11 +417,13 @@ def cpor_historical_apply_task(self, job_id: int) -> dict:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase=phase,
                     phase_label=phase_label,
                     current_row=current_row,
                     total_rows=total_rows,
                     pct=round(current_row / total_rows * 100) if total_rows else 0,
+                
                 ),
             )
         except Exception:
@@ -464,10 +439,7 @@ def cpor_historical_apply_task(self, job_id: int) -> dict:
 
 @celery_app.task(name="imports.dsi_apply", bind=True, ack_late=True)
 def dsi_apply_task(self, job_id: int) -> dict:
-    """Background apply for a ``distributor_inventory`` job.
-
-    Pipeline apply, then complete-to-loaded.
-    """
+    """Background apply for a ``distributor_inventory`` job (pipeline apply → complete-to-loaded)."""
     from app.services.imports.dsi_apply_sync import run_dsi_apply_sync
 
     def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
@@ -475,11 +447,13 @@ def dsi_apply_task(self, job_id: int) -> dict:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase=phase,
                     phase_label=phase_label,
                     current_row=current_row,
                     total_rows=total_rows,
                     pct=round(current_row / total_rows * 100) if total_rows else 0,
+                
                 ),
             )
         except Exception:
@@ -518,11 +492,13 @@ def dsi_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase="ignoring_candidates",
                     phase_label="Ignoring steward candidates",
                     current_row=current,
                     total_rows=total,
                     pct=round(current / total * 100) if total else 0,
+                
                 ),
             )
         except Exception:
@@ -544,25 +520,22 @@ def dsi_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
 
 @celery_app.task(name="imports.dsi_bulk_provisional_customers", bind=True, ack_late=True)
 def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dict:
-    """Batch provisional customer creates for DSI bulk steward.
-
-    Single commit, one replan on the client.
-    """
+    """Batch provisional customer creates for DSI bulk steward (single commit, one replan on client)."""
     from app.db.session_sync import SessionLocal
-    from app.services.imports.dsi_bulk_provisional_customers_sync import (
-        run_dsi_bulk_provisional_customers_sync,
-    )
+    from app.services.imports.dsi_bulk_provisional_customers_sync import run_dsi_bulk_provisional_customers_sync
 
     def _on_progress(current: int, total: int) -> None:
         try:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase="creating_provisional_customers",
                     phase_label="Creating provisional customers",
                     current_row=current,
                     total_rows=total,
                     pct=round(current / total * 100) if total else 0,
+                
                 ),
             )
         except Exception:
@@ -573,9 +546,7 @@ def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dic
             result = run_dsi_bulk_provisional_customers_sync(
                 db, job_id, payload, on_progress=_on_progress
             )
-        from app.services.imports.dsi_post_validate_auto_apply import (
-            try_flush_deferred_dsi_post_validate_auto_apply,
-        )
+        from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
 
         with SessionLocal() as flush_db:
             if try_flush_deferred_dsi_post_validate_auto_apply(flush_db, job_id):
@@ -589,13 +560,9 @@ def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dic
 @celery_app.task(name="imports.dsi_resolution_plan_apply", bind=True, ack_late=True)
 def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
     """Apply DSI resolution-plan rows (steward map/provisional/product) with progress updates."""
+    from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
+    from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
     from app.db.session_sync import SessionLocal
-    from app.services.imports.dsi_post_validate_auto_apply import (
-        try_flush_deferred_dsi_post_validate_auto_apply,
-    )
-    from app.services.imports.dsi_resolution_plan_apply_sync import (
-        run_dsi_resolution_plan_apply_sync,
-    )
 
     candidate_ids = payload.get("candidate_ids") or []
     total_rows = len(candidate_ids) if isinstance(candidate_ids, list) else 0
@@ -605,11 +572,13 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase="applying_resolution_plan",
                     phase_label="Applying resolution plan",
                     current_row=current,
                     total_rows=total or total_rows,
                     pct=round(current / total * 100) if total else 0,
+                
                 ),
             )
         except Exception:
@@ -630,24 +599,22 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
 @celery_app.task(name="imports.dsi_resolution_plan_compute", bind=True, ack_late=True)
 def dsi_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
     """Build DSI steward resolution plan off the HTTP request path."""
+    from app.services.imports.dsi_post_validate_auto_apply import try_flush_deferred_dsi_post_validate_auto_apply
+    from app.services.imports.dsi_resolution_plan_compute_sync import run_dsi_resolution_plan_compute_sync
     from app.db.session_sync import SessionLocal
-    from app.services.imports.dsi_post_validate_auto_apply import (
-        try_flush_deferred_dsi_post_validate_auto_apply,
-    )
-    from app.services.imports.dsi_resolution_plan_compute_sync import (
-        run_dsi_resolution_plan_compute_sync,
-    )
 
     def _on_progress(current: int, total: int) -> None:
         try:
             self.update_state(
                 state="PROGRESS",
                 meta=_celery_progress_meta(
+
                     phase="computing_resolution_plan",
                     phase_label="Computing resolution plan",
                     current_row=current,
                     total_rows=total,
                     pct=round(current / total * 100) if total else 0,
+                
                 ),
             )
         except Exception:
@@ -784,10 +751,7 @@ def run_product_master_validate_job(job_id: int, *, celery_task_id: str | None) 
 
 @celery_app.task(name="imports.product_master_validate", bind=True, ack_late=True)
 def product_master_validate_task(self, job_id: int) -> int:
-    """Background Product Master validation.
-
-    Must be enqueued via try_enqueue_pm_validate_sync first.
-    """
+    """Background Product Master validation: must be enqueued via try_enqueue_pm_validate_sync first."""
     celery_id = getattr(getattr(self, "request", None), "id", None)
     return run_product_master_validate_job(
         job_id,
@@ -1053,10 +1017,7 @@ def listing_capture_poll_listings_task(run: dict | None = None) -> dict:
     import logging
 
     from app.db.session_sync import SessionLocal
-    from app.services.listing_capture.observation import (
-        POLL_RUN_TIME_LIMIT_SECONDS,
-        default_http_get,
-    )
+    from app.services.listing_capture.observation import POLL_RUN_TIME_LIMIT_SECONDS, default_http_get
     from app.services.listing_capture.registry import (
         LISTING_POLL_BATCH_SIZE,
         finish_listing_poll_run,
@@ -1104,11 +1065,7 @@ def listing_capture_poll_listings_task(run: dict | None = None) -> dict:
         page_full = len(batch.get("considered_ids") or []) >= LISTING_POLL_BATCH_SIZE
         if not run.get("stopped_reason") and page_full:
             listing_capture_poll_listings_task.apply_async(kwargs={"run": run})
-            return {
-                "continued": True,
-                "polled": run["polled"],
-                "duration_seconds": run["duration_seconds"],
-            }
+            return {"continued": True, "polled": run["polled"], "duration_seconds": run["duration_seconds"]}
 
         record = finish_listing_poll_run(run, log)
         if gate:
