@@ -282,7 +282,7 @@ New tests: `sellThroughPace.test.ts` (elapsed share, open-only, ended never judg
 1. Should elapsed time stop at the latest sales period loaded for that customer (fewer false alarms when files arrive late), or at today as stated?
 2. `CPOR_SETTLEMENT_SPEC.md` says the system "does not auto-close"; decision 1 says an open promotion closes itself. Which one is current?
 
-## Close for review (Warren, 27 Nov) — STOPPED before code
+## Close for review (Warren, 27 Nov) — stopped before code in round 3; built in round 4 (below)
 
 Warren (via coordinator, verbatim): "Reconcile open promotions from sales over the period, then close them for review. Do not send to the customer yet. Notify the user in charge of that process. Automatic send to the customer comes later, and that send must also notify the person in charge."
 
@@ -317,6 +317,59 @@ Sell-through rows are weekly or monthly (`period_type` / `period_grain`), can be
 4. Where does the notice land? `report_delivery` cannot hold a case notice without a migration widening its `trigger` / `format` checks, or a new notice table (migration). Email has no adapter for CPOR (`promo_export/notify.py` is a stub).
 5. When does it run: a daily beat task over cases whose window ended, or after each sell-through import?
 6. Is "closed for review" the existing `ended` status?
+
+## Close for review — built (Warren's clarification, 27 Nov, round 4)
+
+Warren (via coordinator, verbatim): "Sell-through here means the promotion's actual sales. Count uploaded sales for that customer whose sale dates fall inside the promotion window. Do not use the 31-days-before rule. The forecast units on the case are the reservation target for that same window. Reconcile actuals in the window against that target, the way the existing spec already says. If the spec is silent on whether actuals write result_qty, stop and quote the spec section. Do not invent a second quantity. Leave notifications out. Show the promotion in the status that already means closed for review (use ended if that is the existing status). Do not add a new status."
+
+Answers to the six questions above: (1) rule 1, sale dates inside the window, no 31-day lookback; (2) stopped, see below; (3) and (4) out of this pass, no notification, no person-in-charge field; (5) not ruled, built as a daily beat task (ASSUMPTION); (6) yes, `ended`.
+
+Built (FACT, files on the branch):
+
+- `apps/api/app/services/cpor/close_for_review.py`: `reconcile_window` (pure), `reconcile_case_window` (reads `fact_customer_sellthrough` for the case tenant and customer, case products, `period_start_date` inside the case window), `due_for_review`, `close_case_for_review` (to `ended` + `transition_end` event with the reconciliation), `close_due_cases` (one commit per case; a failing case is logged and reported, the rest continue).
+- `apps/api/app/worker/tasks.py` `cpor.close_ended_windows_for_review`; `celery_app.py` beat entry daily 06:45 UTC; `celery_queues.py` batch queue.
+- `apps/api/app/api/v1/endpoints/cpor_cases.py`, `end` branch only: a manual end of a customer sell-through promotion stores the same reconciliation and `trigger: manual` on its event. Nothing else in the transition changed.
+- `docs/CPOR_SETTLEMENT_SPEC.md` §1: the ruling in plain language, what the build does, and the `result_qty` stop with the quotes.
+
+STOP (`result_qty`): the spec does not say sell-through actuals write `result_qty`. Quoted in the spec: `CPOR_SETTLEMENT_SPEC.md` §6 ("Do not invent a second owed field"), `SPEC_CPOR_V1_AND_LISTING_CAPTURE_V0.md` `cpor_case_line` fields ("result_qty (settlement-written)") and its §6 Settlement, whose input is the customer's claim file ("`sale_date` within case window → counts toward `result_qty`"). The close writes no quantity on any line; the comparison lives on the event payload only (audit, not a fact).
+
+Constants added (each with its reason):
+
+| Constant | Value | Why |
+|---|---|---|
+| beat time | 06:45 UTC daily | after the 06:15 CST slot pass and the 06:30 FX fetch, same pattern as both |
+| `CLOSE_FOR_REVIEW_ACTOR` | `system:close_for_review` | the event needs a non-null actor (spec: "null actor is a defect") |
+| `CLOSE_FOR_REVIEW_TRIGGER` | `window_ended` | tells an automatic close from a manual end on the same event type |
+| flag names | `no_sales_loaded`, `sales_may_be_incomplete`, `includes_mtd_estimate`, `window_week_straddle` | the review shows why a figure may be low; nothing is excluded silently |
+
+No tenant, customer or type names are hardcoded: the family comes from `promotion_type_vocab.promotion_family` (read only, U4's file not edited).
+
+Tests (cloud Linux, no database; packages installed to `/tmp`, placeholder URLs on a closed port, never `cip`):
+
+- `tests/unit/test_cpor_close_for_review.py`: 18 passed (in-window and edge days counted, before/after not counted, line window overrides case window, shared windows not double-counted, voided lines out of target, flags, not-due cases, close to `ended` without touching `result_qty`, idempotent, batch continues past a failure, beat entry and routing).
+- Existing beat tests (`test_cpor_fx_rate`, `test_report_export`, `test_listing_capture_snapshot_policy`) passed.
+- `ruff check` / `ruff format --check`: new files clean; the three edited files gain no new findings against the branch head.
+
+NOT RUN: database tests (`test_cpor_stock_action_lifecycle.py` and any transition test) and the real SQL path for `reconcile_case_window` (project SQL rule: needs one real execution on a disposable database). No browser smoke: no UI changed in this round.
+
+ASSUMPTIONS (round 4):
+
+- A sell-through row's sale date is its `period_start_date`; the table has no other date. A weekly or monthly row that starts inside the window counts in full.
+- Chain-grain and store-grain rows are summed together, as `promo_load_recon.py` and `settlement.py` already do. If a customer loads both for the same week, units double-count (existing behaviour, not new).
+- Month-to-date estimates are counted and flagged, not dropped.
+- "Today" is the worker's date (`date.today()`, UTC beat). A window closes the day after it ends.
+- A promotion closes even when its sales are not loaded yet; the `no_sales_loaded` / `sales_may_be_incomplete` flags say so. The saved comparison is a snapshot at close; settlement still reads live.
+
+FINDINGS:
+
+- Only "Sell-Through PP" is in the customer sell-through family today. "Stock PP (In-Direct)" and SPIV are in no family, so they do not close automatically until U4 assigns them one (`promotion_type_vocab.py`).
+- An approved promotion that was never activated cannot reach `ended` (`approved → active | cancelled`). Its window can pass and it stays open.
+
+QUESTION FOR WARREN (round 4):
+
+1. Should window sell-through set `result_qty` when no claim file exists, or stay on the event beside the claim figure? Today it stays on the event.
+2. Should an approved-but-never-activated promotion whose window ended be closed for review too? That needs a lifecycle change.
+3. Should the close wait until sales are loaded through the window end, or close on the day after as now (with the flag)?
 
 ## Resume notes
 

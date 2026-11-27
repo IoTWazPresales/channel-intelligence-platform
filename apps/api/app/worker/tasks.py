@@ -1095,6 +1095,21 @@ def cpor_fetch_daily_fx_rate_task() -> dict:
     return fetch_daily_fx_rate_safe(reason="beat")
 
 
+@celery_app.task(name="cpor.close_ended_windows_for_review")
+def cpor_close_ended_windows_for_review_task() -> dict:
+    """Beat task (daily): reconcile active sell-through promotions whose window ended; end them."""
+    from datetime import date
+
+    from app.db.session_sync import SessionLocal
+    from app.services.cpor.close_for_review import close_due_cases
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+    with SessionLocal() as session:
+        return {"skipped": False, **close_due_cases(session, today=date.today())}
+
+
 @celery_app.task(name="imports.flush_deferred_dsi_post_validate_auto_apply")
 def flush_deferred_dsi_post_validate_auto_apply_task(job_id: int) -> dict:
     """Batch-queue task: enqueue deferred historical auto-apply when steward is idle."""

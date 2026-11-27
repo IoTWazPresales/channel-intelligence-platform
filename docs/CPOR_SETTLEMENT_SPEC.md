@@ -41,22 +41,49 @@ Manual 11-hop chain after a case ends:
 - **11** — Ken still takes the settle action. The system records it.
 
 **Close for review (Warren, 2026-11-27; replaces "it does not auto-close").** Warren's ruling: reconcile open
-promotions from the sales over the period, then close them for review. Do not send to the customer yet. Notify the
-user in charge of that process. Automatic send to the customer comes later, and that send must also notify the person
-in charge.
+promotions from the sales over the period, then close them for review. Do not send to the customer yet.
 
-- When the window ends, the system reconciles the case from the customer's sell-through over the window and closes it
-  for review. It does not send anything to the customer.
-- The person in charge of that process is notified when a case is closed for review.
-- Sending to the customer automatically is a later step. When it is built, that send also notifies the person in
-  charge.
+Warren's clarification (2026-11-27), in plain language:
+
+- **Window.** The sales that count are the uploaded sales for that customer whose sale dates fall inside the
+  promotion window. Nothing before the window counts: there is no 31-day lookback here.
+- **Target.** The forecast units on the case are the reservation target for that same window.
+- **Reconcile.** The close compares the actual units in the window with that target.
+- **Status.** A closed promotion shows as `ended`, the status that already means closed for review. There is no new
+  status.
+- **No notification in this pass.** Nobody is notified, nothing goes to an inbox or an email, and there is no new
+  person-in-charge field. Sending to the customer automatically is also a later step.
 - Closing for review is not settling. Settle stays a human action (hop 11).
 
 Hop **1** is detected at window end and starts the close-for-review above. It does not auto-settle.
 
-Not built yet (2026-11-27): which sell-through rows count for a window, whether they set `result_qty` beside or
-instead of claim evidence, who "the person in charge" is, and where the notice lands. Tracked in
-`docs/handoffs/2026-11-24/steps/03-step2-planner-calendar-sellthrough.md` ("Close for review").
+**What the build does (2026-11-27).**
+
+- Once a day, an active customer sell-through promotion whose window ended before today is reconciled and moved to
+  `ended`. The comparison is saved on the case's `transition_end` event: target units, actual units, delivery %, one
+  row per product and window, and flags. A case that is already `ended` is left alone, so running it twice changes
+  nothing.
+- When someone ends a customer sell-through promotion by hand, the same comparison is saved on that event.
+- A sale's date is the row's `period_start_date`; the sell-through table has no separate sale date. A row counts
+  when that date is inside the line's window (the case window when the line has none). Rows are not split across
+  the window edge.
+- The comparison is flagged when no sales are loaded for the customer, when the latest loaded sales start before the
+  window end (sales may still arrive), when month-to-date estimates are included, and when the window cuts a week.
+- Not closed automatically: stock actions (moves and returns can only be cancelled), superseded cases, promotions
+  that are not in the customer sell-through family, and approved promotions that were never activated (the
+  lifecycle only lets an `active` case end).
+- The close does **not** write `result_qty`. The spec does not say that sell-through actuals set it, and the close
+  must not invent a second quantity. What the spec says:
+  - §6 below: "**Expected** = sum over lines of (units in **that line’s window** × **that line’s rate**).
+    Compatible with D-027: rate is approved `support_unit`; `ttl_result = support_unit × result_qty`. Do not invent
+    a second owed field."
+  - `docs/SPEC_CPOR_V1_AND_LISTING_CAPTURE_V0.md`, `cpor_case_line` fields: "result_qty (settlement-written)".
+  - Same spec, §6 Settlement, whose input is the customer's CPOR sales submission: "Attribution: `sale_date` within case window → counts toward `result_qty`;
+    out-of-window rows retained + flagged `out_of_window`". That is the customer's claim file, not uploaded
+    sell-through.
+
+  So `result_qty` still comes from the customer's claim file. Whether window sell-through should set it is open for
+  Warren (tracked in `docs/handoffs/2026-11-24/steps/03-step2-planner-calendar-sellthrough.md`, "Close for review").
 
 ---
 
@@ -180,4 +207,4 @@ Backlog: **135–140** (this file’s §9). Do not mint codes or run a migration
 | Over-cap (units) flags and continues | `cap_qty` nullable; money ceiling (095) can **block** export |
 | Terms never mutate; supersede in-case | No line window; unique grain blocks two living lines per SKU |
 | CIP-minted customer codes | `TMP-CUST-*` on named accounts; promote map exists, mint does not |
-| Window end: reconcile from sell-through, close for review, notify the person in charge (2026-11-27) | `end` is a manual transition (`active → ended`); `result_qty` is set from claim evidence only; no notification of a person exists |
+| Window end: reconcile sales dated inside the window against the forecast, close for review as `ended` (2026-11-27) | Daily close and manual `end` record the comparison on the `transition_end` event. `result_qty` is still set from claim evidence only (spec silent on sell-through writing it). Approved cases that never went `active` cannot end. Only the customer sell-through family closes automatically. No notification (out of this pass by ruling). |

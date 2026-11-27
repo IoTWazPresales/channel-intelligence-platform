@@ -1722,6 +1722,7 @@ def transition_case(
             )
 
         drifts: list[dict] = []
+        end_reconciliation: dict | None = None
         now = datetime.now(timezone.utc)
         from_status = case.status
         new_status = target_status(action)
@@ -1785,6 +1786,11 @@ def transition_case(
             drifts = _run_drift_check(session, case, actor, user)
         elif action == "end":
             case.status = "ended"
+            from app.services.cpor import promotion_type_vocab as vocab
+            from app.services.cpor.close_for_review import reconcile_case_window
+
+            if vocab.promotion_family(case.promotion_type) == vocab.CUSTOMER_SELL_THROUGH:
+                end_reconciliation = reconcile_case_window(session, case)
         elif action == "settle":
             if settle_fx_blocked(case):
                 raise HTTPException(
@@ -1830,6 +1836,11 @@ def transition_case(
                 "needs_reapproval": bool(case.needs_reapproval),
                 "fx_rate": body.fx_rate,
                 "roe_snapshot": float(case.roe_snapshot) if case.roe_snapshot is not None else None,
+                **(
+                    {"trigger": "manual", "reconciliation": end_reconciliation}
+                    if end_reconciliation
+                    else {}
+                ),
             },
             user=user,
         )
