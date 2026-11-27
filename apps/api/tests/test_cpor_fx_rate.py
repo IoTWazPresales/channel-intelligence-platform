@@ -34,11 +34,35 @@ STORED_DATE = date(2026, 9, 1)
 
 
 def test_parse_frankfurter_payload():
+    # Warren 2026-11-27 decisions: the quote currency is the case/tenant currency, never built in.
     published, rate = parse_frankfurter_payload(
-        {"amount": 1.0, "base": "USD", "date": "2026-09-04", "rates": {"ZAR": 18.12}}
+        {"amount": 1.0, "base": "USD", "date": "2026-09-04", "rates": {"ZAR": 18.12}},
+        currency="ZAR",
     )
     assert published == date(2026, 9, 4)
     assert abs(rate - 18.12) < 1e-9
+
+
+def test_parse_frankfurter_payload_reads_only_the_given_currency():
+    payload = {"amount": 1.0, "base": "USD", "date": "2026-09-04", "rates": {"EUR": 0.91}}
+    with pytest.raises(ValueError):
+        parse_frankfurter_payload(payload, currency="GBP")
+    assert parse_frankfurter_payload(payload, currency="eur")[1] == pytest.approx(0.91)
+
+
+def test_no_quote_currency_is_not_configured_and_fetches_nothing():
+    from app.services.cpor import fx_rate
+
+    def _no_fetch(**_kwargs):
+        raise AssertionError("must not fetch without a quote currency")
+
+    with patch.object(fx_rate, "tenant_currency_code", return_value=None), patch.object(
+        fx_rate, "fetch_frankfurter", _no_fetch
+    ):
+        quote = fx_rate.ensure_rate_for_date(MagicMock(), date(2026, 9, 4))
+    assert quote.rate is None
+    assert quote.source == "currency_not_configured"
+    assert quote.as_json()["quote_pair"] is None
 
 
 def _case(**kwargs):

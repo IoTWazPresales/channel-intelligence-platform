@@ -26,12 +26,9 @@ from app.services.commercial_planner.calculator import (
     CommercialCalcInputs,
     compute_line_economics,
 )
+from app.services.commercial_tenant_profile import configured_vat_rate_pct, profit_reservation_margins
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.pivot import _line_ttl_support_usd, is_voided_line
-
-DEFAULT_CUSTOMER_MARGIN = 0.12
-DEFAULT_CUSTOMER_REBATE = 0.03
-DEFAULT_DISTRIBUTOR_MARGIN = 0.08
 
 
 def _f(v: Any, default: float | None = None) -> float | None:
@@ -62,8 +59,15 @@ def _planned_campaign_reserve_for_line(
     sku: CommercialSkuAssumption | None,
     cust_term: CommercialCustomerTerm | None,
     dist_term: CommercialDistributorTerm | None,
+    margins: dict[str, float] | None = None,
+    tenant_vat_rate: float | None = None,
 ) -> dict[str, Any]:
-    """Return planned campaign reserve for one case line, or a missing/invalid flag."""
+    """Return planned campaign reserve for one case line, or a missing/invalid flag.
+
+    A margin or rebate comes from the line, then the customer/distributor term, then the tenant's
+    ``profit_reservation_margins``. VAT comes from the line, then the SKU, then the tenant rate.
+    Anything still missing is flagged as not configured; no rate is assumed.
+    """
     est = _f(line.estimate_qty, 0.0) or 0.0
     if est <= 0:
         return {
@@ -92,16 +96,28 @@ def _planned_campaign_reserve_for_line(
             "included": False,
         }
 
+    tenant_margins = margins or {}
     cust_m = _f(line.dealer_margin_pct)
     if cust_m is None:
-        cust_m = _f(
-            cust_term.customer_margin_pct if cust_term else None, DEFAULT_CUSTOMER_MARGIN
-        ) or DEFAULT_CUSTOMER_MARGIN
-    cust_r = _f(cust_term.customer_rebate_pct if cust_term else None, DEFAULT_CUSTOMER_REBATE) or DEFAULT_CUSTOMER_REBATE
+        cust_m = _f(cust_term.customer_margin_pct if cust_term else None, tenant_margins.get("customer_margin_pct"))
+    cust_r = _f(cust_term.customer_rebate_pct if cust_term else None, tenant_margins.get("customer_rebate_pct"))
     dist_m = _f(
         dist_term.distributor_margin_pct if dist_term else None,
-        DEFAULT_DISTRIBUTOR_MARGIN,
-    ) or DEFAULT_DISTRIBUTOR_MARGIN
+        tenant_margins.get("distributor_margin_pct"),
+    )
+    if cust_m is None or cust_r is None or dist_m is None:
+        return {
+            "planned_usd": None,
+            "flags": ["profit_reservation_margins_not_configured"],
+            "included": False,
+        }
+    vat = _f(line.vat_rate, _f(sku.vat_rate_pct, tenant_vat_rate))
+    if vat is None:
+        return {
+            "planned_usd": None,
+            "flags": ["vat_rate_not_configured"],
+            "included": False,
+        }
 
     # Promo case: treat volume as campaign (promo_mix=1) so campaign reserve is the planned support pool
     result = compute_line_economics(
@@ -111,7 +127,7 @@ def _planned_campaign_reserve_for_line(
             promo_srp_local=srp,
             promo_mix_pct=1.0,
             fx_plan_currency_per_cost_currency=_f(sku.fx_plan_currency_per_cost_currency, 1.0) or 1.0,
-            vat_rate_pct=_f(line.vat_rate, _f(sku.vat_rate_pct, 0.15)) or 0.15,
+            vat_rate_pct=vat,
             controlled_cost_amount=cost,
             customer_margin_pct=float(cust_m),
             customer_rebate_pct=cust_r,
@@ -263,6 +279,7 @@ def build_support_bias(
                 continue
             usd = _line_ttl_support_usd(line)
             sku = sku_by_pid.get(int(line.product_id))
+            tenant = str(case.tenant_id or "default")
             plan = _planned_campaign_reserve_for_line(
                 line,
                 sku=sku,
@@ -270,6 +287,8 @@ def build_support_bias(
                 dist_term=dist_terms.get(int(line.distributor_id))
                 if line.distributor_id is not None
                 else None,
+                margins=profit_reservation_margins(tenant),
+                tenant_vat_rate=configured_vat_rate_pct(tenant),
             )
             for f in plan["flags"]:
                 case_flags.add(f)

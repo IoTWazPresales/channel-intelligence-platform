@@ -159,8 +159,13 @@ def effective_commercial_fields_flat(
     sku_promo_reserve_split_pct: float | None,
     sku_controlled_cost_amount: float | None,
     sku_controlled_cost_currency_code: str | None,
+    fallback_vat_rate_pct: float | None = None,
 ) -> dict[str, float | str | None]:
-    """Resolved inputs matching _resolve_terms_and_calc (null when no DB source and no line override)."""
+    """Resolved inputs matching _resolve_terms_and_calc (null when no DB source and no line override).
+
+    ``fallback_vat_rate_pct`` is the plan country's VAT rate (or the tenant rate when the plan names
+    no country), used when neither the line nor the SKU carries one.
+    """
     eff_cm = (
         float(line.override_customer_margin_pct)
         if line.override_customer_margin_pct is not None
@@ -179,7 +184,7 @@ def effective_commercial_fields_flat(
     eff_vat = (
         float(line.override_vat_rate_pct)
         if line.override_vat_rate_pct is not None
-        else (float(sku_vat_rate_pct) if sku_vat_rate_pct is not None else None)
+        else (float(sku_vat_rate_pct) if sku_vat_rate_pct is not None else fallback_vat_rate_pct)
     )
     eff_fx = (
         float(line.override_fx_plan_currency_per_cost_currency)
@@ -326,6 +331,7 @@ def plan_line_read_model_extensions(
     join_distributor_term_present: bool = False,
     join_sku_assumption_present: bool = False,
     distributor_code: str | None = None,
+    fallback_vat_rate_pct: float | None = None,
 ) -> dict[str, Any]:
     """Specs + effective commercial snapshot + plan-currency local amounts (same FX convention as calculator)."""
     specs = product_specs_from_json(specs_json)
@@ -340,6 +346,7 @@ def plan_line_read_model_extensions(
         sku_promo_reserve_split_pct=sku_promo_reserve_split_pct,
         sku_controlled_cost_amount=sku_controlled_cost_amount,
         sku_controlled_cost_currency_code=sku_controlled_cost_currency_code,
+        fallback_vat_rate_pct=fallback_vat_rate_pct,
     )
     sell_econ = float(line.calc_oem_sell_in_amount) if line.calc_oem_sell_in_amount is not None else None
     buy_econ = float(line.calc_distributor_net_amount) if line.calc_distributor_net_amount is not None else None
@@ -358,6 +365,12 @@ def plan_line_read_model_extensions(
         join_distributor_term_present=join_distributor_term_present,
         join_sku_assumption_present=join_sku_assumption_present,
     )
+    if line.override_vat_rate_pct is None and sku_vat_rate_pct is None:
+        provenance["vat_rate_pct"] = (
+            {"source": "tenant_vat_rate", "trusted": True}
+            if fallback_vat_rate_pct is not None
+            else {"source": "missing", "trusted": False, "detail": "vat_rate_not_configured"}
+        )
     out: dict[str, Any] = {
         **specs,
         **eff,

@@ -29,7 +29,7 @@ async def scheduled(signed_in, monkeypatch, tmp_path):
         users = {user.email.split("-")[0]: user.id for user in users}
         for i, product in enumerate(fixture.products):
             customer = (await db.scalars(select(DimCustomer).where(DimCustomer.tenant_id == product.tenant_id))).first()
-            case = CporCase(tenant_id=product.tenant_id, case_code=f"E3-{uuid4().hex[:18]}", customer_id=customer.id,
+            case = CporCase(currency_code="ZAR", tenant_id=product.tenant_id, case_code=f"E3-{uuid4().hex[:18]}", customer_id=customer.id,
                             promotion_type="Fictional", window_start=date(2026, 1, 1), window_end=date(2026, 1, 31))
             db.add(case)
             await db.flush()

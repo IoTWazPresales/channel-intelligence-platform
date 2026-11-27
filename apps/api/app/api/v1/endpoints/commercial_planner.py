@@ -38,6 +38,7 @@ from app.models.ingestion import ImportJob
 from app.models.purchase_order import PurchaseOrder
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
 from app.services.profit_definition import compute_profit, profit_payload
+from app.services.commercial_tenant_profile import vat_rate_for_data
 from app.services.commercial_planner.economics_trust import (
     classify_line_economics_trust,
     plan_trust_from_line_tiers,
@@ -486,6 +487,11 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         join_distributor_term_present=dt_margin is not None,
         join_sku_assumption_present=sa_cc is not None,
         distributor_code=dc,
+        fallback_vat_rate_pct=(
+            await _plan_vat_fallback(db, line.commercial_plan_id)
+            if line.override_vat_rate_pct is None and sa_vat is None
+            else None
+        ),
     )
     return _line_payload(
         line,
@@ -508,11 +514,21 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
     )
 
 
+async def _plan_vat_fallback(db: AsyncSession, plan_id: int) -> float | None:
+    """VAT for plan lines with no line or SKU rate: the plan country's rate, else the tenant rate.
+
+    Plans carry no tenant id, so the planner reads the default tenant profile.
+    """
+    plan = await db.get(CommercialPlan, plan_id)
+    return vat_rate_for_data("default", plan.country_code if plan is not None else None)
+
+
 async def _resolve_terms_and_calc(
     db: AsyncSession,
     line: CommercialPlanLine,
     *,
     unassigned_distributor_id: int | None = None,
+    fallback_vat_rate_pct: float | None = None,
 ) -> tuple[dict, list[str]]:
     missing: list[str] = []
     cterm = (
@@ -536,12 +552,36 @@ async def _resolve_terms_and_calc(
         missing.append("unassigned_distributor_placeholder")
     if sku is None and line.override_fx_plan_currency_per_cost_currency is None:
         missing.append("economics_placeholder_fx_without_sku")
-    if sku is None and line.override_vat_rate_pct is None:
-        missing.append("economics_placeholder_vat_without_sku")
+    if line.override_vat_rate_pct is not None:
+        vat_rate_pct: float | None = float(line.override_vat_rate_pct)
+    elif sku is not None and sku.vat_rate_pct is not None:
+        vat_rate_pct = float(sku.vat_rate_pct)
+    else:
+        vat_rate_pct = fallback_vat_rate_pct
     if sku is None and (
         line.override_reserve_total_pct is None or line.override_promo_reserve_split_pct is None
     ):
         missing.append("economics_placeholder_reserves_without_sku")
+    if vat_rate_pct is None:
+        missing.append("vat_rate_not_configured")
+        not_priced = {
+            key: None
+            for key in (
+                "calc_oem_sell_in_amount",
+                "calc_distributor_net_amount",
+                "calc_campaign_support_reserve_amount",
+                "calc_non_campaign_reserve_amount",
+                "calc_internal_gp_amount",
+                "calc_customer_margin_input_pct",
+                "calc_distributor_margin_input_pct",
+            )
+        }
+        payload = {
+            **not_priced,
+            "calc_flags": list(dict.fromkeys(missing)),
+            "calc_explanation": "Not priced: no VAT rate for this line, its SKU, or the plan country.",
+        }
+        return payload, payload["calc_flags"]
 
     inp = CommercialCalcInputs(
         target_units=float(line.target_units),
@@ -552,7 +592,7 @@ async def _resolve_terms_and_calc(
             line.override_fx_plan_currency_per_cost_currency
             or (sku.fx_plan_currency_per_cost_currency if sku else 1.0)
         ),
-        vat_rate_pct=float(line.override_vat_rate_pct or (sku.vat_rate_pct if sku else 0.15)),
+        vat_rate_pct=vat_rate_pct,
         controlled_cost_amount=float(line.override_controlled_cost_amount or (sku.controlled_cost_amount if sku else 0.0)),
         customer_margin_pct=float(line.override_customer_margin_pct or (cterm.customer_margin_pct if cterm else 0.0)),
         customer_rebate_pct=float(line.override_customer_rebate_pct or (cterm.customer_rebate_pct if cterm else 0.0)),
@@ -753,6 +793,7 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
             .order_by(CommercialPlanLine.id)
         )
     ).all()
+    plan_vat = await _plan_vat_fallback(db, plan_id)
     out = []
     for (
         line,
@@ -800,6 +841,7 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
             join_distributor_term_present=dt_margin is not None,
             join_sku_assumption_present=sa_cc is not None,
             distributor_code=dc,
+            fallback_vat_rate_pct=plan_vat,
         )
         out.append(
             _line_payload(
@@ -899,9 +941,12 @@ async def recalculate_plan(plan_id: int, db: AsyncSession = Depends(get_db)):
         }
     all_flags: list[str] = []
     unassigned_id = await get_unassigned_distributor_id(db)
+    plan_vat = await _plan_vat_fallback(db, plan_id)
     line_trust_rows: list[tuple[int, list[str], str]] = []
     for row in rows:
-        payload, flags = await _resolve_terms_and_calc(db, row, unassigned_distributor_id=unassigned_id)
+        payload, flags = await _resolve_terms_and_calc(
+            db, row, unassigned_distributor_id=unassigned_id, fallback_vat_rate_pct=plan_vat
+        )
         for k, v in payload.items():
             setattr(row, k, v)
         all_flags.extend(flags)

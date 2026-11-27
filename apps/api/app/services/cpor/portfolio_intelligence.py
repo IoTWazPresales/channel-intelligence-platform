@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.commercial_tenant_profile import tenant_currency_code
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.evidence_basis import (
     CLAIM_EVIDENCED,
@@ -64,7 +65,7 @@ def build_portfolio_intelligence(
         session.scalars(stmt).unique().all()
     )
     if not cases:
-        return _empty_payload(cases_in_scope=0, lines_included=0)
+        return _empty_payload(cases_in_scope=0, lines_included=0, tenant_id=tenant_id)
 
     customer_ids = {int(c.customer_id) for c in cases if c.customer_id is not None}
     cust_rows = (
@@ -104,7 +105,7 @@ def build_portfolio_intelligence(
     if bu is not None:
         cases = [case for case in cases if lines_by_case[int(case.id)]]
         if not cases:
-            return _empty_payload(cases_in_scope=0, lines_included=0)
+            return _empty_payload(cases_in_scope=0, lines_included=0, tenant_id=tenant_id)
 
     by_customer: dict[int, dict[str, float]] = defaultdict(
         lambda: {
@@ -264,7 +265,7 @@ def build_portfolio_intelligence(
 
     return {
         "currency_compute": "USD",
-        "currency_display_secondary": "ZAR",
+        "currency_display_secondary": tenant_currency_code(tenant_id or "default"),
         "fx_note": (
             "ZAR totals sum each line at its case FX (booked or floating); "
             "never one period rate applied to a USD total."
@@ -305,10 +306,10 @@ def build_portfolio_intelligence(
     }
 
 
-def _empty_payload(*, cases_in_scope: int, lines_included: int) -> dict[str, Any]:
+def _empty_payload(*, cases_in_scope: int, lines_included: int, tenant_id: str | None) -> dict[str, Any]:
     return {
         "currency_compute": "USD",
-        "currency_display_secondary": "ZAR",
+        "currency_display_secondary": tenant_currency_code(tenant_id or "default"),
         "fx_note": (
             "ZAR totals sum each line at its case FX (booked or floating); "
             "never one period rate applied to a USD total."

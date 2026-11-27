@@ -112,7 +112,7 @@ def test_payment_evidence_shell_case_writes_the_projection():
     db.scalar = MagicMock(return_value=None)
     added: list = []
     db.add = MagicMock(side_effect=added.append)
-    _ensure_shell_case(db, line=line, tenant_id="default", actor="t")
+    _ensure_shell_case(db, line=line, tenant_id="default", actor="t", currency_code=line.currency_code)
     case = added[0]
     assert case.status == "draft"
     assert case.workflow_status == workflow_status_for(case.status) == "draft"

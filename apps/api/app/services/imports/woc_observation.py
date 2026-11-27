@@ -416,6 +416,8 @@ def reconstruct_woc_observations(
     cadence = reporting_cadence(tid)
     min_days = woc_min_velocity_days(tid)
     cover_as_of = as_of or reporting_today(tid)
+    if cover_as_of is None:
+        return {"ok": False, "skipped": True, "reason": "reporting_timezone_not_configured", "rows_upserted": 0}
     floor = distributor_inventory_floor(session, tenant_id=tid, distributor_id=int(distributor_id))
     if floor is None:
         return {
@@ -523,8 +525,12 @@ def persist_woc_observations_for_distributor(
         file_period_end=file_period_end,
     )
     decision: dict[str, Any] | None = None
-    if trigger in {WOC_TRIGGER_DSI_APPLY, WOC_TRIGGER_SHIPMENT_APPLY} and import_job_id is not None:
-        decision_date = file_period_end or cover_as_of
+    decision_date = file_period_end or cover_as_of
+    if (
+        trigger in {WOC_TRIGGER_DSI_APPLY, WOC_TRIGGER_SHIPMENT_APPLY}
+        and import_job_id is not None
+        and decision_date is not None
+    ):
         decision = persist_apply_decision_observations(
             session,
             tenant_id=tid,

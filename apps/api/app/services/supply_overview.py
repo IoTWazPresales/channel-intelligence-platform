@@ -12,6 +12,7 @@ from app.db.parallel_reads import gather_reads
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimDistributor
 from app.models.facts import FactInboundShipment
+from app.services.commercial_tenant_profile import reporting_timezone
 from app.services.shipment_live_line import live_line
 from app.services.commercial_planner.lineup_period_canonical import (
     active_lineup_case_filters,
@@ -20,14 +21,15 @@ from app.services.commercial_planner.lineup_period_canonical import (
 
 logger = logging.getLogger(__name__)
 
-# ISO Monday in Africa/Johannesburg — same grain as Movement / Data stewardship week keys.
-_ISO_WEEK_START_SAST = """
-((now() AT TIME ZONE 'Africa/Johannesburg')::date
- - EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Africa/Johannesburg')::date)::int
+# ISO Monday in the tenant reporting timezone (bind ``:reporting_tz``) — same grain as Movement /
+# Data stewardship week keys.
+_ISO_WEEK_START_SQL = """
+((now() AT TIME ZONE CAST(:reporting_tz AS text))::date
+ - EXTRACT(ISODOW FROM (now() AT TIME ZONE CAST(:reporting_tz AS text))::date)::int
  + 1)
 """
 
-_TODAY_SAST = "(now() AT TIME ZONE 'Africa/Johannesburg')::date"
+_TODAY_SQL = "(now() AT TIME ZONE CAST(:reporting_tz AS text))::date"
 
 from app.services.shipment_live_line import live_line_sql
 from app.services.shipment_strict_pair import (
@@ -184,14 +186,24 @@ def po_totals_stmt():
 async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     tenant = tenant_id_from_user(user)
     dbname = (await db.execute(text("SELECT current_database()"))).scalar()
+    zone = reporting_timezone(tenant)
+    if zone is None:
+        return {
+            "database": dbname,
+            "tenant_id": tenant,
+            "data_unavailable": True,
+            "reporting_timezone_not_configured": True,
+            "labels": {},
+            "captions": {},
+        }
     # The five reads do not depend on each other: they overlap (one pooled session each) instead
     # of queuing on one. Each keeps its own failure handling.
     async def _headline(s: AsyncSession) -> Any:
         try:
             return (
                 await s.execute(
-                    text(_headline_sql(_TODAY_SAST, _ISO_WEEK_START_SAST)),
-                    {"tenant": tenant},
+                    text(_headline_sql(_TODAY_SQL, _ISO_WEEK_START_SQL)),
+                    {"tenant": tenant, "reporting_tz": zone},
                 )
             ).mappings().one()
         except Exception:
@@ -376,7 +388,7 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
                 f"A separate commercial-overdue count (promise window) is {overdue}."
             ),
             "landed_pod_iso_week": (
-                f"Proof of delivery dated this week (from Monday, South Africa time). {job_caption}"
+                f"Proof of delivery dated this week (from Monday, {zone} time). {job_caption}"
             ),
             "po_coverage": (
                 f"{linked} of {observed} purchase orders linked to an active lineup case. "

@@ -71,6 +71,8 @@ def test_create_case_mocked(tmp_path, monkeypatch):
         {
             "cpor_promotion_types": ["Sell out PP"],
             "cpor_channels": ["reseller"],
+            # Warren 2026-11-27 decisions: the case currency comes from the tenant profile.
+            "currency_code": "ZAR",
         },
     )
     cust = SimpleNamespace(id=1, code="C1", name="Cust")
@@ -131,6 +133,29 @@ def test_create_case_mocked(tmp_path, monkeypatch):
     assert body["case_code"] == "C26C00001"
     assert body["status"] == "draft"
     assert body["allowed_next"] == ["cancelled", "proposed"]
+
+
+def test_create_case_without_any_currency_is_not_configured(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    profile.save_tenant_profile_overrides(
+        "default", {"cpor_promotion_types": ["Sell out PP"], "cpor_channels": ["reseller"]}
+    )
+    with patch("app.api.v1.endpoints.cpor_cases.SessionLocal") as SL:
+        r = client.post(
+            "/api/v1/cpor/cases",
+            json={
+                "customer_id": 1,
+                "promotion_type": "Sell out PP",
+                "window_start": "2026-01-01",
+                "window_end": "2026-01-31",
+            },
+            headers={"X-User-Id": "warren"},
+        )
+    assert r.status_code == 400
+    assert r.json()["detail"] == "currency_not_configured"
+    SL.assert_not_called()
 
 
 def test_transition_illegal_returns_409():

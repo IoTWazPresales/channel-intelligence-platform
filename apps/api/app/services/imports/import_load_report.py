@@ -30,6 +30,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from app.services.commercial_tenant_profile import reporting_timezone
 from app.services.imports.upload_date_rule import DATED_AFTER_UPLOAD, DATED_AFTER_UPLOAD_LABEL, UPLOAD_DAY_SQL
 
 CST ="customer_sell_through"
@@ -178,7 +179,8 @@ def load_report_sync(db: Session, job: Any) -> dict[str, Any] | None:
     kind = _kind(getattr(job, "template_slug", None))
     if kind is None:
         return None
-    ids = {"ids": [int(job.id)]}
+    tenant = str(getattr(job, "tenant_id", None) or "default")
+    ids = {"ids": [int(job.id)], "reporting_tz": reporting_timezone(tenant)}
     if kind == CST:
         rows = db.execute(text(_CST_SQL), ids).all()
     else:
@@ -195,9 +197,29 @@ async def load_reports_async(db: AsyncSession, jobs: Iterable[tuple[int, str | N
         if kind:
             by_kind[kind].append(int(job_id))
     out: dict[int, dict[str, Any]] = {}
+    all_ids = by_kind[CST] + by_kind[DSI]
+    if not all_ids:
+        return out
+    tenant_of = {
+        int(r[0]): str(r[1] or "default")
+        for r in (
+            await db.execute(text("SELECT id, tenant_id FROM import_job WHERE id = ANY(:ids)"), {"ids": all_ids})
+        ).all()
+    }
+
+    async def _grouped(sql: str, job_ids: list[int]) -> dict[int, dict[str, int]]:
+        by_tenant: dict[str, list[int]] = {}
+        for jid in job_ids:
+            by_tenant.setdefault(tenant_of.get(jid, "default"), []).append(jid)
+        grouped: dict[int, dict[str, int]] = {}
+        for tenant, tenant_ids in by_tenant.items():
+            params = {"ids": tenant_ids, "reporting_tz": reporting_timezone(tenant)}
+            grouped.update(_group((await db.execute(text(sql), params)).all()))
+        return grouped
+
     if by_kind[CST]:
         ids = {"ids": by_kind[CST]}
-        grouped = _group((await db.execute(text(_CST_SQL), ids)).all())
+        grouped = await _grouped(_CST_SQL, by_kind[CST])
         parses = {
             int(r[0]): r[1]
             for r in (
@@ -209,7 +231,7 @@ async def load_reports_async(db: AsyncSession, jobs: Iterable[tuple[int, str | N
         for jid in by_kind[CST]:
             out[jid] = build_report(CST, grouped.get(jid, {}), parses.get(jid))
     if by_kind[DSI]:
-        grouped = _group((await db.execute(text(_DSI_SQL), {"ids": by_kind[DSI]})).all())
+        grouped = await _grouped(_DSI_SQL, by_kind[DSI])
         for jid in by_kind[DSI]:
             out[jid] = build_report(DSI, grouped.get(jid, {}))
     return out

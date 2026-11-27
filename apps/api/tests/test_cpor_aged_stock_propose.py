@@ -39,6 +39,8 @@ def _tenant_cpor_vocab(monkeypatch, tmp_path):
         "cpor_promotion_types": ["Stock PP (In-Direct)", "Sell out PP"],
         "cpor_channels": ["reseller"],
         "cpor_stock_promote_type": "Stock PP (In-Direct)",
+        # Warren 2026-11-27 decisions: the case currency comes from the tenant profile.
+        "currency_code": "ZAR",
     }
     profile.save_tenant_profile_overrides("tenant-a", saved)
     profile.save_tenant_profile_overrides("default", saved)

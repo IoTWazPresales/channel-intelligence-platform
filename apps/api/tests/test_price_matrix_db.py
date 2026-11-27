@@ -182,6 +182,7 @@ def _sample(session: Session) -> dict:
         (f"ST-{tag}", "Sell-Through PP", cust_a, p1),
     ):
         case = CporCase(
+            currency_code="ZAR",
             tenant_id=tenant,
             customer_id=customer.id,
             case_code=code,

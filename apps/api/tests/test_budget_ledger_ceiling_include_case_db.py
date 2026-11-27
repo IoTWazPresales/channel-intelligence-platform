@@ -108,6 +108,7 @@ def _seed(conn, session: Session, tag: str):
 
     def make_case(label: str) -> CporCase:
         case = CporCase(
+            currency_code="ZAR",
             case_code=f"B1-{tag}-{label}",
             tenant_id="default",
             customer_id=customer.id,

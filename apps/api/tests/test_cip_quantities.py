@@ -92,6 +92,7 @@ def test_apply_skips_voided_and_split_lines_before_preview_and_write(monkeypatch
         assert customer_id is not None
         assert len(product_ids) >= 3
         case = CporCase(
+            currency_code="ZAR",
             case_code=f"W1C-VOID-{uuid.uuid4().hex[:8]}",
             customer_id=int(customer_id),
             promotion_type="Sell out PP",
@@ -174,6 +175,7 @@ def test_apply_leaves_a_line_estimate_alone_when_sellthrough_gives_no_units(monk
         product_id = session.scalar(select(DimProduct.id).limit(1))
         assert customer_id is not None and product_id is not None
         case = CporCase(
+            currency_code="ZAR",
             case_code=f"W1C-NOUNITS-{uuid.uuid4().hex[:8]}",
             customer_id=int(customer_id),
             promotion_type="Sell out PP",

@@ -20,7 +20,7 @@ from app.services.cpor.settle_readiness import (
 
 
 def test_fx_declared_requires_positive_roe():
-    case = CporCase(case_code="C26C00001", roe_snapshot=None)
+    case = CporCase(currency_code="ZAR", case_code="C26C00001", roe_snapshot=None)
     assert fx_declared(case) is False
     case.roe_snapshot = Decimal("0")
     assert fx_declared(case) is False
@@ -31,7 +31,7 @@ def test_fx_declared_requires_positive_roe():
 
 
 def test_case_missing_roe_aligns_with_fx_declared():
-    case = CporCase(case_code="C26C00001", roe_snapshot=None)
+    case = CporCase(currency_code="ZAR", case_code="C26C00001", roe_snapshot=None)
     assert case_missing_roe(case) is True
     case.roe_snapshot = Decimal("0")
     assert case_missing_roe(case) is True
@@ -48,7 +48,7 @@ def test_count_open_assumptions_from_line_flags():
 
 
 def test_build_settle_readiness_shape():
-    case = CporCase(case_code="C26C00002", roe_snapshot=Decimal("18.5"))
+    case = CporCase(currency_code="ZAR", case_code="C26C00002", roe_snapshot=Decimal("18.5"))
     out = build_settle_readiness(case, claim_row_count=3, open_assumption_count=1)
     assert out["fx_declared"] is True
     assert out["roe_snapshot"] == 18.5

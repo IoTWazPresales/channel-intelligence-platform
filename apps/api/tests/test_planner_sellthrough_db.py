@@ -73,6 +73,7 @@ async def world(monkeypatch):
         rival = DimCompetitorProduct(brand_id=brand.id, sku=tag, name=tag)
         lineup = CommercialLineupCase(period_label=PERIOD, commercial_status="accepted")
         earlier = CporCase(
+            currency_code="ZAR",
             case_code=tag,
             tenant_id=tag,
             customer_id=customer.id,
@@ -163,7 +164,7 @@ async def world(monkeypatch):
                     planned_volume_units=9999,
                 )
             )
-            db.add(CommercialSkuAssumption(product_id=candidate.id, controlled_cost_amount=9999))
+            db.add(CommercialSkuAssumption(vat_rate_pct=0.15, product_id=candidate.id, controlled_cost_amount=9999))
             db.add(
                 CporCaseLine(
                     case_id=earlier.id,

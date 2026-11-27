@@ -27,8 +27,8 @@ class CommercialCustomerTerm(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False, unique=True)
-    customer_margin_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.12)
-    customer_rebate_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.03)
+    customer_margin_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
+    customer_rebate_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
     target_cover_weeks: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
 
 
@@ -37,7 +37,7 @@ class CommercialDistributorTerm(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False, unique=True)
-    distributor_margin_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.08)
+    distributor_margin_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
 
 
 class CommercialSkuAssumption(Base, TimestampMixin):
@@ -49,7 +49,7 @@ class CommercialSkuAssumption(Base, TimestampMixin):
     controlled_cost_currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
     # N-0080: shown beside PM controlled cost, never in the margin. Same currency; null = not recorded.
     landed_cost_amount: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
-    vat_rate_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.15)
+    vat_rate_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
     fx_plan_currency_per_cost_currency: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False, default=1.0)
     reserve_total_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.10)
     promo_reserve_split_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.50)

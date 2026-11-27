@@ -587,7 +587,11 @@ class TenantCommercialProfileUpdate(BaseModel):
     stock_gap_highlight_units: float | None = None
     business_calendar: dict[str, Any] | None = None
     vat_rate_pct: float | None = None
+    vat_rate_by_country: dict[str, float | None] | None = None
     sales_value_vat_basis: str | None = None
+    currency_code: str | None = None
+    reporting_timezone: str | None = None
+    profit_reservation_margins: dict[str, float | None] | None = None
     cpor_promotion_types: list[str] | None = None
     cpor_channels: list[str] | None = None
     cpor_stock_promote_type: str | None = None
@@ -612,6 +616,8 @@ async def preview_business_calendar(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     tenant_id = (user.get("tenant_id") or "default").strip() or "default"
     on = body.on or commercial_tenant_profile.reporting_today(tenant_id)
+    if on is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reporting_timezone_not_configured")
     return {"business_calendar": cfg, **BusinessCalendar(cfg).describe_year(on)}
 
 

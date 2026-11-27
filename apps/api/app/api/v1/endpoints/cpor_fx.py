@@ -13,6 +13,7 @@ from app.core.security import Role, get_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase
+from app.services.commercial_tenant_profile import tenant_currency_code
 from app.services.cpor.fx_rate import (
     SOURCE_OPERATOR,
     approval_date,
@@ -59,18 +60,16 @@ def _tenant_cases(session, user: dict):
 
 @router.get("/fx/rates/today")
 def fx_rate_today(user: dict = Depends(get_current_user)) -> dict[str, Any]:
-    _ = user
     with SessionLocal() as session:
-        quote = ensure_today_rate(session)
+        quote = ensure_today_rate(session, currency=tenant_currency_code(tenant_id_from_user(user)))
         session.commit()
         return quote.as_json()
 
 
 @router.post("/fx/rates/fetch")
 def fx_rate_fetch(user: dict = Depends(_require_cpor_planner)) -> dict[str, Any]:
-    _ = user
     with SessionLocal() as session:
-        quote = ensure_today_rate(session)
+        quote = ensure_today_rate(session, currency=tenant_currency_code(tenant_id_from_user(user)))
         session.commit()
         return quote.as_json()
 
@@ -91,9 +90,10 @@ def fx_backfill_suggestions(user: dict = Depends(get_current_user)) -> dict[str,
         items: list[dict[str, Any]] = []
         for case in missing_rate:
             fx_date = approval_date(session, case)
-            if fx_date not in by_date:
-                by_date[fx_date] = rate_for_case_date(session, fx_date)
-            quote = by_date[fx_date]
+            key = (fx_date, case.currency_code)
+            if key not in by_date:
+                by_date[key] = rate_for_case_date(session, fx_date, currency=case.currency_code)
+            quote = by_date[key]
             items.append(
                 {
                     "case_id": case.id,
@@ -144,7 +144,9 @@ def fx_backfill_confirm(
             source = SOURCE_OPERATOR
             rate_date = None
             if rate is None:
-                quote = rate_for_case_date(session, approval_date(session, case))
+                quote = rate_for_case_date(
+                    session, approval_date(session, case), currency=case.currency_code
+                )
                 rate = quote.rate if quote.live else None
                 source = quote.source
                 rate_date = quote.rate_date

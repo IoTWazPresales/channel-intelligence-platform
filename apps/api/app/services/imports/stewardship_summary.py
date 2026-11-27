@@ -7,17 +7,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant_scope import tenant_id_from_user
+from app.services.commercial_tenant_profile import reporting_timezone
 
-# ISO Monday in Africa/Johannesburg — same grain as Movement week keys.
-_ISO_WEEK_START_SAST = """
-((now() AT TIME ZONE 'Africa/Johannesburg')::date
- - EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Africa/Johannesburg')::date)::int
+# ISO Monday in the tenant reporting timezone (bind ``:reporting_tz``) — same grain as Movement week keys.
+_ISO_WEEK_START_SQL = """
+((now() AT TIME ZONE CAST(:reporting_tz AS text))::date
+ - EXTRACT(ISODOW FROM (now() AT TIME ZONE CAST(:reporting_tz AS text))::date)::int
  + 1)
 """
 
 
 async def stewardship_summary(db: AsyncSession, user: dict | None) -> dict[str, Any]:
     tenant = tenant_id_from_user(user)
+    zone = reporting_timezone(tenant)
     dbname = (await db.execute(text("SELECT current_database()"))).scalar()
     row = (
         await db.execute(
@@ -26,7 +28,7 @@ async def stewardship_summary(db: AsyncSession, user: dict | None) -> dict[str, 
                 SELECT
                   :tenant AS tenant_id,
                   count(*) FILTER (
-                    WHERE (created_at AT TIME ZONE 'Africa/Johannesburg')::date >= {_ISO_WEEK_START_SAST}
+                    WHERE (created_at AT TIME ZONE CAST(:reporting_tz AS text))::date >= {_ISO_WEEK_START_SQL}
                   ) AS jobs_iso_week,
                   count(*) FILTER (WHERE created_at >= now() - interval '7 days') AS jobs_last_7d,
                   -- Failed and pending skip archived jobs, as Attention, Brief and Ops do (N-0113).
@@ -47,7 +49,7 @@ async def stewardship_summary(db: AsyncSession, user: dict | None) -> dict[str, 
                 WHERE tenant_id = :tenant
                 """
             ),
-            {"tenant": tenant},
+            {"tenant": tenant, "reporting_tz": zone},
         )
     ).mappings().one()
 
@@ -132,7 +134,7 @@ async def stewardship_summary(db: AsyncSession, user: dict | None) -> dict[str, 
         or 0
     )
 
-    jobs_iso = int(row["jobs_iso_week"] or 0)
+    jobs_iso = int(row["jobs_iso_week"] or 0) if zone is not None else None
     jobs_7d = int(row["jobs_last_7d"] or 0)
     failed_7d = int(row["failed_7d"] or 0)
     pending_7d = int(row["pending_7d"] or 0)
@@ -145,6 +147,7 @@ async def stewardship_summary(db: AsyncSession, user: dict | None) -> dict[str, 
         "tenant_id": tenant,
         "jobs_last_7d": jobs_7d,
         "jobs_iso_week": jobs_iso,
+        "reporting_timezone_not_configured": zone is None,
         "failed_7d": failed_7d,
         "failed_all": failed_all,
         "completed_7d": completed_7d,
@@ -182,7 +185,11 @@ async def stewardship_summary(db: AsyncSession, user: dict | None) -> dict[str, 
             "distributors_unverified": "Unverified distributors",
         },
         "captions": {
-            "jobs_last_7d": f"{jobs_iso} started since Monday (Johannesburg)",
+            "jobs_last_7d": (
+                f"{jobs_iso} started since Monday ({zone})"
+                if zone is not None
+                else "Set the reporting timezone in Settings to count this week"
+            ),
             "failed_7d": "Imports that failed. A row that only failed a check is counted separately.",
             "pending_7d": f"{pending_all} older jobs still waiting for a column map",
             "completed_7d": "Imports that finished",

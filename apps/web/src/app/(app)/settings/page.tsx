@@ -67,6 +67,10 @@ type TenantCommercialProfile = {
   overrides_present: string[];
   vat_rate_pct?: number | null;
   vat_rate_not_configured?: boolean;
+  vat_rate_by_country?: Record<string, number>;
+  currency_code?: string | null;
+  reporting_timezone?: string | null;
+  profit_reservation_margins?: ProfitReservationMargins | null;
   cpor_promotion_types?: string[];
   cpor_channels?: string[];
   cpor_stock_promote_type?: string | null;
@@ -74,6 +78,43 @@ type TenantCommercialProfile = {
   money_ceiling_usd: number | null;
   support_norms_trailing_quarters: number;
 };
+
+type ProfitReservationMargins = {
+  customer_margin_pct: number;
+  customer_rebate_pct: number;
+  distributor_margin_pct: number;
+};
+
+const MARGIN_FIELDS: { key: keyof ProfitReservationMargins; label: string; testId: string }[] = [
+  { key: 'customer_margin_pct', label: 'Customer margin', testId: 'tenant-profile-customer-margin' },
+  { key: 'customer_rebate_pct', label: 'Customer rebate', testId: 'tenant-profile-customer-rebate' },
+  { key: 'distributor_margin_pct', label: 'Distributor margin', testId: 'tenant-profile-distributor-margin' },
+];
+
+const EMPTY_MARGINS: Record<keyof ProfitReservationMargins, string> = {
+  customer_margin_pct: '',
+  customer_rebate_pct: '',
+  distributor_margin_pct: '',
+};
+
+/** One "CC rate" pair per line ("GB 0.2", "GB=0.2" or "GB: 0.2"); blank lines are skipped. */
+function parseVatByCountry(text: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = /^([A-Za-z]{2})\s*[:=\s]\s*([0-9.]+)$/.exec(trimmed);
+    if (!match) throw new Error(`VAT by country: "${trimmed}" is not "country code rate".`);
+    out[match[1].toUpperCase()] = Number(match[2]);
+  }
+  return out;
+}
+
+function formatVatByCountry(rates: Record<string, number> | undefined): string {
+  return Object.entries(rates ?? {})
+    .map(([country, rate]) => `${country} ${rate}`)
+    .join('\n');
+}
 
 const CONSTRAINT_AXIS_OPTIONS: ConstraintAxis[] = ['money', 'support_pct', 'dual', 'none'];
 const OVER_BUDGET_ACTION_OPTIONS: OverBudgetAction[] = ['require_reapproval', 'warn', 'block'];
@@ -126,6 +167,10 @@ export default function SettingsPage() {
   const [wocMinVelocityDays, setWocMinVelocityDays] = useState(90);
   // Opus R-05: shown only when the tenant set it; never pre-filled with a country rate.
   const [vatRatePct, setVatRatePct] = useState('');
+  const [vatByCountryText, setVatByCountryText] = useState('');
+  const [currencyCode, setCurrencyCode] = useState('');
+  const [reportingTimezone, setReportingTimezone] = useState('');
+  const [margins, setMargins] = useState(EMPTY_MARGINS);
   const [promotionTypesText, setPromotionTypesText] = useState('');
   const [channelsText, setChannelsText] = useState('');
   const [stockPromoteType, setStockPromoteType] = useState('');
@@ -150,6 +195,19 @@ export default function SettingsPage() {
     if (tenantProfileQuery.data.overrides_present?.includes('vat_rate_pct') && typeof tenantProfileQuery.data.vat_rate_pct === 'number') {
       setVatRatePct(String(tenantProfileQuery.data.vat_rate_pct));
     }
+    setVatByCountryText(formatVatByCountry(tenantProfileQuery.data.vat_rate_by_country));
+    setCurrencyCode(tenantProfileQuery.data.currency_code ?? '');
+    setReportingTimezone(tenantProfileQuery.data.reporting_timezone ?? '');
+    const savedMargins = tenantProfileQuery.data.profit_reservation_margins;
+    setMargins(
+      savedMargins
+        ? {
+            customer_margin_pct: String(savedMargins.customer_margin_pct),
+            customer_rebate_pct: String(savedMargins.customer_rebate_pct),
+            distributor_margin_pct: String(savedMargins.distributor_margin_pct),
+          }
+        : EMPTY_MARGINS,
+    );
     setPromotionTypesText((tenantProfileQuery.data.cpor_promotion_types ?? []).join('\n'));
     setChannelsText((tenantProfileQuery.data.cpor_channels ?? []).join('\n'));
     setStockPromoteType(tenantProfileQuery.data.cpor_stock_promote_type ?? '');
@@ -164,6 +222,11 @@ export default function SettingsPage() {
     }
   }, [tenantProfileQuery.data]);
 
+  // A cleared field that was saved before is sent as null (clears it); one never set is left out.
+  const savedKeys = tenantProfileQuery.data?.overrides_present ?? [];
+  const clearOrOmit = (key: string) => (savedKeys.includes(key) ? null : undefined);
+  const marginValues = Object.values(margins).map((v) => v.trim());
+
   const tenantProfileMutation = useMutation({
     mutationFn: () =>
       apiPut<TenantCommercialProfile>('/api/v1/auth/tenant-commercial-profile', {
@@ -175,6 +238,20 @@ export default function SettingsPage() {
         reporting_cadence: reportingCadence,
         woc_min_velocity_days: wocMinVelocityDays,
         vat_rate_pct: vatRatePct.trim() ? Number(vatRatePct) : undefined,
+        vat_rate_by_country: vatByCountryText.trim()
+          ? parseVatByCountry(vatByCountryText)
+          : clearOrOmit('vat_rate_by_country'),
+        currency_code: currencyCode.trim() ? currencyCode.trim().toUpperCase() : clearOrOmit('currency_code'),
+        reporting_timezone: reportingTimezone.trim() || clearOrOmit('reporting_timezone'),
+        profit_reservation_margins: marginValues.every(Boolean)
+          ? {
+              customer_margin_pct: Number(margins.customer_margin_pct),
+              customer_rebate_pct: Number(margins.customer_rebate_pct),
+              distributor_margin_pct: Number(margins.distributor_margin_pct),
+            }
+          : marginValues.some(Boolean)
+            ? Object.fromEntries(Object.entries(margins).map(([k, v]) => [k, v.trim() ? Number(v) : null]))
+            : clearOrOmit('profit_reservation_margins'),
         cpor_promotion_types: promotionTypesText.trim()
           ? promotionTypesText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
           : undefined,
@@ -367,9 +444,55 @@ export default function SettingsPage() {
               disabled={!isAdmin}
               fullWidth
               placeholder="Not set"
-              helperText="As a fraction, for example 0.15. Planner SRP from ex-VAT prices, case-line VAT and the stock cost check use it. Not set means those show as not available."
+              helperText="As a fraction of 1. Used for rows that carry no country. Not set means those show as not configured."
               inputProps={{ 'data-testid': 'tenant-profile-vat-rate', min: 0, max: 0.99, step: 0.005 }}
             />
+            <TextField
+              label="VAT rate by country"
+              value={vatByCountryText}
+              onChange={(ev) => setVatByCountryText(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Not set"
+              helperText="One per line: two-letter country code and the rate as a fraction of 1. A row with a country uses only that country's rate; a country not listed is not configured."
+              inputProps={{ 'data-testid': 'tenant-profile-vat-by-country' }}
+            />
+            <TextField
+              label="Currency"
+              value={currencyCode}
+              onChange={(ev) => setCurrencyCode(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              placeholder="Not set"
+              helperText="Three-letter ISO 4217 code for cases, settlement and the daily FX quote. Not set means those show as not configured."
+              inputProps={{ 'data-testid': 'tenant-profile-currency-code', maxLength: 3 }}
+            />
+            <TextField
+              label="Reporting time zone"
+              value={reportingTimezone}
+              onChange={(ev) => setReportingTimezone(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              placeholder="Not set"
+              helperText="IANA name, for example Europe/London. Sets today and upload days. Not set means date-based views show as not configured."
+              inputProps={{ 'data-testid': 'tenant-profile-reporting-timezone' }}
+            />
+            {MARGIN_FIELDS.map((field) => (
+              <TextField
+                key={field.key}
+                label={field.label}
+                type="number"
+                value={margins[field.key]}
+                onChange={(ev) => setMargins((prev) => ({ ...prev, [field.key]: ev.target.value }))}
+                disabled={!isAdmin}
+                fullWidth
+                placeholder="Not set"
+                helperText="Profit-reservation margin as a fraction of 1. All three are required together; not set means the reservation is not configured."
+                inputProps={{ 'data-testid': field.testId, min: 0, max: 0.99, step: 0.005 }}
+              />
+            ))}
             <TextField
               label="Promotion types"
               value={promotionTypesText}

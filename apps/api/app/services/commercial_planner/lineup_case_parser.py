@@ -28,6 +28,7 @@ from app.models.commercial_planner import (
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
 from app.services.catalog.product_lines import sellable_line_codes
+from app.services.commercial_tenant_profile import vat_rate_for_data
 from app.services.commercial_planner.lineup_commercial_month_split import (
     HALF_YEAR_SPLIT_REQUIRES_MONTH_COLUMNS,
     HalfYearSplitRequiresMonthColumnsError,
@@ -188,10 +189,13 @@ def _resolve_pricing_for_row_dict(
     sku_assumptions: dict[int, CommercialSkuAssumption],
     customer_terms: dict[int, CommercialCustomerTerm],
     distributor_terms: dict[int, CommercialDistributorTerm],
+    fallback_vat_rate_pct: float | None = None,
 ) -> tuple[float | None, float | None, dict[str, Any] | None, list[str]]:
     """Run the backwards SRP -> DAP calculator for one parsed row.
 
-    Uses file evidence first, then trade-term / sku-assumption fallbacks. Returns
+    Uses file evidence first, then trade-term / sku-assumption fallbacks. VAT with neither a file
+    nor a SKU rate takes ``fallback_vat_rate_pct`` (the case country's rate, or the tenant rate
+    when the case names no country); with none of these the row is not priced. Returns
     (calc_dap_cost_currency, calc_profit_total, pricing_chain_json, pricing_flags).
     No-op (all None) when there is no SRP to price from.
     """
@@ -211,7 +215,11 @@ def _resolve_pricing_for_row_dict(
         dealer_margin_pct=float(cust_term.customer_margin_pct) if cust_term else None,
         rebate_pct=float(cust_term.customer_rebate_pct) if cust_term else None,
         distributor_margin_pct=float(dist_term.distributor_margin_pct) if dist_term else None,
-        vat_rate_pct=float(assumption.vat_rate_pct) if assumption else None,
+        vat_rate_pct=(
+            float(assumption.vat_rate_pct)
+            if assumption is not None and assumption.vat_rate_pct is not None
+            else fallback_vat_rate_pct
+        ),
         roe_local_per_cost_currency=(
             float(assumption.fx_plan_currency_per_cost_currency) if assumption else None
         ),
@@ -679,6 +687,8 @@ async def parse_current_lineup_file(
         distributor_terms = {
             t.distributor_id: t for t in (await db.execute(select(CommercialDistributorTerm))).scalars().all()
         }
+        # Lineup cases carry no tenant id; the planner reads the default tenant profile.
+        case_vat_rate_pct = vat_rate_for_data("default", getattr(case, "country_code", None))
 
         lines_to_add: list[CommercialLineupLine] = []
         for rd in row_dicts:
@@ -688,6 +698,7 @@ async def parse_current_lineup_file(
                 sku_assumptions=sku_assumptions,
                 customer_terms=customer_terms,
                 distributor_terms=distributor_terms,
+                fallback_vat_rate_pct=case_vat_rate_pct,
             )
             for flag in pricing_flags:
                 if flag not in diag:

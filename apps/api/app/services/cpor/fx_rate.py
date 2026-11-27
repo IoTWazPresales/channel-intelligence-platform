@@ -8,7 +8,9 @@ date (a stored rate up to 4 days older is accepted), or from an explicit manual 
 carries a reason. A rate chosen at create or carried from an import is kept at approval. It is
 fixed at the first approval and never revisited. Rates are fetched daily and can be refreshed.
 
-Fetch source: Frankfurter (ECB daily reference, no API key, ZAR quoted).
+Fetch source: Frankfurter (ECB daily reference, no API key). The quote currency is the
+case's ``currency_code``; with no case it is the tenant profile's ``currency_code``. Unset is
+``currency_not_configured``: nothing is fetched or stored and no currency is assumed.
 Failed fetches never block a case: the case stays unbooked and flagged. A last-known
 row is never passed off as the rate for the case's date.
 """
@@ -29,18 +31,21 @@ from sqlalchemy.orm import Session
 
 from app.models.cpor import CporCase, CporCaseEvent
 from app.models.fx_rate import FxDailyRate
+from app.services.commercial_tenant_profile import tenant_currency_code
 from app.services.cpor.settle_readiness import FX_MODES, fx_declared, fx_mode_valid
 
 logger = logging.getLogger(__name__)
 
-QUOTE_PAIR = "USDZAR"
+# ``roe_snapshot`` orientation (NS-1a): case currency per 1 USD, the CPOR compute currency.
+BASE_CURRENCY = "USD"
 SOURCE_FRANKFURTER = "frankfurter.ecb"
 SOURCE_LAST_KNOWN = "last_known"
 SOURCE_OPERATOR = "operator"
 SOURCE_FETCH_FAILED = "fetch_failed"
+SOURCE_CURRENCY_NOT_CONFIGURED = "currency_not_configured"
 
-FRANKFURTER_LATEST = "https://api.frankfurter.app/latest?from=USD&to=ZAR"
-FRANKFURTER_ON_DATE = "https://api.frankfurter.app/{rate_date}?from=USD&to=ZAR"
+FRANKFURTER_LATEST = "https://api.frankfurter.app/latest?from={base}&to={quote}"
+FRANKFURTER_ON_DATE = "https://api.frankfurter.app/{rate_date}?from={base}&to={quote}"
 FETCH_TIMEOUT_S = 10
 USER_AGENT = "cip-fx-rate/1.0"
 
@@ -73,6 +78,7 @@ class RateQuote:
     is_fallback: bool
     fetch_failed: bool = False
     persisted: bool = True
+    quote_pair: str | None = None
 
     @property
     def live(self) -> bool:
@@ -86,8 +92,18 @@ class RateQuote:
             "is_fallback": self.is_fallback,
             "fetch_failed": self.fetch_failed,
             "persisted": self.persisted,
-            "quote_pair": QUOTE_PAIR,
+            "quote_pair": self.quote_pair,
         }
+
+
+def quote_currency(currency: str | None = None) -> str | None:
+    """The given (case) currency, else the default tenant's ``currency_code``; None when unset."""
+    ccy = (currency or "").strip().upper()
+    return ccy or tenant_currency_code()
+
+
+def quote_pair(currency: str) -> str:
+    return f"{BASE_CURRENCY}{currency.strip().upper()}"
 
 
 def _utc_today() -> date:
@@ -98,16 +114,17 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def parse_frankfurter_payload(payload: dict[str, Any]) -> tuple[date, float]:
+def parse_frankfurter_payload(payload: dict[str, Any], *, currency: str) -> tuple[date, float]:
+    ccy = currency.strip().upper()
     raw_date = payload.get("date")
     rates = payload.get("rates") or {}
-    raw_zar = rates.get("ZAR")
-    if not raw_date or raw_zar is None:
-        raise ValueError("frankfurter payload missing date or ZAR rate")
+    raw_rate = rates.get(ccy)
+    if not raw_date or raw_rate is None:
+        raise ValueError(f"frankfurter payload missing date or {ccy} rate")
     published = date.fromisoformat(str(raw_date))
-    rate = float(Decimal(str(raw_zar)))
+    rate = float(Decimal(str(raw_rate)))
     if rate <= 0:
-        raise ValueError("frankfurter ZAR rate is not positive")
+        raise ValueError(f"frankfurter {ccy} rate is not positive")
     return published, rate
 
 
@@ -124,13 +141,14 @@ def _http_get_json(url: str) -> dict[str, Any]:
     return parsed
 
 
-def fetch_frankfurter(*, on_date: date | None = None) -> tuple[date, float]:
+def fetch_frankfurter(*, currency: str, on_date: date | None = None) -> tuple[date, float]:
+    ccy = currency.strip().upper()
     url = (
-        FRANKFURTER_ON_DATE.format(rate_date=on_date.isoformat())
+        FRANKFURTER_ON_DATE.format(rate_date=on_date.isoformat(), base=BASE_CURRENCY, quote=ccy)
         if on_date is not None
-        else FRANKFURTER_LATEST
+        else FRANKFURTER_LATEST.format(base=BASE_CURRENCY, quote=ccy)
     )
-    return parse_frankfurter_payload(_http_get_json(url))
+    return parse_frankfurter_payload(_http_get_json(url), currency=ccy)
 
 
 def _positive_rate(value: Any) -> float | None:
@@ -145,11 +163,16 @@ def _positive_rate(value: Any) -> float | None:
     return rate
 
 
-def load_rate_on_or_before(session: Session, on_date: date) -> FxDailyRate | None:
+def load_rate_on_or_before(
+    session: Session, on_date: date, *, currency: str | None = None
+) -> FxDailyRate | None:
+    ccy = quote_currency(currency)
+    if ccy is None:
+        return None
     return session.scalars(
         select(FxDailyRate)
         .where(
-            FxDailyRate.quote_pair == QUOTE_PAIR,
+            FxDailyRate.quote_pair == quote_pair(ccy),
             FxDailyRate.rate_date <= on_date,
         )
         .order_by(FxDailyRate.rate_date.desc())
@@ -157,10 +180,15 @@ def load_rate_on_or_before(session: Session, on_date: date) -> FxDailyRate | Non
     ).first()
 
 
-def load_rate_on_date(session: Session, on_date: date) -> FxDailyRate | None:
+def load_rate_on_date(
+    session: Session, on_date: date, *, currency: str | None = None
+) -> FxDailyRate | None:
+    ccy = quote_currency(currency)
+    if ccy is None:
+        return None
     return session.scalars(
         select(FxDailyRate).where(
-            FxDailyRate.quote_pair == QUOTE_PAIR,
+            FxDailyRate.quote_pair == quote_pair(ccy),
             FxDailyRate.rate_date == on_date,
         )
     ).first()
@@ -174,9 +202,13 @@ def upsert_daily_rate(
     source: str,
     is_fallback: bool,
     fetched_at: datetime | None = None,
+    currency: str | None = None,
 ) -> FxDailyRate:
+    ccy = quote_currency(currency)
+    if ccy is None:
+        raise ValueError("currency_not_configured")
     now = fetched_at or _now()
-    existing = load_rate_on_date(session, rate_date)
+    existing = load_rate_on_date(session, rate_date, currency=ccy)
     if existing is not None:
         if is_fallback and not existing.is_fallback:
             return existing
@@ -188,7 +220,7 @@ def upsert_daily_rate(
         return existing
     row = FxDailyRate(
         rate_date=rate_date,
-        quote_pair=QUOTE_PAIR,
+        quote_pair=quote_pair(ccy),
         rate=rate,
         source=source,
         fetched_at=now,
@@ -198,22 +230,36 @@ def upsert_daily_rate(
     return row
 
 
-def ensure_rate_for_date(session: Session, on_date: date) -> RateQuote:
+def ensure_rate_for_date(
+    session: Session, on_date: date, *, currency: str | None = None
+) -> RateQuote:
     """Fetch the ECB rate for ``on_date``. Persist when the table is writable.
 
     Never raises. HTTP failure returns no rate (FLAG, do not substitute last-known).
     Persist failure still returns the fetched rate so case create is not blocked.
+    No quote currency returns no rate with source ``currency_not_configured``.
     """
+    ccy = quote_currency(currency)
+    if ccy is None:
+        return RateQuote(
+            rate=None,
+            rate_date=None,
+            source=SOURCE_CURRENCY_NOT_CONFIGURED,
+            is_fallback=True,
+            fetch_failed=True,
+        )
+    pair = quote_pair(ccy)
     try:
-        published, rate = fetch_frankfurter(on_date=on_date)
+        published, rate = fetch_frankfurter(currency=ccy, on_date=on_date)
     except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError, OSError) as exc:
-        logger.warning("fx fetch failed for %s: %s", on_date.isoformat(), exc)
+        logger.warning("fx fetch failed for %s %s: %s", pair, on_date.isoformat(), exc)
         return RateQuote(
             rate=None,
             rate_date=None,
             source=SOURCE_FETCH_FAILED,
             is_fallback=True,
             fetch_failed=True,
+            quote_pair=pair,
         )
 
     try:
@@ -224,6 +270,7 @@ def ensure_rate_for_date(session: Session, on_date: date) -> RateQuote:
                 rate=rate,
                 source=SOURCE_FRANKFURTER,
                 is_fallback=False,
+                currency=ccy,
             )
             session.flush()
             return RateQuote(
@@ -232,6 +279,7 @@ def ensure_rate_for_date(session: Session, on_date: date) -> RateQuote:
                 source=row.source,
                 is_fallback=False,
                 fetch_failed=False,
+                quote_pair=pair,
             )
     except Exception as exc:
         logger.error("fx persist failed for %s: %s", on_date.isoformat(), exc)
@@ -242,11 +290,12 @@ def ensure_rate_for_date(session: Session, on_date: date) -> RateQuote:
             is_fallback=False,
             fetch_failed=False,
             persisted=False,
+            quote_pair=pair,
         )
 
 
-def ensure_today_rate(session: Session) -> RateQuote:
-    return ensure_rate_for_date(session, _utc_today())
+def ensure_today_rate(session: Session, *, currency: str | None = None) -> RateQuote:
+    return ensure_rate_for_date(session, _utc_today(), currency=currency)
 
 
 def case_rate_date(today: date | None = None) -> date:
@@ -289,10 +338,17 @@ def _quote_from_row(row: FxDailyRate) -> RateQuote:
         source=row.source,
         is_fallback=False,
         fetch_failed=False,
+        quote_pair=row.quote_pair,
     )
 
 
-def rate_for_case_date(session: Session, on_date: date, *, today: date | None = None) -> RateQuote:
+def rate_for_case_date(
+    session: Session,
+    on_date: date,
+    *,
+    today: date | None = None,
+    currency: str | None = None,
+) -> RateQuote:
     """The stored daily rate for ``on_date``. Fetches and stores it only when none is stored.
 
     Stored first: a row for the date, or for a past date the last row no more than
@@ -301,16 +357,17 @@ def rate_for_case_date(session: Session, on_date: date, *, today: date | None = 
     ``STORED_GAP_DAYS`` before the date is used (D-0093); nothing older is substituted.
     """
     now = today or _utc_today()
-    row = load_rate_on_date(session, on_date)
+    ccy = quote_currency(currency)
+    row = load_rate_on_date(session, on_date, currency=ccy)
     if row is None and on_date < now:
-        earlier = load_rate_on_or_before(session, on_date)
+        earlier = load_rate_on_or_before(session, on_date, currency=ccy)
         if earlier is not None and (on_date - earlier.rate_date).days <= STORED_GAP_DAYS:
             row = earlier
     if _usable(row):
         return _quote_from_row(row)  # type: ignore[arg-type]
-    quote = ensure_rate_for_date(session, on_date)
-    if quote.fetch_failed:
-        earlier = load_rate_on_or_before(session, on_date)
+    quote = ensure_rate_for_date(session, on_date, currency=ccy)
+    if quote.fetch_failed and ccy is not None:
+        earlier = load_rate_on_or_before(session, on_date, currency=ccy)
         if _usable(earlier) and (on_date - earlier.rate_date).days <= STORED_GAP_DAYS:  # type: ignore[union-attr]
             return _quote_from_row(earlier)  # type: ignore[arg-type]
     return quote
@@ -415,7 +472,9 @@ def apply_create_fx(
     """
     override = _positive_rate(proposed_override)
     explicit = _positive_rate(explicit_roe)
-    quote = rate_for_case_date(session, case_rate_date())
+    quote = rate_for_case_date(
+        session, case_rate_date(), currency=getattr(case, "currency_code", None)
+    )
     stored_rate = quote.rate if quote.live else None
 
     chosen = override if override is not None else explicit
@@ -442,7 +501,10 @@ def apply_create_fx(
         case.fx_proposed_rate = None
         case.fx_proposed_at = _now()
         case.fx_proposed_by = actor
-        case.fx_proposed_source = SOURCE_FETCH_FAILED if quote.fetch_failed else SOURCE_LAST_KNOWN
+        if quote.source == SOURCE_CURRENCY_NOT_CONFIGURED:
+            case.fx_proposed_source = SOURCE_CURRENCY_NOT_CONFIGURED
+        else:
+            case.fx_proposed_source = SOURCE_FETCH_FAILED if quote.fetch_failed else SOURCE_LAST_KNOWN
         case.roe_snapshot = None
         case.fx_declared_at = None
         case.fx_declared_by = None
@@ -514,7 +576,12 @@ def book_on_approve(
             rate_date=getattr(case, "fx_booked_rate_date", None),
         )
 
-    stored = rate_for_case_date(session, case_rate_date(today), today=today)
+    stored = rate_for_case_date(
+        session,
+        case_rate_date(today),
+        today=today,
+        currency=getattr(case, "currency_code", None),
+    )
     stored_rate = stored.rate if stored.live else None
     stored_date = stored.rate_date if stored_rate is not None else None
     notes: list[str] = []

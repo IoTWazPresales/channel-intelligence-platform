@@ -29,7 +29,9 @@ def test_shape_zero_plan_units_does_not_divide():
     assert rows[0]["backlog_units"] == 0
 
 
-def test_failed_headline_read_logs_and_returns_empty(caplog):
+def test_failed_headline_read_logs_and_returns_empty(caplog, monkeypatch):
+    # Warren 2026-11-27 decisions: the reporting timezone comes from the tenant profile.
+    monkeypatch.setattr("app.services.supply_overview.reporting_timezone", lambda _tenant: "Europe/London")
     db = AsyncMock()
     first = MagicMock()
     first.scalar.return_value = "cip"

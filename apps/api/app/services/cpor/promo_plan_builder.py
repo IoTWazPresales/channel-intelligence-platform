@@ -1159,7 +1159,7 @@ def create_case_from_promo_draft(
             f"seed_channel={seed.channel}; line_count={len(write_specs)}"
         )
         roe = seed.roe_snapshot
-        currency = seed.currency_code or "ZAR"
+        currency = seed.currency_code or tenant_profile.require_tenant_currency_code(tenant)
     else:
         tenant = tenant_id or "default"
         channel = require_channel(tenant, None)
@@ -1175,7 +1175,7 @@ def create_case_from_promo_draft(
             f"line_count={len(write_specs)}"
         )
         roe = None
-        currency = "ZAR"
+        currency = tenant_profile.require_tenant_currency_code(tenant)
     if case_origin:
         origin = case_origin
     if case_name_override:
@@ -1219,8 +1219,11 @@ def create_case_from_promo_draft(
 
     margin, margin_source = resolve_default_margin(session, case.customer_id)
     if margin is None:
-        margin = 0.12
-        margin_source = "b4_default"
+        tenant_margins = tenant_profile.profit_reservation_margins(tenant)
+        if tenant_margins is None:
+            raise ValueError("profit_reservation_margins_not_configured")
+        margin = tenant_margins["customer_margin_pct"]
+        margin_source = "tenant_profile"
 
     created_lines: list[CporCaseLine] = []
     line_reports: list[dict[str, Any]] = []

@@ -39,7 +39,7 @@ async def test_filters_and_totals_at_every_advertised_cpor_grain(monkeypatch):
         await db.flush()
         cases = []
         for i, customer in enumerate(customers):
-            case = CporCase(tenant_id=tenant, case_code=f"E1-{tag}-{i}", customer_id=customer.id,
+            case = CporCase(currency_code="ZAR", tenant_id=tenant, case_code=f"E1-{tag}-{i}", customer_id=customer.id,
                             promotion_type="Fictional promo", window_start=date(2026, 1, 1), window_end=date(2026, 1, 31))
             db.add(case)
             cases.append(case)
@@ -167,7 +167,7 @@ async def test_cpor_authenticated_query_export_and_saved_delivery(signed_in):
     async for db in app.dependency_overrides[get_db]():
         for i, product in enumerate(fixture.products):
             customer = (await db.scalars(select(DimCustomer).where(DimCustomer.tenant_id == product.tenant_id))).first()
-            case = CporCase(tenant_id=product.tenant_id, case_code=f"E1-http-{uuid4().hex[:15]}",
+            case = CporCase(currency_code="ZAR", tenant_id=product.tenant_id, case_code=f"E1-http-{uuid4().hex[:15]}",
                             customer_id=customer.id, promotion_type="Fictional HTTP promo",
                             window_start=date(2026, 1, 1), window_end=date(2026, 1, 31))
             db.add(case)

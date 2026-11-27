@@ -450,12 +450,16 @@ async def test_cst_sku_twin_disambiguation_inbound_quantity_is_live_only():
 
 @pytest.mark.anyio
 async def test_supply_overview_headline_counts_only_live_facts():
-    from app.services.supply_overview import _ISO_WEEK_START_SAST, _TODAY_SAST, _headline_sql
+    from app.services.supply_overview import _ISO_WEEK_START_SQL, _TODAY_SQL, _headline_sql
 
     db = await _session_or_skip()
     try:
         await _world(db)
-        row = (await db.execute(text(_headline_sql(_TODAY_SAST, _ISO_WEEK_START_SAST)), {"tenant": T})).mappings().one()
+        row = (
+            await db.execute(
+                text(_headline_sql(_TODAY_SQL, _ISO_WEEK_START_SQL)), {"tenant": T, "reporting_tz": "UTC"}
+            )
+        ).mappings().one()
         assert row["open_lines"] == 2 and float(row["open_units"]) == 140.0
     finally:
         await db.rollback()

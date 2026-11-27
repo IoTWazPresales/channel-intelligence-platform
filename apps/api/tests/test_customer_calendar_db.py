@@ -391,6 +391,7 @@ def _case(
         tenant_id=tenant,
         customer_id=customer_id,
         promotion_type="test",
+        currency_code="ZAR",
         window_start=start,
         window_end=end,
         status=extra.pop("status", "active"),

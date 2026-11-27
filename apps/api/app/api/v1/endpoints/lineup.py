@@ -14,6 +14,7 @@ from app.api.deps import get_db
 from app.core.security import get_current_user
 from app.models.dimensions import DimChannel, DimCustomer, DimProduct
 from app.models.lineup import FactLineupPlanItem, LineupPlanItemEvent
+from app.services.commercial_tenant_profile import profit_reservation_margins
 from app.services.lineup.audit import record_lineup_approval_event
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.services.lineup.bias_correction import volume_bias_by_bu
@@ -521,6 +522,10 @@ async def post_lineup_builder_economics(
     srp = body.target_srp_local
     if srp is None or srp <= 0:
         raise HTTPException(status_code=400, detail="target_srp_local required (> 0)")
+    # Lineup rows carry no tenant id; the lineup builder reads the default tenant profile.
+    margins = profit_reservation_margins("default")
+    if margins is None:
+        raise HTTPException(status_code=400, detail="profit_reservation_margins_not_configured")
     return compute_profit_with_reservation(
         net_requirement_units=body.net_requirement_units,
         target_srp_local=float(srp),
@@ -528,6 +533,9 @@ async def post_lineup_builder_economics(
         controlled_cost_amount=float(sku.controlled_cost_amount),
         reserve_total_pct=float(sku.reserve_total_pct),
         promo_reserve_split_pct=float(sku.promo_reserve_split_pct),
+        customer_margin_pct=margins["customer_margin_pct"],
+        customer_rebate_pct=margins["customer_rebate_pct"],
+        distributor_margin_pct=margins["distributor_margin_pct"],
         vat_rate_pct=float(sku.vat_rate_pct),
         fx_plan_currency_per_cost_currency=float(sku.fx_plan_currency_per_cost_currency),
         normal_price_share=body.normal_price_share,

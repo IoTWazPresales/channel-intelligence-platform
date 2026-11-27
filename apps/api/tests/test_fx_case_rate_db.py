@@ -37,6 +37,12 @@ TODAY = date(2031, 6, 30)
 NOW = datetime(2031, 6, 30, 8, 0, tzinfo=timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def _tenant_currency(monkeypatch):
+    # Warren 2026-11-27 decisions: the quote currency is the tenant's, never built in.
+    monkeypatch.setattr(fx_rate, "tenant_currency_code", lambda _tenant="default": "ZAR")
+
+
 @pytest.fixture
 def db():
     engine = create_engine(sqlalchemy_sync_engine_url(get_settings().database_url_sync))
@@ -83,6 +89,7 @@ def _case(db: Session, window_start: date, **kw) -> CporCase:
         case_code=f"N0083-{window_start.isoformat()}-{kw.pop('suffix', 'a')}",
         customer_id=int(customer),
         promotion_type="Price Drop",
+        currency_code="ZAR",
         window_start=window_start,
         window_end=window_start + timedelta(days=30),
         **{"status": "proposed", **kw},

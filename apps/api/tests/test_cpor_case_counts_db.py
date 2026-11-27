@@ -80,6 +80,7 @@ def _case(
     product=None,
 ):
     case = CporCase(
+        currency_code="ZAR",
         tenant_id=w["tenant"],
         case_code=f"CN-{w['tag']}-{n}",
         customer_id=(customer or w["cust"]).id,
@@ -187,6 +188,7 @@ def test_tenant_and_fixture_scoping_match_the_cases_list(world):
     w["session"].flush()
     w["session"].add(
         CporCase(
+            currency_code="ZAR",
             tenant_id=other_tenant,
             case_code=f"CN-{w['tag']}-F",
             customer_id=foreign_customer.id,

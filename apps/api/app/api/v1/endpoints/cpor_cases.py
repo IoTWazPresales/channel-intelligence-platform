@@ -17,6 +17,7 @@ from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine, CporClaimEvidenceLine
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.commercial_tenant_profile import tenant_currency_code
 from app.services.customer_reporting import reporting_customer_clauses
 from app.services.cpor.case_supersession import (
     preview_case_supersession,
@@ -480,7 +481,7 @@ class CaseCreate(BaseModel):
     roe_snapshot: float | None = None
     fx_proposed_rate: float | None = None
     fx_mode: str | None = None
-    currency_code: str = "ZAR"
+    currency_code: str | None = None
     channel: str | None = None
     notes: str | None = None
 
@@ -890,6 +891,9 @@ def create_case(
     fx_mode = (body.fx_mode or "booked").strip().lower() or "booked"
     if fx_mode not in FX_MODES:
         raise HTTPException(status_code=400, detail=f"fx_mode must be one of: {sorted(FX_MODES)}")
+    currency_code = (body.currency_code or "").strip().upper() or tenant_currency_code(tenant_id)
+    if not currency_code:
+        raise HTTPException(status_code=400, detail="currency_not_configured")
     with SessionLocal() as session:
         cust = session.get(DimCustomer, body.customer_id)
         if not cust:
@@ -908,7 +912,7 @@ def create_case(
             status="draft",
             roe_snapshot=body.roe_snapshot,
             fx_mode=fx_mode,
-            currency_code=body.currency_code or "ZAR",
+            currency_code=currency_code,
             channel=channel,
             notes=body.notes,
             created_by=actor,
@@ -1796,9 +1800,8 @@ def tenant_profile_hard_enforce() -> bool:
 @router.get("/settlement/book")
 def cpor_settlement_book(user: dict = Depends(get_current_user)) -> dict[str, Any]:
     """NS-4 book read model: regime totals, shape segments, concentration."""
-    _ = user
     with SessionLocal() as session:
-        return build_settlement_book_read_model(session)
+        return build_settlement_book_read_model(session, tenant_id=tenant_id_from_user(user))
 
 
 @router.get("/intelligence/portfolio")

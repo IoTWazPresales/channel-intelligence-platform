@@ -1,8 +1,9 @@
 """Commercial tenant profile — TENANT-VARIABLE commercial policy.
 
 Some keys still have a module default until that key is saved on the tenant
-profile. VAT, promotion types, channels and the stock-promote type do not:
-unset means not configured. BACKLOG-096 (P6): per-tenant overrides persist as
+profile. VAT (and VAT by country), the currency, the reporting timezone, the
+profit-reservation margins, promotion types, channels and the stock-promote
+type do not: unset means not configured. BACKLOG-096 (P6): per-tenant overrides persist as
 JSON files under ``{local_storage_path}/tenant_profiles/{tenant_id}.json`` —
 no migration, no new table. `profile_snapshot()` merges the file over the
 module defaults for the keys that still have one.
@@ -141,8 +142,6 @@ DEFAULT_REPORTING_CADENCE: ReportingCadence = "weekly_monday"
 DEFAULT_WOC_MIN_VELOCITY_DAYS = 90
 WOC_MIN_VELOCITY_DAYS_LO = 28
 WOC_MIN_VELOCITY_DAYS_HI = 90
-# DATE bounds for cover_as_of / Monday alignment (ASUS SA). P6 tenants override later if needed.
-REPORTING_TIMEZONE = "Africa/Johannesburg"
 
 # BACKLOG-096 (P6) — onboarding-editable subset. Everything else on this module
 # (money ceiling, support-norms window, protected case ids) stays env-only.
@@ -165,7 +164,15 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "week_calendar",
     "business_calendar",
     "vat_rate_pct",
+    # {"<ISO 3166 alpha-2>": rate}. A row that names its country takes that country's rate.
+    "vat_rate_by_country",
     "sales_value_vat_basis",
+    # ISO 4217 code of the tenant's local money (case amounts, settlement, payments).
+    "currency_code",
+    # IANA zone that dates "today", upload days and week starts.
+    "reporting_timezone",
+    # {"customer_margin_pct", "customer_rebate_pct", "distributor_margin_pct"} for lineup profit.
+    "profit_reservation_margins",
     # CPOR commercial names. Empty means not configured: no built-in list.
     "cpor_promotion_types",
     "cpor_channels",
@@ -846,6 +853,95 @@ def _normalize_label_list(value: object, *, strict: bool, key: str) -> list[str]
     return out or None
 
 
+PROFIT_RESERVATION_MARGIN_KEYS: tuple[str, ...] = (
+    "customer_margin_pct",
+    "customer_rebate_pct",
+    "distributor_margin_pct",
+)
+_CURRENCY_CODE_RE = re.compile(r"^[A-Z]{3}$")
+
+
+def _rate_fraction(raw: object, *, key: str, strict: bool) -> float | None:
+    """A rate saved as a fraction (0 <= rate < 1). A value above 1 is read as a percentage."""
+    if raw is None or isinstance(raw, bool) or str(raw).strip() == "":
+        if strict:
+            raise ValueError(f"{key}: a rate is required")
+        return None
+    try:
+        rate = float(str(raw).strip())
+    except (TypeError, ValueError) as exc:
+        if strict:
+            raise ValueError(f"{key}: a rate is required") from exc
+        return None
+    if rate > 1:
+        rate = rate / 100.0
+    if not (0 <= rate < 1):
+        if strict:
+            raise ValueError(f"{key}: must be a fraction from 0 up to 1, or a percentage under 100")
+        return None
+    return rate
+
+
+def _normalize_currency_code(value: object, *, strict: bool) -> str | None:
+    code = str(value).strip().upper() if isinstance(value, str) else ""
+    if not _CURRENCY_CODE_RE.match(code):
+        if strict:
+            raise ValueError("currency_code: a three-letter ISO 4217 code is required")
+        return None
+    return code
+
+
+def _normalize_reporting_timezone(value: object, *, strict: bool) -> str | None:
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    name = str(value).strip() if isinstance(value, str) else ""
+    try:
+        if not name:
+            raise ValueError(name)
+        ZoneInfo(name)
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        if strict:
+            raise ValueError("reporting_timezone: an IANA timezone name is required") from exc
+        return None
+    return name
+
+
+def _normalize_vat_rate_by_country(value: object, *, strict: bool) -> dict[str, float] | None:
+    from app.reference.iso3166_countries import alpha2_name_index
+
+    if not isinstance(value, dict):
+        if strict:
+            raise ValueError("vat_rate_by_country: an object of country code to rate is required")
+        return None
+    known = alpha2_name_index()
+    out: dict[str, float] = {}
+    for code, raw in value.items():
+        country = str(code).strip().upper() if isinstance(code, str) else ""
+        if country not in known:
+            if strict:
+                raise ValueError(f"vat_rate_by_country: {code!r} is not an ISO 3166 alpha-2 country code")
+            continue
+        rate = _rate_fraction(raw, key=f"vat_rate_by_country.{country}", strict=strict)
+        if rate is not None:
+            out[country] = rate
+    return out or None
+
+
+def _normalize_profit_reservation_margins(value: object, *, strict: bool) -> dict[str, float] | None:
+    """All three margins or none: a partial set would price lineup profit on a guess."""
+    if not isinstance(value, dict):
+        if strict:
+            raise ValueError("profit_reservation_margins: an object with the three margins is required")
+        return None
+    out: dict[str, float] = {}
+    for key in PROFIT_RESERVATION_MARGIN_KEYS:
+        rate = _rate_fraction(value.get(key), key=f"profit_reservation_margins.{key}", strict=strict)
+        if rate is None:
+            return None
+        out[key] = rate
+    return out
+
+
 def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
     """Read persisted overrides for ``tenant_id``. Missing/unreadable file → ``{}`` (FLAG != BLOCK)."""
     path = _tenant_profile_override_path(tenant_id)
@@ -908,6 +1004,26 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
         if key == "cpor_stock_promote_type":
             if isinstance(value, str) and value.strip():
                 out[key] = value.strip()
+            continue
+        if key == "currency_code":
+            code = _normalize_currency_code(value, strict=False)
+            if code:
+                out[key] = code
+            continue
+        if key == "reporting_timezone":
+            zone = _normalize_reporting_timezone(value, strict=False)
+            if zone:
+                out[key] = zone
+            continue
+        if key == "vat_rate_by_country":
+            rates = _normalize_vat_rate_by_country(value, strict=False)
+            if rates:
+                out[key] = rates
+            continue
+        if key == "profit_reservation_margins":
+            margins = _normalize_profit_reservation_margins(value, strict=False)
+            if margins:
+                out[key] = margins
             continue
         text = str(value).strip()
         if text:
@@ -978,12 +1094,32 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
             try:
                 rate = float(str(raw).strip())
             except (TypeError, ValueError) as exc:
-                raise ValueError("vat_rate_pct: a rate such as 0.15 is required") from exc
+                raise ValueError("vat_rate_pct: a rate as a fraction of 1 is required") from exc
             if rate > 1:
                 rate = rate / 100.0
             if not (0 <= rate < 1):
-                raise ValueError("vat_rate_pct: must be between 0 and 1 (0.15 for 15%)")
+                raise ValueError("vat_rate_pct: must be at least 0 and below 1 (a fraction of 1)")
             clean[key] = rate
+            continue
+        if key in ("currency_code", "reporting_timezone"):
+            if raw is None or str(raw).strip() == "":
+                continue
+            if key == "currency_code":
+                clean[key] = _normalize_currency_code(raw, strict=True)
+            else:
+                clean[key] = _normalize_reporting_timezone(raw, strict=True)
+            continue
+        if key == "vat_rate_by_country":
+            if raw is None or raw == "" or raw == {}:
+                continue
+            rates = _normalize_vat_rate_by_country(raw, strict=True)
+            if rates:
+                clean[key] = rates
+            continue
+        if key == "profit_reservation_margins":
+            if raw is None or raw == "" or raw == {}:
+                continue
+            clean[key] = _normalize_profit_reservation_margins(raw, strict=True)
             continue
         if key in ("cpor_promotion_types", "cpor_channels"):
             if raw is None or raw == "" or raw == []:
@@ -1111,11 +1247,17 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "business_calendar": business_calendar_config(tenant_id),
         "vat_rate_pct": configured_vat_rate_pct(tenant_id),
         "vat_rate_not_configured": configured_vat_rate_pct(tenant_id) is None,
+        "vat_rate_by_country": vat_rate_by_country(tenant_id),
         "cpor_promotion_types": list(cpor_promotion_types(tenant_id)),
         "cpor_channels": list(cpor_channels(tenant_id)),
         "cpor_stock_promote_type": cpor_stock_promote_type(tenant_id),
         "sales_value_vat_basis": sales_value_vat_basis(tenant_id),
-        "reporting_timezone": REPORTING_TIMEZONE,
+        "currency_code": tenant_currency_code(tenant_id),
+        "currency_not_configured": tenant_currency_code(tenant_id) is None,
+        "reporting_timezone": reporting_timezone(tenant_id),
+        "reporting_timezone_not_configured": reporting_timezone(tenant_id) is None,
+        "profit_reservation_margins": profit_reservation_margins(tenant_id),
+        "profit_reservation_margins_not_configured": profit_reservation_margins(tenant_id) is None,
         "open_book": {
             "complete_report_types": list(complete_open_book_report_types(tenant_id)),
             "report_date_rule": open_book_report_date_rule(tenant_id),
@@ -1194,6 +1336,55 @@ def configured_vat_rate_pct(tenant_id: str = "default") -> float | None:
     return rate if 0 <= rate < 1 else None
 
 
+def vat_rate_by_country(tenant_id: str = "default") -> dict[str, float]:
+    """Saved VAT rates by ISO 3166 alpha-2 country. Empty when none are saved."""
+    raw = load_tenant_profile_overrides(tenant_id).get("vat_rate_by_country")
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def vat_rate_for_data(tenant_id: str, country_code: str | None) -> float | None:
+    """VAT for data that may name its country.
+
+    A row with a country takes the rate saved for that country, and only that rate: another
+    country's rate is never borrowed. A row without a country takes the tenant's own rate.
+    None means not configured (``vat_rate_not_configured``).
+    """
+    country = (country_code or "").strip().upper()
+    if country:
+        return vat_rate_by_country(tenant_id).get(country)
+    return configured_vat_rate_pct(tenant_id)
+
+
+def tenant_currency_code(tenant_id: str = "default") -> str | None:
+    """The tenant's local currency (ISO 4217), or None when it is not set (``currency_not_configured``)."""
+    return load_tenant_profile_overrides(tenant_id).get("currency_code")
+
+
+def require_tenant_currency_code(tenant_id: str = "default") -> str:
+    code = tenant_currency_code(tenant_id)
+    if code is None:
+        raise ValueError("currency_not_configured")
+    return code
+
+
+def reporting_timezone(tenant_id: str = "default") -> str | None:
+    """IANA zone for "today" and upload days, or None when it is not set (``reporting_timezone_not_configured``)."""
+    return load_tenant_profile_overrides(tenant_id).get("reporting_timezone")
+
+
+def require_reporting_timezone(tenant_id: str = "default") -> str:
+    zone = reporting_timezone(tenant_id)
+    if zone is None:
+        raise ValueError("reporting_timezone_not_configured")
+    return zone
+
+
+def profit_reservation_margins(tenant_id: str = "default") -> dict[str, float] | None:
+    """Customer margin, customer rebate and distributor margin for lineup profit, or None when not set."""
+    raw = load_tenant_profile_overrides(tenant_id).get("profit_reservation_margins")
+    return dict(raw) if isinstance(raw, dict) else None
+
+
 def cpor_promotion_types(tenant_id: str = "default") -> tuple[str, ...]:
     """This tenant's CPOR promotion types, in saved order. Empty when not configured."""
     raw = load_tenant_profile_overrides(tenant_id).get("cpor_promotion_types")
@@ -1266,10 +1457,18 @@ def woc_min_velocity_days(tenant_id: str = "default") -> int:
     return max(WOC_MIN_VELOCITY_DAYS_LO, min(WOC_MIN_VELOCITY_DAYS_HI, days))
 
 
-def reporting_today(tenant_id: str = "default") -> date:
-    """Calendar date in the tenant reporting timezone (DATE bounds, not UTC wall clock)."""
-    from datetime import date, datetime
+def reporting_today(tenant_id: str = "default") -> date | None:
+    """Calendar date in the tenant reporting timezone, or None when no timezone is set."""
     from zoneinfo import ZoneInfo
 
-    _ = tenant_id  # reserved for a future per-tenant timezone key
-    return datetime.now(ZoneInfo(REPORTING_TIMEZONE)).date()
+    zone = reporting_timezone(tenant_id)
+    if zone is None:
+        return None
+    return datetime.now(ZoneInfo(zone)).date()
+
+
+def require_reporting_today(tenant_id: str = "default") -> date:
+    """Today in the tenant reporting timezone; ``ValueError("reporting_timezone_not_configured")`` when unset."""
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo(require_reporting_timezone(tenant_id))).date()
