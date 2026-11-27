@@ -65,7 +65,9 @@ describe('CustomerRowsTimeline (mock-up layout)', () => {
     expect(screen.getByTestId('planner-timeline-empty')).toHaveTextContent('No open customer promotions.');
   });
 
-  it('labels the week view with ISO weeks above the Monday dates', () => {
+  it('opens on Week, with a month row and ISO week labels, over the three-month block', () => {
+    // Requirement: docs/design/planner/Promotion_Planner Mockup.png shows Week selected, a month row
+    // ("Nov 2026") and week labels ("W47 / Nov 16"), plus the navigator "Nov – Jan 2027".
     renderWithProviders(
       <CustomerRowsTimeline
         cases={[row(1, 'Alpha', 'active', '2026-11-02', '2026-11-20')]}
@@ -74,9 +76,57 @@ describe('CustomerRowsTimeline (mock-up layout)', () => {
         onSelect={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Week' }));
     const tl = screen.getByTestId('planner-timeline');
-    expect(within(tl).getByText('W45')).toBeInTheDocument();
-    expect(within(tl).getByText('2 Nov')).toBeInTheDocument();
+    expect(within(tl).getByText('Nov 2026')).toBeInTheDocument();
+    expect(within(tl).getByText('W45 / 2 Nov')).toBeInTheDocument();
+    expect(screen.getByTestId('planner-period-label')).toHaveTextContent('Nov – Jan 2027');
+    expect(screen.getByTestId('planner-period-label')).not.toHaveTextContent('Q');
+  });
+
+  it('appends the tenant gregorian quarter when the block is one quarter', () => {
+    renderWithProviders(
+      <CustomerRowsTimeline
+        cases={[row(1, 'Alpha', 'active', '2026-11-02', '2026-11-20')]}
+        today="2026-11-19"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fiscalYearStartMonth={2}
+      />,
+    );
+    expect(screen.getByTestId('planner-period-label')).toHaveTextContent('Nov – Jan 2027 (Q4)');
+  });
+
+  it('moves the visible block with the period arrows and hides a promotion outside it', () => {
+    renderWithProviders(
+      <CustomerRowsTimeline
+        cases={[row(1, 'Alpha', 'ended', '2026-10-01', '2026-10-10')]}
+        today="2026-11-19"
+        selectedId={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('planner-timeline-bar-1')).toBeNull();
+    fireEvent.click(screen.getByTestId('planner-period-prev'));
+    expect(screen.getByTestId('planner-period-label')).toHaveTextContent('Aug – Oct 2026');
+    expect(screen.getByTestId('planner-timeline-bar-1')).toBeInTheDocument();
+  });
+
+  it('shows the list instead of the bars when List is selected', () => {
+    // Requirement: the mock-up's Timeline | List switch. Timeline is selected; the list is the other view.
+    renderWithProviders(
+      <CustomerRowsTimeline
+        cases={[row(1, 'Alpha', 'active', '2026-11-02', '2026-11-20')]}
+        today="2026-11-19"
+        selectedId={null}
+        onSelect={vi.fn()}
+        list={<div data-testid="planner-list-slot">the list</div>}
+      />,
+    );
+    expect(screen.getByTestId('planner-timeline-bar-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-list-slot')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByTestId('planner-list-slot')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-timeline-bar-1')).toBeNull();
+    expect(screen.queryByTestId('planner-period-nav')).toBeNull();
   });
 });

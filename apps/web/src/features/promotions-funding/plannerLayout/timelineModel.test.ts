@@ -4,11 +4,15 @@ import {
   barGeometry,
   buildTimeline,
   defaultTimelineViewWindow,
+  formatPlannerWindowLabel,
+  gregorianQuarterLabel,
   isoWeek,
   monthTicks,
   monthTicksForAxis,
   orderByCustomer,
+  plannerVisibleWindow,
   scrollLeftForViewWindow,
+  shiftPlannerVisibleWindow,
   statusLane,
   weekStartIso,
   weekTicks,
@@ -154,5 +158,36 @@ describe('orderByCustomer', () => {
     const ordered = orderByCustomer(t.bars);
     expect(ordered.map((o) => o.bar.id)).toEqual([2, 1]);
     expect(ordered[1].firstOfCustomer).toBe(true);
+  });
+});
+
+describe('planner visible window (mock-up period navigator)', () => {
+  it('is the three months that start with the anchor month', () => {
+    expect(plannerVisibleWindow('2026-11-19')).toEqual({ start: '2026-11-01', end: '2027-01-31' });
+    expect(formatPlannerWindowLabel('2026-11-01', '2027-01-31')).toBe('Nov – Jan 2027');
+  });
+  it('steps a whole block in either direction', () => {
+    expect(shiftPlannerVisibleWindow('2026-11-01', -1)).toEqual({ start: '2026-08-01', end: '2026-10-31' });
+    expect(shiftPlannerVisibleWindow('2026-11-01', 1)).toEqual({ start: '2027-02-01', end: '2027-04-30' });
+  });
+  it('names a gregorian fiscal quarter only when the block is that quarter', () => {
+    // Fiscal year starting February: Nov–Jan is Q4. Calendar year (January) does not label Nov–Jan as one quarter.
+    expect(gregorianQuarterLabel('2026-11-01', '2027-01-31', 2)).toBe('Q4');
+    expect(gregorianQuarterLabel('2026-11-01', '2027-01-31', 1)).toBeNull();
+    expect(gregorianQuarterLabel('2026-10-01', '2026-12-31', 1)).toBe('Q4');
+    expect(gregorianQuarterLabel('2026-11-01', '2027-01-31', 0)).toBeNull();
+  });
+  it('draws only the bars that meet the navigator block, clipping a bar that crosses the edge', () => {
+    const t = buildTimeline(
+      [row(1, '2026-10-01', '2026-10-10'), row(2, '2026-11-20', '2026-12-05'), row(3, null, null)],
+      '2026-11-19',
+      { start: '2026-11-01', end: '2027-01-31' },
+    );
+    expect(t.start).toBe('2026-11-01');
+    expect(t.end).toBe('2027-01-31');
+    expect(t.bars.map((b) => b.id)).toEqual([2]);
+    expect(t.undated).toBe(1);
+    expect(t.bars[0].start).toBe('2026-11-20');
+    expect(t.bars[0].leftPct).toBeGreaterThan(0);
   });
 });

@@ -49,7 +49,7 @@ const listPayload = {
     row(1, { status: 'active', evidence_basis: 'claim_evidenced', settle_readiness: { claim_evidence_count: 2 } }),
     row(2, { status: 'approved', window_start: '2026-12-01', window_end: '2026-12-15' }),
     row(3, { status: 'draft', window_start: '2026-12-20', window_end: '2027-01-05' }),
-    row(4, { status: 'ended', window_start: '2026-10-01', window_end: '2026-10-10' }),
+    row(4, { status: 'ended', window_start: '2026-11-01', window_end: '2026-11-08' }),
     row(5, { status: 'active', needs_reapproval: true, flags: ['no_cost'], window_start: '2026-11-10', window_end: '2026-11-30' }),
   ],
   total: 5,
@@ -169,7 +169,9 @@ describe('planner layout (mock-up)', () => {
       const rel = nodes[i - 1].compareDocumentPosition(nodes[i]);
       expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
-    expect(screen.queryByTestId('planner-detail-empty')).toBeNull();
+    // The detail column is docked beside the timeline (mock-up) and empty until a promotion is selected.
+    expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-detail-drawer')).toBeNull();
   });
 
   it('draws one timeline row per customer, with the bars coloured by status and a legend of the four statuses', async () => {
@@ -186,23 +188,29 @@ describe('planner layout (mock-up)', () => {
     for (const l of ['Live', 'Approved', 'Planned', 'Ended']) expect(within(legend).getByText(l)).toBeInTheDocument();
   });
 
-  it('switches the timeline axis between Month and Week', async () => {
+  it('opens on Week over Nov – Jan, and Month still shows the month labels', async () => {
+    // Requirement: Promotion_Planner Mockup.png selects Week, with a month row and "Wnn / d Mon" labels.
+    // The earlier assertion that Week hides "Nov 2026" described the unfinished header, not the mock-up.
     renderPlanner();
     await screen.findByTestId('planner-timeline-bar-1');
     const tl = screen.getByTestId('planner-timeline');
     expect(within(tl).getByText('Nov 2026')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Week' }));
-    expect(within(tl).queryByText('Nov 2026')).toBeNull();
-    expect(within(tl).getByText('2 Nov')).toBeInTheDocument();
+    expect(within(tl).getByText('W45 / 2 Nov')).toBeInTheDocument();
+    expect(screen.getByTestId('planner-period-label')).toHaveTextContent('Nov – Jan 2027');
     fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+    expect(within(tl).queryByText('W45 / 2 Nov')).toBeNull();
     expect(within(tl).getByText('Nov 2026')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Week' }));
+    expect(within(tl).getByText('W45 / 2 Nov')).toBeInTheDocument();
   });
 
-  it('selecting a promotion fills the detail drawer with the seven sections', async () => {
+  it('selecting a promotion fills the docked detail with the seven sections', async () => {
+    // Requirement: the mock-up docks the detail on the right of the timeline, rather than a drawer.
     renderPlanner();
-    expect(screen.queryByTestId('planner-detail-empty')).toBeNull();
+    expect(screen.getByTestId('planner-detail-dock')).toBeInTheDocument();
+    expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
+    expect(screen.queryByTestId('planner-detail-drawer')).toBeNull();
     fireEvent.click(await screen.findByTestId('planner-timeline-bar-1'));
-    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
     const detail = screen.getByTestId('planner-detail');
     for (const s of ['support', 'units', 'stock', 'claims', 'evidence', 'risks', 'next-actions']) {
       expect(within(detail).getByTestId(`planner-detail-${s}`)).toBeInTheDocument();

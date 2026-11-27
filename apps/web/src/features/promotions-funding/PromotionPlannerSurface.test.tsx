@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
@@ -44,8 +44,8 @@ const listPayload = {
       customer_name: 'TechMart',
       customer_code: 'TMT',
       promotion_type: 'Sell-Through PP',
-      window_start: '2026-09-07',
-      window_end: '2026-09-20',
+      window_start: '2026-11-09',
+      window_end: '2026-11-20',
       status: 'proposed',
       workflow_status: 'proposed',
       origin: 'proposed_by_cip',
@@ -135,6 +135,9 @@ vi.mock('@/lib/api', () => ({
 
 describe('PromotionPlannerSurface', () => {
   beforeEach(() => {
+    // The navigator shows the three months around today. Pin the day so a November case stays on the default block.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 19, 10, 0, 0));
     apiGetMock.mockClear();
     replaceMock.mockClear();
     pushMock.mockClear();
@@ -142,6 +145,10 @@ describe('PromotionPlannerSurface', () => {
     countsOverride = null;
     clashOverride = null;
     search.value = '';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const renderPlanner = () => {
@@ -239,6 +246,8 @@ describe('PromotionPlannerSurface', () => {
   });
 
   it('moves the starting window to the new local day after midnight', async () => {
+    // beforeEach already fakes Date. Install the interval fakes on a clean timer so the two do not nest.
+    vi.useRealTimers();
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     try {
       vi.setSystemTime(new Date(2026, 10, 19, 23, 59, 30));
@@ -270,40 +279,41 @@ describe('PromotionPlannerSurface', () => {
     expect(replaceMock).toHaveBeenCalledWith('/promotions?stage=proposed', { scroll: false });
   });
 
-  it('keeps the timeline full width with no detail column until a case is selected', async () => {
+  it('docks an empty detail column beside the timeline until a case is selected', async () => {
+    // Requirement: Promotion_Planner Mockup.png docks the detail on the right. It is not a drawer.
     renderPlanner();
     await screen.findByTestId('planner-timeline-section');
     await screen.findByTestId('planner-timeline');
-    expect(screen.queryByTestId('planner-detail-empty')).toBeNull();
+    expect(screen.getByTestId('planner-detail-dock')).toBeInTheDocument();
+    expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
     expect(screen.queryByTestId('planner-detail-drawer')).toBeNull();
   });
 
-  it('selecting a case on the timeline opens the detail drawer and opens the plan workspace from there', async () => {
+  it('selecting a case fills the docked detail and opens the plan workspace from there', async () => {
     renderPlanner();
     fireEvent.click(await screen.findByTestId('planner-timeline-bar-41'));
-    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
     expect(screen.getByTestId('planner-detail')).toHaveTextContent('CPR-26-1204');
+    expect(screen.queryByTestId('planner-detail-empty')).toBeNull();
+    expect(screen.queryByTestId('planner-detail-drawer')).toBeNull();
     fireEvent.click(screen.getByTestId('planner-side-open'));
     expect(replaceMock).toHaveBeenCalledWith('/promotions?plan=41', { scroll: false });
   });
 
-  it('closes the detail drawer with the close control, Clear, or Escape', async () => {
+  it('clears the docked detail with the close control, Clear, or Escape', async () => {
     const user = userEvent.setup();
     renderPlanner();
     fireEvent.click(await screen.findByTestId('planner-timeline-bar-41'));
-    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
+    expect(screen.getByTestId('planner-detail')).toHaveTextContent('CPR-26-1204');
     fireEvent.click(screen.getByTestId('planner-detail-close'));
-    await waitFor(() => expect(screen.queryByTestId('planner-detail-drawer')).toBeNull());
+    expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('planner-timeline-bar-41'));
-    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
     fireEvent.click(screen.getByTestId('planner-side-clear'));
-    await waitFor(() => expect(screen.queryByTestId('planner-detail-drawer')).toBeNull());
+    expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('planner-timeline-bar-41'));
-    await waitFor(() => expect(screen.getByTestId('planner-detail-drawer')).toBeVisible());
     await user.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByTestId('planner-detail-drawer')).toBeNull());
+    expect(screen.getByTestId('planner-detail-empty')).toBeInTheDocument();
   });
 
   it('puts a proposed case in the action queue', async () => {
@@ -324,6 +334,9 @@ describe('PromotionPlannerSurface', () => {
     expect(await screen.findByTestId('promotion-planner')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Promotion planner' })).toBeInTheDocument();
     expect(screen.getByTestId('lifecycle-rail')).toBeInTheDocument();
+    // Requirement: Timeline is the default view (mock-up). The grid is the List view of the same cases.
+    expect(screen.queryByTestId('planner-grid')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
     await waitFor(() => {
       expect(screen.getByTestId('planner-grid')).toHaveTextContent('CPR-26-1204');
     });

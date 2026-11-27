@@ -66,6 +66,49 @@ export function defaultTimelineViewWindow(today: string): { start: string; end: 
   };
 }
 
+/**
+ * Months in the planner period navigator.
+ * The mock-up (`docs/design/planner/Promotion_Planner Mockup.png`) draws one three-month block
+ * ("Nov – Jan 2027") with previous/next arrows. This is that block's length, a layout of this
+ * screen, not a tenant threshold. The quarter name, when shown, comes from the tenant calendar.
+ */
+export const PLANNER_VISIBLE_MONTHS = 3;
+
+/** The three-month block that contains `anchorIso`, starting on the first of that month. */
+export function plannerVisibleWindow(anchorIso: string): { start: string; end: string } {
+  const start = monthStart(anchorIso);
+  return { start, end: monthEnd(addMonthsIso(start, PLANNER_VISIBLE_MONTHS - 1)) };
+}
+
+/** Previous or next block of the same length. `windowStart` is the block's first day. */
+export function shiftPlannerVisibleWindow(windowStart: string, direction: -1 | 1): { start: string; end: string } {
+  return plannerVisibleWindow(addMonthsIso(monthStart(windowStart), direction * PLANNER_VISIBLE_MONTHS));
+}
+
+/** "Nov – Jan 2027": the start month, then the end month and year. Matches the mock-up navigator. */
+export function formatPlannerWindowLabel(start: string, end: string): string {
+  const startMonth = new Date(ms(start)).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+  const endLabel = new Date(ms(end)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return `${startMonth} – ${endLabel}`;
+}
+
+/**
+ * "Q4" when this block is exactly one quarter of a gregorian fiscal year that starts in
+ * `fiscalYearStartMonth` (1–12, from the tenant business calendar). Null when the month is
+ * not a quarter boundary, or the block is not `PLANNER_VISIBLE_MONTHS` long. No implied January.
+ */
+export function gregorianQuarterLabel(start: string, end: string, fiscalYearStartMonth: number): string | null {
+  if (!Number.isInteger(fiscalYearStartMonth) || fiscalYearStartMonth < 1 || fiscalYearStartMonth > 12) return null;
+  const startDay = start.slice(0, 10);
+  const endDay = end.slice(0, 10);
+  const expected = plannerVisibleWindow(startDay);
+  if (expected.start !== startDay || expected.end !== endDay) return null;
+  const month = Number(startDay.slice(5, 7));
+  const offset = (month - fiscalYearStartMonth + 12) % 12;
+  if (offset % 3 !== 0) return null;
+  return `Q${offset / 3 + 1}`;
+}
+
 export function axisMonthCount(axisStart: string, axisEnd: string): number {
   let n = 0;
   let cur = monthStart(axisStart);
@@ -122,9 +165,8 @@ export function monthTicks(axisStart: string, axisEnd: string): { label: string;
   return out;
 }
 
-/** Our case windows on one date axis. Cases without both dates are counted, not drawn. */
-export function buildTimeline<T extends TimelineCase>(cases: readonly T[], today: string): TimelineModel<T> {
-  const dated = cases
+function datedWindows<T extends TimelineCase>(cases: readonly T[]) {
+  return cases
     .filter((c) => c.window_start)
     .map((c) => {
       const start = String(c.window_start).slice(0, 10);
@@ -132,24 +174,41 @@ export function buildTimeline<T extends TimelineCase>(cases: readonly T[], today
       return { c, start, end: rawEnd < start ? start : rawEnd };
     })
     .sort((a, b) => (a.start === b.start ? a.c.id - b.c.id : a.start < b.start ? -1 : 1));
+}
+
+/**
+ * Our case windows on one date axis. Cases without both dates are counted, not drawn.
+ * Pass `axis` to draw only that block (the period navigator): bars that miss it are left off,
+ * and a bar that crosses the edge is drawn for the part inside the block. The bar's own
+ * `start`/`end` stay the case window.
+ */
+export function buildTimeline<T extends TimelineCase>(
+  cases: readonly T[],
+  today: string,
+  axis?: { start: string; end: string },
+): TimelineModel<T> {
+  const dated = datedWindows(cases);
   const undated = cases.length - dated.length;
-  const lo = dated.reduce((m, d) => (d.start < m ? d.start : m), today);
-  const hi = dated.reduce((m, d) => (d.end > m ? d.end : m), today);
-  const start = monthStart(lo);
-  const end = monthEnd(hi);
+  const start = axis ? axis.start.slice(0, 10) : monthStart(dated.reduce((m, d) => (d.start < m ? d.start : m), today));
+  const end = axis ? axis.end.slice(0, 10) : monthEnd(dated.reduce((m, d) => (d.end > m ? d.end : m), today));
   const total = daysBetween(start, end) + 1;
+  const visible = axis ? dated.filter((d) => d.end >= start && d.start <= end) : dated;
   return {
     start,
     end,
     todayPct: (daysBetween(start, today) / total) * 100,
     undated,
-    bars: dated.map((d) => ({
-      id: d.c.id,
-      row: d.c,
-      start: d.start,
-      end: d.end,
-      ...barGeometry(d.start, d.end, start, end),
-    })),
+    bars: visible.map((d) => {
+      const drawStart = d.start < start ? start : d.start;
+      const drawEnd = d.end > end ? end : d.end;
+      return {
+        id: d.c.id,
+        row: d.c,
+        start: d.start,
+        end: d.end,
+        ...barGeometry(drawStart, drawEnd, start, end),
+      };
+    }),
   };
 }
 

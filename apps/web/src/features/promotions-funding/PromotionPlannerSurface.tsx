@@ -14,7 +14,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Drawer,
   IconButton,
   MenuItem,
   Snackbar,
@@ -96,6 +95,9 @@ import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type PromoTypes = { promotion_types: string[] };
+
+/** Width of the docked promotion detail. The mock-up column beside the timeline; not a tenant setting. */
+const DETAIL_DOCK_PX = 360;
 
 export function PromotionPlannerSurface() {
   const router = useRouter();
@@ -293,8 +295,34 @@ function PlannerList({
   });
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const detailOpen = selectedId != null;
   const closeDetail = useCallback(() => setSelectedId(null), []);
+  // The quarter name on the period navigator. Gregorian business calendar only; anything else leaves it off.
+  const calendarProfile = useQuery({
+    queryKey: ['auth', 'tenant-commercial-profile'],
+    queryFn: ({ signal }) =>
+      apiGet<{ business_calendar?: { type?: string; fiscal_year_start_month?: number } }>(
+        '/api/v1/auth/tenant-commercial-profile',
+        { signal },
+      ),
+    staleTime: 60_000,
+  });
+  const calendar = calendarProfile.data?.business_calendar;
+  const fiscalYearStartMonth =
+    calendar?.type === 'gregorian' &&
+    Number.isInteger(calendar.fiscal_year_start_month) &&
+    (calendar.fiscal_year_start_month ?? 0) >= 1 &&
+    (calendar.fiscal_year_start_month ?? 0) <= 12
+      ? calendar.fiscal_year_start_month!
+      : null;
+  useEffect(() => {
+    if (selectedId == null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || proposeOpen || createOpen) return;
+      closeDetail();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId, proposeOpen, createOpen, closeDetail]);
 
   const counts = data?.status_counts ?? {};
   const rowsAll = data?.items ?? [];
@@ -712,9 +740,17 @@ function PlannerList({
             />
           </Box>
 
-          {/* 4. Promotion timeline (full width); promotion detail opens in a drawer when a case is selected */}
-          <Box data-testid="planner-timeline-section" sx={{ minWidth: 0 }}>
-            <Stack spacing={2}>
+          {/* 4. Promotion timeline with the detail docked beside it (mock-up). List is the other view of the same cases. */}
+          <Box
+            data-testid="planner-timeline-section"
+            sx={{
+              minWidth: 0,
+              display: 'grid',
+              gap: 2,
+              alignItems: 'start',
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: `minmax(0, 1fr) ${DETAIL_DOCK_PX}px` },
+            }}
+          >
               <CustomerRowsTimeline
                 cases={rows}
                 today={today}
@@ -722,6 +758,7 @@ function PlannerList({
                 onSelect={setSelectedId}
                 status={isLoading ? 'loading' : isError ? 'error' : 'ready'}
                 subtitle={history ? 'Customer promotions, history' : 'Open customer promotions of reporting customers'}
+                fiscalYearStartMonth={fiscalYearStartMonth}
                 emptyState={
                   noOpenPromotions ? (
                     <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -734,7 +771,7 @@ function PlannerList({
                     </Stack>
                   ) : undefined
                 }
-              />
+                list={
             <ModuleDataSection
               isLoading={isLoading}
               isError={isError}
@@ -801,49 +838,33 @@ function PlannerList({
                 <PlanGrid rows={rows} onOpen={setSelectedId} />
               )}
             </ModuleDataSection>
-            </Stack>
+                }
+              />
+            <Box data-testid="planner-detail-dock" sx={{ minWidth: 0 }}>
+              {selectedId != null ? (
+                <Stack direction="row" alignItems="flex-start" justifyContent="flex-end">
+                  <IconButton
+                    aria-label="Close promotion detail"
+                    onClick={closeDetail}
+                    data-testid="planner-detail-close"
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Stack>
+              ) : null}
+              <PlannerDetailPanel
+                row={selectedRow}
+                unavailableId={selectedId != null && !selectedRow ? selectedId : null}
+                actions={
+                  selectedRow && queueFigureState === 'ready' && !queueIncomplete
+                    ? queue.filter((a) => a.caseId === selectedRow.id)
+                    : undefined
+                }
+                onOpen={onOpen}
+                onClear={closeDetail}
+              />
+            </Box>
           </Box>
-
-          <Drawer
-            anchor={isMobile ? 'bottom' : 'right'}
-            open={detailOpen}
-            onClose={closeDetail}
-            keepMounted={false}
-            data-testid="planner-detail-drawer"
-            slotProps={{
-              paper: {
-                sx: {
-                  width: isMobile ? '100%' : 'min(440px, 92vw)',
-                  maxHeight: isMobile ? '92vh' : undefined,
-                },
-              },
-            }}
-          >
-            <Stack sx={{ p: 2, height: '100%', minHeight: 0 }} spacing={1}>
-              <Stack direction="row" alignItems="flex-start" justifyContent="flex-end">
-                <IconButton
-                  aria-label="Close promotion detail"
-                  onClick={closeDetail}
-                  data-testid="planner-detail-close"
-                >
-                  <CloseIcon />
-                </IconButton>
-              </Stack>
-              <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                <PlannerDetailPanel
-                  row={selectedRow}
-                  unavailableId={selectedId != null && !selectedRow ? selectedId : null}
-                  actions={
-                    selectedRow && queueFigureState === 'ready' && !queueIncomplete
-                      ? queue.filter((a) => a.caseId === selectedRow.id)
-                      : undefined
-                  }
-                  onOpen={onOpen}
-                  onClear={closeDetail}
-                />
-              </Box>
-            </Stack>
-          </Drawer>
 
           {/* 5. Action queue */}
           <PlannerQueueSection

@@ -1,8 +1,10 @@
 'use client';
 
-import { Box, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import { Box, IconButton, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { STAGE_LABEL, type PlanStage } from '@/features/promotions-funding/lifecycle';
 import { addDaysIso } from '@/features/promotions-funding/plannerCards';
@@ -10,9 +12,13 @@ import {
   axisMonthCount,
   barGeometry,
   buildTimeline,
-  defaultTimelineViewWindow,
+  formatPlannerWindowLabel,
+  gregorianQuarterLabel,
+  monthTicks,
   monthTicksForAxis,
+  plannerVisibleWindow,
   scrollLeftForViewWindow,
+  shiftPlannerVisibleWindow,
   statusLane,
   TIMELINE_DEFAULT_VIEW_MONTHS,
   TIMELINE_MONTH_PX,
@@ -59,6 +65,8 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
   status = 'ready',
   subtitle = 'Reporting customers',
   emptyState,
+  list,
+  fiscalYearStartMonth = null,
 }: {
   cases: readonly T[];
   today: string;
@@ -66,18 +74,43 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
   onSelect: (id: number) => void;
   /** Request state of the case list: an empty list is only "no cases" when it actually loaded. */
   status?: 'ready' | 'loading' | 'error';
-  /** Scope line under the title (the axis range is appended). */
+  /** Scope line under the title. */
   subtitle?: string;
   /** What to show when the list loaded and holds no dated promotion; defaults to a plain sentence. */
   emptyState?: ReactNode;
+  /** The case list, shown when List is selected. Timeline is the default (the mock-up). */
+  list?: ReactNode;
+  /**
+   * Gregorian fiscal-year start month from the tenant business calendar (1–12).
+   * Null (unset, still loading, or a non-gregorian calendar) leaves the quarter name off.
+   */
+  fiscalYearStartMonth?: number | null;
 }) {
   const theme = useTheme();
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const model = useMemo(() => buildTimeline(cases, today), [cases, today]);
-  const viewWindow = useMemo(() => defaultTimelineViewWindow(today), [today]);
-  const [scale, setScale] = useState<'month' | 'week'>('month');
+  // Week is the mock-up's selected scale (`Promotion_Planner Mockup.png`).
+  const [scale, setScale] = useState<'month' | 'week'>('week');
+  const [presentation, setPresentation] = useState<'timeline' | 'list'>('timeline');
+  // The navigator starts on the month that contains today and stays there until the arrows move it.
+  const [anchor, setAnchor] = useState(today);
+  const [windowMoved, setWindowMoved] = useState(false);
+  useEffect(() => {
+    if (!windowMoved) setAnchor(today);
+  }, [today, windowMoved]);
+  const viewWindow = useMemo(() => plannerVisibleWindow(windowMoved ? anchor : today), [windowMoved, anchor, today]);
+  const model = useMemo(() => buildTimeline(cases, today, viewWindow), [cases, today, viewWindow]);
+  const periodLabel = useMemo(() => {
+    const range = formatPlannerWindowLabel(viewWindow.start, viewWindow.end);
+    const quarter = fiscalYearStartMonth == null ? null : gregorianQuarterLabel(viewWindow.start, viewWindow.end, fiscalYearStartMonth);
+    return quarter ? `${range} (${quarter})` : range;
+  }, [viewWindow.start, viewWindow.end, fiscalYearStartMonth]);
+  const shiftWindow = (direction: -1 | 1) => {
+    const next = shiftPlannerVisibleWindow(viewWindow.start, direction);
+    setAnchor(next.start);
+    setWindowMoved(true);
+  };
   const monthCount = useMemo(() => axisMonthCount(model.start, model.end), [model.start, model.end]);
-  const trackWidthPx = Math.max(TIMELINE_DEFAULT_VIEW_MONTHS * TIMELINE_MONTH_PX, monthCount * TIMELINE_MONTH_PX);
+  const trackWidthPx = Math.max(monthCount * TIMELINE_MONTH_PX, 1);
   const weeks = useMemo(() => weekTicks(model.start, model.end), [model.start, model.end]);
   const ticks = useMemo(
     () => (scale === 'week' ? weeks : monthTicksForAxis(model.start, model.end, monthCount > 14 ? 12 : 24)),
@@ -143,9 +176,9 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
   return (
     <Panel
       title="Promotion timeline"
-      subtitle={`${subtitle} · scroll for full range · ${model.start} → ${model.end}`}
+      subtitle={`${subtitle} · ${periodLabel}`}
       actions={
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           {model.undated > 0 ? (
             <Typography variant="caption" color="text.secondary" data-testid="planner-timeline-undated">
               {model.undated} without dates not shown
@@ -154,27 +187,63 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
           <ToggleButtonGroup
             size="small"
             exclusive
-            value={scale}
-            aria-label="Timeline scale"
-            onChange={(_e, next: 'month' | 'week' | null) => next && setScale(next)}
+            value={presentation}
+            aria-label="Timeline or list"
+            data-testid="planner-presentation"
+            onChange={(_e, next: 'timeline' | 'list' | null) => next && setPresentation(next)}
           >
-            <ToggleButton value="week" sx={{ py: 0.25, px: 1 }}>
-              Week
+            <ToggleButton value="timeline" sx={{ py: 0.25, px: 1 }}>
+              Timeline
             </ToggleButton>
-            <ToggleButton value="month" sx={{ py: 0.25, px: 1 }}>
-              Month
+            <ToggleButton value="list" sx={{ py: 0.25, px: 1 }}>
+              List
             </ToggleButton>
           </ToggleButtonGroup>
+          {presentation === 'timeline' ? (
+            <>
+              <Stack direction="row" spacing={0} alignItems="center" data-testid="planner-period-nav">
+                <IconButton size="small" aria-label="Previous period" data-testid="planner-period-prev" onClick={() => shiftWindow(-1)}>
+                  <ChevronLeftIcon fontSize="small" />
+                </IconButton>
+                <Typography variant="body2" data-testid="planner-period-label" sx={{ fontWeight: 600, whiteSpace: 'nowrap', px: 0.5 }}>
+                  {periodLabel}
+                </Typography>
+                <IconButton size="small" aria-label="Next period" data-testid="planner-period-next" onClick={() => shiftWindow(1)}>
+                  <ChevronRightIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={scale}
+                aria-label="Timeline scale"
+                onChange={(_e, next: 'month' | 'week' | null) => next && setScale(next)}
+              >
+                <ToggleButton value="week" sx={{ py: 0.25, px: 1 }}>
+                  Week
+                </ToggleButton>
+                <ToggleButton value="month" sx={{ py: 0.25, px: 1 }}>
+                  Month
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </>
+          ) : null}
         </Stack>
       }
     >
       <Box data-testid="planner-timeline">
-        {status === 'error' ? (
+        {presentation === 'list' ? (
+          list ?? (
+            <Typography variant="body2" color="text.secondary">
+              No list for this timeline.
+            </Typography>
+          )
+        ) : status === 'error' ? (
           <Typography variant="body2" color="error" role="alert" data-testid="planner-timeline-error" sx={{ mb: model.bars.length ? 1 : 0 }}>
             The promotion windows could not be loaded{model.bars.length > 0 ? '; what is drawn may be out of date' : ''}.
           </Typography>
         ) : null}
-        {model.bars.length === 0 && status === 'loading' ? (
+        {presentation === 'list' ? null : model.bars.length === 0 && status === 'loading' ? (
           <Typography variant="body2" color="text.secondary" data-testid="planner-timeline-loading">
             Loading promotion windows…
           </Typography>
@@ -194,7 +263,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                 minWidth: scale === 'week' ? Math.max(trackWidthPx + LABEL_W, LABEL_W + ticks.length * WEEK_PX) : trackWidthPx + LABEL_W,
               }}
             >
-              <Stack direction="row" sx={{ height: scale === 'week' ? 34 : 22, mb: 0.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
+              <Stack direction="row" sx={{ minHeight: scale === 'week' ? 40 : 22, mb: 0.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
                 <Typography
                   variant="caption"
                   sx={{ ...stickyLabel, width: LABEL_W, flexShrink: 0, alignSelf: 'stretch', display: 'flex', alignItems: 'flex-end', pb: 0.5, fontWeight: 600, color: 'text.secondary' }}
@@ -203,34 +272,48 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                   Customer
                 </Typography>
                 <Box sx={{ position: 'relative', flex: 1 }}>
-                  {scale === 'week'
-                    ? weeks.map((t) => (
-                        <Stack
-                          key={`${t.label}-${t.leftPct}`}
-                          spacing={0}
-                          sx={{ position: 'absolute', left: `${t.leftPct}%`, pl: 0.5, top: 0 }}
-                        >
-                          <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.3, whiteSpace: 'nowrap' }}>
-                            {`W${t.week}`}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+                  {scale === 'week' ? (
+                    <>
+                      <Box sx={{ position: 'relative', height: 16 }} data-testid="planner-timeline-months">
+                        {monthTicks(model.start, model.end).map((t) => (
+                          <Typography
+                            key={`month-${t.label}-${t.leftPct}`}
+                            variant="caption"
+                            sx={{ position: 'absolute', left: `${t.leftPct}%`, whiteSpace: 'nowrap', pl: 0.5, fontWeight: 600, lineHeight: 1.3 }}
+                          >
                             {t.label}
                           </Typography>
-                        </Stack>
-                      ))
-                    : ticks.map((t) => (
-                        <Typography
-                          key={`${t.label}-${t.leftPct}`}
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ position: 'absolute', left: `${t.leftPct}%`, whiteSpace: 'nowrap', pl: 0.5, top: 2 }}
-                        >
-                          {t.label}
-                        </Typography>
-                      ))}
+                        ))}
+                      </Box>
+                      <Box sx={{ position: 'relative', height: 18 }}>
+                        {weeks.map((t) => (
+                          <Typography
+                            key={`${t.label}-${t.leftPct}`}
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ position: 'absolute', left: `${t.leftPct}%`, whiteSpace: 'nowrap', pl: 0.5, lineHeight: 1.3 }}
+                          >
+                            {`W${t.week} / ${t.label}`}
+                          </Typography>
+                        ))}
+                      </Box>
+                    </>
+                  ) : (
+                    ticks.map((t) => (
+                      <Typography
+                        key={`${t.label}-${t.leftPct}`}
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ position: 'absolute', left: `${t.leftPct}%`, whiteSpace: 'nowrap', pl: 0.5, top: 2 }}
+                      >
+                        {t.label}
+                      </Typography>
+                    ))
+                  )}
                 </Box>
               </Stack>
               <Box sx={{ position: 'relative' }}>
+                {today >= model.start && today <= model.end ? (
                 <Box
                   aria-hidden
                   data-testid="planner-timeline-today"
@@ -248,6 +331,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                     pointerEvents: 'none',
                   }}
                 />
+                ) : null}
                 {rows.map((row) => {
                   const rowH = Math.max(ROW_MIN_H, row.laneCount * LANE_H + ROW_PAD * 2);
                   const name = row.key === UNASSIGNED_KEY ? 'No customer' : row.customer;
@@ -323,6 +407,13 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
                                 '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 1 },
                               }}
                             >
+                              {barPx >= 28 ? (
+                                <Box
+                                  component="span"
+                                  aria-hidden
+                                  sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color, flexShrink: 0 }}
+                                />
+                              ) : null}
                               {barPx >= BAR_NAME_MIN_PX ? (
                                 <Box
                                   component="span"
@@ -352,6 +443,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
             </Box>
           </Box>
         )}
+        {presentation === 'timeline' ? (
         <Stack
           direction="row"
           spacing={2}
@@ -372,6 +464,7 @@ export function CustomerRowsTimeline<T extends TimelineCase>({
             </Stack>
           ))}
         </Stack>
+        ) : null}
       </Box>
     </Panel>
   );

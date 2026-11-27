@@ -1,6 +1,6 @@
 # Step 2
 
-- **Status:** Session 1 build done, pushed; waiting for the coordinator's independent review, merge and deploy. Open items are questions for Warren (below), not unfinished build work.
+- **Status:** Cloud code run 27 Nov (U2) finished the web layout the mock-up answers. Not merged, not visually checked, cip_test not run. Questions the mock-up does not answer are still for Warren.
 - **Branch:** `fix/planner-sellthrough-calendar-20261125` (cut from integrate tip `6d2adc16`)
 - **Worktree:** `C:\Users\warren_eliason\channel-intelligence-platform\.worktrees\impl-step2`
 - **EIF node:** N-0122, run `IMPL_step2_20261125`
@@ -169,6 +169,66 @@ See "Specialist findings" below. Proposals only; this file is the single writer.
 ## Specialist findings
 
 (filled at the end of the session)
+
+## Cloud code run (27 Nov, U2)
+
+FACT: continued on `fix/planner-sellthrough-calendar-20261125` (tip was `5444352f`). Merged `origin/feat/integrate-20261103` (`643b2892`) in. No new branch. No migration. `cpor_cases.py` not edited. Theme files not edited (U5).
+
+The mock-up (`docs/design/planner/Promotion_Planner Mockup.png`) answered questions 3, 5 and 6, and the navigator half of question 4. Those are built. Warren: "include promotion calendar AS PER THE FUCKING MOCKUP SPEC". The image's sell-out and ended bars are not built. Warren: "The planner never shows closed, settled or ended cases (or old years) by default." and "The promotion planner shows customer promotions, never sell-out."
+
+| Element | What the cloud run did |
+|---|---|
+| Week default | Week is selected. Month is still there. |
+| Week header | Month row ("Nov 2026") and `W45 / 2 Nov` on the week row. |
+| Period navigator | Previous / next over a three-month block starting at the month that contains today ("Nov – Jan 2027" when today is in November 2026). |
+| Quarter name | Appended only when that block is one quarter of the tenant's gregorian business calendar (`/api/v1/auth/tenant-commercial-profile`). No name while the profile is missing, the calendar is not gregorian, or the block is not a quarter boundary. No implied January. |
+| Timeline \| List | Timeline is the default. List shows the existing grid (or the phone cards). The grid is not removed. |
+| Detail | Docked beside the timeline (`planner-detail-dock`), empty until a promotion is selected. Close, Clear and Escape clear it. No drawer. |
+| Bar mark | A lane-coloured dot on a bar wide enough to hold it. There is no icon field on the case. |
+| Approved colour | Unchanged (theme secondary). Purple is a theme token; U5 owns the theme. |
+| Logos | Not added. The case list has no logo. |
+| Page title / panel weight | Unchanged. U5 owns the theme. |
+
+### Constants kept or added
+
+| Constant | Reason it is not tenant config |
+|---|---|
+| `PLANNER_VISIBLE_MONTHS = 3` | The mock-up draws one three-month block. Layout of this screen. |
+| `DETAIL_DOCK_PX = 360` | Width of that docked column in the mock-up. Layout of this screen. |
+| Bar-mark minimum 28px, `BAR_NAME_MIN_PX` 44, `BAR_STATUS_MIN_PX` 120, `WEEK_PX` 56, `LABEL_W` 170 | How much text fits on a bar. Layout, not a rate or a threshold a tenant sets. |
+
+### Tests (cloud Linux, no database)
+
+| Gate | Result |
+|---|---|
+| eslint on the eight touched web files | exit 0 |
+| `tsc --noEmit -p apps/web` | exit 0 |
+| vitest planner + plannerLayout + PromotionPlannerSurface | 12 files, 143 passed |
+| `pnpm --filter @cip/web build` | exit 0. Compiled, 85 pages. Existing hook warnings elsewhere, none in the planner files this run edited. |
+
+Assertions changed because the mock-up is the requirement (close-off: follow the mock-up where it answers an open question):
+
+1. `PlannerLayout.test.tsx` week header: Week is the default, "Nov 2026" stays in the week view (month row), week text is `W45 / 2 Nov`. The ended sample sits in November so it is inside the default block.
+2. `PlannerLayout.test.tsx` and `PromotionPlannerSurface.test.tsx`: the detail is the docked column, empty until a selection. There is no drawer.
+3. `PromotionPlannerSurface.test.tsx`: the grid is behind List. Timeline is what the page opens on. The sample case window is 9–20 Nov 2026 so it is on the default block. Date is pinned to 19 Nov 2026 in that file so the block does not drift.
+4. `CustomerRowsTimeline.layout.test.tsx`: week labels, navigator, quarter name when fiscal start month is 2, List hides the bars.
+5. `CustomerRowsTimeline.test.tsx`: the sample window is June 2026 because today in that test is 15 Jun 2026 (the three-month block). The theme mock gained `secondary` and `mode`, which the component already reads.
+
+No test deleted, skipped or weakened. Sell-through and `open_only` assertions are unchanged.
+
+### NOT RUN (cloud)
+
+- Every `cip_test` / pytest path. No database on this machine.
+- Visual gate (dark and light, Open and History) against the mock-up.
+- Production `next build` is recorded below if this session ran it.
+- Review, merge, deploy.
+
+### ASSUMPTIONS
+
+- The navigator pages three calendar months, not one fiscal quarter of a 4-4-5 calendar. A non-gregorian business calendar leaves the quarter name off.
+- List shows the same cases as the timeline's request (open customer sell-through, or History). It is not cut to the three-month block.
+- Detail actions stay "Open plan", "Case book" and "Clear". The image's "Adjust promotion / Create claim / More" were not an open question.
+- At-risk still counts ended cases missing evidence (question 1, option b). Closed-stage chips stay on the default view (question 2, option b).
 
 ## Resume notes
 
