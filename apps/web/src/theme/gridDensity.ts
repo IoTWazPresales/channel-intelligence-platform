@@ -37,6 +37,14 @@ export function gridRowMetrics(density: GridDensity | string | undefined = 'comf
   return GRID_DENSITY[normalizeGridDensity(density)];
 }
 
+/** A cell that stacks three text lines (e.g. value, age, note) needs this many times the shared row, which fits two. */
+export const GRID_THREE_LINE_ROW_FACTOR = 1.75;
+
+/** Row height for grids whose cells stack three text lines; scales with the density like the shared row. */
+export function gridThreeLineRowHeight(density: GridDensity | string | undefined = 'comfortable'): number {
+  return Math.round(gridRowMetrics(density).rowHeight * GRID_THREE_LINE_ROW_FACTOR);
+}
+
 /** The same numbers as CSS custom properties, for the grid shell's inline style. */
 export function gridDensityCssVars(
   density: GridDensity | string | undefined,

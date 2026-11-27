@@ -1,7 +1,23 @@
 """Unit tests for lineup case status semantics."""
 import pytest
 
-from app.services.commercial_planner.lineup_case_status import commercial_status_after_po_link
+from app.services.commercial_planner.lineup_case_status import (
+    ACCEPTED_OR_LATER_STATUSES,
+    commercial_status_after_po_link,
+)
+
+
+def test_accepted_or_later_statuses_is_the_accepted_part_of_the_ladder():
+    assert ACCEPTED_OR_LATER_STATUSES == {
+        "accepted",
+        "po_pending",
+        "po_issued",
+        "in_fulfillment",
+        "received_closed",
+        "work_closed",
+    }
+    for before_or_off_ladder in ("draft_imported", "validated", "pending_review", "cancelled", "superseded"):
+        assert before_or_off_ladder not in ACCEPTED_OR_LATER_STATUSES
 
 
 @pytest.mark.parametrize(

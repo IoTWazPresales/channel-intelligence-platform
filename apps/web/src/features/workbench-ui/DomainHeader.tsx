@@ -40,7 +40,7 @@ export function DomainHeader({
       ) : null}
       <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ md: 'flex-end' }} justifyContent="space-between" spacing={1}>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 650, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+          <Typography variant="h1">
             {title}
           </Typography>
           {description ? (

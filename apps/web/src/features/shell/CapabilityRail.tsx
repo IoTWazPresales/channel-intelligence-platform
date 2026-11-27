@@ -3,7 +3,6 @@
 import type { SvgIconComponent } from '@mui/icons-material';
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
-import AppsOutlinedIcon from '@mui/icons-material/AppsOutlined';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -11,19 +10,7 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
-import {
-  Box,
-  Chip,
-  Collapse,
-  Divider,
-  IconButton,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Stack,
-  Typography,
-} from '@mui/material';
+import { Box, Chip, Collapse, IconButton, Typography } from '@mui/material';
 import { alpha, type Theme } from '@mui/material/styles';
 import NextLink from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -32,15 +19,34 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NAV_STORAGE_GROUP_EXPANDED, railNavGroups, type NavGroup } from '@/features/shell/navConfig';
 import { activeNavGroup } from '@/features/shell/navPageChrome';
 
-export const RAIL_WIDTH = 172;
+/**
+ * The mock-up sidebar is 172px, but its headings are two short words ("Workspace", "Explore"). The real group
+ * headings at the mock-up's own eyebrow type (10px / 700 / 1.4px / uppercase) measure up to 154.2px
+ * ("PROMOTIONS & FUNDING"), more than the 144px content box a 172px rail leaves, before any chevron or count.
+ * Measured (Playwright, 26 Nov): 240px is the exact minimum at which every heading fits on one line beside its count and
+ * chevron (0px spare on "PROMOTIONS & FUNDING"); 244px keeps 4px for font substitution. Everything else in the rail
+ * is the mock-up's own geometry (NAV_MOCK).
+ */
+export const RAIL_WIDTH = 244;
 
-/** Opaque-safe hover lift for the raised domain header (bgcolor stays solid so a pinned header never shows leaves through). */
-const raisedHoverOverlay = (t: Theme) => {
-  const lift = alpha(t.palette.mode === 'dark' ? t.palette.common.white : t.palette.common.black, t.palette.mode === 'dark' ? 0.05 : 0.04);
-  return `linear-gradient(${lift}, ${lift})`;
-};
+/**
+ * Navigation rail geometry, copied value for value from the mock-up (`docs/design/dashboard-v2/index.html`:
+ * `.sidebar`, `.brand`, `.nav-group`, `.nav-label`, `.nav-item`, `.sidebar-foot`). Colours come from the theme palette.
+ */
+export const NAV_MOCK = {
+  padding: '24px 14px',
+  gap: '25px',
+  groupGap: '5px',
+  eyebrow: { fontSize: 10, fontWeight: 700, letterSpacing: '1.4px', padding: '0 10px 7px' },
+  item: { padding: '9px 10px', borderLeft: '2px solid', radius: '0 8px 8px 0', activeWeight: 600 },
+  brand: { gap: '10px', fontSize: 15, fontWeight: 700, letterSpacing: '-.3px', smallSize: 10, smallLetterSpacing: '.5px' },
+  foot: { padding: '12px 9px 0', fontSize: 11 },
+} as const;
 
-/** Icons stay out of navConfig so the nav model remains a plain, testable module. */
+/** Mock-up `--accent-wash`: accent at 15% (dark) / 12% (light). */
+const activeWash = (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.15 : 0.12);
+
+/** Icons stay out of navConfig so the nav model remains a plain, testable module (AppShell's mobile bar uses them). */
 export const DOMAIN_ICONS: Record<string, SvgIconComponent> = {
   overview: DashboardOutlinedIcon,
   stock: Inventory2OutlinedIcon,
@@ -115,6 +121,21 @@ type CapabilityRailProps = {
   onNavigate?: () => void;
 };
 
+/** Mock-up `.nav-item` / `.nav-item.active`. */
+const itemSx = (on: boolean) => ({
+  display: 'block',
+  padding: NAV_MOCK.item.padding,
+  borderLeft: NAV_MOCK.item.borderLeft,
+  borderColor: on ? 'primary.main' : 'transparent',
+  borderRadius: NAV_MOCK.item.radius,
+  color: on ? 'primary.main' : 'text.secondary',
+  bgcolor: on ? activeWash : 'transparent',
+  fontWeight: on ? NAV_MOCK.item.activeWeight : 400,
+  textDecoration: 'none',
+  lineHeight: 1.45,
+  '&:hover': { bgcolor: on ? activeWash : 'action.hover', color: on ? 'primary.main' : 'text.primary' },
+});
+
 export function CapabilityRail({
   role,
   tenantName,
@@ -135,115 +156,126 @@ export function CapabilityRail({
     <Box
       component="aside"
       data-testid="capability-rail"
-      sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        boxSizing: 'border-box',
+        padding: NAV_MOCK.padding,
+        gap: NAV_MOCK.gap,
+      }}
     >
-      <Box sx={{ px: 1.75, pt: 3, pb: 1.5 }}>
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Box
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: NAV_MOCK.brand.gap, flexShrink: 0 }}>
+        <Box component="svg" viewBox="0 0 27 29" aria-hidden="true" sx={{ width: 27, height: 29, color: 'primary.main', flex: 'none' }}>
+          <path d="M2 21V8l11-6 12 6v13l-12 6Z" fill="none" stroke="currentColor" strokeWidth="2" />
+          <path d="m2 8 11 7 12-7M13 15v12" fill="none" stroke="currentColor" strokeWidth="2" />
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            component="div"
             sx={{
-              width: 28,
-              height: 28,
-              borderRadius: 1.5,
-              bgcolor: 'primary.main',
-              display: 'grid',
-              placeItems: 'center',
-              color: 'primary.contrastText',
-              fontWeight: 800,
-              fontSize: 13,
+              fontSize: NAV_MOCK.brand.fontSize,
+              fontWeight: NAV_MOCK.brand.fontWeight,
+              letterSpacing: NAV_MOCK.brand.letterSpacing,
+              lineHeight: 1.45,
             }}
           >
-            CI
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.1 }}>
-              Channel Intelligence
+            Channel
+          </Typography>
+          <Typography
+            component="small"
+            color="text.secondary"
+            sx={{
+              display: 'block',
+              fontSize: NAV_MOCK.brand.smallSize,
+              fontWeight: 400,
+              letterSpacing: NAV_MOCK.brand.smallLetterSpacing,
+              lineHeight: 1.45,
+            }}
+          >
+            INTELLIGENCE
+          </Typography>
+          {tenantName || tenantStamp ? (
+            <Typography
+              component="small"
+              color="text.secondary"
+              noWrap
+              sx={{ display: 'block', fontSize: NAV_MOCK.brand.smallSize, lineHeight: 1.45 }}
+              data-testid="rail-tenant-stamp"
+            >
+              {tenantName || tenantStamp}
             </Typography>
-            {tenantName || tenantStamp ? (
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }} data-testid="rail-tenant-stamp">
-                {tenantName || tenantStamp}
-              </Typography>
-            ) : null}
-          </Box>
-        </Stack>
+          ) : null}
+        </Box>
       </Box>
-      <Divider />
-      <List dense component="nav" aria-label="Capability areas" sx={{ flex: 1, overflowY: 'auto', py: 1, px: 0.5 }}>
+      <Box
+        component="nav"
+        aria-label="Capability areas"
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          scrollbarWidth: 'thin',
+          display: 'grid',
+          alignContent: 'start',
+          gap: NAV_MOCK.gap,
+        }}
+      >
         {groups.map((d: NavGroup) => {
-          const Icon = DOMAIN_ICONS[d.id] ?? AppsOutlinedIcon;
           const isActive = active?.id === d.id;
           const expanded = open[d.id] ?? isActive;
           const badge = badges?.[d.id];
-          const activeWash = (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.15 : 0.12);
           return (
-            <Box key={d.id} sx={{ px: 0.75 }}>
-              <ListItemButton
+            <Box key={d.id} sx={{ display: 'grid', gap: NAV_MOCK.groupGap, alignContent: 'start' }}>
+              <Box
                 component={NextLink}
                 href={d.href ?? d.items[0].href}
                 prefetch
                 onClick={onNavigate}
-                selected={isActive}
                 data-testid={`rail-domain-${d.id}`}
                 sx={{
-                  borderRadius: '0 8px 8px 0',
-                  py: 1.1,
-                  px: 1.25,
-                  // Sticky within its own group Box: the header holds parent context while
-                  // long domains scroll, and is pushed out by the next domain.
+                  // Sticky inside its own group: the heading holds parent context while a long group scrolls.
                   position: 'sticky',
                   top: 0,
                   zIndex: 2,
-                  borderLeft: '2px solid',
-                  borderColor: isActive ? 'primary.main' : 'transparent',
-                  ...(isActive
-                    ? {
-                        color: 'primary.main',
-                        bgcolor: activeWash,
-                        '&:hover': { bgcolor: activeWash },
-                        '&.Mui-selected': {
-                          bgcolor: activeWash,
-                          '&:hover': { bgcolor: activeWash },
-                        },
-                      }
-                    : expanded
-                      ? {
-                          bgcolor: 'background.paper',
-                          '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
-                          '&.Mui-selected': {
-                            bgcolor: 'background.paper',
-                            '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
-                          },
-                        }
-                      : {
-                          '&.Mui-selected': { bgcolor: 'transparent' },
-                        }),
+                  bgcolor: 'background.elevated',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: NAV_MOCK.eyebrow.padding,
+                  paddingRight: 0,
+                  // Mock-up `.nav-label`: secondary colour; the active leaf carries the accent. Warren: "YES" to
+                  // highlighting the active group's heading when its leaves are collapsed, so the current area stays visible.
+                  color: isActive && !expanded ? 'text.primary' : 'text.secondary',
+                  textDecoration: 'none',
+                  '&:hover': { color: 'text.primary' },
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 28, color: isActive ? 'primary.main' : 'text.secondary' }}>
-                  <Icon sx={{ fontSize: 18 }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={d.label}
-                  primaryTypographyProps={{
-                    variant: 'caption',
-                    fontWeight: isActive ? 600 : 700,
-                    noWrap: false,
-                    sx: {
-                      overflow: 'visible',
-                      textOverflow: 'clip',
-                      fontSize: 10,
-                      letterSpacing: '1.4px',
-                      textTransform: 'uppercase',
-                      lineHeight: 1.3,
-                    },
+                <Typography
+                  component="span"
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    whiteSpace: 'nowrap',
+                    color: 'inherit',
+                    fontSize: NAV_MOCK.eyebrow.fontSize,
+                    fontWeight: NAV_MOCK.eyebrow.fontWeight,
+                    letterSpacing: NAV_MOCK.eyebrow.letterSpacing,
+                    textTransform: 'uppercase',
+                    lineHeight: 1.45,
                   }}
-                />
+                >
+                  {d.label}
+                </Typography>
                 {badge != null && badge > 0 ? (
                   <Chip
                     size="small"
                     color={d.id === 'overview' || d.id === 'data' ? 'warning' : 'default'}
                     label={badge}
                     data-testid={`rail-badge-${d.id}`}
-                    sx={{ height: 18, fontSize: 11, mr: 0.5 }}
+                    sx={{ height: 16, fontSize: 10, '& .MuiChip-label': { px: '6px' } }}
                   />
                 ) : null}
                 <IconButton
@@ -254,100 +286,73 @@ export function CapabilityRail({
                     e.stopPropagation();
                     setOpen(d.id, !expanded);
                   }}
-                  sx={{ p: 0.25, transform: expanded ? 'rotate(180deg)' : undefined, transition: 'transform 120ms' }}
+                  sx={{ p: 0, color: 'inherit', transform: expanded ? 'rotate(180deg)' : undefined, transition: 'transform 120ms' }}
                 >
-                  <ExpandMoreIcon fontSize="small" />
+                  <ExpandMoreIcon sx={{ fontSize: 16 }} />
                 </IconButton>
-              </ListItemButton>
+              </Box>
               <Collapse in={expanded} unmountOnExit>
-                <List dense disablePadding sx={{ ml: 4.25, mb: 0.5 }}>
+                <Box sx={{ display: 'grid', gap: NAV_MOCK.groupGap }}>
                   {d.items.map((l) => {
                     const on = leafIsActive(l.href, pathname, searchStr);
                     return (
-                      <ListItemButton
+                      <Box
                         key={l.href}
                         component={NextLink}
                         href={l.href}
                         prefetch
                         onClick={onNavigate}
-                        selected={on}
-                        sx={{
-                          py: 0.55,
-                          pl: 1.25,
-                          pr: 1,
-                          borderRadius: '0 8px 8px 0',
-                          position: 'relative',
-                          borderLeft: '2px solid',
-                          borderColor: on ? 'primary.main' : 'transparent',
-                          ...(on
-                            ? {
-                                color: 'primary.main',
-                                bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.15 : 0.12),
-                                '&:hover': {
-                                  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.15 : 0.12),
-                                },
-                              }
-                            : {}),
-                          '&.Mui-selected': {
-                            bgcolor: on ? undefined : 'transparent',
-                            '&:hover': on ? undefined : { bgcolor: 'action.hover' },
-                          },
-                        }}
+                        aria-current={on ? 'page' : undefined}
+                        sx={itemSx(on)}
                       >
-                        <ListItemText
-                          primary={l.label}
-                          primaryTypographyProps={{
-                            variant: 'body2',
-                            color: on ? 'text.primary' : 'text.secondary',
-                            fontWeight: on ? 600 : 400,
-                            noWrap: false,
-                            sx: { overflow: 'visible', textOverflow: 'clip' },
-                          }}
-                        />
-                      </ListItemButton>
+                        {l.label}
+                      </Box>
                     );
                   })}
-                </List>
+                </Box>
               </Collapse>
             </Box>
           );
         })}
-      </List>
-      <Divider />
-      <List dense sx={{ py: 0.5, px: 1 }}>
-        <ListItemButton
+      </Box>
+      <Box sx={{ flexShrink: 0 }}>
+        <Box
           component={NextLink}
           href="/directory"
           onClick={onNavigate}
-          selected={pathname === '/directory'}
-          sx={{ borderRadius: 1.5 }}
+          aria-current={pathname === '/directory' ? 'page' : undefined}
           data-testid="rail-directory"
+          sx={itemSx(pathname === '/directory')}
         >
-          <ListItemIcon sx={{ minWidth: 34, color: 'text.secondary' }}>
-            <AppsOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="What CIP does"
-            secondary="Capability directory"
-            primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
-            secondaryTypographyProps={{ variant: 'caption' }}
-          />
-        </ListItemButton>
-      </List>
-      {displayName || sessionMeta ? (
-        <Box sx={{ px: 2, pt: 1, pb: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
-          {displayName ? (
-            <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
-              {displayName}
-            </Typography>
-          ) : null}
-          {sessionMeta ? (
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-              {sessionMeta}
-            </Typography>
-          ) : null}
+          What CIP does
+          <Box component="small" sx={{ display: 'block', fontSize: NAV_MOCK.foot.fontSize, fontWeight: 400, opacity: 0.85 }}>
+            Capability directory
+          </Box>
         </Box>
-      ) : null}
+      </Box>
+      <Box
+        sx={{
+          flexShrink: 0,
+          padding: NAV_MOCK.foot.padding,
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          color: 'text.secondary',
+          fontSize: NAV_MOCK.foot.fontSize,
+          lineHeight: 1.45,
+          // Mock-up `.sidebar-foot`: the rail's own gap already separates it from the block above.
+          marginTop: 0,
+        }}
+      >
+        Your workspace
+        <br />
+        Only data you can access
+        {displayName ? (
+          <Box sx={{ mt: '8px', fontWeight: 500, color: 'text.primary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {displayName}
+          </Box>
+        ) : null}
+        {sessionMeta ? <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sessionMeta}</Box> : null}
+      </Box>
     </Box>
   );
 }
