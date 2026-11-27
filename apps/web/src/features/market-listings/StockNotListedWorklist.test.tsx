@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiGet } from '@/lib/api';
 
+import { customersListUrl } from './listingCustomerScope';
 import { StockNotListedWorklist } from './StockNotListedWorklist';
 
 const apiState = vi.hoisted(() => ({
@@ -133,7 +134,7 @@ describe('StockNotListedWorklist', () => {
 
     await selectLateAccount(user);
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith(
-      '/api/v1/customers?page=1&page_size=25&q=Zulu%20%26%20Co',
+      customersListUrl(false, { q: 'Zulu & Co' }),
       { signal: expect.any(AbortSignal) },
     ));
     expect(apiGet).toHaveBeenCalledWith(
