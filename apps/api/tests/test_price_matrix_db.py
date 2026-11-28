@@ -20,7 +20,6 @@ from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing, ListingObservation
 from app.services.listing_capture import price_matrix as price_matrix_module
 from app.services.listing_capture.price_matrix import (
-    BELOW_SRP_TOLERANCE,
     SRP_REASON_NONE,
     SRP_REASON_PENDING,
     SRP_REASON_VARIES,
@@ -34,6 +33,9 @@ from app.services.listing_capture.price_matrix import (
 )
 from sqlalchemy.orm import Session
 from test_listing_coverage import db_session  # noqa: F401 - shared cip_test-only fixture
+
+# A tolerance the tests save. It is not a product fallback. Warren 27 Nov: unset means not configured.
+SAVED_TOLERANCE = 1.0
 
 
 @pytest.fixture(autouse=True)
@@ -186,6 +188,8 @@ def _sample(session: Session) -> dict:
     ):
         case = CporCase(
             currency_code="ZAR",
+            # The writer supplies a channel. There is no built-in channel default.
+            channel="counter",
             tenant_id=tenant,
             customer_id=customer.id,
             case_code=code,
@@ -222,10 +226,18 @@ def _sample(session: Session) -> dict:
     }
 
 
+def _save_tolerance(tenant: str, amount: str = "1") -> None:
+    from app.services.commercial_tenant_profile import save_tenant_profile_overrides
+
+    save_tenant_profile_overrides(tenant, {"below_srp_tolerance": amount})
+
+
 def test_price_matrix_end_to_end(db_session: Session) -> None:  # noqa: F811 - fixture
     s = _sample(db_session)
     a, b = s["a"], s["b"]
     p0, p1, p2 = s["p"]
+    # Warren 27 Nov: unset tolerance does not flag. This test saves the amount it checks.
+    _save_tolerance(s["tenant"])
 
     out = build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id])
 
@@ -287,13 +299,15 @@ def test_price_matrix_end_to_end(db_session: Session) -> None:  # noqa: F811 - f
 
 def test_is_below_srp_rule() -> None:
     srp = 1000.0
-    boundary = srp - BELOW_SRP_TOLERANCE
-    assert is_below_srp(boundary - 0.01, srp, in_stock=True) is True
-    assert is_below_srp(boundary, srp, in_stock=True) is False  # exactly at the boundary
-    assert is_below_srp(srp, srp, in_stock=True) is False
-    assert is_below_srp(boundary - 50, srp, in_stock=False) is False  # out of stock
-    assert is_below_srp(500.0, None, in_stock=True) is False  # no SRP
-    assert is_below_srp(None, srp, in_stock=True) is False  # no price
+    # 1.0 is the tolerance supplied to this check, not the value used when the tenant has not saved one.
+    boundary = srp - SAVED_TOLERANCE
+    assert is_below_srp(boundary - 0.01, srp, in_stock=True, tolerance=SAVED_TOLERANCE) is True
+    assert is_below_srp(boundary, srp, in_stock=True, tolerance=SAVED_TOLERANCE) is False  # exactly at the boundary
+    assert is_below_srp(srp, srp, in_stock=True, tolerance=SAVED_TOLERANCE) is False
+    assert is_below_srp(boundary - 50, srp, in_stock=False, tolerance=SAVED_TOLERANCE) is False  # out of stock
+    assert is_below_srp(500.0, None, in_stock=True, tolerance=SAVED_TOLERANCE) is False  # no SRP
+    assert is_below_srp(None, srp, in_stock=True, tolerance=SAVED_TOLERANCE) is False  # no price
+    assert is_below_srp(500.0, srp, in_stock=True, tolerance=None) is False  # unset is not configured
 
 
 def _sell_out(
@@ -458,13 +472,15 @@ def test_website_regular_price_is_the_last_fallback(db_session: Session, monkeyp
         ]
     )
     db_session.flush()
+    # Warren 27 Nov: unset tolerance does not flag. This test saves the amount it checks.
+    _save_tolerance(s["tenant"])
 
     out = build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id])
     cells = _cells(out)
 
     b2 = cells[(p2.id, b.id)]
     assert (b2["srp"], b2["srp_source"]) == (2000, SRP_SOURCE_WEBSITE)
-    assert b2["below_srp"] is True  # in stock at 1800, under 2000 - tolerance
+    assert b2["below_srp"] is True  # in stock at 1800, under 2000 by more than the saved tolerance
     a1 = cells[(p1.id, a.id)]
     assert (a1["srp"], a1["srp_source"]) == (800, SRP_SOURCE_LINEUP)
     # The shelf price itself is never the regular price: A/p0 has no flag and keeps its line-up SRP.
@@ -496,9 +512,11 @@ def test_below_srp_flag_is_in_stock_only_and_counted(db_session: Session, monkey
     a, b = s["a"], s["b"]
     p0, p1, p2 = s["p"]
     _tenant_vat(monkeypatch, 0.15)
+    # Warren 27 Nov: unset tolerance does not flag. This test saves the amount it checks.
+    _save_tolerance(s["tenant"])
     # A/p0 SRP 1500 (line-up): in stock at 1200 -> below. B/p0 SRP 9999: out of stock at 1100 -> not
-    # flagged. A/p1 sell-out SRP 701: in stock at 700 = exactly SRP minus tolerance -> not below.
-    _sell_out(db_session, s, a, p1, key="a1", days_ago=3, price=700.0 + BELOW_SRP_TOLERANCE, vat_basis="inc_vat")
+    # flagged. A/p1 sell-out SRP 701: in stock at 700 = exactly SRP minus the saved tolerance -> not below.
+    _sell_out(db_session, s, a, p1, key="a1", days_ago=3, price=700.0 + SAVED_TOLERANCE, vat_basis="inc_vat")
 
     out = build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id])
     cells = _cells(out)
@@ -683,9 +701,10 @@ def test_srp_period_is_returned_for_sell_out_and_lineup_tiers(db_session: Sessio
     assert cells[(p2.id, a.id)]["srp_period"] is None
 
 
-def test_below_srp_tolerance_defaults_to_one_and_follows_the_tenant_override(
+def test_below_srp_tolerance_is_unset_until_saved(
     db_session: Session, monkeypatch, tmp_path  # noqa: F811
 ) -> None:
+    """Warren 27 Nov: unset means not configured. An unsaved tolerance does not fall back to 1.0."""
     from app.services import commercial_tenant_profile as profile
 
     monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
@@ -693,9 +712,9 @@ def test_below_srp_tolerance_defaults_to_one_and_follows_the_tenant_override(
     a, b = s["a"], s["b"]
     _p0, p1, _p2 = s["p"]  # A/p1: in stock at 700, line-up SRP 800
 
-    assert price_matrix_module.below_srp_tolerance(s["tenant"]) == BELOW_SRP_TOLERANCE == 1.0
+    assert price_matrix_module.below_srp_tolerance(s["tenant"]) is None
     default = _cells(build_price_matrix(db_session, tenant_id=s["tenant"], customer_ids=[a.id, b.id]))
-    assert default[(p1.id, a.id)]["below_srp"] is True
+    assert default[(p1.id, a.id)]["below_srp"] is False
 
     # 100 under SRP is exactly the tolerance: not below. 99 is: below.
     profile.save_tenant_profile_overrides(s["tenant"], {"below_srp_tolerance": "100"})

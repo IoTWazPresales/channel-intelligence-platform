@@ -35,7 +35,6 @@ from app.models.dimensions import DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.listing_capture import CustomerListing, ListingObservation
 from app.services.commercial_tenant_profile import (
-    DEFAULT_BELOW_SRP_TOLERANCE,
     below_srp_tolerance,
     configured_vat_rate_pct,
 )
@@ -65,10 +64,9 @@ SRP_REASON_VARIES = "srp_varies_by_customer"
 _WEBSITE_REGULAR_PRICE_FLAG = "rrp_listing_price"
 _WEBSITE_VAT_BASIS_FLAG = "vat_basis"
 
-# A price counts as below SRP only when it is more than the tenant's tolerance (currency units) under
-# it: ``below_srp_tolerance`` in the tenant profile, 1.0 when unset. The one place this rule lives:
-# cells carry the resulting ``below_srp`` flag and the UI does no arithmetic.
-BELOW_SRP_TOLERANCE = DEFAULT_BELOW_SRP_TOLERANCE
+# A price counts as below SRP only when the tenant has saved a tolerance and the shelf price is more
+# than that many currency units under the SRP. Unset means not configured: the flag stays false.
+# Warren 27 Nov. The one place this rule lives: cells carry ``below_srp`` and the UI does no arithmetic.
 
 CellKey = tuple[int, int]  # (customer_id, product_id)
 # One tier's answer for a cell: the SRP and the period it came from (None when the tier has none).
@@ -80,9 +78,14 @@ def is_below_srp(
     srp: float | None,
     *,
     in_stock: bool,
-    tolerance: float = BELOW_SRP_TOLERANCE,
+    tolerance: float | None,
 ) -> bool:
-    """In-stock prices only: an out-of-stock shelf price is not a live offer."""
+    """In-stock prices only: an out-of-stock shelf price is not a live offer.
+
+    ``tolerance`` is the tenant's saved amount. None means the comparison is not configured.
+    """
+    if tolerance is None:
+        return False
     return bool(in_stock and price is not None and srp is not None and price < srp - tolerance)
 
 

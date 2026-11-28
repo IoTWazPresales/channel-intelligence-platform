@@ -66,6 +66,7 @@ type TenantCommercialProfile = {
   lineup_export_columns?: LineupExportColumn[];
   overrides_present: string[];
   vat_rate_pct?: number | null;
+  below_srp_tolerance?: number | null;
   vat_rate_not_configured?: boolean;
   vat_rate_by_country?: Record<string, number>;
   currency_code?: string | null;
@@ -167,6 +168,7 @@ export default function SettingsPage() {
   const [wocMinVelocityDays, setWocMinVelocityDays] = useState(90);
   // Opus R-05: shown only when the tenant set it; never pre-filled with a country rate.
   const [vatRatePct, setVatRatePct] = useState('');
+  const [belowSrpTolerance, setBelowSrpTolerance] = useState('');
   const [vatByCountryText, setVatByCountryText] = useState('');
   const [currencyCode, setCurrencyCode] = useState('');
   const [reportingTimezone, setReportingTimezone] = useState('');
@@ -194,6 +196,12 @@ export default function SettingsPage() {
     }
     if (tenantProfileQuery.data.overrides_present?.includes('vat_rate_pct') && typeof tenantProfileQuery.data.vat_rate_pct === 'number') {
       setVatRatePct(String(tenantProfileQuery.data.vat_rate_pct));
+    }
+    if (
+      tenantProfileQuery.data.overrides_present?.includes('below_srp_tolerance')
+      && typeof tenantProfileQuery.data.below_srp_tolerance === 'number'
+    ) {
+      setBelowSrpTolerance(String(tenantProfileQuery.data.below_srp_tolerance));
     }
     setVatByCountryText(formatVatByCountry(tenantProfileQuery.data.vat_rate_by_country));
     setCurrencyCode(tenantProfileQuery.data.currency_code ?? '');
@@ -238,6 +246,9 @@ export default function SettingsPage() {
         reporting_cadence: reportingCadence,
         woc_min_velocity_days: wocMinVelocityDays,
         vat_rate_pct: vatRatePct.trim() ? Number(vatRatePct) : undefined,
+        below_srp_tolerance: belowSrpTolerance.trim()
+          ? Number(belowSrpTolerance)
+          : clearOrOmit('below_srp_tolerance'),
         vat_rate_by_country: vatByCountryText.trim()
           ? parseVatByCountry(vatByCountryText)
           : clearOrOmit('vat_rate_by_country'),
@@ -446,6 +457,17 @@ export default function SettingsPage() {
               placeholder="Not set"
               helperText="As a fraction of 1. Used for rows that carry no country. Not set means those show as not configured."
               inputProps={{ 'data-testid': 'tenant-profile-vat-rate', min: 0, max: 0.99, step: 0.005 }}
+            />
+            <TextField
+              label="Below SRP tolerance"
+              type="number"
+              value={belowSrpTolerance}
+              onChange={(ev) => setBelowSrpTolerance(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              placeholder="Not set"
+              helperText="Currency units a shelf price must be under SRP before it counts as below. Not set means that comparison is not configured. 0 means any amount under."
+              inputProps={{ 'data-testid': 'tenant-profile-below-srp-tolerance', min: 0, step: 0.01 }}
             />
             <TextField
               label="VAT rate by country"

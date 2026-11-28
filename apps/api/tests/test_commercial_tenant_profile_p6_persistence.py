@@ -173,7 +173,9 @@ def test_shipping_method_pattern_roundtrip_and_refusal() -> None:
 
 
 def test_below_srp_tolerance_default_save_and_reject() -> None:
-    assert profile.below_srp_tolerance("acme") == profile.DEFAULT_BELOW_SRP_TOLERANCE == 1.0
+    # Warren 27 Nov: unset means not configured. There is no 1.0 fallback.
+    assert profile.below_srp_tolerance("acme") is None
+    assert profile.profile_snapshot("acme")["below_srp_tolerance"] is None
     saved = profile.save_tenant_profile_overrides("acme", {"below_srp_tolerance": "2.5"})
     assert saved["below_srp_tolerance"] == 2.5
     assert profile.below_srp_tolerance("acme") == 2.5

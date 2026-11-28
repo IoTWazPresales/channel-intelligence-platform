@@ -131,6 +131,7 @@ describe('SettingsPage semantic overlay gate', () => {
       'tenant-profile-customer-margin',
       'tenant-profile-customer-rebate',
       'tenant-profile-distributor-margin',
+      'tenant-profile-below-srp-tolerance',
     ]) {
       const el = (await screen.findByTestId(id)) as HTMLInputElement;
       expect(el.value).toBe('');

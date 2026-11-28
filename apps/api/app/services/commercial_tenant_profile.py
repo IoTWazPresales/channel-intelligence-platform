@@ -207,9 +207,9 @@ STOCK_GAP_HIGHLIGHT_UNITS_MAX = 1_000_000.0
 DEFAULT_SOH_TOLERANCE_PCT = 0.10
 SOH_TOLERANCE_PCT_MAX = 1.0  # exclusive upper bound in save/read (same shape as vat_rate_pct)
 
-# Monitored-listings price matrix: a shelf price counts as below SRP only when it is more than this
-# many currency units under it (absolute, not a percentage). Editable per tenant; 0 means any amount.
-DEFAULT_BELOW_SRP_TOLERANCE = 1.0
+# Monitored-listings price matrix: a shelf price counts as below SRP only when it is more than the
+# tenant's saved amount (currency units, absolute, not a percentage) under it. 0 means any amount.
+# Unset means the comparison is not configured. There is no 1.0 fallback. Warren 27 Nov.
 BELOW_SRP_TOLERANCE_MAX = 1_000_000.0
 
 # Governed metric overlay (P3-1). Only label / hidden / allowed_grains persist;
@@ -1278,15 +1278,21 @@ def stock_gap_highlight_units(tenant_id: str = "default") -> float:
     return units
 
 
-def below_srp_tolerance(tenant_id: str = "default") -> float:
-    """Currency units a shelf price must be under its SRP to count as below it (default 1.0)."""
-    raw = load_tenant_profile_overrides(tenant_id).get("below_srp_tolerance", DEFAULT_BELOW_SRP_TOLERANCE)
+def below_srp_tolerance(tenant_id: str = "default") -> float | None:
+    """Currency units a shelf price must be under its SRP to count as below it.
+
+    Unset, blank, unreadable, or out of range means not configured. There is no 1.0 fallback.
+    Warren 27 Nov: unset means not configured.
+    """
+    raw = load_tenant_profile_overrides(tenant_id).get("below_srp_tolerance")
+    if raw is None or str(raw).strip() == "":
+        return None
     try:
         amount = float(str(raw).strip())
     except (TypeError, ValueError):
-        return DEFAULT_BELOW_SRP_TOLERANCE
+        return None
     if not (0 <= amount <= BELOW_SRP_TOLERANCE_MAX):
-        return DEFAULT_BELOW_SRP_TOLERANCE
+        return None
     return amount
 
 
